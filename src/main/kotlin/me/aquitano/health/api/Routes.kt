@@ -2,20 +2,26 @@ package me.aquitano.health.api
 
 import io.ktor.http.*
 import io.ktor.server.application.*
-import io.ktor.server.plugins.openapi.*
-import io.ktor.server.plugins.swagger.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import me.aquitano.health.api.dto.GoogleHealthSyncRequest
+import me.aquitano.health.api.dto.WithingsSyncRequest
 import kotlinx.serialization.Serializable
 import me.aquitano.health.api.dto.IngestionBatchRequest
 import me.aquitano.health.application.QueryParams
 
 fun Application.configureRoutes(services: ApplicationServices) {
     routing {
-        openAPI(path = "openapi", swaggerFile = "openapi/aqt-health.yaml")
-        swaggerUI(path = "swagger", swaggerFile = "openapi/aqt-health.yaml")
+        get("/openapi") {
+            call.respondText(
+                text = requireNotNull(
+                    Thread.currentThread().contextClassLoader
+                        .getResource("openapi/aqt-health.yaml")
+                ).readText(),
+                contentType = ContentType.Text.Plain,
+            )
+        }
 
         get("/api/v1/admin/health") {
             call.respond(
@@ -59,6 +65,29 @@ fun Application.configureRoutes(services: ApplicationServices) {
             call.respond(
                 services.googleHealthSyncService.sync(
                     request = call.receive<GoogleHealthSyncRequest>(),
+                    now = services.clock.now(),
+                )
+            )
+        }
+        get("/api/v1/providers/withings/oauth/start") {
+            call.authenticateProtected(services)
+            call.respond(services.withingsOAuthService.start(services.clock.now()))
+        }
+        get("/api/v1/providers/withings/oauth/callback") {
+            call.respond(
+                services.withingsOAuthService.callback(
+                    code = call.request.queryParameters["code"],
+                    state = call.request.queryParameters["state"],
+                    error = call.request.queryParameters["error"],
+                    now = services.clock.now(),
+                )
+            )
+        }
+        post("/api/v1/providers/withings/sync") {
+            call.authenticateProtected(services)
+            call.respond(
+                services.withingsSyncService.sync(
+                    request = call.receive<WithingsSyncRequest>(),
                     now = services.clock.now(),
                 )
             )

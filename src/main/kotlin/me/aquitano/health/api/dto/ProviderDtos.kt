@@ -56,3 +56,32 @@ data class GoogleHealthSyncErrorResponse(
     val code: String,
     val message: String,
 )
+
+@Serializable
+data class WithingsOAuthStartResponse(
+    val authorizationUrl: String,
+    val expiresAt: String,
+)
+
+@Serializable
+data class WithingsOAuthCallbackResponse(
+    val provider: String,
+    val providerInstanceId: String,
+    val connected: Boolean,
+)
+
+@Serializable
+data class WithingsSyncRequest(
+    val from: String? = null,
+    val to: String? = null,
+    val dataTypes: List<String>? = null,
+)
+
+@Serializable
+data class WithingsSyncResponse(
+    val provider: String,
+    val providerInstanceId: String,
+    val requestedRange: GoogleHealthRequestedRangeResponse,
+    val batches: List<GoogleHealthSyncBatchResponse>,
+    val errors: List<GoogleHealthSyncErrorResponse>,
+)

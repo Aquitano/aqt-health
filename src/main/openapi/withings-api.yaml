@@ -1,0 +1,288 @@
+openapi: 3.0.0
+info:
+  title: Withings Public API Integration
+  version: 1.0.0
+  description: >-
+    # Welcome to Withings Public API Postman collection!
+
+
+    This collection provides resources for integrating our API, enabling access
+    to valuable health data insights.
+
+
+    If you're unsure on whether integrating our Public API is the right solution
+    for your use case, you can find out everything about the services Withings
+    provide on our [Developer
+    Portal](https://developer.withings.com/developer-guide/v3/withings-solutions/cellular-solutions).
+
+
+    You can refer at any time to the [Public API integration
+    guide](https://developer.withings.com/developer-guide/v3/integration-guide/public-health-data-api/public-health-data-api-overview)
+    for more detailed information about this integration.
+
+
+    ## Before you begin
+
+
+    To start using this collection, you need to create your Withings developer
+    account and application by following the steps presented in the Withings
+    Health Solution workspace page.
+servers:
+  - url: '{{base_url}}'
+  - url: https://account.withings.com
+  - url: https://scalews.withings.com
+paths:
+  /v2/signature:
+    post:
+      summary: Signature v2 - Get nonce
+      responses: {}
+      tags:
+        - ✍️ Sign your requests
+      description: "## Signature v2 - Get nonce\n\nA\_`nonce`\_is a random token that is generated and stored in Withings server with\_**30 minutes of validity**.\n\nAs a partner, you will use this\_`nonce`\_token in the API services that require a\_`signature`\_so that Withings can check that the\_`nonce`\_token is still valid and was never used before. The usage of a\_`nonce`\_token prevents your service calls from replay attacks.\n\nBecause this service is a Device Management service, Withings checks your authorised access using your\_`client_id`\_and your\_`client_secret`\_based\_`signature`.\n\nTo generate the\_`signature`\_please follow these steps:\n\n*   Sort the following parameters alphabetically:\n    *   `action`\n    *   `client_id`\n    *   `timestamp`\n*   Generate a string by concatenating values separated by a comma. The string should look like:\_*value1,value2,value3*.\n*   Apply a hmac hashing function on the string using the algorithm\_`sha256`\_and your partner\_`client_secret`\_(available in your\_[Withings partner dashboard](https://developer.withings.com/dashboard/)) as a secret key.\n*   Add the hash string in the parameters under the key\_`signature`\n    \n\nThis request's prescript builds does exactly that, then set the environment variables for the request to use them.\n\n[Look at our API reference for more information](https://developer.withings.com/api-reference#operation/notify-update)"
+  /oauth2_user/authorize2:
+    get:
+      summary: OAuth2.0 v2 - Get Auth code
+      parameters:
+        - name: response_type
+          in: query
+          description: DO NOT CHANGE
+          schema:
+            type: string
+          example: code
+        - name: client_id
+          in: query
+          description: >-
+            Available on your developer dashboard
+            https://developer.withings.com/dashboard/
+          schema:
+            type: string
+          example: '{{client_id}}'
+        - name: redirect_uri
+          in: query
+          description: >-
+            Available on your developer dashboard
+            https://developer.withings.com/dashboard/
+          schema:
+            type: string
+          example: '{{oauth2_redirect_uri}}'
+        - name: state
+          in: query
+          description: Randomly generated in the Pre-request script
+          schema:
+            type: string
+          example: '{{state}}'
+        - name: scope
+          in: query
+          description: Available scopes on https://developer.withings.com/oauth2/
+          schema:
+            type: string
+          example: '{{scope}}'
+      responses: {}
+      tags:
+        - 🔐 Get access to your users' data
+      description: >-
+        ## OAuth 2.0 - Get your authorization code
+
+
+        Use the `authorize` method which will construct a URL and redirect to
+        it. It will ask the user for permissions. The user will be able to sign
+        up for a new account or to sign in with their existing account.
+
+
+        When the user has accepted, he is redirected to your application (using
+        the redirect_uri) with the authorization code and the state passed as
+        URL parameters.
+
+
+        **Important**:
+
+
+        *   Must be called as GET call.
+
+        *   The authorization code is valid for 30 seconds.
+            
+
+        More information about this webservice can be found in our [API
+        reference](https://developer.withings.com/api-reference#operation/oauth2-authorize).
+
+
+        ## Getting your first access_token using Postman
+
+
+        Let's have a look at the steps to get your first user `acccess_token`
+        using Postman. You'll need to have access to a user account in order to
+        complete this flow. We recommend using a sample user created beforehand
+        on [https://account.withings.com](https://account.withings.com).
+
+
+        ### Step 1
+
+
+        ![](https://static.withings.com/content/b2b/postman/oauth_tutorial/oauth_step_1.png)
+
+
+        1.  Go to the Public API collection and click on `OAuth2.0 v2 - Get Auth
+        Code`
+
+        2.  Click the send button. Parameters in the URL will be filled
+        automatically based on you environment variables.
+
+        3.  Select the `Code snippet` button from Postman righthand side bar.
+
+        4.  Copy the URL that was generated by Postman by using your environment
+        variables
+            
+
+        ### Step 2
+
+
+        ![](https://static.withings.com/content/b2b/postman/oauth_tutorial/oauth_step_2.png)
+
+
+        1.  Open the URL built in step 1 to your favorite web browser.
+
+        2.  Login with a user account. Follow the OAuth2.0 flow and authorize
+        your application to access the user account.
+            
+
+        ### Step 3
+
+
+        ![](https://static.withings.com/content/b2b/postman/oauth_tutorial/oauth_step_3.png)
+
+
+        Your callbackURL is called at the end of the flow with the user
+        authorization code passed as a parameter. Copy this code from the URL.
+
+
+        > **WARNING**: the authorization code is valid for 30 seconds only, so
+        once Step 3 is complete you should quickly proceed with Step 4 and 5.
+
+
+        ### Step 4
+
+
+        ![](https://static.withings.com/content/b2b/postman/oauth_tutorial/oauth_step_4.png)
+
+
+        1.  Click Postman environment menu item
+
+        2.  Select your active Withings environment
+
+        3.  Replace the code variable with the one you obtained in Step 3
+
+        4.  Don't forget to Save!
+            
+
+        ### Step 5
+
+
+        ![](https://static.withings.com/content/b2b/postman/oauth_tutorial/oauth_step_5.png)
+
+
+        1.  Go back to the Public API Integration Collection
+
+        2.  Select the `OAuth2.0 v2 - Get access token` request and click Send
+            
+
+        If you managed to perform steps 3, 4 and 5 in less than 30s, then
+        congratulations: you've generated a valid `access_token` and
+        `refresh_token` for this user ! 🎉
+
+
+        Next time your `access_token` expires, you just need to call the
+        `OAuth2.0 v2 - Get refresh token` request in order to refresh it.
+  /v2/oauth2:
+    post:
+      summary: OAuth2.0 v2 - Get access token [using secret]
+      responses: {}
+      tags:
+        - 🔐 Get access to your users' data
+      description: >-
+        Learn everything there is to know about getting and refreshing your
+        `access_token` by looking at [our integration guide dedicated
+        section](https://developer.withings.com/developer-guide/v3/integration-guide/public-health-data-api/get-access/access-and-refresh-tokens).
+  /measure:
+    post:
+      summary: Measure - Getmeas
+      responses: {}
+      tags:
+        - 📉 Fetch Health Data
+        - Measures
+      security:
+        - BearerAuth: []
+      description: >-
+        Provides measures stored at a specific date among the types listed on
+        [this
+        page](https://developer.withings.com/api-reference#operation/measure-getmeas)
+
+
+        Please refer to the [API
+        Reference](https://developer.withings.com/api-reference#operation/measure-getmeas)
+        for more details.
+  /v2/measure:
+    post:
+      summary: Measure v2 - Get activity
+      responses: {}
+      tags:
+        - 📉 Fetch Health Data
+        - Measures
+      security:
+        - BearerAuth: []
+      description: >-
+        Provides daily aggregated activity data of a user.
+
+
+        Please refer to the [API
+        Reference](https://developer.withings.com/api-reference#operation/measurev2-getactivity)
+        for more details.
+  /v2/heart:
+    post:
+      summary: Heart v2 - List
+      responses: {}
+      tags:
+        - 📉 Fetch Health Data
+        - Heart
+      security:
+        - BearerAuth: []
+      description: "Returns a list of ECG records and Afib classification for a given period of time. To get the full ECG signal, use the\_[Heart v2 - Get](https://developer.withings.com/api-reference#operation/heartv2-get)\_service.\n\nIf the ECG recordings have been taken with BPM Core, systole and diastole measurements will also be returned.\n\nPlease refer to the [API Reference](https://developer.withings.com/api-reference#operation/heartv2-list) for more details."
+  /v2/sleep:
+    post:
+      summary: Sleep v2 - Get summary
+      responses: {}
+      tags:
+        - 📉 Fetch Health Data
+        - Sleep
+      security:
+        - BearerAuth: []
+      description: >-
+        Returns sleep activity summaries, which are an aggregation of all the
+        data captured at high frequency during the sleep activity.
+
+
+        Please refer to the [API
+        Reference](https://developer.withings.com/api-reference#operation/sleepv2-getsummary)
+        for more details.
+  /notify:
+    post:
+      summary: Notify - Subscribe
+      responses: {}
+      tags:
+        - 🔔  Keep Data up to date
+      security:
+        - BearerAuth: []
+      description: >-
+        This service allows to receive notifications when your users' data gets
+        updated or when new data is available ([more
+        information](https://developer.withings.com/developer-guide/v3/data-api/keep-user-data-up-to-date)).
+        Please note that you need to subscribe for each individual user.
+
+
+        Please refer to the [API
+        Reference](https://developer.withings.com/api-reference#operation/notify-subscribe)
+        for more details.
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer

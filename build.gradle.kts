@@ -8,6 +8,7 @@ plugins {
     kotlin("jvm") version "2.3.0"
     id("io.ktor.plugin") version "3.4.2"
     id("org.jetbrains.kotlin.plugin.serialization") version "2.3.0"
+    id("org.openapi.generator") version "7.15.0"
 }
 
 group = "me.aquitano"
@@ -19,6 +20,42 @@ application {
 
 kotlin {
     jvmToolchain(21)
+    sourceSets {
+        main {
+            kotlin.srcDir(layout.buildDirectory.dir("generated/withings-openapi/src/main/kotlin"))
+        }
+    }
+}
+
+openApiGenerate {
+    generatorName.set("kotlin")
+    inputSpec.set(layout.projectDirectory.file("src/main/openapi/withings-provider-openapi.yaml").asFile.absolutePath)
+    outputDir.set(layout.buildDirectory.dir("generated/withings-openapi").get().asFile.absolutePath)
+    modelPackage.set("me.aquitano.health.infrastructure.providers.withings.generated.model")
+    globalProperties.set(
+        mapOf(
+            "apiDocs" to "false",
+            "apiTests" to "false",
+            "modelDocs" to "false",
+            "modelTests" to "false",
+        )
+    )
+    configOptions.set(
+        mapOf(
+            "library" to "jvm-ktor",
+            "serializationLibrary" to "kotlinx_serialization",
+        )
+    )
+}
+
+tasks.named("openApiGenerate") {
+    doFirst {
+        delete(layout.buildDirectory.dir("generated/withings-openapi"))
+    }
+}
+
+tasks.named("compileKotlin") {
+    dependsOn(tasks.named("openApiGenerate"))
 }
 
 dependencies {
@@ -30,9 +67,7 @@ dependencies {
     implementation("io.ktor:ktor-server-core")
     implementation("io.ktor:ktor-server-content-negotiation")
     implementation("io.ktor:ktor-server-netty")
-    implementation("io.ktor:ktor-server-openapi")
     implementation("io.ktor:ktor-server-status-pages")
-    implementation("io.ktor:ktor-server-swagger")
     implementation("io.ktor:ktor-serialization-kotlinx-json")
     implementation("io.ktor:ktor-server-config-yaml")
     implementation("ch.qos.logback:logback-classic:$logback_version")

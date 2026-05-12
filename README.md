@@ -40,7 +40,6 @@ The OpenAPI spec is stored at `src/main/resources/openapi/aqt-health.yaml` and i
 After starting the app, open:
 
 - `http://localhost:8080/openapi`
-- `http://localhost:8080/swagger`
 
 ## Configuration
 
@@ -59,6 +58,12 @@ Environment variables:
 - `AQT_HEALTH_GOOGLE_API_BASE_URL`: Google Health API base URL, default `https://health.googleapis.com`
 - `AQT_HEALTH_GOOGLE_OAUTH_TOKEN_URL`: Google OAuth token URL, default `https://oauth2.googleapis.com/token`
 - `AQT_HEALTH_GOOGLE_OAUTH_AUTH_URL`: Google OAuth authorization URL, default `https://accounts.google.com/o/oauth2/v2/auth`
+- `AQT_HEALTH_WITHINGS_CLIENT_ID`: Withings OAuth client ID
+- `AQT_HEALTH_WITHINGS_CLIENT_SECRET`: Withings OAuth client secret
+- `AQT_HEALTH_WITHINGS_REDIRECT_URI`: OAuth callback URL, default `http://localhost:8080/api/v1/providers/withings/oauth/callback`
+- `AQT_HEALTH_WITHINGS_TOKEN_ENCRYPTION_KEY`: required before connecting Withings; used to encrypt stored OAuth tokens
+- `AQT_HEALTH_WITHINGS_API_BASE_URL`: Withings API base URL, default `https://wbsapi.withings.net`
+- `AQT_HEALTH_WITHINGS_OAUTH_AUTH_URL`: Withings OAuth authorization URL, default `https://account.withings.com/oauth2_user/authorize2`
 
 If `AQT_HEALTH_BOOTSTRAP_API_KEY` is set, the app hashes it with SHA-256 and stores only `sha256:<hex>` in `api_clients`. If it is blank, startup still succeeds, but protected endpoints require a client row to exist in SQLite.
 
@@ -170,6 +175,43 @@ curl -X POST http://localhost:8080/api/v1/providers/google-health/sync \
     "to": "2026-04-20T00:00:00Z",
     "dataTypes": ["steps", "sleep", "heart-rate", "weight", "body-fat"],
     "pageSize": 1000
+  }'
+```
+
+## Withings Provider
+
+The Withings provider is a server-owned OAuth integration. It uses the Withings OpenAPI spec in `src/main/openapi/withings-openapi.json` for generation and syncs activity steps, body measurements, sleep summaries, and heart pulse measurements into the normal ingestion pipeline.
+
+Withings setup:
+
+1. Create an application in the Withings developer dashboard.
+2. Add this callback URL: `http://localhost:8080/api/v1/providers/withings/oauth/callback`
+3. Put the Withings client ID, client secret, redirect URI, and token encryption key in `.env`.
+
+Required Withings OAuth scopes:
+
+- `user.info`
+- `user.metrics`
+- `user.activity`
+- `user.sleepevents`
+
+Start the OAuth flow:
+
+```bash
+curl "http://localhost:8080/api/v1/providers/withings/oauth/start" \
+  -H "Authorization: Bearer local-dev-key"
+```
+
+Sync Withings data:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/providers/withings/sync \
+  -H "Authorization: Bearer local-dev-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "from": "2026-04-01T00:00:00Z",
+    "to": "2026-04-20T00:00:00Z",
+    "dataTypes": ["activity", "body-measurements", "sleep-summary"]
   }'
 ```
 

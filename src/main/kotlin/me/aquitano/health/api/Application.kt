@@ -17,6 +17,10 @@ import me.aquitano.health.infrastructure.providers.googlehealth.GoogleHealthNorm
 import me.aquitano.health.infrastructure.providers.googlehealth.GoogleHealthOAuthService
 import me.aquitano.health.infrastructure.providers.googlehealth.GoogleHealthSyncService
 import me.aquitano.health.infrastructure.providers.googlehealth.KtorGoogleHealthClient
+import me.aquitano.health.infrastructure.providers.withings.KtorWithingsClient
+import me.aquitano.health.infrastructure.providers.withings.WithingsNormalizer
+import me.aquitano.health.infrastructure.providers.withings.WithingsOAuthService
+import me.aquitano.health.infrastructure.providers.withings.WithingsSyncService
 import me.aquitano.health.infrastructure.security.ApiKeyHasher
 import me.aquitano.health.infrastructure.time.UtcClock
 import me.aquitano.health.shared.AppJson
@@ -41,6 +45,7 @@ fun Application.module() {
         }
     }
     val googleHealthClient = KtorGoogleHealthClient(httpClient, appConfig.googleHealth)
+    val withingsClient = KtorWithingsClient(httpClient, appConfig.withings)
     val ingestionService = IngestionService(
         database = database,
         mappingService = IngestionMappingService(),
@@ -75,6 +80,18 @@ fun Application.module() {
             normalizer = GoogleHealthNormalizer(),
             ingestionService = ingestionService,
         ),
+        withingsOAuthService = WithingsOAuthService(
+            config = appConfig.withings,
+            repository = providerOAuthRepository,
+            client = withingsClient,
+        ),
+        withingsSyncService = WithingsSyncService(
+            config = appConfig.withings,
+            repository = providerOAuthRepository,
+            client = withingsClient,
+            normalizer = WithingsNormalizer(),
+            ingestionService = ingestionService,
+        ),
     )
 
     ApiClientBootstrapService(
@@ -98,4 +115,6 @@ data class ApplicationServices(
     val adminService: AdminService,
     val googleHealthOAuthService: GoogleHealthOAuthService,
     val googleHealthSyncService: GoogleHealthSyncService,
+    val withingsOAuthService: WithingsOAuthService,
+    val withingsSyncService: WithingsSyncService,
 )

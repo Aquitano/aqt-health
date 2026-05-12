@@ -6,6 +6,7 @@ data class AppConfig(
     val database: DatabaseConfig,
     val auth: AuthConfig,
     val googleHealth: GoogleHealthConfig,
+    val withings: WithingsConfig,
 )
 
 data class DatabaseConfig(
@@ -25,6 +26,15 @@ data class GoogleHealthConfig(
     val tokenEncryptionKey: String,
     val apiBaseUrl: String,
     val oauthTokenUrl: String,
+    val oauthAuthUrl: String,
+)
+
+data class WithingsConfig(
+    val clientId: String,
+    val clientSecret: String,
+    val redirectUri: String,
+    val tokenEncryptionKey: String,
+    val apiBaseUrl: String,
     val oauthAuthUrl: String,
 )
 
@@ -57,6 +67,23 @@ fun ApplicationConfig.toAppConfig(): AppConfig =
             oauthAuthUrl = optional(
                 "aqtHealth.googleHealth.oauthAuthUrl",
                 "https://accounts.google.com/o/oauth2/v2/auth",
+            ),
+        ),
+        withings = WithingsConfig(
+            clientId = optional("aqtHealth.withings.clientId"),
+            clientSecret = optional("aqtHealth.withings.clientSecret"),
+            redirectUri = optional(
+                "aqtHealth.withings.redirectUri",
+                "http://localhost:8080/api/v1/providers/withings/oauth/callback",
+            ),
+            tokenEncryptionKey = optional("aqtHealth.withings.tokenEncryptionKey"),
+            apiBaseUrl = optional(
+                "aqtHealth.withings.apiBaseUrl",
+                "https://wbsapi.withings.net",
+            ),
+            oauthAuthUrl = optional(
+                "aqtHealth.withings.oauthAuthUrl",
+                "https://account.withings.com/oauth2_user/authorize2",
             ),
         ),
     )

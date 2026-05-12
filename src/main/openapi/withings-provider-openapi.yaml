@@ -1,0 +1,41 @@
+openapi: 3.0.3
+info:
+  title: Withings provider API subset
+  version: 1.0.0
+servers:
+  - url: https://wbsapi.withings.net
+paths:
+  /v2/oauth2:
+    post:
+      operationId: oauth2GetAccessToken
+      responses:
+        "200":
+          description: OAuth token response.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Oauth2Getaccesstoken200Response"
+components:
+  schemas:
+    Oauth2Getaccesstoken200Response:
+      type: object
+      properties:
+        status:
+          type: integer
+        body:
+          $ref: "#/components/schemas/Oauth2Getaccesstoken200ResponseBody"
+    Oauth2Getaccesstoken200ResponseBody:
+      type: object
+      properties:
+        userid:
+          type: integer
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        expires_in:
+          type: integer
+        scope:
+          type: string
+        token_type:
+          type: string
