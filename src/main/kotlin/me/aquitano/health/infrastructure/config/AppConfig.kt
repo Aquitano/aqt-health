@@ -34,6 +34,7 @@ data class WithingsConfig(
     val clientSecret: String,
     val redirectUri: String,
     val tokenEncryptionKey: String,
+    val apiBaseUrl: String,
     val oauthTokenUrl: String,
     val oauthAuthUrl: String,
 )
@@ -77,6 +78,10 @@ fun ApplicationConfig.toAppConfig(): AppConfig =
                 "http://localhost:8080/api/v1/providers/withings/oauth/callback",
             ),
             tokenEncryptionKey = optional("aqtHealth.withings.tokenEncryptionKey"),
+            apiBaseUrl = optional(
+                "aqtHealth.withings.apiBaseUrl",
+                "https://wbsapi.withings.net",
+            ),
             oauthTokenUrl = optional(
                 "aqtHealth.withings.oauthTokenUrl",
                 "https://wbsapi.withings.net/v2/oauth2",

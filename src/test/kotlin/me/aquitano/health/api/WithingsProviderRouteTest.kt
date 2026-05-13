@@ -61,7 +61,7 @@ class WithingsProviderRouteTest {
     }
 
     @Test
-    fun syncReturnsNotImplementedConflict() = testApplication {
+    fun syncReturnsNotConnectedConflict() = testApplication {
         configureTestApplication()
 
         val response = client.post("/api/v1/providers/withings/sync") {
@@ -71,7 +71,7 @@ class WithingsProviderRouteTest {
         }
 
         assertEquals(HttpStatusCode.Conflict, response.status)
-        assertTrue(response.bodyAsText().contains("withings_sync_not_implemented"))
+        assertTrue(response.bodyAsText().contains("withings_not_connected"))
     }
 
     private fun ApplicationTestBuilder.configureTestApplication() {
@@ -88,6 +88,7 @@ class WithingsProviderRouteTest {
                 "aqtHealth.withings.clientSecret" to "withings-client-secret",
                 "aqtHealth.withings.redirectUri" to "http://localhost:8080/api/v1/providers/withings/oauth/callback",
                 "aqtHealth.withings.tokenEncryptionKey" to "test-token-encryption-key-with-32-bytes",
+                "aqtHealth.withings.apiBaseUrl" to "https://wbsapi.withings.net",
                 "aqtHealth.withings.oauthTokenUrl" to "https://wbsapi.withings.net/v2/oauth2",
                 "aqtHealth.withings.oauthAuthUrl" to "https://account.withings.com/oauth2_user/authorize2",
             )

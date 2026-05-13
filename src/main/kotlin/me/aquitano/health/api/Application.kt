@@ -19,7 +19,8 @@ import me.aquitano.external.google.GeneratedGoogleHealthClient
 import me.aquitano.external.google.GoogleHealthDataPointsServiceFactory
 import me.aquitano.external.google.GoogleHealthNormalizer
 import me.aquitano.external.google.KtorGoogleHealthOAuthClient
-import me.aquitano.external.withings.KtorWithingsOAuthClient
+import me.aquitano.external.withings.KtorWithingsClient
+import me.aquitano.external.withings.WithingsNormalizer
 import me.aquitano.external.withings.WithingsProvider
 import me.aquitano.health.infrastructure.security.ApiKeyHasher
 import me.aquitano.health.infrastructure.time.UtcClock
@@ -62,7 +63,7 @@ fun Application.module() {
         oauthClient = googleHealthOAuthClient,
         dataPointsServiceFactory = GoogleHealthDataPointsServiceFactory(appConfig.googleHealth.apiBaseUrl),
     )
-    val withingsOAuthClient = KtorWithingsOAuthClient(httpClient, appConfig.withings)
+    val withingsClient = KtorWithingsClient(httpClient, appConfig.withings)
     logger.info(
         "app_configured {} {}",
         kv(
@@ -96,7 +97,9 @@ fun Application.module() {
     val withingsProvider = WithingsProvider(
         config = appConfig.withings,
         repository = providerOAuthRepository,
-        client = withingsOAuthClient,
+        client = withingsClient,
+        normalizer = WithingsNormalizer(),
+        ingestionService = ingestionService,
     )
     val providerRegistry = HealthProviderRegistry(listOf(googleHealthProvider, withingsProvider))
 

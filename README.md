@@ -63,6 +63,7 @@ Environment variables:
 - `AQT_HEALTH_WITHINGS_CLIENT_SECRET`: Withings OAuth client secret
 - `AQT_HEALTH_WITHINGS_REDIRECT_URI`: OAuth callback URL, default `http://localhost:8080/api/v1/providers/withings/oauth/callback`
 - `AQT_HEALTH_WITHINGS_TOKEN_ENCRYPTION_KEY`: required before connecting Withings; used to encrypt stored OAuth tokens
+- `AQT_HEALTH_WITHINGS_API_BASE_URL`: Withings API base URL, default `https://wbsapi.withings.net`
 - `AQT_HEALTH_WITHINGS_OAUTH_TOKEN_URL`: Withings OAuth token URL, default `https://wbsapi.withings.net/v2/oauth2`
 - `AQT_HEALTH_WITHINGS_OAUTH_AUTH_URL`: Withings OAuth authorization URL, default `https://account.withings.com/oauth2_user/authorize2`
 - `AQT_HEALTH_LOG_FORMAT`: stdout log format, `text` by default or `json` for production JSON lines
@@ -226,7 +227,7 @@ If `dataTypes` is omitted, the sync reads `steps`, `sleep`, `heart-rate`, `weigh
 
 ## Withings Provider
 
-The Withings provider is currently an OAuth-only integration. It starts the Withings authorization flow, exchanges the callback authorization code immediately, and stores encrypted access and refresh tokens in the shared provider OAuth table. Data sync is intentionally not implemented yet.
+The Withings provider is a server-owned OAuth integration. It starts the Withings authorization flow, exchanges the callback authorization code immediately, stores encrypted access and refresh tokens in the shared provider OAuth table, reads Withings data, preserves the raw Withings response pages in ingestion `sourcePayload`, and writes supported normalized metrics through the normal ingestion service.
 
 Withings developer setup:
 
@@ -247,9 +248,22 @@ curl "http://localhost:8080/api/v1/providers/withings/oauth/start" \
   -H "Authorization: Bearer local-dev-key"
 ```
 
-Open the returned `authorizationUrl` in a browser. Withings redirects back to `/api/v1/providers/withings/oauth/callback`, which stores encrypted tokens for future sync support. Withings authorization codes are valid for only 30 seconds, so the callback must reach this backend immediately.
+Open the returned `authorizationUrl` in a browser. Withings redirects back to `/api/v1/providers/withings/oauth/callback`, which stores encrypted tokens for future syncs. Withings authorization codes are valid for only 30 seconds, so the callback must reach this backend immediately.
 
-Calling the Withings sync endpoint currently returns `409 Conflict` with `withings_sync_not_implemented`.
+Sync Withings data:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/providers/withings/sync \
+  -H "Authorization: Bearer local-dev-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "from": "2026-04-01T00:00:00Z",
+    "to": "2026-04-20T00:00:00Z",
+    "dataTypes": ["activity", "measures", "sleep-summary", "sleep"]
+  }'
+```
+
+If `dataTypes` is omitted, the sync reads `activity`, `measures`, `sleep-summary`, and `sleep`. Withings fields from the listed Measure, Activity, Sleep, and Sleep Summary APIs are preserved in the ingestion source payload. The current normalized metric tables store steps, supported body measurements, heart-rate samples, and sleep sessions; unsupported Withings metrics such as blood pressure, SpO2, temperature, ECG intervals, BMR, metabolic age, bone mass, vascular age, segmental body composition, and conductance values remain available in source payloads until matching metric tables exist.
 
 ## Read Data
 
