@@ -19,6 +19,8 @@ import me.aquitano.external.google.GeneratedGoogleHealthClient
 import me.aquitano.external.google.GoogleHealthDataPointsServiceFactory
 import me.aquitano.external.google.GoogleHealthNormalizer
 import me.aquitano.external.google.KtorGoogleHealthOAuthClient
+import me.aquitano.external.withings.KtorWithingsOAuthClient
+import me.aquitano.external.withings.WithingsProvider
 import me.aquitano.health.infrastructure.security.ApiKeyHasher
 import me.aquitano.health.infrastructure.time.UtcClock
 import me.aquitano.health.shared.AppJson
@@ -60,13 +62,20 @@ fun Application.module() {
         oauthClient = googleHealthOAuthClient,
         dataPointsServiceFactory = GoogleHealthDataPointsServiceFactory(appConfig.googleHealth.apiBaseUrl),
     )
+    val withingsOAuthClient = KtorWithingsOAuthClient(httpClient, appConfig.withings)
     logger.info(
-        "app_configured {}",
+        "app_configured {} {}",
         kv(
             "googleHealthConfigured",
             appConfig.googleHealth.clientId.isNotBlank() &&
                     appConfig.googleHealth.clientSecret.isNotBlank() &&
                     appConfig.googleHealth.tokenEncryptionKey.isNotBlank(),
+        ),
+        kv(
+            "withingsConfigured",
+            appConfig.withings.clientId.isNotBlank() &&
+                    appConfig.withings.clientSecret.isNotBlank() &&
+                    appConfig.withings.tokenEncryptionKey.isNotBlank(),
         ),
     )
     val ingestionService = IngestionService(
@@ -84,7 +93,12 @@ fun Application.module() {
         normalizer = GoogleHealthNormalizer(),
         ingestionService = ingestionService,
     )
-    val providerRegistry = HealthProviderRegistry(listOf(googleHealthProvider))
+    val withingsProvider = WithingsProvider(
+        config = appConfig.withings,
+        repository = providerOAuthRepository,
+        client = withingsOAuthClient,
+    )
+    val providerRegistry = HealthProviderRegistry(listOf(googleHealthProvider, withingsProvider))
 
     val services = ApplicationServices(
         database = database,

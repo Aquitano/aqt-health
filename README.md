@@ -59,6 +59,12 @@ Environment variables:
 - `AQT_HEALTH_GOOGLE_API_BASE_URL`: Google Health API base URL, default `https://health.googleapis.com`
 - `AQT_HEALTH_GOOGLE_OAUTH_TOKEN_URL`: Google OAuth token URL, default `https://oauth2.googleapis.com/token`
 - `AQT_HEALTH_GOOGLE_OAUTH_AUTH_URL`: Google OAuth authorization URL, default `https://accounts.google.com/o/oauth2/v2/auth`
+- `AQT_HEALTH_WITHINGS_CLIENT_ID`: Withings OAuth client ID
+- `AQT_HEALTH_WITHINGS_CLIENT_SECRET`: Withings OAuth client secret
+- `AQT_HEALTH_WITHINGS_REDIRECT_URI`: OAuth callback URL, default `http://localhost:8080/api/v1/providers/withings/oauth/callback`
+- `AQT_HEALTH_WITHINGS_TOKEN_ENCRYPTION_KEY`: required before connecting Withings; used to encrypt stored OAuth tokens
+- `AQT_HEALTH_WITHINGS_OAUTH_TOKEN_URL`: Withings OAuth token URL, default `https://wbsapi.withings.net/v2/oauth2`
+- `AQT_HEALTH_WITHINGS_OAUTH_AUTH_URL`: Withings OAuth authorization URL, default `https://account.withings.com/oauth2_user/authorize2`
 - `AQT_HEALTH_LOG_FORMAT`: stdout log format, `text` by default or `json` for production JSON lines
 - `AQT_HEALTH_LOG_FILE`: JSON lines log file for local inspection, default `build/logs/aqt-health.jsonl`
 - `AQT_HEALTH_LOG_FILE_ROLLOVER`: rolling JSON log archive pattern, default `build/logs/aqt-health.%d{yyyy-MM-dd}.%i.jsonl.gz`
@@ -217,6 +223,33 @@ curl -X POST http://localhost:8080/api/v1/providers/google-health/sync \
 ```
 
 If `dataTypes` is omitted, the sync reads `steps`, `sleep`, `heart-rate`, `weight`, and `body-fat`. If both `from` and `to` are omitted, the sync defaults to the last seven days. Explicit ranges must be no longer than 31 days.
+
+## Withings Provider
+
+The Withings provider is currently an OAuth-only integration. It starts the Withings authorization flow, exchanges the callback authorization code immediately, and stores encrypted access and refresh tokens in the shared provider OAuth table. Data sync is intentionally not implemented yet.
+
+Withings developer setup:
+
+1. Create or choose a Withings developer application.
+2. Add this callback URL: `http://localhost:8080/api/v1/providers/withings/oauth/callback`
+3. Put the client ID, client secret, redirect URI, and token encryption key in `.env`.
+
+Required Withings OAuth scopes:
+
+- `user.info`
+- `user.metrics`
+- `user.activity`
+
+Start the OAuth flow:
+
+```bash
+curl "http://localhost:8080/api/v1/providers/withings/oauth/start" \
+  -H "Authorization: Bearer local-dev-key"
+```
+
+Open the returned `authorizationUrl` in a browser. Withings redirects back to `/api/v1/providers/withings/oauth/callback`, which stores encrypted tokens for future sync support. Withings authorization codes are valid for only 30 seconds, so the callback must reach this backend immediately.
+
+Calling the Withings sync endpoint currently returns `409 Conflict` with `withings_sync_not_implemented`.
 
 ## Read Data
 
