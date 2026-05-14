@@ -1,13 +1,11 @@
 package me.aquitano.external.withings
 
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
@@ -17,12 +15,15 @@ import me.aquitano.health.api.dto.IngestionRecordDto
 import me.aquitano.health.api.dto.SleepSessionDto
 import me.aquitano.health.api.dto.SleepStageDto
 import me.aquitano.health.api.dto.StepIntervalDto
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
 import kotlin.math.pow
 
 class WithingsNormalizer {
+    private val sleepSessionGap = Duration.ofHours(2)
+
     fun normalize(fetchResult: WithingsFetchResult): WithingsNormalizedBatch {
         val records = when (fetchResult.dataType) {
             "activity" -> normalizeActivity(fetchResult.records)
@@ -146,35 +147,45 @@ class WithingsNormalizer {
                 context = "sleep",
             )
         }
-        val stages = sorted.zipWithNext().mapNotNull { (current, next) ->
-            val stage = mapSleepStage(current.second.int("state")) ?: return@mapNotNull null
-            if (!current.first.isBefore(next.first)) return@mapNotNull null
-            SleepStageDto(
-                stage = stage,
-                startAt = current.first.toString(),
-                endAt = next.first.toString(),
+        val sessions = splitSleepSessions(sorted).mapNotNull { sessionRecords ->
+            val stages = sessionRecords.zipWithNext().mapNotNull { (current, next) ->
+                val stage = mapSleepStage(current.second.int("state")) ?: return@mapNotNull null
+                if (!current.first.isBefore(next.first)) return@mapNotNull null
+                SleepStageDto(
+                    stage = stage,
+                    startAt = current.first.toString(),
+                    endAt = next.first.toString(),
+                )
+            }
+            if (stages.isEmpty()) return@mapNotNull null
+            val start = sessionRecords.first().first
+            val end = sessionRecords.last().first
+            if (!start.isBefore(end)) return@mapNotNull null
+            SleepSessionDto(
+                providerRecordId = "withings:sleep:${start.epochSecond}:${end.epochSecond}",
+                startAt = start.toString(),
+                endAt = end.toString(),
+                stages = stages,
             )
         }
-        val session = if (stages.isNotEmpty()) {
-            val start = sorted.first().first
-            val end = sorted.last().first
-            if (start.isBefore(end)) {
-                listOf(
-                    SleepSessionDto(
-                        providerRecordId = "withings:sleep:${start.epochSecond}:${end.epochSecond}",
-                        startAt = start.toString(),
-                        endAt = end.toString(),
-                        stages = stages,
-                    )
-                )
-            } else {
-                emptyList()
-            }
-        } else {
-            emptyList()
-        }
-        return session + heartRates
+        return sessions + heartRates
     }
+
+    private fun splitSleepSessions(
+        sorted: List<Pair<Instant, JsonObject>>,
+    ): List<List<Pair<Instant, JsonObject>>> =
+        buildList {
+            var current = mutableListOf<Pair<Instant, JsonObject>>()
+            sorted.forEach { record ->
+                val previous = current.lastOrNull()
+                if (previous != null && Duration.between(previous.first, record.first) > sleepSessionGap) {
+                    add(current)
+                    current = mutableListOf()
+                }
+                current.add(record)
+            }
+            if (current.isNotEmpty()) add(current)
+        }
 
     private fun mapSleepStage(value: Int?): String? =
         when (value) {

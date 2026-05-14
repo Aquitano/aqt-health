@@ -101,14 +101,10 @@ class WithingsProvider(
 
     override suspend fun sync(request: ProviderSyncRequest, now: Instant): ProviderSyncSummary {
         val validated = validate(request)
-        val account = repository.latestAccount(WITHINGS_PROVIDER_CODE)
-            ?: throw ConflictException(
-                "withings_not_connected",
-                "Withings is not connected",
-            )
-        val providerInstanceId = validated.providerInstanceId ?: account.providerInstanceId
+        val account = accountForSync(validated.providerInstanceId)
+        val providerInstanceId = account.providerInstanceId
         val cipher = TokenCipher(config.tokenEncryptionKey)
-        val tokenState = freshAccessToken(account, cipher, now)
+        var tokenState = freshAccessToken(account, cipher, now)
         val runId = repository.startSyncRun(
             providerCode = WITHINGS_PROVIDER_CODE,
             providerInstanceId = providerInstanceId,
@@ -133,7 +129,7 @@ class WithingsProvider(
             }
 
             try {
-                val fetchResult = fetchWithOneAuthRetry(
+                val authResult = fetchWithOneAuthRetry(
                     tokenState = tokenState,
                     account = account,
                     cipher = cipher,
@@ -142,6 +138,8 @@ class WithingsProvider(
                     to = validated.to,
                     now = now,
                 )
+                tokenState = authResult.tokenState
+                val fetchResult = authResult.fetchResult
                 val normalized = normalizer.normalize(fetchResult)
                 if (normalized.records.isEmpty()) {
                     logger.info(
@@ -236,6 +234,21 @@ class WithingsProvider(
         )
     }
 
+    private suspend fun accountForSync(providerInstanceId: String?): ProviderOAuthAccount =
+        if (providerInstanceId == null) {
+            repository.latestAccount(WITHINGS_PROVIDER_CODE)
+                ?: throw ConflictException(
+                    "withings_not_connected",
+                    "Withings is not connected",
+                )
+        } else {
+            repository.accountByProviderInstance(WITHINGS_PROVIDER_CODE, providerInstanceId)
+                ?: throw ConflictException(
+                    "withings_account_not_found",
+                    "Withings account is not connected for providerInstanceId: $providerInstanceId",
+                )
+        }
+
     private fun validate(request: ProviderSyncRequest): ValidatedSyncRequest {
         val issues = mutableListOf<ValidationIssue>()
         val dataTypes = request.dataTypes?.takeIf { it.isNotEmpty() } ?: WITHINGS_DEFAULT_DATA_TYPES
@@ -302,13 +315,19 @@ class WithingsProvider(
         from: Instant,
         to: Instant,
         now: Instant,
-    ): WithingsFetchResult =
+    ): FetchWithAuthResult =
         try {
-            fetchDataType(tokenState.accessToken, dataType, from, to)
+            FetchWithAuthResult(
+                fetchResult = fetchDataType(tokenState.accessToken, dataType, from, to),
+                tokenState = tokenState,
+            )
         } catch (exception: WithingsHttpException) {
             if (exception.code != "withings_data_request_failed") throw exception
             val refreshed = refreshAccessToken(account, tokenState.refreshToken, cipher, now)
-            fetchDataType(refreshed.accessToken, dataType, from, to)
+            FetchWithAuthResult(
+                fetchResult = fetchDataType(refreshed.accessToken, dataType, from, to),
+                tokenState = refreshed,
+            )
         }
 
     private suspend fun fetchDataType(
@@ -370,5 +389,10 @@ class WithingsProvider(
     private data class TokenState(
         val accessToken: String,
         val refreshToken: String,
+    )
+
+    private data class FetchWithAuthResult(
+        val fetchResult: WithingsFetchResult,
+        val tokenState: TokenState,
     )
 }

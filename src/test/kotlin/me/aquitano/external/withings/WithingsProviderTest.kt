@@ -137,6 +137,79 @@ class WithingsProviderTest {
     }
 
     @Test
+    fun syncUsesRequestedProviderInstanceAccount() = runBlocking {
+        val fixture = Fixture()
+        fixture.seedAccount(
+            providerUserId = "363",
+            providerInstanceId = "withings-363",
+            accessToken = "requested-access",
+            refreshToken = "requested-refresh",
+            updatedAt = fixture.now,
+        )
+        fixture.seedAccount(
+            providerUserId = "999",
+            providerInstanceId = "withings-999",
+            accessToken = "latest-access",
+            refreshToken = "latest-refresh",
+            updatedAt = fixture.now.plusSeconds(1),
+        )
+
+        val summary = fixture.provider.sync(
+            ProviderSyncRequest(
+                providerInstanceId = "withings-363",
+                from = Instant.parse("2026-04-01T00:00:00Z"),
+                to = Instant.parse("2026-04-02T00:00:00Z"),
+                dataTypes = listOf("activity"),
+            ),
+            fixture.now.plusSeconds(2),
+        )
+
+        assertEquals("withings-363", summary.providerInstanceId)
+        assertEquals(listOf("requested-access"), fixture.client.accessTokensUsed)
+    }
+
+    @Test
+    fun syncRejectsUnknownProviderInstanceBeforeFetching() = runBlocking {
+        val fixture = Fixture()
+        fixture.seedAccount()
+
+        val error = assertFailsWith<ConflictException> {
+            fixture.provider.sync(
+                ProviderSyncRequest(
+                    providerInstanceId = "withings-missing",
+                    from = Instant.parse("2026-04-01T00:00:00Z"),
+                    to = Instant.parse("2026-04-02T00:00:00Z"),
+                    dataTypes = listOf("activity"),
+                ),
+                fixture.now,
+            )
+        }
+
+        assertEquals("withings_account_not_found", error.code)
+        assertTrue(fixture.client.accessTokensUsed.isEmpty())
+    }
+
+    @Test
+    fun authRetryPropagatesRefreshedTokenToRemainingDataTypes() = runBlocking {
+        val fixture = Fixture()
+        fixture.seedAccount()
+        fixture.client.failDataRequestsWithAccessToken = "stored-access"
+        fixture.client.failuresRemaining = 1
+
+        fixture.provider.sync(
+            ProviderSyncRequest(
+                from = Instant.parse("2026-04-01T00:00:00Z"),
+                to = Instant.parse("2026-04-02T00:00:00Z"),
+                dataTypes = listOf("activity", "measures"),
+            ),
+            fixture.now,
+        )
+
+        assertEquals(1, fixture.client.refreshCalls)
+        assertEquals(listOf("stored-access", "fresh-access", "fresh-access"), fixture.client.accessTokensUsed)
+    }
+
+    @Test
     fun syncReturnsNotConnectedConflictWhenNoAccount() = runBlocking {
         val fixture = Fixture()
 
@@ -232,18 +305,25 @@ class WithingsProviderTest {
             providerOAuthRepository = providerRepository,
         )
 
-        suspend fun seedAccount(expiresAt: Instant = now.plusSeconds(3600)) {
+        suspend fun seedAccount(
+            providerUserId: String = "363",
+            providerInstanceId: String = "withings-363",
+            accessToken: String = "stored-access",
+            refreshToken: String = "stored-refresh",
+            expiresAt: Instant = now.plusSeconds(3600),
+            updatedAt: Instant = now,
+        ) {
             val cipher = TokenCipher(config.tokenEncryptionKey)
             providerRepository.upsertAccount(
                 providerCode = WITHINGS_PROVIDER_CODE,
-                providerUserId = "363",
-                providerInstanceId = "withings-363",
-                accessTokenCiphertext = cipher.encrypt("stored-access"),
-                refreshTokenCiphertext = cipher.encrypt("stored-refresh"),
+                providerUserId = providerUserId,
+                providerInstanceId = providerInstanceId,
+                accessTokenCiphertext = cipher.encrypt(accessToken),
+                refreshTokenCiphertext = cipher.encrypt(refreshToken),
                 tokenType = "Bearer",
                 expiresAt = expiresAt,
                 scope = "user.info,user.metrics,user.activity",
-                now = now,
+                now = updatedAt,
             )
         }
     }
@@ -251,6 +331,8 @@ class WithingsProviderTest {
     private class FakeWithingsClient : WithingsClient {
         var nextExchangeFailure: WithingsHttpException? = null
         var refreshCalls = 0
+        var failDataRequestsWithAccessToken: String? = null
+        var failuresRemaining = 0
         val accessTokensUsed = mutableListOf<String>()
 
         override suspend fun exchangeCode(code: String, now: Instant): WithingsTokenSet {
@@ -285,6 +367,7 @@ class WithingsProviderTest {
             category: Int,
         ): WithingsFetchResult {
             accessTokensUsed.add(accessToken)
+            failDataRequestIfConfigured(accessToken)
             return WithingsFetchResult(
                 dataType = "measures",
                 pages = page("measures"),
@@ -311,6 +394,7 @@ class WithingsProviderTest {
             dataFields: List<String>,
         ): WithingsFetchResult {
             accessTokensUsed.add(accessToken)
+            failDataRequestIfConfigured(accessToken)
             return WithingsFetchResult(
                 dataType = "activity",
                 pages = page("activity"),
@@ -331,6 +415,7 @@ class WithingsProviderTest {
             measureTypes: List<Int>,
         ): WithingsFetchResult {
             accessTokensUsed.add(accessToken)
+            failDataRequestIfConfigured(accessToken)
             return WithingsFetchResult(
                 dataType = "sleep",
                 pages = page("sleep"),
@@ -356,6 +441,7 @@ class WithingsProviderTest {
             dataFields: List<String>,
         ): WithingsFetchResult {
             accessTokensUsed.add(accessToken)
+            failDataRequestIfConfigured(accessToken)
             return WithingsFetchResult(
                 dataType = "sleep-summary",
                 pages = page("sleep-summary"),
@@ -367,6 +453,16 @@ class WithingsProviderTest {
                     }
                 ),
             )
+        }
+
+        private fun failDataRequestIfConfigured(accessToken: String) {
+            if (accessToken == failDataRequestsWithAccessToken && failuresRemaining > 0) {
+                failuresRemaining -= 1
+                throw WithingsHttpException(
+                    "withings_data_request_failed",
+                    "Withings data request failed with 401",
+                )
+            }
         }
 
         private fun page(dataType: String): List<WithingsPage> =

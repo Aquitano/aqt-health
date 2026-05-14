@@ -156,6 +156,40 @@ class WithingsNormalizerTest {
     }
 
     @Test
+    fun highFrequencySleepSplitsSessionsAcrossLargeGaps() {
+        val result = normalizer.normalize(
+            fetchResult(
+                "sleep",
+                buildJsonObject {
+                    put("timestamp", "2026-04-01T00:00:00Z")
+                    put("state", 1)
+                },
+                buildJsonObject {
+                    put("timestamp", "2026-04-01T01:00:00Z")
+                    put("state", 2)
+                },
+                buildJsonObject {
+                    put("timestamp", "2026-04-02T00:00:00Z")
+                    put("state", 1)
+                },
+                buildJsonObject {
+                    put("timestamp", "2026-04-02T01:00:00Z")
+                    put("state", 3)
+                },
+            )
+        )
+
+        val sessions = result.records.filterIsInstance<SleepSessionDto>()
+        assertEquals(2, sessions.size)
+        assertEquals("2026-04-01T00:00:00Z", sessions[0].startAt)
+        assertEquals("2026-04-01T01:00:00Z", sessions[0].endAt)
+        assertEquals(1, sessions[0].stages.size)
+        assertEquals("2026-04-02T00:00:00Z", sessions[1].startAt)
+        assertEquals("2026-04-02T01:00:00Z", sessions[1].endAt)
+        assertEquals(1, sessions[1].stages.size)
+    }
+
+    @Test
     fun invalidAndZeroValuesAreSkipped() {
         val result = normalizer.normalize(
             fetchResult(
