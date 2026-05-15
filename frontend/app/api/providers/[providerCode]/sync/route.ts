@@ -2,10 +2,16 @@ import { NextResponse } from "next/server";
 import { syncProvider } from "@/lib/aqtHealthApi";
 import type { ProviderSyncRequest } from "@/lib/types";
 
-export async function POST(request: Request) {
+type RouteContext = {
+  params: Promise<{
+    providerCode: string;
+  }>;
+};
+
+export async function POST(request: Request, context: RouteContext) {
+  const { providerCode } = await context.params;
   const body = (await request.json().catch(() => ({}))) as ProviderSyncRequest;
-  const payload = normalizePayload(body);
-  const result = await syncProvider("google-health", payload);
+  const result = await syncProvider(providerCode, normalizePayload(body));
 
   return NextResponse.json(result, {
     status: result.ok ? 200 : result.status ?? 500,
