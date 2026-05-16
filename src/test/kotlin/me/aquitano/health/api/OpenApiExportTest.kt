@@ -24,7 +24,7 @@ class OpenApiExportTest {
         val output = System.getProperty("aqtHealth.openapi.output")
             ?.let(Path::of)
             ?: return@testApplication
-        output.parent.createDirectories()
+        output.parent?.createDirectories()
         output.writeText(response.bodyAsText())
     }
 
