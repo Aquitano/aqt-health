@@ -47,6 +47,10 @@ export async function getHealthDataPageData(
     bodyMeasurements,
     latestHeartRate,
     latestSleep,
+    latestActivity,
+    latestSleepSummary,
+    latestRespiratoryRate,
+    latestHrv,
   ] = await Promise.all([
     client.getHealth(),
     client.getDashboardSummary({
@@ -70,6 +74,10 @@ export async function getHealthDataPageData(
     }),
     client.listHeartRateSamples({ latest: true, includeSource: true }),
     client.listSleepNights({ date: toDate, timezone, includeSource: true }),
+    client.getLatestActivitySummary({ date: toDate, includeSource: true }),
+    client.getLatestSleepSummary({ includeSource: true }),
+    client.listRespiratoryRateSamples({ latest: true, includeSource: true }),
+    client.listHrvSamples({ latest: true, includeSource: true }),
   ]);
 
   return {
@@ -81,6 +89,10 @@ export async function getHealthDataPageData(
     bodyMeasurements,
     latestHeartRate,
     latestSleep,
+    latestActivity,
+    latestSleepSummary,
+    latestRespiratoryRate,
+    latestHrv,
     metricCatalog,
   };
 }

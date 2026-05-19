@@ -292,5 +292,9 @@ class ProviderWorkflowService(
             sleepStages = sleepStages,
             bodyMeasurements = bodyMeasurements,
             heartRateSamples = heartRateSamples,
+            activitySummaries = activitySummaries,
+            sleepSummaries = sleepSummaries,
+            respiratoryRateSamples = respiratoryRateSamples,
+            hrvSamples = hrvSamples,
         )
 }

@@ -1,7 +1,11 @@
 package me.aquitano.health.infrastructure.repositories
 
 import me.aquitano.health.domain.BodyMeasurementRecord
+import me.aquitano.health.domain.ActivitySummaryRecord
 import me.aquitano.health.domain.HeartRateRecord
+import me.aquitano.health.domain.HrvRecord
+import me.aquitano.health.domain.RespiratoryRateRecord
+import me.aquitano.health.domain.SleepSummaryRecord
 import me.aquitano.health.domain.SleepSessionRecord
 import me.aquitano.health.domain.StepIntervalRecord
 import me.aquitano.health.infrastructure.database.tables.*
@@ -117,6 +121,104 @@ class MetricsWriteRepository {
             Unit
         }
     }
+
+    fun insertActivitySummary(
+        sourceInstanceId: Int,
+        ingestionRecordId: Int,
+        record: ActivitySummaryRecord,
+        now: Instant,
+    ): Boolean =
+        insertOrSkipDuplicateUnit {
+            ActivitySummariesTable.insert {
+                it[this.sourceInstanceId] = sourceInstanceId
+                it[this.ingestionRecordId] = ingestionRecordId
+                it[providerRecordId] = record.providerRecordId
+                it[date] = record.date.toString()
+                it[distanceMeters] = record.distanceMeters
+                it[activeEnergyKcal] = record.activeEnergyKcal
+                it[totalEnergyKcal] = record.totalEnergyKcal
+                it[elevationMeters] = record.elevationMeters
+                it[softMinutes] = record.softMinutes
+                it[moderateMinutes] = record.moderateMinutes
+                it[intenseMinutes] = record.intenseMinutes
+                it[activeMinutes] = record.activeMinutes
+                it[avgHeartRateBpm] = record.averageHeartRateBpm
+                it[minHeartRateBpm] = record.minHeartRateBpm
+                it[maxHeartRateBpm] = record.maxHeartRateBpm
+                it[createdAt] = now.toString()
+            }
+            Unit
+        }
+
+    fun insertSleepSummary(
+        sourceInstanceId: Int,
+        ingestionRecordId: Int,
+        record: SleepSummaryRecord,
+        now: Instant,
+    ): Boolean =
+        insertOrSkipDuplicateUnit {
+            SleepSummariesTable.insert {
+                it[this.sourceInstanceId] = sourceInstanceId
+                it[this.ingestionRecordId] = ingestionRecordId
+                it[providerRecordId] = record.providerRecordId
+                it[startAt] = record.startAt.toString()
+                it[endAt] = record.endAt.toString()
+                it[timeInBedSeconds] = record.timeInBedSeconds
+                it[totalSleepSeconds] = record.totalSleepSeconds
+                it[lightSleepSeconds] = record.lightSleepSeconds
+                it[deepSleepSeconds] = record.deepSleepSeconds
+                it[remSleepSeconds] = record.remSleepSeconds
+                it[sleepEfficiencyPercent] = record.sleepEfficiencyPercent
+                it[sleepLatencySeconds] = record.sleepLatencySeconds
+                it[wakeupLatencySeconds] = record.wakeupLatencySeconds
+                it[wakeupDurationSeconds] = record.wakeupDurationSeconds
+                it[wakeupCount] = record.wakeupCount
+                it[wasoSeconds] = record.wasoSeconds
+                it[sleepScore] = record.sleepScore
+                it[createdAt] = now.toString()
+            }
+            Unit
+        }
+
+    fun insertRespiratoryRateSample(
+        sourceInstanceId: Int,
+        ingestionRecordId: Int,
+        record: RespiratoryRateRecord,
+        now: Instant,
+    ): Boolean =
+        insertOrSkipDuplicateUnit {
+            RespiratoryRateSamplesTable.insert {
+                it[this.sourceInstanceId] = sourceInstanceId
+                it[this.ingestionRecordId] = ingestionRecordId
+                it[providerRecordId] = record.providerRecordId
+                it[measuredAt] = record.measuredAt.toString()
+                it[breathsPerMinute] = record.breathsPerMinute
+                it[context] = record.context
+                it[createdAt] = now.toString()
+            }
+            Unit
+        }
+
+    fun insertHrvSample(
+        sourceInstanceId: Int,
+        ingestionRecordId: Int,
+        record: HrvRecord,
+        now: Instant,
+    ): Boolean =
+        insertOrSkipDuplicateUnit {
+            HrvSamplesTable.insert {
+                it[this.sourceInstanceId] = sourceInstanceId
+                it[this.ingestionRecordId] = ingestionRecordId
+                it[providerRecordId] = record.providerRecordId
+                it[measuredAt] = record.measuredAt.toString()
+                it[metricType] = record.metricType
+                it[value] = record.value
+                it[unit] = record.unit
+                it[context] = record.context
+                it[createdAt] = now.toString()
+            }
+            Unit
+        }
 
     fun recomputeStepDailySummary(
         sourceInstanceId: Int,
