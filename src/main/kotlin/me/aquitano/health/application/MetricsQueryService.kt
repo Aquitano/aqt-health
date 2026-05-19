@@ -39,7 +39,7 @@ class MetricsQueryService(
         now: Instant,
     ): ActivitySummaryLatestResponse =
         dbQuery {
-            val filters = params.dailyReadFilters(now)
+            val filters = params.dailyLatestReadFilters(now)
             val (row, sourceMetadata) =
                 metricsReadRepository.latestActivitySummary(filters)
             ActivitySummaryLatestResponse(
@@ -114,8 +114,8 @@ class MetricsQueryService(
     suspend fun listSleepSummaries(params: QueryParams): SleepSummariesResponse =
         dbQuery {
             val filters = params.readFilters(
-                defaultSort = SortFields.START_AT,
-                allowedSorts = setOf(SortFields.START_AT),
+                defaultSort = SortFields.END_AT,
+                allowedSorts = setOf(SortFields.END_AT),
                 latestSupported = true,
             )
             val (rows, sourceMetadata) =
@@ -468,6 +468,38 @@ class MetricsQueryService(
     }
 
     private fun QueryParams.dailyReadFilters(now: Instant): DailyReadFilters {
+        val (fromDate, toDate) = dailyDateRange(now)
+        return DailyReadFilters(
+            fromDate = fromDate,
+            toDate = toDate,
+            provider = optional("provider"),
+            providerInstanceId = optional("providerInstanceId"),
+            includeSource = boolean("includeSource", default = false),
+            limit = if (optional("date") != null) 1 else limit(
+                default = 500,
+                max = 5000
+            ),
+            sort = sort(setOf(SortFields.DATE), SortFields.DATE),
+            order = order(),
+        )
+    }
+
+    private fun QueryParams.dailyLatestReadFilters(now: Instant): DailyReadFilters {
+        rejectLatestEndpointOverrides()
+        val (fromDate, toDate) = dailyDateRange(now)
+        return DailyReadFilters(
+            fromDate = fromDate,
+            toDate = toDate,
+            provider = optional("provider"),
+            providerInstanceId = optional("providerInstanceId"),
+            includeSource = boolean("includeSource", default = false),
+            limit = 1,
+            sort = SortFields.DATE,
+            order = Orders.DESC,
+        )
+    }
+
+    private fun QueryParams.dailyDateRange(now: Instant): Pair<LocalDate?, LocalDate?> {
         val exactDate = dateOrToday("date", now)
         if (exactDate != null && (optional("fromDate") != null || optional("toDate") != null)) {
             throw RequestValidationException(
@@ -493,19 +525,7 @@ class MetricsQueryService(
                 )
             )
         }
-        return DailyReadFilters(
-            fromDate = fromDate,
-            toDate = toDate,
-            provider = optional("provider"),
-            providerInstanceId = optional("providerInstanceId"),
-            includeSource = boolean("includeSource", default = false),
-            limit = if (exactDate != null) 1 else limit(
-                default = 500,
-                max = 5000
-            ),
-            sort = sort(setOf(SortFields.DATE), SortFields.DATE),
-            order = order(),
-        )
+        return fromDate to toDate
     }
 
     private suspend fun <T> dbQuery(block: () -> T): T =
@@ -719,6 +739,22 @@ class QueryParams(
                         field = it,
                         code = ValidationIssueCodes.InvalidState,
                         message = "cannot be combined with latest=true",
+                    )
+                }
+            )
+        }
+    }
+
+    fun rejectLatestEndpointOverrides() {
+        val invalidFields = listOf("limit", "sort", "order")
+            .filter { optional(it) != null }
+        if (invalidFields.isNotEmpty()) {
+            throw RequestValidationException(
+                invalidFields.map {
+                    ValidationIssue(
+                        field = it,
+                        code = ValidationIssueCodes.InvalidState,
+                        message = "is not supported for latest endpoints",
                     )
                 }
             )

@@ -421,8 +421,56 @@ internal fun Operation.Builder.readQueryParameters(includeLatest: Boolean = fals
 }
 
 internal fun Operation.Builder.dailyStepQueryParameters() {
-    readQueryParameters()
+    dailyReadQueryParameters()
     dateRangeQueryParameters("UTC date")
+}
+
+internal fun Operation.Builder.dailyLatestQueryParameters() {
+    dailyReadQueryParameters(includeListControls = false)
+    dateRangeQueryParameters("UTC date")
+}
+
+private fun Operation.Builder.dailyReadQueryParameters(includeListControls: Boolean = true) {
+    parameters {
+        query("provider") {
+            description = "Source provider filter."
+            schema = stringSchema(example = WITHINGS_PROVIDER_CODE)
+        }
+        query("providerInstanceId") {
+            description = "Source provider account or instance filter."
+            schema = stringSchema(example = ExampleProviderInstanceId)
+        }
+        query("includeSource") {
+            description =
+                "Include source provider metadata in each item. Defaults to false."
+            schema = booleanSchema(default = false, example = false)
+        }
+        if (includeListControls) {
+            query("sort") {
+                description = "Sort field. Daily endpoints support date."
+                schema = stringSchema(example = "date")
+            }
+            query("order") {
+                description =
+                    "Sort direction. Defaults to asc. Use desc for newest-first reads."
+                schema = stringSchema(
+                    enumValues = listOf("asc", "desc"),
+                    default = "asc",
+                    example = "desc",
+                )
+            }
+            query("limit") {
+                description =
+                    "Maximum number of items. Defaults to 500 and cannot exceed 5000."
+                schema = integerSchema(
+                    default = 500,
+                    minimum = 1.0,
+                    maximum = 5000.0,
+                    example = 100
+                )
+            }
+        }
+    }
 }
 
 internal fun Operation.Builder.sleepNightQueryParameters() {
@@ -742,7 +790,7 @@ internal fun Route.describeDailyStepReadOperation(): Route = describe {
     tag("Read")
     summary = "List daily step summaries"
     description =
-        "Returns daily UTC step totals. Use `date` for one day, or `fromDate` and `toDate` for an inclusive date range. `from` and `to` are also accepted by the shared query parser for timestamp-style filters."
+        "Returns daily UTC step totals. Use `date` for one day, or `fromDate` and `toDate` for an inclusive date range."
     requiresBearerAuth()
     dailyStepQueryParameters()
     errorResponses()
@@ -766,7 +814,7 @@ internal fun Route.describeActivitySummaryLatestReadOperation(): Route = describ
     description =
         "Returns the latest matching daily activity summary for optional date and source filters."
     requiresBearerAuth()
-    dailyStepQueryParameters()
+    dailyLatestQueryParameters()
     errorResponses()
 }
 

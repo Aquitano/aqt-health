@@ -465,7 +465,7 @@ class MetricsReadRepository {
         val rows = SleepSummariesTable.selectAll()
             .where(combineConditions(conditions))
             .orderBy(
-                SleepSummariesTable.startAt to filters.sortOrder(),
+                SleepSummariesTable.endAt to filters.sortOrder(),
                 SleepSummariesTable.id to filters.sortOrder(),
             )
             .limit(filters.limit)

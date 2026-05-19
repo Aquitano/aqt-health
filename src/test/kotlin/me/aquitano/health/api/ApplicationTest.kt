@@ -189,6 +189,19 @@ class ApplicationTest {
         assertTrue("date" in dailyStepParamNames)
         assertTrue("fromDate" in dailyStepParamNames)
         assertTrue("toDate" in dailyStepParamNames)
+        assertFalse("from" in dailyStepParamNames)
+        assertFalse("to" in dailyStepParamNames)
+
+        val latestActivityParamNames = paths["/api/v1/activity/summaries/latest"]!!.jsonObject["get"]!!.jsonObject["parameters"]!!
+            .jsonArray.map { it.jsonObject["name"]!!.jsonPrimitive.content }.toSet()
+        assertTrue("date" in latestActivityParamNames)
+        assertTrue("fromDate" in latestActivityParamNames)
+        assertTrue("toDate" in latestActivityParamNames)
+        assertFalse("from" in latestActivityParamNames)
+        assertFalse("to" in latestActivityParamNames)
+        assertFalse("limit" in latestActivityParamNames)
+        assertFalse("sort" in latestActivityParamNames)
+        assertFalse("order" in latestActivityParamNames)
 
         val bodyMetricParamNames = paths["/api/v1/body/measurements"]!!.jsonObject["get"]!!.jsonObject["parameters"]!!
             .jsonArray.map { it.jsonObject["name"]!!.jsonPrimitive.content }.toSet()

@@ -288,6 +288,20 @@ class ReadApiRouteTest {
             latestHeartRate.items()[0].jsonObject["bpm"]!!.jsonPrimitive.int
         )
 
+        val latestSleepSummary =
+            authorizedGet("/api/v1/sleep/summaries?latest=true")
+        val latestSleepSummaryAlias =
+            authorizedGet("/api/v1/sleep/summaries/latest")
+        assertEquals(1, latestSleepSummary.items().size)
+        assertEquals(
+            91,
+            latestSleepSummary.items()[0].jsonObject["sleepScore"]!!.jsonPrimitive.int
+        )
+        assertEquals(
+            latestSleepSummary.items()[0].jsonObject["sleepScore"]!!.jsonPrimitive.int,
+            latestSleepSummaryAlias.jsonBody()["item"]!!.jsonObject["sleepScore"]!!.jsonPrimitive.int
+        )
+
         val datedSteps =
             authorizedGet("/api/v1/metrics/steps/daily?date=2026-04-19")
         assertEquals(1, datedSteps.items().size)
@@ -383,6 +397,14 @@ class ReadApiRouteTest {
         assertEquals(
             "limit",
             latestWithLimit.errorDetails()[0].jsonObject["field"]!!.jsonPrimitive.content
+        )
+
+        val latestActivityWithLimit =
+            authorizedGet("/api/v1/activity/summaries/latest?limit=10")
+        assertEquals(HttpStatusCode.BadRequest, latestActivityWithLimit.status)
+        assertEquals(
+            "limit",
+            latestActivityWithLimit.errorDetails()[0].jsonObject["field"]!!.jsonPrimitive.content
         )
     }
 
@@ -886,6 +908,24 @@ class ReadApiRouteTest {
               "measuredAt": "2026-04-19T21:45:00Z",
               "bpm": 67,
               "context": "resting"
+            },
+            {
+              "type": "sleep_summary",
+              "providerRecordId": "sleep-summary-read-2",
+              "startAt": "2026-04-18T21:00:00Z",
+              "endAt": "2026-04-20T07:00:00Z",
+              "timeInBedSeconds": 122400,
+              "totalSleepSeconds": 21600,
+              "lightSleepSeconds": 9600,
+              "deepSleepSeconds": 6600,
+              "remSleepSeconds": 5400,
+              "sleepEfficiencyPercent": 91.0,
+              "sleepLatencySeconds": 480,
+              "wakeupLatencySeconds": 90,
+              "wakeupDurationSeconds": 600,
+              "wakeupCount": 1,
+              "wasoSeconds": 240,
+              "sleepScore": 91
             }
           ]
         }
