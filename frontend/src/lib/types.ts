@@ -72,9 +72,13 @@ export type HealthDataPageData = HealthStatusData & {
   summary: ApiResult<DashboardSummaryResponse>;
   healthDay: ApiResult<HealthDayResponse>;
   dailySteps: ApiResult<StepDailySummariesResponse>;
+  activitySummaries: ApiResult<ActivitySummariesResponse>;
   bodyMeasurements: ApiResult<BodyMeasurementsResponse>;
   latestHeartRate: ApiResult<HeartRateSamplesResponse>;
   latestSleep: ApiResult<SleepNightsResponse>;
+  sleepSummaries: ApiResult<SleepSummariesResponse>;
+  respiratoryRates: ApiResult<RespiratoryRateSamplesResponse>;
+  hrvSamples: ApiResult<HrvSamplesResponse>;
   latestActivity: ApiResult<ActivitySummaryLatestResponse>;
   latestSleepSummary: ApiResult<SleepSummaryLatestResponse>;
   latestRespiratoryRate: ApiResult<RespiratoryRateSamplesResponse>;
