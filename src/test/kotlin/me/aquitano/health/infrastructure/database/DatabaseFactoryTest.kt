@@ -22,7 +22,7 @@ class DatabaseFactoryTest {
 
         val tableNames = transaction(database) {
             val names = mutableSetOf<String>()
-            exec("SELECT tablename FROM pg_tables WHERE schemaname = 'public'") { resultSet ->
+            exec("SELECT tablename FROM pg_tables WHERE schemaname = current_schema()") { resultSet ->
                 while (resultSet.next()) {
                     names.add(resultSet.getString("tablename"))
                 }
@@ -52,7 +52,7 @@ class DatabaseFactoryTest {
 
         val indexNames = transaction(database) {
             val names = mutableSetOf<String>()
-            exec("SELECT indexname FROM pg_indexes WHERE schemaname = 'public'") { resultSet ->
+            exec("SELECT indexname FROM pg_indexes WHERE schemaname = current_schema()") { resultSet ->
                 while (resultSet.next()) {
                     names.add(resultSet.getString("indexname"))
                 }

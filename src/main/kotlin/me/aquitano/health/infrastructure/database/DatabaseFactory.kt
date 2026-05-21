@@ -4,7 +4,6 @@ import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import me.aquitano.health.infrastructure.config.DatabaseConfig
 import org.jetbrains.exposed.sql.Database
-import java.util.Collections
 
 class DatabaseFactory(
     private val migrator: FlywayMigrator = FlywayMigrator(),
@@ -26,29 +25,11 @@ class DatabaseFactory(
         close()
         val newDataSource = HikariDataSource(hikariConfig)
         dataSource = newDataSource
-        openDataSources.add(newDataSource)
         return Database.connect(newDataSource)
     }
 
     override fun close() {
-        dataSource?.let {
-            it.close()
-            openDataSources.remove(it)
-        }
+        dataSource?.close()
         dataSource = null
-    }
-
-    companion object {
-        private val openDataSources =
-            Collections.synchronizedSet(mutableSetOf<HikariDataSource>())
-
-        init {
-            Runtime.getRuntime().addShutdownHook(
-                Thread {
-                    openDataSources.toList().forEach { it.close() }
-                    openDataSources.clear()
-                }
-            )
-        }
     }
 }

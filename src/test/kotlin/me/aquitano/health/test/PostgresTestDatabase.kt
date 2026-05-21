@@ -1,9 +1,11 @@
 package me.aquitano.health.test
 
 import me.aquitano.health.infrastructure.config.DatabaseConfig
+import org.junit.AssumptionViolatedException
 import org.testcontainers.containers.PostgreSQLContainer
 import java.sql.Connection
 import java.sql.DriverManager
+import java.sql.SQLException
 import java.util.Collections
 import java.util.UUID
 
@@ -28,20 +30,43 @@ object PostgresTestDatabase {
     }
 
     fun config(): DatabaseConfig {
-        externalConfig()?.let { return it }
+        val configuredJdbcUrl = System.getenv("AQT_HEALTH_TEST_JDBC_URL")
+        val configuredUser = System.getenv("AQT_HEALTH_TEST_DB_USER") ?: "aqt_health"
+        val configuredPassword = System.getenv("AQT_HEALTH_TEST_DB_PASSWORD") ?: "aqt_health"
+        externalConfig(
+            jdbcUrl = configuredJdbcUrl ?: LOCAL_JDBC_URL,
+            user = configuredUser,
+            password = configuredPassword,
+            required = configuredJdbcUrl != null,
+        )?.let { return it }
+
+        if (!dockerIsAvailable()) {
+            throw AssumptionViolatedException(
+                "PostgreSQL integration tests require Docker or a reachable " +
+                        "AQT_HEALTH_TEST_JDBC_URL/local PostgreSQL database.",
+            )
+        }
 
         val databaseName = "aqt_health_test_${UUID.randomUUID().toString().replace("-", "")}"
-        adminConnection().use { connection ->
-            connection.createStatement().use { statement ->
-                statement.execute("CREATE DATABASE $databaseName")
+        try {
+            adminConnection().use { connection ->
+                connection.createStatement().use { statement ->
+                    statement.execute("CREATE DATABASE $databaseName")
+                }
             }
+        } catch (exception: IllegalStateException) {
+            throw AssumptionViolatedException(
+                "PostgreSQL integration tests require Docker or a reachable " +
+                        "AQT_HEALTH_TEST_JDBC_URL/local PostgreSQL database.",
+                exception,
+            )
         }
         return DatabaseConfig(
             jdbcUrl = "jdbc:postgresql://${container.host}:${container.getMappedPort(5432)}/$databaseName",
             driver = "org.postgresql.Driver",
             user = container.username,
             password = container.password,
-            maxPoolSize = 4,
+            maxPoolSize = 1,
         )
     }
 
@@ -64,15 +89,23 @@ object PostgresTestDatabase {
             container.password,
         )
 
-    private fun externalConfig(): DatabaseConfig? {
-        val jdbcUrl = System.getenv("AQT_HEALTH_TEST_JDBC_URL") ?: return null
-        val user = System.getenv("AQT_HEALTH_TEST_DB_USER") ?: "aqt_health"
-        val password = System.getenv("AQT_HEALTH_TEST_DB_PASSWORD") ?: "aqt_health"
+    private fun externalConfig(
+        jdbcUrl: String,
+        user: String,
+        password: String,
+        required: Boolean,
+    ): DatabaseConfig? {
         val schema = "aqt_health_test_${UUID.randomUUID().toString().replace("-", "")}"
-        DriverManager.getConnection(jdbcUrl, user, password).use { connection ->
-            connection.createStatement().use { statement ->
-                statement.execute("CREATE SCHEMA $schema")
-            }
+        try {
+            DriverManager.getConnection(jdbcUrl.withJdbcParameter("connectTimeout", "1"), user, password)
+                .use { connection ->
+                    connection.createStatement().use { statement ->
+                        statement.execute("CREATE SCHEMA $schema")
+                    }
+                }
+        } catch (exception: SQLException) {
+            if (required) throw exception
+            return null
         }
         externalSchemas.add(ExternalSchema(jdbcUrl, user, password, schema))
         return DatabaseConfig(
@@ -80,9 +113,26 @@ object PostgresTestDatabase {
             driver = "org.postgresql.Driver",
             user = user,
             password = password,
-            maxPoolSize = 4,
+            maxPoolSize = 1,
         )
     }
+
+    private fun dockerIsAvailable(): Boolean =
+        listOf(
+            listOf("docker", "info"),
+            listOf("/usr/local/bin/docker", "info"),
+            listOf("/opt/homebrew/bin/docker", "info"),
+        ).any { command ->
+            try {
+                ProcessBuilder(command)
+                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                    .redirectError(ProcessBuilder.Redirect.DISCARD)
+                    .start()
+                    .waitFor() == 0
+            } catch (_: Exception) {
+                false
+            }
+        }
 
     private fun String.withJdbcParameter(name: String, value: String): String {
         val separator = if (contains("?")) "&" else "?"
@@ -108,4 +158,7 @@ object PostgresTestDatabase {
             }
         )
     }
+
+    private const val LOCAL_JDBC_URL =
+        "jdbc:postgresql://localhost:5432/aqt_health"
 }
