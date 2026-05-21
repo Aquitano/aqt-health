@@ -15,99 +15,24 @@ export type StepDailySummariesResponse = ApiSchema<"StepDailySummariesResponse">
 export type BodyMeasurement = ApiSchema<"BodyMeasurementResponse">;
 export type BodyMeasurementsResponse = ApiSchema<"BodyMeasurementsResponse">;
 export type BodyMeasurementLatestResponse = ApiSchema<"BodyMeasurementLatestResponse">;
-export type ActivitySummary = {
-  id: number;
-  date: string;
-  distanceMeters?: number | null;
-  activeEnergyKcal?: number | null;
-  totalEnergyKcal?: number | null;
-  elevationMeters?: number | null;
-  softMinutes?: number | null;
-  moderateMinutes?: number | null;
-  intenseMinutes?: number | null;
-  activeMinutes?: number | null;
-  averageHeartRateBpm?: number | null;
-  minHeartRateBpm?: number | null;
-  maxHeartRateBpm?: number | null;
-  source?: SourceMetadata | null;
-};
-export type ActivitySummariesResponse = {
-  items: ActivitySummary[];
-  meta: ReadResponseMeta;
-};
-export type ActivitySummaryLatestResponse = {
-  item?: ActivitySummary | null;
-};
+export type ActivitySummary = ApiSchema<"ActivitySummaryResponse">;
+export type ActivitySummariesResponse = ApiSchema<"ActivitySummariesResponse">;
+export type ActivitySummaryLatestResponse = ApiSchema<"ActivitySummaryLatestResponse">;
 export type HeartRateSample = ApiSchema<"HeartRateSampleResponse">;
 export type HeartRateSamplesResponse = ApiSchema<"HeartRateSamplesResponse">;
 export type HeartRateSummaryResponse = ApiSchema<"HeartRateSummaryResponse">;
-export type RespiratoryRateSample = {
-  id: number;
-  measuredAt: string;
-  breathsPerMinute: number;
-  context: string;
-  source?: SourceMetadata | null;
-};
-export type RespiratoryRateSamplesResponse = {
-  items: RespiratoryRateSample[];
-  meta: ReadResponseMeta;
-};
-export type RespiratoryRateSummaryResponse = {
-  count: number;
-  minBreathsPerMinute?: number | null;
-  maxBreathsPerMinute?: number | null;
-  avgBreathsPerMinute?: number | null;
-  latest?: RespiratoryRateSample | null;
-};
-export type HrvSample = {
-  id: number;
-  measuredAt: string;
-  metricType: string;
-  value: number;
-  unit: string;
-  context: string;
-  source?: SourceMetadata | null;
-};
-export type HrvSamplesResponse = {
-  items: HrvSample[];
-  meta: ReadResponseMeta;
-};
-export type HrvSummaryResponse = {
-  count: number;
-  metricType: string;
-  minValue?: number | null;
-  maxValue?: number | null;
-  avgValue?: number | null;
-  latest?: HrvSample | null;
-};
+export type RespiratoryRateSample = ApiSchema<"RespiratoryRateSampleResponse">;
+export type RespiratoryRateSamplesResponse = ApiSchema<"RespiratoryRateSamplesResponse">;
+export type RespiratoryRateSummaryResponse = ApiSchema<"RespiratoryRateSummaryResponse">;
+export type HrvSample = ApiSchema<"HrvSampleResponse">;
+export type HrvSamplesResponse = ApiSchema<"HrvSamplesResponse">;
+export type HrvSummaryResponse = ApiSchema<"HrvSummaryResponse">;
 export type SleepStage = ApiSchema<"SleepStageResponse">;
 export type SleepSession = ApiSchema<"SleepSessionResponse">;
 export type SleepSessionsResponse = ApiSchema<"SleepSessionsResponse">;
-export type SleepSummary = {
-  id: number;
-  startAt: string;
-  endAt: string;
-  timeInBedSeconds?: number | null;
-  totalSleepSeconds?: number | null;
-  lightSleepSeconds?: number | null;
-  deepSleepSeconds?: number | null;
-  remSleepSeconds?: number | null;
-  sleepEfficiencyPercent?: number | null;
-  sleepLatencySeconds?: number | null;
-  wakeupLatencySeconds?: number | null;
-  wakeupDurationSeconds?: number | null;
-  wakeupCount?: number | null;
-  wasoSeconds?: number | null;
-  sleepScore?: number | null;
-  source?: SourceMetadata | null;
-};
-export type SleepSummariesResponse = {
-  items: SleepSummary[];
-  meta: ReadResponseMeta;
-};
-export type SleepSummaryLatestResponse = {
-  item?: SleepSummary | null;
-};
+export type SleepSummary = ApiSchema<"SleepSummaryResponse">;
+export type SleepSummariesResponse = ApiSchema<"SleepSummariesResponse">;
+export type SleepSummaryLatestResponse = ApiSchema<"SleepSummaryLatestResponse">;
 export type SleepNight = ApiSchema<"SleepNightResponse">;
 export type SleepNightsResponse = ApiSchema<"SleepNightsResponse">;
 export type DashboardSummaryResponse = ApiSchema<"DashboardSummaryResponse">;
