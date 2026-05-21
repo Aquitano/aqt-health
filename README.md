@@ -99,6 +99,8 @@ Environment variables:
 
 If `AQT_HEALTH_BOOTSTRAP_API_KEY` is set, the app hashes it with SHA-256 and stores only `sha256:<hex>` in `api_clients`. If it is blank, startup still succeeds, but protected endpoints require a client row to exist in PostgreSQL.
 
+PostgreSQL migrations require permission to run `CREATE EXTENSION IF NOT EXISTS btree_gist`. Managed deployments should enable `btree_gist` ahead of application startup if the application database user cannot create extensions.
+
 For local secrets, copy `.env.example` to `.env` and put real values only in `.env`. The `.env` file is ignored by git.
 
 PowerShell:

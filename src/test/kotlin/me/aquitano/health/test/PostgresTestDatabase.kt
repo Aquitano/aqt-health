@@ -4,9 +4,20 @@ import me.aquitano.health.infrastructure.config.DatabaseConfig
 import org.testcontainers.containers.PostgreSQLContainer
 import java.sql.Connection
 import java.sql.DriverManager
+import java.util.Collections
 import java.util.UUID
 
 object PostgresTestDatabase {
+    private data class ExternalSchema(
+        val jdbcUrl: String,
+        val user: String,
+        val password: String,
+        val schema: String,
+    )
+
+    private val externalSchemas =
+        Collections.synchronizedList(mutableListOf<ExternalSchema>())
+
     private val container: PostgreSQLContainer<Nothing> by lazy {
         PostgreSQLContainer<Nothing>("postgres:17-alpine").apply {
             withDatabaseName("postgres")
@@ -22,7 +33,7 @@ object PostgresTestDatabase {
         val databaseName = "aqt_health_test_${UUID.randomUUID().toString().replace("-", "")}"
         adminConnection().use { connection ->
             connection.createStatement().use { statement ->
-                statement.execute("""CREATE DATABASE "$databaseName"""")
+                statement.execute("CREATE DATABASE $databaseName")
             }
         }
         return DatabaseConfig(
@@ -60,9 +71,10 @@ object PostgresTestDatabase {
         val schema = "aqt_health_test_${UUID.randomUUID().toString().replace("-", "")}"
         DriverManager.getConnection(jdbcUrl, user, password).use { connection ->
             connection.createStatement().use { statement ->
-                statement.execute("""CREATE SCHEMA "$schema"""")
+                statement.execute("CREATE SCHEMA $schema")
             }
         }
+        externalSchemas.add(ExternalSchema(jdbcUrl, user, password, schema))
         return DatabaseConfig(
             jdbcUrl = jdbcUrl.withJdbcParameter("currentSchema", schema),
             driver = "org.postgresql.Driver",
@@ -75,5 +87,25 @@ object PostgresTestDatabase {
     private fun String.withJdbcParameter(name: String, value: String): String {
         val separator = if (contains("?")) "&" else "?"
         return "$this$separator$name=$value"
+    }
+
+    init {
+        Runtime.getRuntime().addShutdownHook(
+            Thread {
+                externalSchemas.toList().forEach { externalSchema ->
+                    DriverManager.getConnection(
+                        externalSchema.jdbcUrl,
+                        externalSchema.user,
+                        externalSchema.password,
+                    ).use { connection ->
+                        connection.createStatement().use { statement ->
+                            statement.execute(
+                                "DROP SCHEMA IF EXISTS ${externalSchema.schema} CASCADE"
+                            )
+                        }
+                    }
+                }
+            }
+        )
     }
 }
