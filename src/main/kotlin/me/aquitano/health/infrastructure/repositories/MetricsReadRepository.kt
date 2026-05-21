@@ -191,8 +191,8 @@ class MetricsReadRepository {
         val sourceIds = sourceInstanceIds(filters.provider, filters.providerInstanceId)
         if (sourceIds != null && sourceIds.isEmpty()) return emptyList<ActivitySummaryRow>() to emptyMap()
         val conditions = mutableListOf<Op<Boolean>>()
-        filters.fromDate?.let { conditions.add(ActivitySummariesTable.date greaterEq it.toString()) }
-        filters.toDate?.let { conditions.add(ActivitySummariesTable.date lessEq it.toString()) }
+        filters.fromDate?.let { conditions.add(ActivitySummariesTable.date greaterEq it) }
+        filters.toDate?.let { conditions.add(ActivitySummariesTable.date lessEq it) }
         sourceIds?.let { conditions.add(ActivitySummariesTable.sourceInstanceId inList it) }
         val rows = ActivitySummariesTable.selectAll()
             .where(combineConditions(conditions))
@@ -209,8 +209,8 @@ class MetricsReadRepository {
         val sourceIds = sourceInstanceIds(filters.provider, filters.providerInstanceId)
         if (sourceIds != null && sourceIds.isEmpty()) return null to emptyMap()
         val conditions = mutableListOf<Op<Boolean>>()
-        filters.fromDate?.let { conditions.add(ActivitySummariesTable.date greaterEq it.toString()) }
-        filters.toDate?.let { conditions.add(ActivitySummariesTable.date lessEq it.toString()) }
+        filters.fromDate?.let { conditions.add(ActivitySummariesTable.date greaterEq it) }
+        filters.toDate?.let { conditions.add(ActivitySummariesTable.date lessEq it) }
         sourceIds?.let { conditions.add(ActivitySummariesTable.sourceInstanceId inList it) }
         val row = ActivitySummariesTable.selectAll()
             .where(combineConditions(conditions))
@@ -461,8 +461,8 @@ class MetricsReadRepository {
         val sourceIds = sourceInstanceIds(filters.provider, filters.providerInstanceId)
         if (sourceIds != null && sourceIds.isEmpty()) return emptyList<SleepSummaryRow>() to emptyMap()
         val conditions = mutableListOf<Op<Boolean>>()
-        filters.from?.let { conditions.add(SleepSummariesTable.startAt greaterEq it.toString()) }
-        filters.to?.let { conditions.add(SleepSummariesTable.startAt less it.toString()) }
+        filters.from?.let { conditions.add(SleepSummariesTable.startAt greaterEq it.toDbTimestamp()) }
+        filters.to?.let { conditions.add(SleepSummariesTable.startAt less it.toDbTimestamp()) }
         sourceIds?.let { conditions.add(SleepSummariesTable.sourceInstanceId inList it) }
         val rows = SleepSummariesTable.selectAll()
             .where(combineConditions(conditions))
@@ -479,8 +479,8 @@ class MetricsReadRepository {
         val sourceIds = sourceInstanceIds(filters.provider, filters.providerInstanceId)
         if (sourceIds != null && sourceIds.isEmpty()) return null to emptyMap()
         val conditions = mutableListOf<Op<Boolean>>()
-        filters.from?.let { conditions.add(SleepSummariesTable.startAt greaterEq it.toString()) }
-        filters.to?.let { conditions.add(SleepSummariesTable.startAt less it.toString()) }
+        filters.from?.let { conditions.add(SleepSummariesTable.startAt greaterEq it.toDbTimestamp()) }
+        filters.to?.let { conditions.add(SleepSummariesTable.startAt less it.toDbTimestamp()) }
         sourceIds?.let { conditions.add(SleepSummariesTable.sourceInstanceId inList it) }
         val row = SleepSummariesTable.selectAll()
             .where(combineConditions(conditions))
@@ -705,8 +705,8 @@ class MetricsReadRepository {
         val sourceIds = sourceInstanceIds(filters.provider, filters.providerInstanceId)
         if (sourceIds != null && sourceIds.isEmpty()) return emptyList<RespiratoryRateSampleRow>() to emptyMap()
         val conditions = mutableListOf<Op<Boolean>>()
-        filters.from?.let { conditions.add(RespiratoryRateSamplesTable.measuredAt greaterEq it.toString()) }
-        filters.to?.let { conditions.add(RespiratoryRateSamplesTable.measuredAt less it.toString()) }
+        filters.from?.let { conditions.add(RespiratoryRateSamplesTable.measuredAt greaterEq it.toDbTimestamp()) }
+        filters.to?.let { conditions.add(RespiratoryRateSamplesTable.measuredAt less it.toDbTimestamp()) }
         sourceIds?.let { conditions.add(RespiratoryRateSamplesTable.sourceInstanceId inList it) }
         val rows = RespiratoryRateSamplesTable.selectAll()
             .where(combineConditions(conditions))
@@ -723,8 +723,8 @@ class MetricsReadRepository {
         val sourceIds = sourceInstanceIds(filters.provider, filters.providerInstanceId)
         if (sourceIds != null && sourceIds.isEmpty()) return null to emptyMap()
         val conditions = mutableListOf<Op<Boolean>>()
-        filters.from?.let { conditions.add(RespiratoryRateSamplesTable.measuredAt greaterEq it.toString()) }
-        filters.to?.let { conditions.add(RespiratoryRateSamplesTable.measuredAt less it.toString()) }
+        filters.from?.let { conditions.add(RespiratoryRateSamplesTable.measuredAt greaterEq it.toDbTimestamp()) }
+        filters.to?.let { conditions.add(RespiratoryRateSamplesTable.measuredAt less it.toDbTimestamp()) }
         sourceIds?.let { conditions.add(RespiratoryRateSamplesTable.sourceInstanceId inList it) }
         val row = RespiratoryRateSamplesTable.selectAll()
             .where(combineConditions(conditions))
@@ -742,8 +742,8 @@ class MetricsReadRepository {
         val sourceIds = sourceInstanceIds(filters.provider, filters.providerInstanceId)
         if (sourceIds != null && sourceIds.isEmpty()) return RespiratoryRateSummaryRow(0, null, null, null)
         val conditions = mutableListOf<Op<Boolean>>()
-        filters.from?.let { conditions.add(RespiratoryRateSamplesTable.measuredAt greaterEq it.toString()) }
-        filters.to?.let { conditions.add(RespiratoryRateSamplesTable.measuredAt less it.toString()) }
+        filters.from?.let { conditions.add(RespiratoryRateSamplesTable.measuredAt greaterEq it.toDbTimestamp()) }
+        filters.to?.let { conditions.add(RespiratoryRateSamplesTable.measuredAt less it.toDbTimestamp()) }
         sourceIds?.let { conditions.add(RespiratoryRateSamplesTable.sourceInstanceId inList it) }
         val countExpression = RespiratoryRateSamplesTable.id.count()
         val minExpression = RespiratoryRateSamplesTable.breathsPerMinute.min()
@@ -767,8 +767,8 @@ class MetricsReadRepository {
         val sourceIds = sourceInstanceIds(filters.provider, filters.providerInstanceId)
         if (sourceIds != null && sourceIds.isEmpty()) return emptyList<HrvSampleRow>() to emptyMap()
         val conditions = mutableListOf<Op<Boolean>>()
-        filters.from?.let { conditions.add(HrvSamplesTable.measuredAt greaterEq it.toString()) }
-        filters.to?.let { conditions.add(HrvSamplesTable.measuredAt less it.toString()) }
+        filters.from?.let { conditions.add(HrvSamplesTable.measuredAt greaterEq it.toDbTimestamp()) }
+        filters.to?.let { conditions.add(HrvSamplesTable.measuredAt less it.toDbTimestamp()) }
         sourceIds?.let { conditions.add(HrvSamplesTable.sourceInstanceId inList it) }
         conditions.add(HrvSamplesTable.metricType eq metricType)
         val rows = HrvSamplesTable.selectAll()
@@ -786,8 +786,8 @@ class MetricsReadRepository {
         val sourceIds = sourceInstanceIds(filters.provider, filters.providerInstanceId)
         if (sourceIds != null && sourceIds.isEmpty()) return null to emptyMap()
         val conditions = mutableListOf<Op<Boolean>>()
-        filters.from?.let { conditions.add(HrvSamplesTable.measuredAt greaterEq it.toString()) }
-        filters.to?.let { conditions.add(HrvSamplesTable.measuredAt less it.toString()) }
+        filters.from?.let { conditions.add(HrvSamplesTable.measuredAt greaterEq it.toDbTimestamp()) }
+        filters.to?.let { conditions.add(HrvSamplesTable.measuredAt less it.toDbTimestamp()) }
         sourceIds?.let { conditions.add(HrvSamplesTable.sourceInstanceId inList it) }
         conditions.add(HrvSamplesTable.metricType eq metricType)
         val row = HrvSamplesTable.selectAll()
@@ -806,8 +806,8 @@ class MetricsReadRepository {
         val sourceIds = sourceInstanceIds(filters.provider, filters.providerInstanceId)
         if (sourceIds != null && sourceIds.isEmpty()) return HrvSummaryRow(0, null, null, null)
         val conditions = mutableListOf<Op<Boolean>>()
-        filters.from?.let { conditions.add(HrvSamplesTable.measuredAt greaterEq it.toString()) }
-        filters.to?.let { conditions.add(HrvSamplesTable.measuredAt less it.toString()) }
+        filters.from?.let { conditions.add(HrvSamplesTable.measuredAt greaterEq it.toDbTimestamp()) }
+        filters.to?.let { conditions.add(HrvSamplesTable.measuredAt less it.toDbTimestamp()) }
         sourceIds?.let { conditions.add(HrvSamplesTable.sourceInstanceId inList it) }
         conditions.add(HrvSamplesTable.metricType eq metricType)
         val countExpression = HrvSamplesTable.id.count()
@@ -932,7 +932,7 @@ class MetricsReadRepository {
         ActivitySummaryRow(
             id = row[ActivitySummariesTable.id].value,
             sourceInstanceId = row[ActivitySummariesTable.sourceInstanceId],
-            date = row[ActivitySummariesTable.date],
+            date = row[ActivitySummariesTable.date].toString(),
             distanceMeters = row[ActivitySummariesTable.distanceMeters],
             activeEnergyKcal = row[ActivitySummariesTable.activeEnergyKcal],
             totalEnergyKcal = row[ActivitySummariesTable.totalEnergyKcal],
@@ -950,8 +950,8 @@ class MetricsReadRepository {
         SleepSummaryRow(
             id = row[SleepSummariesTable.id].value,
             sourceInstanceId = row[SleepSummariesTable.sourceInstanceId],
-            startAt = row[SleepSummariesTable.startAt],
-            endAt = row[SleepSummariesTable.endAt],
+            startAt = row[SleepSummariesTable.startAt].toApiString(),
+            endAt = row[SleepSummariesTable.endAt].toApiString(),
             timeInBedSeconds = row[SleepSummariesTable.timeInBedSeconds],
             totalSleepSeconds = row[SleepSummariesTable.totalSleepSeconds],
             lightSleepSeconds = row[SleepSummariesTable.lightSleepSeconds],
@@ -970,7 +970,7 @@ class MetricsReadRepository {
         RespiratoryRateSampleRow(
             id = row[RespiratoryRateSamplesTable.id].value,
             sourceInstanceId = row[RespiratoryRateSamplesTable.sourceInstanceId],
-            measuredAt = row[RespiratoryRateSamplesTable.measuredAt],
+            measuredAt = row[RespiratoryRateSamplesTable.measuredAt].toApiString(),
             breathsPerMinute = row[RespiratoryRateSamplesTable.breathsPerMinute],
             context = row[RespiratoryRateSamplesTable.context] ?: "unknown",
         )
@@ -979,7 +979,7 @@ class MetricsReadRepository {
         HrvSampleRow(
             id = row[HrvSamplesTable.id].value,
             sourceInstanceId = row[HrvSamplesTable.sourceInstanceId],
-            measuredAt = row[HrvSamplesTable.measuredAt],
+            measuredAt = row[HrvSamplesTable.measuredAt].toApiString(),
             metricType = row[HrvSamplesTable.metricType],
             value = row[HrvSamplesTable.value],
             unit = row[HrvSamplesTable.unit],

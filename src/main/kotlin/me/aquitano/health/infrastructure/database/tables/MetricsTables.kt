@@ -86,7 +86,7 @@ object ActivitySummariesTable : IntIdTable("activity_summaries") {
         integer("ingestion_record_id").references(IngestionRecordsTable.id)
             .nullable()
     val providerRecordId = text("provider_record_id").nullable()
-    val date = text("date")
+    val date = date("date")
     val distanceMeters = double("distance_meters").nullable()
     val activeEnergyKcal = double("active_energy_kcal").nullable()
     val totalEnergyKcal = double("total_energy_kcal").nullable()
@@ -98,7 +98,7 @@ object ActivitySummariesTable : IntIdTable("activity_summaries") {
     val avgHeartRateBpm = integer("avg_heart_rate_bpm").nullable()
     val minHeartRateBpm = integer("min_heart_rate_bpm").nullable()
     val maxHeartRateBpm = integer("max_heart_rate_bpm").nullable()
-    val createdAt = text("created_at")
+    val createdAt = timestampWithTimeZone("created_at")
 }
 
 object SleepSummariesTable : IntIdTable("sleep_summaries") {
@@ -108,8 +108,8 @@ object SleepSummariesTable : IntIdTable("sleep_summaries") {
         integer("ingestion_record_id").references(IngestionRecordsTable.id)
             .nullable()
     val providerRecordId = text("provider_record_id").nullable()
-    val startAt = text("start_at")
-    val endAt = text("end_at")
+    val startAt = timestampWithTimeZone("start_at")
+    val endAt = timestampWithTimeZone("end_at")
     val timeInBedSeconds = long("time_in_bed_seconds").nullable()
     val totalSleepSeconds = long("total_sleep_seconds").nullable()
     val lightSleepSeconds = long("light_sleep_seconds").nullable()
@@ -122,7 +122,7 @@ object SleepSummariesTable : IntIdTable("sleep_summaries") {
     val wakeupCount = integer("wakeup_count").nullable()
     val wasoSeconds = long("waso_seconds").nullable()
     val sleepScore = integer("sleep_score").nullable()
-    val createdAt = text("created_at")
+    val createdAt = timestampWithTimeZone("created_at")
 }
 
 object RespiratoryRateSamplesTable : IntIdTable("respiratory_rate_samples") {
@@ -132,10 +132,10 @@ object RespiratoryRateSamplesTable : IntIdTable("respiratory_rate_samples") {
         integer("ingestion_record_id").references(IngestionRecordsTable.id)
             .nullable()
     val providerRecordId = text("provider_record_id").nullable()
-    val measuredAt = text("measured_at")
+    val measuredAt = timestampWithTimeZone("measured_at")
     val breathsPerMinute = integer("breaths_per_minute")
     val context = text("context").nullable()
-    val createdAt = text("created_at")
+    val createdAt = timestampWithTimeZone("created_at")
 }
 
 object HrvSamplesTable : IntIdTable("hrv_samples") {
@@ -145,10 +145,10 @@ object HrvSamplesTable : IntIdTable("hrv_samples") {
         integer("ingestion_record_id").references(IngestionRecordsTable.id)
             .nullable()
     val providerRecordId = text("provider_record_id").nullable()
-    val measuredAt = text("measured_at")
+    val measuredAt = timestampWithTimeZone("measured_at")
     val metricType = text("metric_type")
     val value = double("value")
     val unit = text("unit")
     val context = text("context").nullable()
-    val createdAt = text("created_at")
+    val createdAt = timestampWithTimeZone("created_at")
 }

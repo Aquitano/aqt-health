@@ -1,5 +1,14 @@
 import createClient from "openapi-fetch";
-import type { ApiResult, ApiSchema } from "./types";
+import type {
+  ActivitySummariesResponse,
+  ActivitySummaryLatestResponse,
+  ApiResult,
+  ApiSchema,
+  HrvSamplesResponse,
+  RespiratoryRateSamplesResponse,
+  SleepSummariesResponse,
+  SleepSummaryLatestResponse,
+} from "./types";
 import type { paths } from "./generated/aqtHealthApiTypes";
 
 type ClientResponse<T> = {
@@ -11,6 +20,8 @@ type ClientResponse<T> = {
 type ClientOptions = {
   protected?: boolean;
 };
+
+type UntypedGet = <T>(path: string, init: unknown) => Promise<ClientResponse<T>>;
 
 type IngestionBatchQuery = NonNullable<
   paths["/api/v1/admin/ingestion/batches"]["get"]["parameters"]["query"]
@@ -24,28 +35,38 @@ type HealthDayQuery = NonNullable<paths["/api/v1/health/day"]["get"]["parameters
 type DailyStepsQuery = NonNullable<
   paths["/api/v1/metrics/steps/daily"]["get"]["parameters"]["query"]
 >;
-type ActivitySummariesQuery = NonNullable<
-  paths["/api/v1/activity/summaries"]["get"]["parameters"]["query"]
->;
-type ActivitySummaryLatestQuery = NonNullable<
-  paths["/api/v1/activity/summaries/latest"]["get"]["parameters"]["query"]
->;
+type DailyMetricQuery = {
+  date?: string;
+  fromDate?: string;
+  toDate?: string;
+  provider?: string;
+  providerInstanceId?: string;
+  includeSource?: boolean;
+  sort?: string;
+  order?: "asc" | "desc";
+  limit?: number;
+};
+type ActivitySummariesQuery = DailyMetricQuery;
+type ActivitySummaryLatestQuery = Omit<DailyMetricQuery, "sort" | "order" | "limit">;
 type HeartRateSamplesQuery = NonNullable<
   paths["/api/v1/metrics/heart-rate"]["get"]["parameters"]["query"]
 >;
-type RespiratoryRateSamplesQuery = NonNullable<
-  paths["/api/v1/metrics/respiratory-rate"]["get"]["parameters"]["query"]
->;
-type HrvSamplesQuery = NonNullable<
-  paths["/api/v1/metrics/hrv"]["get"]["parameters"]["query"]
->;
+type MetricSampleQuery = {
+  from?: string;
+  to?: string;
+  provider?: string;
+  providerInstanceId?: string;
+  includeSource?: boolean;
+  latest?: boolean;
+  sort?: string;
+  order?: "asc" | "desc";
+  limit?: number;
+};
+type RespiratoryRateSamplesQuery = MetricSampleQuery;
+type HrvSamplesQuery = MetricSampleQuery & { metricType?: string };
 type SleepNightsQuery = NonNullable<paths["/api/v1/sleep/nights"]["get"]["parameters"]["query"]>;
-type SleepSummariesQuery = NonNullable<
-  paths["/api/v1/sleep/summaries"]["get"]["parameters"]["query"]
->;
-type SleepSummaryLatestQuery = NonNullable<
-  paths["/api/v1/sleep/summaries/latest"]["get"]["parameters"]["query"]
->;
+type SleepSummariesQuery = MetricSampleQuery;
+type SleepSummaryLatestQuery = Omit<MetricSampleQuery, "latest" | "sort" | "order" | "limit">;
 type LatestBodyMeasurementQuery = NonNullable<
   paths["/api/v1/body/measurements/latest"]["get"]["parameters"]["query"]
 >;
@@ -71,6 +92,7 @@ export function createAqtHealthClient() {
         next: { revalidate: 0 },
       } as RequestInit & { next: { revalidate: 0 } }),
   });
+  const rawGet = rawClient.GET as unknown as UntypedGet;
 
   return {
     apiBaseUrl,
@@ -159,16 +181,16 @@ export function createAqtHealthClient() {
       ),
 
     listActivitySummaries: (query: ActivitySummariesQuery) =>
-      call<ApiSchema<"ActivitySummariesResponse">>((headers) =>
-        rawClient.GET("/api/v1/activity/summaries", {
+      call<ActivitySummariesResponse>((headers) =>
+        rawGet<ActivitySummariesResponse>("/api/v1/activity/summaries", {
           headers,
           params: { query },
         }),
       ),
 
     getLatestActivitySummary: (query: ActivitySummaryLatestQuery) =>
-      call<ApiSchema<"ActivitySummaryLatestResponse">>((headers) =>
-        rawClient.GET("/api/v1/activity/summaries/latest", {
+      call<ActivitySummaryLatestResponse>((headers) =>
+        rawGet<ActivitySummaryLatestResponse>("/api/v1/activity/summaries/latest", {
           headers,
           params: { query },
         }),
@@ -183,16 +205,16 @@ export function createAqtHealthClient() {
       ),
 
     listRespiratoryRateSamples: (query: RespiratoryRateSamplesQuery) =>
-      call<ApiSchema<"RespiratoryRateSamplesResponse">>((headers) =>
-        rawClient.GET("/api/v1/metrics/respiratory-rate", {
+      call<RespiratoryRateSamplesResponse>((headers) =>
+        rawGet<RespiratoryRateSamplesResponse>("/api/v1/metrics/respiratory-rate", {
           headers,
           params: { query },
         }),
       ),
 
     listHrvSamples: (query: HrvSamplesQuery) =>
-      call<ApiSchema<"HrvSamplesResponse">>((headers) =>
-        rawClient.GET("/api/v1/metrics/hrv", {
+      call<HrvSamplesResponse>((headers) =>
+        rawGet<HrvSamplesResponse>("/api/v1/metrics/hrv", {
           headers,
           params: { query },
         }),
@@ -207,16 +229,16 @@ export function createAqtHealthClient() {
       ),
 
     listSleepSummaries: (query: SleepSummariesQuery) =>
-      call<ApiSchema<"SleepSummariesResponse">>((headers) =>
-        rawClient.GET("/api/v1/sleep/summaries", {
+      call<SleepSummariesResponse>((headers) =>
+        rawGet<SleepSummariesResponse>("/api/v1/sleep/summaries", {
           headers,
           params: { query },
         }),
       ),
 
     getLatestSleepSummary: (query: SleepSummaryLatestQuery) =>
-      call<ApiSchema<"SleepSummaryLatestResponse">>((headers) =>
-        rawClient.GET("/api/v1/sleep/summaries/latest", {
+      call<SleepSummaryLatestResponse>((headers) =>
+        rawGet<SleepSummaryLatestResponse>("/api/v1/sleep/summaries/latest", {
           headers,
           params: { query },
         }),
