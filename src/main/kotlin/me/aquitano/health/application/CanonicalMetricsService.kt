@@ -15,12 +15,12 @@ class CanonicalMetricsService(
         rows.groupBy { it.date }
             .values
             .map { candidates ->
-                candidates.maxWith(
+                candidates.maxWithOrNull(
                     compareBy<StepDailySummaryRow> { -rank(CanonicalMetricFamily.STEPS, it, metadata) }
                         .thenBy { it.sampleCount }
                         .thenBy { it.steps }
                         .thenBy { it.sourceInstanceId }
-                )
+                )!!
             }
             .sortedWith(compareBy<StepDailySummaryRow> { it.date }.thenBy { it.sourceInstanceId })
 
@@ -36,12 +36,12 @@ class CanonicalMetricsService(
                     instant(right.startAt).isBefore(instant(left.endAt))
             },
             choose = { candidates ->
-                candidates.minWith(
+                candidates.minWithOrNull(
                     compareBy<StepSampleRow> { rank(CanonicalMetricFamily.STEPS, it, metadata) }
                         .thenBy { durationSeconds(it.startAt, it.endAt) }
                         .thenByDescending { stepsPerSecond(it) }
                         .thenBy { it.id }
-                )
+                )!!
             },
             start = { instant(it.startAt) },
         )
@@ -53,11 +53,11 @@ class CanonicalMetricsService(
         rows.groupBy { it.date }
             .values
             .map { candidates ->
-                candidates.minWith(
+                candidates.minWithOrNull(
                     compareBy<ActivitySummaryRow> { rank(CanonicalMetricFamily.ACTIVITY, it, metadata) }
                         .thenByDescending { activityFieldCount(it) }
                         .thenBy { it.id }
-                )
+                )!!
             }
             .sortedWith(compareBy<ActivitySummaryRow> { it.date }.thenBy { it.id })
 
@@ -72,13 +72,13 @@ class CanonicalMetricsService(
                 left.sourceInstanceId != right.sourceInstanceId && sleepOverlaps(left, right)
             },
             choose = { candidates ->
-                candidates.maxWith(
+                candidates.maxWithOrNull(
                     compareBy<SleepSessionRow> { stagesBySession[it.id].orEmpty().size }
                         .thenBy { stagesBySession[it.id].orEmpty().map { stage -> stage.stage }.filterNot { stage -> stage == "unknown" }.toSet().size }
                         .thenBy { durationSeconds(it.startAt, it.endAt) == it.durationSeconds }
                         .thenBy { -rank(CanonicalMetricFamily.SLEEP, it, metadata) }
                         .thenBy { -it.id }
-                )
+                )!!
             },
             start = { instant(it.startAt) },
         )
@@ -93,11 +93,11 @@ class CanonicalMetricsService(
                 left.sourceInstanceId != right.sourceInstanceId && sleepOverlaps(left, right)
             },
             choose = { candidates ->
-                candidates.minWith(
+                candidates.minWithOrNull(
                     compareByDescending<SleepSummaryRow> { sleepSummaryFieldCount(it) }
                         .thenBy { rank(CanonicalMetricFamily.SLEEP_SUMMARY, it, metadata) }
                         .thenBy { it.id }
-                )
+                )!!
             },
             start = { instant(it.startAt) },
         )
@@ -106,23 +106,17 @@ class CanonicalMetricsService(
         rows: List<BodyMeasurementRow>,
         metadata: Map<Int, SourceMetadata>,
     ): List<BodyMeasurementRow> =
-        rows.groupBy { Triple(it.metricType, it.measuredAt, metadata[it.sourceInstanceId]?.provider ?: it.sourceInstanceId.toString()) }
-            .values
-            .map { candidates ->
-                candidates
-            }
-            .flatten()
-            .groupBy { it.metricType to it.measuredAt }
+        rows.groupBy { it.metricType to it.measuredAt }
             .values
             .flatMap { candidates ->
                 if (candidates.map { it.sourceInstanceId }.toSet().size <= 1) {
                     candidates
                 } else {
                     listOf(
-                        candidates.minWith(
+                        candidates.minWithOrNull(
                             compareBy<BodyMeasurementRow> { rank(CanonicalMetricFamily.BODY_MEASUREMENT, it, metadata) }
                                 .thenBy { it.id }
-                        )
+                        )!!
                     )
                 }
             }
@@ -142,11 +136,11 @@ class CanonicalMetricsService(
                 candidates
             } else {
                 listOf(
-                    candidates.maxWith(
+                    candidates.maxWithOrNull(
                         compareBy<HeartRateSampleRow> { densityBySource[it.sourceInstanceId] ?: 0 }
                             .thenBy { -policy.heartRateRank(metadata[it.sourceInstanceId]?.provider, it.context) }
                             .thenBy { -it.id }
-                    )
+                    )!!
                 )
             }
         }.sortedWith(compareBy<HeartRateSampleRow> { instant(it.measuredAt) }.thenBy { it.id })
@@ -165,10 +159,10 @@ class CanonicalMetricsService(
                 candidates
             } else {
                 listOf(
-                    candidates.minWith(
+                    candidates.minWithOrNull(
                         compareBy<RespiratoryRateSampleRow> { rank(CanonicalMetricFamily.RESPIRATORY_RATE, it, metadata) }
                             .thenBy { it.id }
-                    )
+                    )!!
                 )
             }
         }.sortedWith(compareBy<RespiratoryRateSampleRow> { instant(it.measuredAt) }.thenBy { it.id })
@@ -186,10 +180,10 @@ class CanonicalMetricsService(
                 candidates
             } else {
                 listOf(
-                    candidates.minWith(
+                    candidates.minWithOrNull(
                         compareBy<HrvSampleRow> { rank(CanonicalMetricFamily.HRV, it, metadata) }
                             .thenBy { it.id }
-                    )
+                    )!!
                 )
             }
         }.sortedWith(compareBy<HrvSampleRow> { instant(it.measuredAt) }.thenBy { it.id })

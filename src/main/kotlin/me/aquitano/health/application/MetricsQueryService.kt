@@ -1160,31 +1160,6 @@ private fun <T> List<T>.meta(filters: SleepNightReadFilters): ReadResponseMeta =
         order = filters.order,
     )
 
-private fun <T> List<T>.sourceIds(sourceInstanceId: (T) -> Int): Set<Int> =
-    map(sourceInstanceId).toSet()
-
-private fun <T> List<T>.singleSource(
-    includeSource: Boolean,
-    metricsReadRepository: MetricsReadRepository,
-    sourceInstanceId: (T) -> Int,
-): SourceMetadataResponse? {
-    if (!includeSource) return null
-    val sourceIds = sourceIds(sourceInstanceId)
-    if (sourceIds.size != 1) return null
-    return metricsReadRepository.sourceMetadataFor(sourceIds)
-        .values
-        .singleOrNull()
-        .toResponse()
-}
-
-private fun List<HeartRateSampleRow>.heartRateSummary(): HeartRateSummaryRow =
-    HeartRateSummaryRow(
-        count = size,
-        minBpm = minOfOrNull { it.bpm },
-        maxBpm = maxOfOrNull { it.bpm },
-        avgBpm = if (isEmpty()) null else sumOf { it.bpm }.toDouble() / size.toDouble(),
-    )
-
 private fun List<RespiratoryRateSampleRow>.respiratoryRateSummary(): RespiratoryRateSummaryRow =
     RespiratoryRateSummaryRow(
         count = size,

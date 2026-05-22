@@ -635,6 +635,15 @@ class ReadApiRouteTest {
             day.jsonBody()["sleep"]!!.jsonObject["sessions"]!!.jsonArray[0].jsonObject["source"]!!.jsonObject["provider"]!!.jsonPrimitive.content
         )
 
+        val nextDayWeight =
+            authorizedGet("/api/v1/health/day?date=2026-04-20&timezone=UTC&modules=weight&includeSource=true")
+        val previousWeight = nextDayWeight.jsonBody()["weight"]!!.jsonObject["previous"]!!.jsonObject
+        assertEquals(81.8, previousWeight["value"]!!.jsonPrimitive.double)
+        assertEquals(
+            "withings",
+            previousWeight["source"]!!.jsonObject["provider"]!!.jsonPrimitive.content
+        )
+
         val rawBody =
             authorizedGet("/api/v1/body/measurements?metricType=weight&canonical=false")
         assertEquals(2, rawBody.items().size)

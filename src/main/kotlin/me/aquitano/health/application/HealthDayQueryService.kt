@@ -250,9 +250,21 @@ class WeightDayModule(
         } else {
             rawPoints
         }
-        val (rawPrevious, previousSourceMetadata) =
-            metricsReadRepository.latestBodyMeasurementBefore(filters, BodyMetricTypes.WEIGHT)
-        val previous = rawPrevious
+        val (previousCandidates, previousSourceMetadata) =
+            if (context.canonical) {
+                metricsReadRepository.latestBodyMeasurementsBefore(filters, BodyMetricTypes.WEIGHT)
+            } else {
+                val (row, metadata) = metricsReadRepository.latestBodyMeasurementBefore(filters, BodyMetricTypes.WEIGHT)
+                listOfNotNull(row) to metadata
+            }
+        val previous = if (context.canonical) {
+            canonicalMetricsService.canonicalBodyMeasurements(
+                previousCandidates,
+                metricsReadRepository.sourceMetadataFor(previousCandidates.sourceIds { it.sourceInstanceId }),
+            ).maxWithOrNull(compareBy<BodyMeasurementRow> { it.measuredAt }.thenBy { it.id })
+        } else {
+            previousCandidates.singleOrNull()
+        }
         val latest = points.maxWithOrNull(compareBy<BodyMeasurementRow> { it.measuredAt }.thenBy { it.id })
         val sourceMetadata = pointSourceMetadata + previousSourceMetadata
 
@@ -357,31 +369,6 @@ private fun overlapSeconds(
         0
     }
 }
-
-private fun <T> List<T>.sourceIds(sourceInstanceId: (T) -> Int): Set<Int> =
-    map(sourceInstanceId).toSet()
-
-private fun <T> List<T>.singleSource(
-    includeSource: Boolean,
-    metricsReadRepository: MetricsReadRepository,
-    sourceInstanceId: (T) -> Int,
-): SourceMetadataResponse? {
-    if (!includeSource) return null
-    val sourceIds = sourceIds(sourceInstanceId)
-    if (sourceIds.size != 1) return null
-    return metricsReadRepository.sourceMetadataFor(sourceIds)
-        .values
-        .singleOrNull()
-        .toResponse()
-}
-
-private fun List<HeartRateSampleRow>.heartRateSummary(): HeartRateSummaryRow =
-    HeartRateSummaryRow(
-        count = size,
-        minBpm = minOfOrNull { it.bpm },
-        maxBpm = maxOfOrNull { it.bpm },
-        avgBpm = if (isEmpty()) null else sumOf { it.bpm }.toDouble() / size.toDouble(),
-    )
 
 private fun BodyMeasurementRow.toResponse(
     sourceMetadata: Map<Int, SourceMetadata>
