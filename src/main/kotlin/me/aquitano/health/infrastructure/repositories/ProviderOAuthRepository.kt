@@ -148,62 +148,51 @@ class ProviderOAuthRepository(private val database: Database) {
     ) {
         newSuspendedTransaction(Dispatchers.IO, db = database) {
             val nowTimestamp = now.toDbTimestamp()
-            val existing = ProviderOAuthAccountsTable
-                .selectAll()
-                .where {
-                    (ProviderOAuthAccountsTable.providerCode eq providerCode) and
-                            (ProviderOAuthAccountsTable.providerUserId eq providerUserId)
-                }
-                .limit(1)
-                .singleOrNull()
-
-            if (existing == null) {
-                ProviderOAuthAccountsTable.insert {
-                    it[this.providerCode] = providerCode
-                    it[this.providerUserId] = providerUserId
-                    it[this.providerInstanceId] = providerInstanceId
-                    it[this.accessTokenCiphertext] = accessTokenCiphertext
-                    it[this.refreshTokenCiphertext] = refreshTokenCiphertext
-                    it[this.tokenType] = tokenType
-                    it[this.expiresAt] = expiresAt.toDbTimestamp()
-                    it[this.scope] = scope
-                    it[accountStatus] = ACCOUNT_STATUS_CONNECTED
-                    it[connectedAt] = nowTimestamp
-                    it[disconnectedAt] = null
-                    it[lastTokenRefreshAt] = null
-                    it[lastTokenRefreshStatus] = null
-                    it[lastAuthErrorCode] = null
-                    it[lastAuthErrorMessage] = null
-                    it[createdAt] = nowTimestamp
-                    it[updatedAt] = nowTimestamp
-                }
-            } else {
-                val previousStatus = existing[ProviderOAuthAccountsTable.accountStatus]
-                val previousConnectedAt = existing[ProviderOAuthAccountsTable.connectedAt]
-                val nextConnectedAt =
-                    if (previousStatus == ACCOUNT_STATUS_DISCONNECTED || previousStatus == ACCOUNT_STATUS_NEEDS_REAUTH) {
-                        nowTimestamp
-                    } else {
-                        previousConnectedAt ?: nowTimestamp
-                    }
-                ProviderOAuthAccountsTable.update({
-                    ProviderOAuthAccountsTable.id eq existing[ProviderOAuthAccountsTable.id]
-                }) {
-                    it[this.providerInstanceId] = providerInstanceId
-                    it[this.accessTokenCiphertext] = accessTokenCiphertext
-                    it[this.refreshTokenCiphertext] = refreshTokenCiphertext
-                    it[this.tokenType] = tokenType
-                    it[this.expiresAt] = expiresAt.toDbTimestamp()
-                    it[this.scope] = scope
-                    it[accountStatus] = ACCOUNT_STATUS_CONNECTED
-                    it[connectedAt] = nextConnectedAt
-                    it[disconnectedAt] = null
-                    it[lastTokenRefreshAt] = null
-                    it[lastTokenRefreshStatus] = null
-                    it[lastAuthErrorCode] = null
-                    it[lastAuthErrorMessage] = null
-                    it[updatedAt] = nowTimestamp
-                }
+            ProviderOAuthAccountsTable.upsert(
+                ProviderOAuthAccountsTable.providerCode,
+                ProviderOAuthAccountsTable.providerUserId,
+                onUpdate = {
+                    it[ProviderOAuthAccountsTable.providerInstanceId] =
+                        insertValue(ProviderOAuthAccountsTable.providerInstanceId)
+                    it[ProviderOAuthAccountsTable.accessTokenCiphertext] =
+                        insertValue(ProviderOAuthAccountsTable.accessTokenCiphertext)
+                    it[ProviderOAuthAccountsTable.refreshTokenCiphertext] =
+                        insertValue(ProviderOAuthAccountsTable.refreshTokenCiphertext)
+                    it[ProviderOAuthAccountsTable.tokenType] =
+                        insertValue(ProviderOAuthAccountsTable.tokenType)
+                    it[ProviderOAuthAccountsTable.expiresAt] =
+                        insertValue(ProviderOAuthAccountsTable.expiresAt)
+                    it[ProviderOAuthAccountsTable.scope] =
+                        insertValue(ProviderOAuthAccountsTable.scope)
+                    it[ProviderOAuthAccountsTable.accountStatus] = ACCOUNT_STATUS_CONNECTED
+                    it[ProviderOAuthAccountsTable.connectedAt] =
+                        insertValue(ProviderOAuthAccountsTable.connectedAt)
+                    it[ProviderOAuthAccountsTable.disconnectedAt] = null
+                    it[ProviderOAuthAccountsTable.lastTokenRefreshAt] = null
+                    it[ProviderOAuthAccountsTable.lastTokenRefreshStatus] = null
+                    it[ProviderOAuthAccountsTable.lastAuthErrorCode] = null
+                    it[ProviderOAuthAccountsTable.lastAuthErrorMessage] = null
+                    it[ProviderOAuthAccountsTable.updatedAt] =
+                        insertValue(ProviderOAuthAccountsTable.updatedAt)
+                },
+            ) {
+                it[this.providerCode] = providerCode
+                it[this.providerUserId] = providerUserId
+                it[this.providerInstanceId] = providerInstanceId
+                it[this.accessTokenCiphertext] = accessTokenCiphertext
+                it[this.refreshTokenCiphertext] = refreshTokenCiphertext
+                it[this.tokenType] = tokenType
+                it[this.expiresAt] = expiresAt.toDbTimestamp()
+                it[this.scope] = scope
+                it[accountStatus] = ACCOUNT_STATUS_CONNECTED
+                it[connectedAt] = nowTimestamp
+                it[disconnectedAt] = null
+                it[lastTokenRefreshAt] = null
+                it[lastTokenRefreshStatus] = null
+                it[lastAuthErrorCode] = null
+                it[lastAuthErrorMessage] = null
+                it[createdAt] = nowTimestamp
+                it[updatedAt] = nowTimestamp
             }
         }
     }
@@ -245,6 +234,23 @@ class ProviderOAuthRepository(private val database: Database) {
         newSuspendedTransaction(Dispatchers.IO, db = database) {
             ProviderOAuthAccountsTable.update({ ProviderOAuthAccountsTable.id eq accountId }) {
                 it[accountStatus] = ACCOUNT_STATUS_NEEDS_REAUTH
+                it[lastTokenRefreshAt] = now.toDbTimestamp()
+                it[lastTokenRefreshStatus] = TOKEN_REFRESH_STATUS_FAILED
+                it[lastAuthErrorCode] = errorCode.take(200)
+                it[lastAuthErrorMessage] = errorMessage.take(1000)
+                it[updatedAt] = now.toDbTimestamp()
+            }
+        }
+    }
+
+    suspend fun markTokenRefreshFailed(
+        accountId: Int,
+        errorCode: String,
+        errorMessage: String,
+        now: Instant,
+    ) {
+        newSuspendedTransaction(Dispatchers.IO, db = database) {
+            ProviderOAuthAccountsTable.update({ ProviderOAuthAccountsTable.id eq accountId }) {
                 it[lastTokenRefreshAt] = now.toDbTimestamp()
                 it[lastTokenRefreshStatus] = TOKEN_REFRESH_STATUS_FAILED
                 it[lastAuthErrorCode] = errorCode.take(200)

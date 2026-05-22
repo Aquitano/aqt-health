@@ -395,20 +395,34 @@ class GoogleHealthProvider(
         } catch (exception: Exception) {
             if (exception is CancellationException) throw exception
             val message = exception.message ?: "Google OAuth token refresh failed"
-            repository.markNeedsReauth(
+            if (exception.isInvalidRefreshToken()) {
+                repository.markNeedsReauth(
+                    accountId = account.id,
+                    errorCode = "google_health_needs_reauth",
+                    errorMessage = message,
+                    now = now,
+                )
+                logger.warn(
+                    "provider_token_refresh_failed {} {}",
+                    kv("provider", GOOGLE_HEALTH_PROVIDER_CODE),
+                    kv("errorCode", "google_health_needs_reauth"),
+                )
+                throw ConflictException(
+                    code = "google_health_needs_reauth",
+                    message = "Google Health needs reconnect before syncing",
+                    cause = exception,
+                )
+            }
+            repository.markTokenRefreshFailed(
                 accountId = account.id,
-                errorCode = "google_health_needs_reauth",
+                errorCode = errorCode(exception),
                 errorMessage = message,
                 now = now,
             )
-            logger.warn(
-                "provider_token_refresh_failed {} {}",
-                kv("provider", GOOGLE_HEALTH_PROVIDER_CODE),
-                kv("errorCode", "google_health_needs_reauth"),
-            )
-            throw ConflictException(
-                code = "google_health_needs_reauth",
-                message = "Google Health needs reconnect before syncing",
+            throw UpstreamProviderException(
+                code = "google_health_token_refresh_failed",
+                message = message,
+                statusCode = 502,
                 cause = exception,
             )
         }
@@ -571,6 +585,9 @@ class GoogleHealthProvider(
             is UpstreamProviderException -> throwable.code
             else -> "google_health_sync_failed"
         }
+
+    private fun Exception.isInvalidRefreshToken(): Boolean =
+        this is GoogleHealthHttpException && oauthError == "invalid_grant"
 
     private data class ValidatedSyncRequest(
         val providerInstanceId: String?,
