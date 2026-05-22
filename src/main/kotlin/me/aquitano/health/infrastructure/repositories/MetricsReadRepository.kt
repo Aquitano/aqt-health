@@ -851,6 +851,9 @@ class MetricsReadRepository {
         )
     }
 
+    fun sourceMetadataFor(sourceInstanceIds: Set<Int>): Map<Int, SourceMetadata> =
+        sourceMetadata(sourceInstanceIds, includeSource = true)
+
     private fun sourceInstanceIds(
         provider: String?,
         providerInstanceId: String?
