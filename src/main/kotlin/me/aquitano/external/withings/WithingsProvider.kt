@@ -546,7 +546,7 @@ class WithingsProvider(
     private fun Exception.isInvalidRefreshToken(): Boolean =
         this is WithingsHttpException &&
                 code == "withings_token_request_failed" &&
-                providerStatus in setOf(401, 503)
+                providerStatus == 401
 
     private data class ValidatedSyncRequest(
         val providerInstanceId: String?,

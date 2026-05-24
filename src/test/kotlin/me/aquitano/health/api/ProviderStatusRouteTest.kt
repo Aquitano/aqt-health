@@ -162,6 +162,40 @@ class ProviderStatusRouteTest {
     }
 
     @Test
+    fun providerWithSyncableAndNeedsReauthAccountsStillReportsSyncAction() = testApplication {
+        val dbPath = PostgresTestDatabase.config()
+        configureTestApplication(dbPath)
+        client.get("/api/v1/admin/health")
+        insertGoogleAccount(
+            dbPath = dbPath,
+            providerUserId = "syncable-user",
+            providerInstanceId = "google-health-syncable",
+            expiresAt = "2099-01-01T00:00:00Z",
+        )
+        insertGoogleAccount(
+            dbPath = dbPath,
+            providerUserId = "reauth-user",
+            providerInstanceId = "google-health-reauth",
+            expiresAt = "2099-01-01T00:00:00Z",
+            accountStatus = "needs_reauth",
+            lastAuthErrorCode = "google_health_needs_reauth",
+        )
+
+        val response = client.get("/api/v1/providers/google-health/status") {
+            authorized()
+        }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        val status = response.bodyAsJsonObject()
+        assertEquals("true", status["connected"].toString())
+        assertEquals("true", status["canSync"].toString())
+        assertEquals("false", status["needsAuthentication"].toString())
+        assertEquals("sync", status.string("nextAction"))
+        val accounts = status["accounts"]!!.jsonArray.map { it.jsonObject.string("status") }.toSet()
+        assertEquals(setOf("connected", "needs_reauth"), accounts)
+    }
+
+    @Test
     fun disconnectedProviderReportsConnectAction() = testApplication {
         val dbPath = PostgresTestDatabase.config()
         configureTestApplication(dbPath)
@@ -295,6 +329,8 @@ class ProviderStatusRouteTest {
 
     private fun insertGoogleAccount(
         dbPath: DatabaseConfig,
+        providerUserId: String = "google-health-me",
+        providerInstanceId: String = "google-health-me",
         expiresAt: String,
         accountStatus: String = "connected",
         accessTokenCiphertext: String = "access-ciphertext",
@@ -323,8 +359,8 @@ class ProviderStatusRouteTest {
                         updated_at
                     ) VALUES (
                         'google_health',
-                        'google-health-me',
-                        'google-health-me',
+                        '$providerUserId',
+                        '$providerInstanceId',
                         '$accessTokenCiphertext',
                         '$refreshTokenCiphertext',
                         'Bearer',

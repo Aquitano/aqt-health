@@ -142,6 +142,7 @@ class WithingsProviderTest {
         fixture.client.nextRefreshFailure = WithingsHttpException(
             "withings_token_refresh_failed",
             "Withings refresh token is invalid",
+            providerStatus = 401,
         )
 
         val error = assertFailsWith<ConflictException> {
@@ -162,6 +163,38 @@ class WithingsProviderTest {
         )
         assertEquals(
             "withings_needs_reauth",
+            singleString(fixture.dbPath, "SELECT last_auth_error_code FROM provider_oauth_accounts"),
+        )
+    }
+
+    @Test
+    fun temporaryRefreshFailureDoesNotMarkAccountNeedsReauth() = runBlocking {
+        val fixture = Fixture()
+        fixture.seedAccount(expiresAt = fixture.now.minusSeconds(1))
+        fixture.client.nextRefreshFailure = WithingsHttpException(
+            "withings_token_request_failed",
+            "Withings OAuth token request failed with 503",
+            providerStatus = 503,
+        )
+
+        val error = assertFailsWith<UpstreamProviderException> {
+            fixture.provider.sync(
+                ProviderSyncRequest(
+                    from = Instant.parse("2026-04-01T00:00:00Z"),
+                    to = Instant.parse("2026-04-02T00:00:00Z"),
+                    dataTypes = listOf("activity"),
+                ),
+                fixture.now,
+            )
+        }
+
+        assertEquals("withings_token_refresh_failed", error.code)
+        assertEquals(
+            "connected",
+            singleString(fixture.dbPath, "SELECT account_status FROM provider_oauth_accounts"),
+        )
+        assertEquals(
+            "withings_token_request_failed",
             singleString(fixture.dbPath, "SELECT last_auth_error_code FROM provider_oauth_accounts"),
         )
     }
