@@ -33,6 +33,7 @@ export function ProviderSyncPanel({ catalog, statuses }: ProviderSyncPanelProps)
   const [pendingAccountAction, setPendingAccountAction] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [isOAuthPending, startOAuthTransition] = useTransition();
+  const [, startAccountActionTransition] = useTransition();
 
   if (!catalog.ok || !statuses.ok) {
     return (
@@ -111,17 +112,22 @@ export function ProviderSyncPanel({ catalog, statuses }: ProviderSyncPanelProps)
     setAccountActionError(null);
     setPendingAccountAction(`disconnect:${providerInstanceId}`);
 
-    startOAuthTransition(async () => {
-      const response = await fetch(
-        `/api/providers/${encodeURIComponent(selectedProvider.descriptor.providerCode)}/accounts/${encodeURIComponent(providerInstanceId)}/disconnect`,
-        { method: "POST" },
-      );
-      const body = (await response.json()) as ApiResult<unknown>;
-      setPendingAccountAction(null);
-      if (body.ok) {
-        router.refresh();
-      } else {
-        setAccountActionError(body.message);
+    startAccountActionTransition(async () => {
+      try {
+        const response = await fetch(
+          `/api/providers/${encodeURIComponent(selectedProvider.descriptor.providerCode)}/accounts/${encodeURIComponent(providerInstanceId)}/disconnect`,
+          { method: "POST" },
+        );
+        const body = (await response.json()) as ApiResult<unknown>;
+        if (body.ok) {
+          router.refresh();
+        } else {
+          setAccountActionError(body.message);
+        }
+      } catch {
+        setAccountActionError("Disconnect failed. Try again.");
+      } finally {
+        setPendingAccountAction(null);
       }
     });
   }
@@ -132,17 +138,22 @@ export function ProviderSyncPanel({ catalog, statuses }: ProviderSyncPanelProps)
     setAccountActionError(null);
     setPendingAccountAction(`reconnect:${providerInstanceId}`);
 
-    startOAuthTransition(async () => {
-      const response = await fetch(
-        `/api/providers/${encodeURIComponent(selectedProvider.descriptor.providerCode)}/accounts/${encodeURIComponent(providerInstanceId)}/reconnect`,
-        { method: "POST" },
-      );
-      const body = (await response.json()) as ApiResult<ProviderOAuthStartResponse>;
-      setPendingAccountAction(null);
-      if (body.ok) {
-        window.location.assign(body.data.authorizationUrl);
-      } else {
-        setAccountActionError(body.message);
+    startAccountActionTransition(async () => {
+      try {
+        const response = await fetch(
+          `/api/providers/${encodeURIComponent(selectedProvider.descriptor.providerCode)}/accounts/${encodeURIComponent(providerInstanceId)}/reconnect`,
+          { method: "POST" },
+        );
+        const body = (await response.json()) as ApiResult<ProviderOAuthStartResponse>;
+        if (body.ok) {
+          window.location.assign(body.data.authorizationUrl);
+        } else {
+          setAccountActionError(body.message);
+        }
+      } catch {
+        setAccountActionError("Reconnect failed. Try again.");
+      } finally {
+        setPendingAccountAction(null);
       }
     });
   }

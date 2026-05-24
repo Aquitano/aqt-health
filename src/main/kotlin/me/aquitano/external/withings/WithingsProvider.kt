@@ -372,15 +372,29 @@ class WithingsProvider(
         } catch (exception: Exception) {
             if (exception is CancellationException) throw exception
             val message = exception.message ?: "Withings OAuth token refresh failed"
-            repository.markNeedsReauth(
+            if (exception.isInvalidRefreshToken()) {
+                repository.markNeedsReauth(
+                    accountId = account.id,
+                    errorCode = "withings_needs_reauth",
+                    errorMessage = message,
+                    now = now,
+                )
+                throw ConflictException(
+                    code = "withings_needs_reauth",
+                    message = "Withings needs reconnect before syncing",
+                    cause = exception,
+                )
+            }
+            repository.markTokenRefreshFailed(
                 accountId = account.id,
-                errorCode = "withings_needs_reauth",
+                errorCode = errorCode(exception),
                 errorMessage = message,
                 now = now,
             )
-            throw ConflictException(
-                code = "withings_needs_reauth",
-                message = "Withings needs reconnect before syncing",
+            throw UpstreamProviderException(
+                code = "withings_token_refresh_failed",
+                message = message,
+                statusCode = 502,
                 cause = exception,
             )
         }
@@ -528,6 +542,11 @@ class WithingsProvider(
             is UpstreamProviderException -> throwable.code
             else -> "withings_sync_failed"
         }
+
+    private fun Exception.isInvalidRefreshToken(): Boolean =
+        this is WithingsHttpException &&
+                code == "withings_token_request_failed" &&
+                providerStatus in setOf(401, 503)
 
     private data class ValidatedSyncRequest(
         val providerInstanceId: String?,

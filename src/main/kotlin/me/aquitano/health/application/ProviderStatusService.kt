@@ -124,7 +124,7 @@ class ProviderStatusService(
             accountStatus == ACCOUNT_STATUS_NEEDS_REAUTH -> ProviderAccountLifecycleStatus.NeedsReauth
             accountStatus == ACCOUNT_STATUS_DISCONNECTED -> ProviderAccountLifecycleStatus.Disconnected
             accountStatus == ACCOUNT_STATUS_CONNECTED && hasStoredTokens() -> ProviderAccountLifecycleStatus.Connected
-            else -> ProviderAccountLifecycleStatus.NeedsReauth
+            else -> ProviderAccountLifecycleStatus.NotConnected
         }
 
     private fun ProviderOAuthAccount.tokenStatus(now: Instant): ProviderTokenStatus =
