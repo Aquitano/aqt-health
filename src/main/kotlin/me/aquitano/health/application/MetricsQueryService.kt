@@ -1,6 +1,5 @@
 package me.aquitano.health.application
 
-import kotlinx.coroutines.Dispatchers
 import me.aquitano.health.api.dto.*
 import me.aquitano.health.domain.BodyMetricTypes
 import me.aquitano.health.domain.HrvMetricTypes
@@ -9,8 +8,8 @@ import me.aquitano.health.domain.ValidationIssue
 import me.aquitano.health.domain.ValidationIssueCodes
 import me.aquitano.health.infrastructure.repositories.*
 import me.aquitano.health.shared.utcDate
-import org.jetbrains.exposed.sql.Database
-import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.transactions.suspendTransaction
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -19,6 +18,7 @@ import java.time.ZoneOffset
 class MetricsQueryService(
     private val database: Database,
     private val metricsReadRepository: MetricsReadRepository,
+    private val canonicalMetricsService: CanonicalMetricsService,
 ) {
     suspend fun listActivitySummaries(
         params: QueryParams,
@@ -26,8 +26,17 @@ class MetricsQueryService(
     ): ActivitySummariesResponse =
         dbQuery {
             val filters = params.dailyReadFilters(now)
-            val (rows, sourceMetadata) =
+            val canonical = params.canonical(default = false)
+            val (rawRows, sourceMetadata) =
                 metricsReadRepository.listActivitySummaries(filters)
+            val rows = if (canonical) {
+                canonicalMetricsService.canonicalActivitySummaries(
+                    rawRows,
+                    metricsReadRepository.sourceMetadataFor(rawRows.sourceIds { it.sourceInstanceId }),
+                )
+            } else {
+                rawRows
+            }
             ActivitySummariesResponse(
                 items = rows.map { it.toResponse(sourceMetadata) },
                 meta = rows.meta(filters),
@@ -40,8 +49,19 @@ class MetricsQueryService(
     ): ActivitySummaryLatestResponse =
         dbQuery {
             val filters = params.dailyLatestReadFilters(now)
-            val (row, sourceMetadata) =
+            val canonical = params.canonical(default = true)
+            val (row, sourceMetadata) = if (canonical) {
+                val (rows, metadata) = metricsReadRepository.listActivitySummaries(
+                    filters.copy(limit = Int.MAX_VALUE)
+                )
+                val canonicalRows = canonicalMetricsService.canonicalActivitySummaries(
+                    rows,
+                    metricsReadRepository.sourceMetadataFor(rows.sourceIds { it.sourceInstanceId }),
+                )
+                canonicalRows.maxWithOrNull(compareBy<ActivitySummaryRow> { it.date }.thenBy { it.id }) to metadata
+            } else {
                 metricsReadRepository.latestActivitySummary(filters)
+            }
             ActivitySummaryLatestResponse(
                 item = row?.toResponse(sourceMetadata),
             )
@@ -49,14 +69,23 @@ class MetricsQueryService(
 
     suspend fun listStepSamples(params: QueryParams): StepSamplesResponse =
         dbQuery {
+            val canonical = params.canonical(default = params.boolean("latest", default = false))
             val filters = params.readFilters(
                 defaultSort = SortFields.START_AT,
                 allowedSorts = setOf(SortFields.START_AT),
                 latestSupported = true,
             )
-            val (rows, sourceMetadata) = metricsReadRepository.listStepSamples(
+            val (rawRows, sourceMetadata) = metricsReadRepository.listStepSamples(
                 filters
             )
+            val rows = if (canonical) {
+                canonicalMetricsService.canonicalStepSamples(
+                    rawRows,
+                    metricsReadRepository.sourceMetadataFor(rawRows.sourceIds { it.sourceInstanceId }),
+                )
+            } else {
+                rawRows
+            }
             StepSamplesResponse(
                 items = rows.map {
                     StepSampleResponse(
@@ -78,9 +107,18 @@ class MetricsQueryService(
         dbQuery {
             params.rejectLatest()
             val filters = params.dailyReadFilters(now)
-            val (rows, sourceMetadata) = metricsReadRepository.listStepDailySummaries(
+            val canonical = params.canonical(default = false)
+            val (rawRows, sourceMetadata) = metricsReadRepository.listStepDailySummaries(
                 filters
             )
+            val rows = if (canonical) {
+                canonicalMetricsService.canonicalStepDailySummaries(
+                    rawRows,
+                    metricsReadRepository.sourceMetadataFor(rawRows.sourceIds { it.sourceInstanceId }),
+                )
+            } else {
+                rawRows
+            }
             StepDailySummariesResponse(
                 items = rows.map {
                     StepDailySummaryResponse(
@@ -96,42 +134,29 @@ class MetricsQueryService(
 
     suspend fun listSleepSessions(params: QueryParams): SleepSessionsResponse =
         dbQuery {
+            val canonical = params.canonical(default = params.boolean("latest", default = false))
             val filters = params.readFilters(
                 defaultSort = SortFields.START_AT,
                 allowedSorts = setOf(SortFields.START_AT),
                 latestSupported = true,
             )
-            val (sessions, stagesBySession, sourceMetadata) =
+            val (rawSessions, stagesBySession, sourceMetadata) =
                 metricsReadRepository.listSleepSessions(filters)
+            val sessions = if (canonical) {
+                canonicalMetricsService.canonicalSleepSessions(
+                    rawSessions,
+                    stagesBySession,
+                    metricsReadRepository.sourceMetadataFor(rawSessions.sourceIds { it.sourceInstanceId }),
+                )
+            } else {
+                rawSessions
+            }
             SleepSessionsResponse(
                 items = sessions.map { session ->
                     session.toResponse(stagesBySession, sourceMetadata)
                 },
                 meta = sessions.meta(filters),
             )
-        }
-
-    suspend fun listSleepSummaries(params: QueryParams): SleepSummariesResponse =
-        dbQuery {
-            val filters = params.readFilters(
-                defaultSort = SortFields.END_AT,
-                allowedSorts = setOf(SortFields.END_AT),
-                latestSupported = true,
-            )
-            val (rows, sourceMetadata) =
-                metricsReadRepository.listSleepSummaries(filters)
-            SleepSummariesResponse(
-                items = rows.map { it.toResponse(sourceMetadata) },
-                meta = rows.meta(filters),
-            )
-        }
-
-    suspend fun latestSleepSummary(params: QueryParams): SleepSummaryLatestResponse =
-        dbQuery {
-            val filters = params.summaryFilters(SortFields.END_AT)
-            val (row, sourceMetadata) =
-                metricsReadRepository.latestSleepSummary(filters)
-            SleepSummaryLatestResponse(item = row?.toResponse(sourceMetadata))
         }
 
     suspend fun listSleepNights(
@@ -141,8 +166,19 @@ class MetricsQueryService(
         dbQuery {
             params.rejectLatest()
             val filters = params.sleepNightReadFilters(now)
-            val (nights, stagesBySession, sourceMetadata) =
+            val canonical = params.canonical(default = false)
+            val (rawNights, stagesBySession, sourceMetadata) =
                 metricsReadRepository.listSleepNights(filters)
+            val canonicalSessionIds = if (canonical) {
+                canonicalMetricsService.canonicalSleepSessions(
+                    rawNights.map { it.session },
+                    stagesBySession,
+                    metricsReadRepository.sourceMetadataFor(rawNights.map { it.session }.sourceIds { it.sourceInstanceId }),
+                ).map { it.id }.toSet()
+            } else {
+                rawNights.map { it.session.id }.toSet()
+            }
+            val nights = rawNights.filter { it.session.id in canonicalSessionIds }
             SleepNightsResponse(
                 items = nights.map { night ->
                     night.toResponse(stagesBySession, sourceMetadata)
@@ -165,15 +201,24 @@ class MetricsQueryService(
             )
         }
         return dbQuery {
+            val canonical = params.canonical(default = params.boolean("latest", default = false))
             val filters = params.readFilters(
                 defaultSort = SortFields.MEASURED_AT,
                 allowedSorts = setOf(SortFields.MEASURED_AT),
                 latestSupported = true,
             )
-            val (rows, sourceMetadata) = metricsReadRepository.listBodyMeasurements(
+            val (rawRows, sourceMetadata) = metricsReadRepository.listBodyMeasurements(
                 filters,
                 metricType
             )
+            val rows = if (canonical) {
+                canonicalMetricsService.canonicalBodyMeasurements(
+                    rawRows,
+                    metricsReadRepository.sourceMetadataFor(rawRows.sourceIds { it.sourceInstanceId }),
+                )
+            } else {
+                rawRows
+            }
             BodyMeasurementsResponse(
                 items = rows.map { it.toResponse(sourceMetadata) },
                 meta = rows.meta(filters),
@@ -183,13 +228,22 @@ class MetricsQueryService(
 
     suspend fun listHeartRateSamples(params: QueryParams): HeartRateSamplesResponse =
         dbQuery {
+            val canonical = params.canonical(default = params.boolean("latest", default = false))
             val filters = params.readFilters(
                 defaultSort = SortFields.MEASURED_AT,
                 allowedSorts = setOf(SortFields.MEASURED_AT),
                 latestSupported = true,
             )
-            val (rows, sourceMetadata) =
+            val (rawRows, sourceMetadata) =
                 metricsReadRepository.listHeartRateSamples(filters)
+            val rows = if (canonical) {
+                canonicalMetricsService.canonicalHeartRateSamples(
+                    rawRows,
+                    metricsReadRepository.sourceMetadataFor(rawRows.sourceIds { it.sourceInstanceId }),
+                )
+            } else {
+                rawRows
+            }
             HeartRateSamplesResponse(
                 items = rows.map { it.toResponse(sourceMetadata) },
                 meta = rows.meta(filters),
@@ -198,13 +252,22 @@ class MetricsQueryService(
 
     suspend fun listRespiratoryRateSamples(params: QueryParams): RespiratoryRateSamplesResponse =
         dbQuery {
+            val canonical = params.canonical(default = params.boolean("latest", default = false))
             val filters = params.readFilters(
                 defaultSort = SortFields.MEASURED_AT,
                 allowedSorts = setOf(SortFields.MEASURED_AT),
                 latestSupported = true,
             )
-            val (rows, sourceMetadata) =
+            val (rawRows, sourceMetadata) =
                 metricsReadRepository.listRespiratoryRateSamples(filters)
+            val rows = if (canonical) {
+                canonicalMetricsService.canonicalRespiratoryRateSamples(
+                    rawRows,
+                    metricsReadRepository.sourceMetadataFor(rawRows.sourceIds { it.sourceInstanceId }),
+                )
+            } else {
+                rawRows
+            }
             RespiratoryRateSamplesResponse(
                 items = rows.map { it.toResponse(sourceMetadata) },
                 meta = rows.meta(filters),
@@ -214,9 +277,24 @@ class MetricsQueryService(
     suspend fun respiratoryRateSummary(params: QueryParams): RespiratoryRateSummaryResponse =
         dbQuery {
             val filters = params.summaryFilters(SortFields.MEASURED_AT)
-            val summary = metricsReadRepository.summarizeRespiratoryRate(filters)
-            val (latest, sourceMetadata) =
-                metricsReadRepository.latestRespiratoryRateSample(filters)
+            val canonical = params.canonical(default = true)
+            val (summary, latest, sourceMetadata) = if (canonical) {
+                val (rows, metadata) = metricsReadRepository.listRespiratoryRateSamples(
+                    filters.copy(limit = Int.MAX_VALUE, order = Orders.ASC)
+                )
+                val canonicalRows = canonicalMetricsService.canonicalRespiratoryRateSamples(
+                    rows,
+                    metricsReadRepository.sourceMetadataFor(rows.sourceIds { it.sourceInstanceId }),
+                )
+                Triple(
+                    canonicalRows.respiratoryRateSummary(),
+                    canonicalRows.maxWithOrNull(compareBy<RespiratoryRateSampleRow> { it.measuredAt }.thenBy { it.id }),
+                    metadata,
+                )
+            } else {
+                val (latest, metadata) = metricsReadRepository.latestRespiratoryRateSample(filters)
+                Triple(metricsReadRepository.summarizeRespiratoryRate(filters), latest, metadata)
+            }
             RespiratoryRateSummaryResponse(
                 count = summary.count,
                 minBreathsPerMinute = summary.minBreathsPerMinute,
@@ -230,13 +308,22 @@ class MetricsQueryService(
         val metricType = params.optional("metricType") ?: HrvMetricTypes.RMSSD
         validateHrvMetricType(metricType)
         return dbQuery {
+            val canonical = params.canonical(default = params.boolean("latest", default = false))
             val filters = params.readFilters(
                 defaultSort = SortFields.MEASURED_AT,
                 allowedSorts = setOf(SortFields.MEASURED_AT),
                 latestSupported = true,
             )
-            val (rows, sourceMetadata) =
+            val (rawRows, sourceMetadata) =
                 metricsReadRepository.listHrvSamples(filters, metricType)
+            val rows = if (canonical) {
+                canonicalMetricsService.canonicalHrvSamples(
+                    rawRows,
+                    metricsReadRepository.sourceMetadataFor(rawRows.sourceIds { it.sourceInstanceId }),
+                )
+            } else {
+                rawRows
+            }
             HrvSamplesResponse(
                 items = rows.map { it.toResponse(sourceMetadata) },
                 meta = rows.meta(filters),
@@ -249,9 +336,25 @@ class MetricsQueryService(
         validateHrvMetricType(metricType)
         return dbQuery {
             val filters = params.summaryFilters(SortFields.MEASURED_AT)
-            val summary = metricsReadRepository.summarizeHrv(filters, metricType)
-            val (latest, sourceMetadata) =
-                metricsReadRepository.latestHrvSample(filters, metricType)
+            val canonical = params.canonical(default = true)
+            val (summary, latest, sourceMetadata) = if (canonical) {
+                val (rows, metadata) = metricsReadRepository.listHrvSamples(
+                    filters.copy(limit = Int.MAX_VALUE, order = Orders.ASC),
+                    metricType,
+                )
+                val canonicalRows = canonicalMetricsService.canonicalHrvSamples(
+                    rows,
+                    metricsReadRepository.sourceMetadataFor(rows.sourceIds { it.sourceInstanceId }),
+                )
+                Triple(
+                    canonicalRows.hrvSummary(),
+                    canonicalRows.maxWithOrNull(compareBy<HrvSampleRow> { it.measuredAt }.thenBy { it.id }),
+                    metadata,
+                )
+            } else {
+                val (latest, metadata) = metricsReadRepository.latestHrvSample(filters, metricType)
+                Triple(metricsReadRepository.summarizeHrv(filters, metricType), latest, metadata)
+            }
             HrvSummaryResponse(
                 count = summary.count,
                 metricType = metricType,
@@ -267,10 +370,21 @@ class MetricsQueryService(
         val metricType = params.required("metricType")
         validateBodyMetricType(metricType)
         return dbQuery {
-            val (row, sourceMetadata) = metricsReadRepository.latestBodyMeasurement(
-                params.summaryFilters(SortFields.MEASURED_AT),
-                metricType,
-            )
+            val filters = params.summaryFilters(SortFields.MEASURED_AT)
+            val canonical = params.canonical(default = true)
+            val (row, sourceMetadata) = if (canonical) {
+                val (rows, metadata) = metricsReadRepository.listBodyMeasurements(
+                    filters.copy(limit = Int.MAX_VALUE, order = Orders.ASC),
+                    metricType,
+                )
+                val canonicalRows = canonicalMetricsService.canonicalBodyMeasurements(
+                    rows,
+                    metricsReadRepository.sourceMetadataFor(rows.sourceIds { it.sourceInstanceId }),
+                )
+                canonicalRows.maxWithOrNull(compareBy<BodyMeasurementRow> { it.measuredAt }.thenBy { it.id }) to metadata
+            } else {
+                metricsReadRepository.latestBodyMeasurement(filters, metricType)
+            }
             BodyMeasurementLatestResponse(
                 item = row?.toResponse(sourceMetadata),
             )
@@ -280,9 +394,24 @@ class MetricsQueryService(
     suspend fun heartRateSummary(params: QueryParams): HeartRateSummaryResponse =
         dbQuery {
             val filters = params.summaryFilters(SortFields.MEASURED_AT)
-            val summary = metricsReadRepository.summarizeHeartRate(filters)
-            val (latest, sourceMetadata) =
-                metricsReadRepository.latestHeartRateSample(filters)
+            val canonical = params.canonical(default = true)
+            val (summary, latest, sourceMetadata) = if (canonical) {
+                val (rows, metadata) = metricsReadRepository.listHeartRateSamples(
+                    filters.copy(limit = Int.MAX_VALUE, order = Orders.ASC)
+                )
+                val canonicalRows = canonicalMetricsService.canonicalHeartRateSamples(
+                    rows,
+                    metricsReadRepository.sourceMetadataFor(rows.sourceIds { it.sourceInstanceId }),
+                )
+                Triple(
+                    canonicalRows.heartRateSummary(),
+                    canonicalRows.maxWithOrNull(compareBy<HeartRateSampleRow> { it.measuredAt }.thenBy { it.id }),
+                    metadata,
+                )
+            } else {
+                val (latest, metadata) = metricsReadRepository.latestHeartRateSample(filters)
+                Triple(metricsReadRepository.summarizeHeartRate(filters), latest, metadata)
+            }
             HeartRateSummaryResponse(
                 count = summary.count,
                 minBpm = summary.minBpm,
@@ -310,6 +439,7 @@ class MetricsQueryService(
             )
         }
         val includeSource = params.boolean("includeSource", default = false)
+        val canonical = params.canonical(default = true)
         val fromInstant = fromDate.atStartOfDay().toInstant(ZoneOffset.UTC)
         val toInstant =
             toDate.plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC)
@@ -345,24 +475,75 @@ class MetricsQueryService(
                 sort = SortFields.DATE,
                 order = Orders.ASC,
             )
-            val steps =
-                metricsReadRepository.sumStepDailySummaries(dailyFilters)
-            val (weight, weightSourceMetadata) = metricsReadRepository.latestBodyMeasurement(
-                instantFilters,
-                BodyMetricTypes.WEIGHT
-            )
-            val (heartRate, heartRateSourceMetadata) =
+            val steps = if (canonical) {
+                val (rows) = metricsReadRepository.listStepDailySummaries(
+                    dailyFilters.copy(limit = Int.MAX_VALUE)
+                )
+                val canonicalRows = canonicalMetricsService.canonicalStepDailySummaries(
+                    rows,
+                    metricsReadRepository.sourceMetadataFor(rows.sourceIds { it.sourceInstanceId }),
+                )
+                DashboardStepsSummaryResponse(
+                    steps = canonicalRows.sumOf { it.steps },
+                    sampleCount = canonicalRows.sumOf { it.sampleCount },
+                    source = canonicalRows.singleSource(
+                        includeSource,
+                        metricsReadRepository,
+                    ) { it.sourceInstanceId },
+                )
+            } else {
+                metricsReadRepository.sumStepDailySummaries(dailyFilters).let {
+                    DashboardStepsSummaryResponse(
+                        steps = it.steps,
+                        sampleCount = it.sampleCount,
+                    )
+                }
+            }
+            val (weight, weightSourceMetadata) = if (canonical) {
+                val (rows, metadata) = metricsReadRepository.listBodyMeasurements(
+                    instantFilters.copy(limit = Int.MAX_VALUE, order = Orders.ASC),
+                    BodyMetricTypes.WEIGHT,
+                )
+                val canonicalRows = canonicalMetricsService.canonicalBodyMeasurements(
+                    rows,
+                    metricsReadRepository.sourceMetadataFor(rows.sourceIds { it.sourceInstanceId }),
+                )
+                canonicalRows.maxWithOrNull(compareBy<BodyMeasurementRow> { it.measuredAt }.thenBy { it.id }) to metadata
+            } else {
+                metricsReadRepository.latestBodyMeasurement(
+                    instantFilters,
+                    BodyMetricTypes.WEIGHT
+                )
+            }
+            val (heartRate, heartRateSourceMetadata) = if (canonical) {
+                val (rows, metadata) = metricsReadRepository.listHeartRateSamples(
+                    instantFilters.copy(limit = Int.MAX_VALUE, order = Orders.ASC)
+                )
+                val canonicalRows = canonicalMetricsService.canonicalHeartRateSamples(
+                    rows,
+                    metricsReadRepository.sourceMetadataFor(rows.sourceIds { it.sourceInstanceId }),
+                )
+                canonicalRows.maxWithOrNull(compareBy<HeartRateSampleRow> { it.measuredAt }.thenBy { it.id }) to metadata
+            } else {
                 metricsReadRepository.latestHeartRateSample(instantFilters)
+            }
             val (sleepNights, sleepStagesBySession, sleepSourceMetadata) =
-                metricsReadRepository.listSleepNights(sleepNightFilters)
-            val sleep = sleepNights.firstOrNull()?.session
+                metricsReadRepository.listSleepNights(
+                    sleepNightFilters.copy(limit = if (canonical) Int.MAX_VALUE else sleepNightFilters.limit)
+                )
+            val sleep = if (canonical) {
+                canonicalMetricsService.canonicalSleepSessions(
+                    sleepNights.map { it.session },
+                    sleepStagesBySession,
+                    metricsReadRepository.sourceMetadataFor(sleepNights.map { it.session }.sourceIds { it.sourceInstanceId }),
+                ).maxWithOrNull(compareBy<SleepSessionRow> { it.endAt }.thenBy { it.id })
+            } else {
+                sleepNights.firstOrNull()?.session
+            }
             DashboardSummaryResponse(
                 fromDate = fromDate.toString(),
                 toDate = toDate.toString(),
-                steps = DashboardStepsSummaryResponse(
-                    steps = steps.steps,
-                    sampleCount = steps.sampleCount,
-                ),
+                steps = steps,
                 latestWeight = weight?.toResponse(weightSourceMetadata),
                 latestHeartRate = heartRate?.toResponse(heartRateSourceMetadata),
                 lastSleepSession = sleep?.toResponse(
@@ -371,57 +552,6 @@ class MetricsQueryService(
                 ),
             )
         }
-    }
-
-    private fun QueryParams.readFilters(
-        defaultSort: String,
-        allowedSorts: Set<String>,
-        latestSupported: Boolean,
-    ): ReadFilters {
-        val latest = boolean("latest", default = false)
-        if (latest && !latestSupported) {
-            throw RequestValidationException(
-                listOf(
-                    ValidationIssue(
-                        field = "latest",
-                        code = ValidationIssueCodes.UnsupportedValue,
-                        message = "latest is not supported for this endpoint",
-                    )
-                )
-            )
-        }
-        if (latest) {
-            validateLatestOverrides()
-        }
-        val from = instant("from")
-        val to = instant("to")
-        validateRange(from, to, "from", "to")
-        return ReadFilters(
-            from = from,
-            to = to,
-            provider = optional("provider"),
-            providerInstanceId = optional("providerInstanceId"),
-            includeSource = boolean("includeSource", default = false),
-            limit = if (latest) 1 else limit(default = 500, max = 5000),
-            sort = if (latest) defaultSort else sort(allowedSorts, defaultSort),
-            order = if (latest) Orders.DESC else order(),
-        )
-    }
-
-    private fun QueryParams.summaryFilters(defaultSort: String): ReadFilters {
-        val from = instant("from")
-        val to = instant("to")
-        validateRange(from, to, "from", "to")
-        return ReadFilters(
-            from = from,
-            to = to,
-            provider = optional("provider"),
-            providerInstanceId = optional("providerInstanceId"),
-            includeSource = boolean("includeSource", default = false),
-            limit = 1,
-            sort = defaultSort,
-            order = Orders.DESC,
-        )
     }
 
     private fun QueryParams.sleepNightReadFilters(now: Instant): SleepNightReadFilters {
@@ -529,9 +659,60 @@ class MetricsQueryService(
     }
 
     private suspend fun <T> dbQuery(block: () -> T): T =
-        newSuspendedTransaction(Dispatchers.IO, db = database) {
+        suspendTransaction(db = database) {
             block()
         }
+}
+
+internal fun QueryParams.readFilters(
+    defaultSort: String,
+    allowedSorts: Set<String>,
+    latestSupported: Boolean,
+): ReadFilters {
+    val latest = boolean("latest", default = false)
+    if (latest && !latestSupported) {
+        throw RequestValidationException(
+            listOf(
+                ValidationIssue(
+                    field = "latest",
+                    code = ValidationIssueCodes.UnsupportedValue,
+                    message = "latest is not supported for this endpoint",
+                )
+            )
+        )
+    }
+    if (latest) {
+        validateLatestOverrides()
+    }
+    val from = instant("from")
+    val to = instant("to")
+    validateRange(from, to, "from", "to")
+    return ReadFilters(
+        from = from,
+        to = to,
+        provider = optional("provider"),
+        providerInstanceId = optional("providerInstanceId"),
+        includeSource = boolean("includeSource", default = false),
+        limit = if (latest) 1 else limit(default = 500, max = 5000),
+        sort = if (latest) defaultSort else sort(allowedSorts, defaultSort),
+        order = if (latest) Orders.DESC else order(),
+    )
+}
+
+internal fun QueryParams.summaryFilters(defaultSort: String): ReadFilters {
+    val from = instant("from")
+    val to = instant("to")
+    validateRange(from, to, "from", "to")
+    return ReadFilters(
+        from = from,
+        to = to,
+        provider = optional("provider"),
+        providerInstanceId = optional("providerInstanceId"),
+        includeSource = boolean("includeSource", default = false),
+        limit = 1,
+        sort = defaultSort,
+        order = Orders.DESC,
+    )
 }
 
 class QueryParams(
@@ -655,6 +836,9 @@ class QueryParams(
             )
         }
     }
+
+    fun canonical(default: Boolean): Boolean =
+        boolean("canonical", default)
 
     fun limit(default: Int, max: Int): Int {
         val value = optional("limit") ?: return default
@@ -821,7 +1005,7 @@ private fun ActivitySummaryRow.toResponse(
         source = sourceMetadata[sourceInstanceId].toResponse(),
     )
 
-private fun SleepSummaryRow.toResponse(
+internal fun SleepSummaryRow.toResponse(
     sourceMetadata: Map<Int, SourceMetadata>
 ): SleepSummaryResponse =
     SleepSummaryResponse(
@@ -908,7 +1092,7 @@ private fun SleepNightRow.toResponse(
         session = session.toResponse(stagesBySession, sourceMetadata),
     )
 
-private fun <T> List<T>.meta(filters: ReadFilters): ReadResponseMeta =
+internal fun <T> List<T>.meta(filters: ReadFilters): ReadResponseMeta =
     ReadResponseMeta(
         count = size,
         limit = filters.limit,
@@ -932,6 +1116,22 @@ private fun <T> List<T>.meta(filters: SleepNightReadFilters): ReadResponseMeta =
         order = filters.order,
     )
 
+private fun List<RespiratoryRateSampleRow>.respiratoryRateSummary(): RespiratoryRateSummaryRow =
+    RespiratoryRateSummaryRow(
+        count = size,
+        minBreathsPerMinute = minOfOrNull { it.breathsPerMinute },
+        maxBreathsPerMinute = maxOfOrNull { it.breathsPerMinute },
+        avgBreathsPerMinute = if (isEmpty()) null else sumOf { it.breathsPerMinute }.toDouble() / size.toDouble(),
+    )
+
+private fun List<HrvSampleRow>.hrvSummary(): HrvSummaryRow =
+    HrvSummaryRow(
+        count = size,
+        minValue = minOfOrNull { it.value },
+        maxValue = maxOfOrNull { it.value },
+        avgValue = if (isEmpty()) null else sumOf { it.value } / size.toDouble(),
+    )
+
 private fun validateBodyMetricType(metricType: String) {
     if (metricType !in BodyMetricTypes.supported) {
         throw RequestValidationException(
@@ -946,14 +1146,14 @@ private fun validateBodyMetricType(metricType: String) {
     }
 }
 
-private object SortFields {
+internal object SortFields {
     const val START_AT = "startAt"
     const val END_AT = "endAt"
     const val DATE = "date"
     const val MEASURED_AT = "measuredAt"
 }
 
-private object Orders {
+internal object Orders {
     const val ASC = "asc"
     const val DESC = "desc"
 }

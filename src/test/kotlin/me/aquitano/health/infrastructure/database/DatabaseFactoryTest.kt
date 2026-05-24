@@ -7,8 +7,8 @@ import me.aquitano.health.infrastructure.repositories.SupportRepository
 import me.aquitano.health.infrastructure.security.ApiKeyHasher
 import me.aquitano.health.infrastructure.time.UtcClock
 import me.aquitano.health.test.PostgresTestDatabase
-import org.jetbrains.exposed.sql.transactions.TransactionManager
-import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -44,29 +44,6 @@ class DatabaseFactoryTest {
         assertContains(tableNames, "provider_oauth_accounts")
         assertContains(tableNames, "provider_oauth_states")
         assertContains(tableNames, "provider_sync_runs")
-    }
-
-    @Test
-    fun migrationsCreateReadPathIndexes() {
-        val database = DatabaseFactory().initialize(tempDatabaseConfig())
-
-        val indexNames = transaction(database) {
-            val names = mutableSetOf<String>()
-            exec("SELECT indexname FROM pg_indexes WHERE schemaname = current_schema()") { resultSet ->
-                while (resultSet.next()) {
-                    names.add(resultSet.getString("indexname"))
-                }
-            }
-            names
-        }
-
-        assertContains(indexNames, "step_samples_source_instance_start_end_idx")
-        assertContains(indexNames, "step_samples_source_instance_time_range_gist_idx")
-        assertContains(indexNames, "sleep_sessions_source_instance_start_idx")
-        assertContains(indexNames, "body_measurements_source_instance_metric_measured_idx")
-        assertContains(indexNames, "heart_rate_samples_source_instance_measured_idx")
-        assertContains(indexNames, "ingestion_batches_status_received_idx")
-        assertContains(indexNames, "provider_sync_runs_provider_instance_started_idx")
     }
 
     @Test

@@ -3,13 +3,14 @@ package me.aquitano.health.infrastructure.repositories
 import me.aquitano.health.infrastructure.database.tables.*
 import me.aquitano.health.infrastructure.database.toApiString
 import me.aquitano.health.infrastructure.database.toDbTimestamp
-import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.greaterEq
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.greater
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.less
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.lessEq
+import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.greater
+import org.jetbrains.exposed.v1.core.greaterEq
+import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.core.less
+import org.jetbrains.exposed.v1.core.lessEq
+import org.jetbrains.exposed.v1.jdbc.*
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -561,6 +562,43 @@ class MetricsReadRepository {
         )
     }
 
+    fun latestBodyMeasurementsBefore(
+        filters: ReadFilters,
+        metricType: String
+    ): Pair<List<BodyMeasurementRow>, Map<Int, SourceMetadata>> {
+        val sourceIds =
+            sourceInstanceIds(filters.provider, filters.providerInstanceId)
+        if (sourceIds != null && sourceIds.isEmpty()) return emptyList<BodyMeasurementRow>() to emptyMap()
+        val latestConditions = mutableListOf<Op<Boolean>>()
+        filters.from?.let { latestConditions.add(BodyMeasurementsTable.measuredAt less it.toDbTimestamp()) }
+        sourceIds?.let { latestConditions.add(BodyMeasurementsTable.sourceInstanceId inList it) }
+        latestConditions.add(BodyMeasurementsTable.metricType eq metricType)
+        val latestMeasuredAt = BodyMeasurementsTable.selectAll()
+            .where(combineConditions(latestConditions))
+            .orderBy(
+                BodyMeasurementsTable.measuredAt to SortOrder.DESC,
+                BodyMeasurementsTable.id to SortOrder.DESC,
+            )
+            .limit(1)
+            .map { it[BodyMeasurementsTable.measuredAt] }
+            .singleOrNull()
+            ?: return emptyList<BodyMeasurementRow>() to emptyMap()
+
+        val conflictConditions = mutableListOf<Op<Boolean>>(
+            BodyMeasurementsTable.measuredAt eq latestMeasuredAt,
+            BodyMeasurementsTable.metricType eq metricType,
+        )
+        sourceIds?.let { conflictConditions.add(BodyMeasurementsTable.sourceInstanceId inList it) }
+        val rows = BodyMeasurementsTable.selectAll()
+            .where(combineConditions(conflictConditions))
+            .orderBy(BodyMeasurementsTable.id to SortOrder.ASC)
+            .map(::toBodyMeasurementRow)
+        return rows to sourceMetadata(
+            rows.map { it.sourceInstanceId }.toSet(),
+            filters.includeSource
+        )
+    }
+
     fun latestBodyMeasurement(
         filters: ReadFilters,
         metricType: String?
@@ -850,6 +888,9 @@ class MetricsReadRepository {
             sampleCount = row[sampleCountExpression] ?: 0,
         )
     }
+
+    fun sourceMetadataFor(sourceInstanceIds: Set<Int>): Map<Int, SourceMetadata> =
+        sourceMetadata(sourceInstanceIds, includeSource = true)
 
     private fun sourceInstanceIds(
         provider: String?,

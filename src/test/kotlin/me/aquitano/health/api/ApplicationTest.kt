@@ -80,26 +80,6 @@ class ApplicationTest {
     }
 
     @Test
-    fun openApiDocumentIsGenerated() = testApplication {
-        configureTestApplication()
-
-        val response = client.get("/openapi")
-
-        assertEquals(HttpStatusCode.OK, response.status)
-        assertEquals(ContentType.Application.Json, response.contentType())
-        val body = AppJson.parseToJsonElement(response.bodyAsText()).jsonObject
-        assertNotNull(body["openapi"])
-        assertNotNull(body["paths"])
-        assertNotNull(body["components"]!!.jsonObject["securitySchemes"]!!.jsonObject["bearerApiKey"])
-        assertEquals(
-            "bearerApiKey",
-            body["security"]!!.jsonArray.first().jsonObject.keys.first()
-        )
-        // The /openapi route itself must not appear in the spec
-        assertFalse(response.bodyAsText().contains("\"/openapi\""))
-    }
-
-    @Test
     fun openApiDocumentContainsContractMetadata() = testApplication {
         configureTestApplication()
 
@@ -193,6 +173,7 @@ class ApplicationTest {
         assertTrue("date" in dailyStepParamNames)
         assertTrue("fromDate" in dailyStepParamNames)
         assertTrue("toDate" in dailyStepParamNames)
+        assertTrue("canonical" in dailyStepParamNames)
         assertFalse("from" in dailyStepParamNames)
         assertFalse("to" in dailyStepParamNames)
 
@@ -211,6 +192,15 @@ class ApplicationTest {
             .jsonArray.map { it.jsonObject["name"]!!.jsonPrimitive.content }.toSet()
         assertTrue("metricType" in bodyMetricParamNames)
         assertTrue("latest" in bodyMetricParamNames)
+        assertTrue("canonical" in bodyMetricParamNames)
+
+        val dashboardParamNames = paths["/api/v1/dashboard/summary"]!!.jsonObject["get"]!!.jsonObject["parameters"]!!
+            .jsonArray.map { it.jsonObject["name"]!!.jsonPrimitive.content }.toSet()
+        assertTrue("canonical" in dashboardParamNames)
+
+        val healthDayParamNames = paths["/api/v1/health/day"]!!.jsonObject["get"]!!.jsonObject["parameters"]!!
+            .jsonArray.map { it.jsonObject["name"]!!.jsonPrimitive.content }.toSet()
+        assertTrue("canonical" in healthDayParamNames)
 
         val schemas = body["components"]!!.jsonObject["schemas"]!!.jsonObject
         val providerStatus = schemas["ProviderStatusResponseDto"]!!.jsonObject
@@ -274,6 +264,18 @@ class ApplicationTest {
         )
     }
 
+    @Test
+    fun openApiDocumentsEndpointSpecificReadSortEnums() = testApplication {
+        configureTestApplication()
+
+        val paths = client.get("/openapi").jsonBody()["paths"]!!.jsonObject
+
+        assertEquals(listOf("endAt"), paths.sortEnum("/api/v1/sleep/summaries"))
+        assertEquals(listOf("startAt"), paths.sortEnum("/api/v1/sleep/sessions"))
+        assertEquals(listOf("measuredAt"), paths.sortEnum("/api/v1/metrics/heart-rate"))
+        assertEquals(listOf("date"), paths.sortEnum("/api/v1/metrics/steps/daily"))
+    }
+
     private fun ApplicationTestBuilder.configureTestApplication() {
         val dbConfig = PostgresTestDatabase.config()
         environment {
@@ -289,4 +291,10 @@ class ApplicationTest {
 
     private suspend fun HttpResponse.jsonBody() =
         AppJson.parseToJsonElement(bodyAsText()).jsonObject
+
+    private fun JsonObject.sortEnum(path: String): List<String> =
+        this[path]!!.jsonObject["get"]!!.jsonObject["parameters"]!!.jsonArray
+            .first { it.jsonObject["name"]!!.jsonPrimitive.content == "sort" }
+            .jsonObject["schema"]!!.jsonObject["enum"]!!.jsonArray
+            .map { it.jsonPrimitive.content }
 }

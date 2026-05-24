@@ -2777,7 +2777,7 @@ export interface operations {
                 /** @description Return the latest matching item when true. Defaults to false. Cannot be combined with limit, sort, or order. */
                 latest?: boolean;
                 /** @description Sort field for this endpoint. Each metric endpoint supports its documented default temporal or date field. */
-                sort?: string;
+                sort?: "startAt";
                 /** @description Sort direction. Defaults to asc. Use desc for newest-first reads. */
                 order?: "asc" | "desc";
                 /** @description Maximum number of items. Defaults to 500 and cannot exceed 5000. */
@@ -2857,7 +2857,7 @@ export interface operations {
                 /** @description Include source provider metadata in each item. Defaults to false. */
                 includeSource?: boolean;
                 /** @description Sort field. Daily endpoints support date. */
-                sort?: string;
+                sort?: "date";
                 /** @description Sort direction. Defaults to asc. Use desc for newest-first reads. */
                 order?: "asc" | "desc";
                 /** @description Maximum number of items. Defaults to 500 and cannot exceed 5000. */
@@ -3027,7 +3027,7 @@ export interface operations {
                 /** @description Return the latest matching item when true. Defaults to false. Cannot be combined with limit, sort, or order. */
                 latest?: boolean;
                 /** @description Sort field for this endpoint. Each metric endpoint supports its documented default temporal or date field. */
-                sort?: string;
+                sort?: "measuredAt";
                 /** @description Sort direction. Defaults to asc. Use desc for newest-first reads. */
                 order?: "asc" | "desc";
                 /** @description Maximum number of items. Defaults to 500 and cannot exceed 5000. */
@@ -3191,7 +3191,7 @@ export interface operations {
                 /** @description Return the latest matching item when true. Defaults to false. Cannot be combined with limit, sort, or order. */
                 latest?: boolean;
                 /** @description Sort field for this endpoint. Each metric endpoint supports its documented default temporal or date field. */
-                sort?: string;
+                sort?: "measuredAt";
                 /** @description Sort direction. Defaults to asc. Use desc for newest-first reads. */
                 order?: "asc" | "desc";
                 /** @description Maximum number of items. Defaults to 500 and cannot exceed 5000. */
@@ -3357,7 +3357,7 @@ export interface operations {
                 /** @description Return the latest matching item when true. Defaults to false. Cannot be combined with limit, sort, or order. */
                 latest?: boolean;
                 /** @description Sort field for this endpoint. Each metric endpoint supports its documented default temporal or date field. */
-                sort?: string;
+                sort?: "measuredAt";
                 /** @description Sort direction. Defaults to asc. Use desc for newest-first reads. */
                 order?: "asc" | "desc";
                 /** @description Maximum number of items. Defaults to 500 and cannot exceed 5000. */
@@ -3600,7 +3600,7 @@ export interface operations {
                 /** @description Include source provider metadata in each item. Defaults to false. */
                 includeSource?: boolean;
                 /** @description Sort field. Daily endpoints support date. */
-                sort?: string;
+                sort?: "date";
                 /** @description Sort direction. Defaults to asc. Use desc for newest-first reads. */
                 order?: "asc" | "desc";
                 /** @description Maximum number of items. Defaults to 500 and cannot exceed 5000. */
@@ -3692,7 +3692,7 @@ export interface operations {
                 /** @description Return the latest matching item when true. Defaults to false. Cannot be combined with limit, sort, or order. */
                 latest?: boolean;
                 /** @description Sort field for this endpoint. Each metric endpoint supports its documented default temporal or date field. */
-                sort?: string;
+                sort?: "startAt";
                 /** @description Sort direction. Defaults to asc. Use desc for newest-first reads. */
                 order?: "asc" | "desc";
                 /** @description Maximum number of items. Defaults to 500 and cannot exceed 5000. */
@@ -3944,7 +3944,7 @@ export interface operations {
                 /** @description Return the latest matching item when true. Defaults to false. Cannot be combined with limit, sort, or order. */
                 latest?: boolean;
                 /** @description Sort field for this endpoint. Each metric endpoint supports its documented default temporal or date field. */
-                sort?: string;
+                sort?: "endAt";
                 /** @description Sort direction. Defaults to asc. Use desc for newest-first reads. */
                 order?: "asc" | "desc";
                 /** @description Maximum number of items. Defaults to 500 and cannot exceed 5000. */
@@ -4110,7 +4110,7 @@ export interface operations {
                 /** @description Return the latest matching item when true. Defaults to false. Cannot be combined with limit, sort, or order. */
                 latest?: boolean;
                 /** @description Sort field for this endpoint. Each metric endpoint supports its documented default temporal or date field. */
-                sort?: string;
+                sort?: "measuredAt";
                 /** @description Sort direction. Defaults to asc. Use desc for newest-first reads. */
                 order?: "asc" | "desc";
                 /** @description Maximum number of items. Defaults to 500 and cannot exceed 5000. */

@@ -397,6 +397,8 @@ fun Application.configureRoutes(services: ApplicationServices) {
             summary = "List step samples",
             descriptionText = "Returns raw step samples filtered by timestamp range, source provider, provider instance, source metadata inclusion, item limit, and sort order. Use `latest=true` to return the latest matching sample only.",
             includeLatest = true,
+            sortValues = listOf("startAt"),
+            defaultSort = "startAt",
         )
         get("/api/v1/metrics/steps/daily") {
             call.authenticateProtected(services)
@@ -440,6 +442,8 @@ fun Application.configureRoutes(services: ApplicationServices) {
             summary = "List sleep sessions",
             descriptionText = "Returns sleep sessions with nested stages. Use `latest=true` to return the latest matching session only.",
             includeLatest = true,
+            sortValues = listOf("startAt"),
+            defaultSort = "startAt",
         )
         get("/api/v1/sleep/nights") {
             call.authenticateProtected(services)
@@ -455,7 +459,7 @@ fun Application.configureRoutes(services: ApplicationServices) {
             call.authenticateProtected(services)
             call.respond<SleepSummaryLatestResponse>(
                 HttpStatusCode.OK,
-                services.metricsQueryService.latestSleepSummary(
+                services.sleepSummaryReadService.latest(
                     call.queryParams()
                 )
             )
@@ -463,7 +467,7 @@ fun Application.configureRoutes(services: ApplicationServices) {
         get("/api/v1/sleep/summaries") {
             call.authenticateProtected(services)
             call.respond<SleepSummariesResponse>(
-                services.metricsQueryService.listSleepSummaries(
+                services.sleepSummaryReadService.list(
                     call.queryParams()
                 )
             )
@@ -472,6 +476,8 @@ fun Application.configureRoutes(services: ApplicationServices) {
             summary = "List sleep summaries",
             descriptionText = "Returns aggregate sleep summary records such as sleep score, efficiency, latency, wakeups, WASO, and stage-duration totals. Use `latest=true` to return the latest matching summary only.",
             includeLatest = true,
+            sortValues = listOf("endAt"),
+            defaultSort = "endAt",
         )
         get("/api/v1/body/measurements/latest") {
             call.authenticateProtected(services)
@@ -538,6 +544,8 @@ fun Application.configureRoutes(services: ApplicationServices) {
             summary = "List heart rate samples",
             descriptionText = "Returns heart-rate samples filtered by timestamp and source. Use `latest=true` to return the latest matching sample only.",
             includeLatest = true,
+            sortValues = listOf("measuredAt"),
+            defaultSort = "measuredAt",
         )
         get("/api/v1/metrics/respiratory-rate/summary") {
             call.authenticateProtected(services)
@@ -560,6 +568,8 @@ fun Application.configureRoutes(services: ApplicationServices) {
             summary = "List respiratory rate samples",
             descriptionText = "Returns timestamped respiratory-rate samples filtered by timestamp and source. Use `latest=true` to return the latest matching sample only.",
             includeLatest = true,
+            sortValues = listOf("measuredAt"),
+            defaultSort = "measuredAt",
         )
         get("/api/v1/metrics/hrv/summary") {
             call.authenticateProtected(services)

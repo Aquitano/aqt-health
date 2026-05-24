@@ -18,7 +18,7 @@ import me.aquitano.health.infrastructure.security.ApiKeyHasher
 import me.aquitano.health.infrastructure.time.UtcClock
 import me.aquitano.health.shared.AppJson
 import net.logstash.logback.argument.StructuredArguments.kv
-import org.jetbrains.exposed.sql.Database
+import org.jetbrains.exposed.v1.jdbc.Database
 import org.slf4j.LoggerFactory
 
 private val logger =
@@ -81,12 +81,14 @@ fun Application.module() {
         ),
     )
     val metricsReadRepository = MetricsReadRepository()
+    val canonicalMetricsService =
+        CanonicalMetricsService(CanonicalMetricsPolicy.default())
     val healthDayModuleRegistry = HealthDayModuleRegistry(
         listOf(
-            StepsDayModule(metricsReadRepository),
-            HeartRateDayModule(metricsReadRepository),
-            WeightDayModule(metricsReadRepository),
-            SleepDayModule(metricsReadRepository),
+            StepsDayModule(metricsReadRepository, canonicalMetricsService),
+            HeartRateDayModule(metricsReadRepository, canonicalMetricsService),
+            WeightDayModule(metricsReadRepository, canonicalMetricsService),
+            SleepDayModule(metricsReadRepository, canonicalMetricsService),
         )
     )
     val ingestionService = IngestionService(
@@ -127,6 +129,12 @@ fun Application.module() {
         metricsQueryService = MetricsQueryService(
             database = database,
             metricsReadRepository = metricsReadRepository,
+            canonicalMetricsService = canonicalMetricsService,
+        ),
+        sleepSummaryReadService = SleepSummaryReadService(
+            database = database,
+            metricsReadRepository = metricsReadRepository,
+            canonicalMetricsService = canonicalMetricsService,
         ),
         healthDayQueryService = HealthDayQueryService(
             database = database,
@@ -169,6 +177,7 @@ data class ApplicationServices(
     val clock: UtcClock,
     val ingestionService: IngestionService,
     val metricsQueryService: MetricsQueryService,
+    val sleepSummaryReadService: SleepSummaryReadService,
     val healthDayQueryService: HealthDayQueryService,
     val adminService: AdminService,
     val providerRegistry: HealthProviderRegistry,
