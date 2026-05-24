@@ -70,10 +70,10 @@ class ProviderStatusService(
         val needsReauth = accountStatuses.any {
             it.status == ProviderAccountLifecycleStatus.NeedsReauth
         }
-        val needsAuthentication = configured && (!canSync || needsReauth)
+        val needsAuthentication = configured && !canSync
         val nextAction = when {
             !configured -> ProviderNextAction.Configure
-            needsReauth -> ProviderNextAction.Reconnect
+            !canSync && needsReauth -> ProviderNextAction.Reconnect
             !connected -> ProviderNextAction.Connect
             !canSync -> ProviderNextAction.Reconnect
             else -> ProviderNextAction.Sync

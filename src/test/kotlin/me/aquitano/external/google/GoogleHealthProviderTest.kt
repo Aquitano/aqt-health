@@ -58,6 +58,46 @@ class GoogleHealthProviderTest {
     }
 
     @Test
+    fun oauthCallbackPreservesConnectedAtForAlreadyConnectedAccount() = runBlocking {
+        val fixture = Fixture()
+        val firstConnectedAt = Instant.parse("2026-04-20T10:00:00Z")
+        val firstStart = fixture.providerWorkflowService.startOAuth("google-health", firstConnectedAt)
+        val firstState = Regex("state=([^&]+)").find(firstStart.authorizationUrl)!!.groupValues[1]
+        fixture.providerWorkflowService.completeOAuth(
+            providerCode = "google-health",
+            code = "auth-code",
+            state = firstState,
+            error = null,
+            now = firstConnectedAt,
+        )
+
+        val secondStart = fixture.providerWorkflowService.startOAuth(
+            "google-health",
+            firstConnectedAt.plusSeconds(60),
+        )
+        val secondState = Regex("state=([^&]+)").find(secondStart.authorizationUrl)!!.groupValues[1]
+        fixture.providerWorkflowService.completeOAuth(
+            providerCode = "google-health",
+            code = "auth-code",
+            state = secondState,
+            error = null,
+            now = firstConnectedAt.plusSeconds(120),
+        )
+
+        assertEquals(
+            1,
+            singleInt(
+                fixture.dbPath,
+                """
+                SELECT COUNT(*)
+                FROM provider_oauth_accounts
+                WHERE connected_at = TIMESTAMPTZ '2026-04-20T10:00:00Z'
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
     fun oauthCallbackMapsTokenExchangeFailureToUpstreamProviderError() = runBlocking {
         val fixture = Fixture()
         val now = Instant.parse("2026-04-20T10:00:00Z")
