@@ -587,7 +587,8 @@ class GoogleHealthProvider(
         }
 
     private fun Exception.isInvalidRefreshToken(): Boolean =
-        this is GoogleHealthHttpException && oauthError == "invalid_grant"
+        this is GoogleHealthUnauthorizedException ||
+                this is GoogleHealthHttpException && oauthError == "invalid_grant"
 
     private data class ValidatedSyncRequest(
         val providerInstanceId: String?,
