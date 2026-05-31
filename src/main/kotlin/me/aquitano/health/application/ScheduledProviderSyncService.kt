@@ -67,7 +67,7 @@ class ScheduledProviderSyncService(
         val lookbackDays = validateRange(
             field = "lookbackDays",
             value = request.lookbackDays ?: existing?.lookbackDays ?: DEFAULT_LOOKBACK_DAYS,
-            min = 0,
+            min = 1,
             max = provider.descriptor.maxSyncRangeDays,
         )
         val nextRunAt = if (enabled) existing?.nextRunAt ?: now else null
@@ -176,8 +176,12 @@ class ScheduledProviderSyncService(
             )
             ScheduledSyncExecutionResult("processed", earliestFrom, latestTo, emptyList(), summaries)
         } else {
-            val nonRetryable = errors.any { it.contains("validation", ignoreCase = true) } ||
-                    errors.any { it.contains("not configured", ignoreCase = true) }
+            val nonRetryable = errors.any { error ->
+                error.contains("validation", ignoreCase = true) ||
+                        error.contains("not configured", ignoreCase = true) ||
+                        error.contains("not connected", ignoreCase = true) ||
+                        error.contains("needs reconnect", ignoreCase = true)
+            }
             val failureCount = config.failureCount + 1
             repository.markFailure(
                 configId = config.id,

@@ -234,6 +234,10 @@ class ScheduledSyncRepository(private val database: Database) {
             .where { ProviderScheduledSyncCheckpointsTable.configId eq configId }
             .associateBy { it[ProviderScheduledSyncCheckpointsTable.dataType] }
         val nowTimestamp = now.toDbTimestamp()
+        ProviderScheduledSyncCheckpointsTable.deleteWhere {
+            (ProviderScheduledSyncCheckpointsTable.configId eq configId) and
+                    (ProviderScheduledSyncCheckpointsTable.dataType notInList dataTypes)
+        }
         dataTypes.forEach { dataType ->
             if (!existing.containsKey(dataType)) {
                 ProviderScheduledSyncCheckpointsTable.insert {

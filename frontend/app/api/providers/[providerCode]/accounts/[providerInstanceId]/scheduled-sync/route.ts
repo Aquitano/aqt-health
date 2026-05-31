@@ -39,14 +39,10 @@ function normalizePayload(body: ScheduledSyncConfigUpdateRequest): ScheduledSync
     enabled: typeof body.enabled === "boolean" ? body.enabled : undefined,
     dataTypes: dataTypes && dataTypes.length > 0 ? dataTypes : undefined,
     cadenceMinutes: positiveInteger(body.cadenceMinutes),
-    lookbackDays: nonNegativeInteger(body.lookbackDays),
+    lookbackDays: positiveInteger(body.lookbackDays),
   };
 }
 
 function positiveInteger(value?: number): number | undefined {
   return Number.isInteger(value) && value && value > 0 ? value : undefined;
-}
-
-function nonNegativeInteger(value?: number): number | undefined {
-  return Number.isInteger(value) && value !== undefined && value >= 0 ? value : undefined;
 }

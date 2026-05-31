@@ -18,7 +18,7 @@ CREATE TABLE provider_scheduled_sync_configs
     updated_at           TIMESTAMPTZ NOT NULL,
     UNIQUE (provider_code, provider_instance_id),
     CHECK (cadence_minutes BETWEEN 15 AND 43200),
-    CHECK (lookback_days BETWEEN 0 AND 31),
+    CHECK (lookback_days BETWEEN 1 AND 31),
     CHECK (failure_count >= 0)
 );
 

@@ -41,6 +41,18 @@ class ScheduledSyncRepositoryTest {
         val stepsCheckpoint = repository.checkpoints(config.id).single { it.dataType == "steps" }
         assertEquals(now, stepsCheckpoint.checkpointAt)
 
+        repository.upsertConfig(
+            providerCode = "google_health",
+            providerInstanceId = "google-health-me",
+            enabled = true,
+            dataTypes = listOf("steps"),
+            cadenceMinutes = 1_440,
+            lookbackDays = 7,
+            nextRunAt = now,
+            now = now,
+        )
+        assertEquals(listOf("steps"), repository.checkpoints(config.id).map { it.dataType })
+
         val due = repository.dueConfigs(now)
         assertEquals(config.id, due.single().id)
         assertNotNull(repository.getConfig("google_health", "google-health-me"))
