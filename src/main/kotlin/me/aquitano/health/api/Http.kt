@@ -21,11 +21,16 @@ fun Application.configureHttp(corsConfig: CorsConfig) {
     }
     install(CORS) {
         allowMethod(HttpMethod.Get)
+        allowMethod(HttpMethod.Options)
         allowMethod(HttpMethod.Post)
         allowMethod(HttpMethod.Put)
         allowMethod(HttpMethod.Delete)
         allowHeader(HttpHeaders.Authorization)
         allowHeader(HttpHeaders.ContentType)
+        allowHeader("Mcp-Session-Id")
+        allowHeader("Mcp-Protocol-Version")
+        exposeHeader("Mcp-Session-Id")
+        exposeHeader("Mcp-Protocol-Version")
         allowNonSimpleContentTypes = true
         allowCredentials = true
         corsConfig.origins.forEach { origin ->

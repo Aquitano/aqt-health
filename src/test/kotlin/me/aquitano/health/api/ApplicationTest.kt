@@ -73,6 +73,61 @@ class ApplicationTest {
     }
 
     @Test
+    fun mcpEndpointRequiresAuthAndListsTools() = testApplication {
+        configureTestApplication()
+
+        val unauthorized = client.post("/mcp") {
+            contentType(ContentType.Application.Json)
+            header(HttpHeaders.Accept, "application/json, text/event-stream")
+            setBody(mcpInitializeRequest())
+        }
+        assertEquals(HttpStatusCode.Unauthorized, unauthorized.status)
+
+        val initialized = client.post("/mcp") {
+            header(HttpHeaders.Authorization, "Bearer test-key")
+            contentType(ContentType.Application.Json)
+            header(HttpHeaders.Accept, "application/json, text/event-stream")
+            setBody(mcpInitializeRequest())
+        }
+        assertEquals(HttpStatusCode.OK, initialized.status)
+        val sessionId = initialized.headers["Mcp-Session-Id"]
+        assertNotNull(sessionId)
+        assertTrue(sessionId.isNotBlank())
+
+        client.post("/mcp") {
+            header(HttpHeaders.Authorization, "Bearer test-key")
+            header("Mcp-Session-Id", sessionId)
+            header("Mcp-Protocol-Version", "2025-06-18")
+            contentType(ContentType.Application.Json)
+            header(HttpHeaders.Accept, "application/json, text/event-stream")
+            setBody("""{"jsonrpc":"2.0","method":"notifications/initialized"}""")
+        }
+
+        val tools = client.post("/mcp") {
+            header(HttpHeaders.Authorization, "Bearer test-key")
+            header("Mcp-Session-Id", sessionId)
+            header("Mcp-Protocol-Version", "2025-06-18")
+            contentType(ContentType.Application.Json)
+            header(HttpHeaders.Accept, "application/json, text/event-stream")
+            setBody("""{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}""")
+        }
+        assertEquals(HttpStatusCode.OK, tools.status)
+        val toolNames = tools.jsonBody()["result"]!!.jsonObject["tools"]!!.jsonArray
+            .map { it.jsonObject["name"]!!.jsonPrimitive.content }
+            .toSet()
+        assertEquals(
+            setOf(
+                "health_catalog",
+                "health_day",
+                "dashboard_summary",
+                "dashboard_trends",
+                "query_health_metric",
+            ),
+            toolNames,
+        )
+    }
+
+    @Test
     fun validationErrorDetailsIncludeMachineReadableCodes() = testApplication {
         configureTestApplication()
 
@@ -301,6 +356,23 @@ class ApplicationTest {
 
     private suspend fun HttpResponse.jsonBody() =
         AppJson.parseToJsonElement(bodyAsText()).jsonObject
+
+    private fun mcpInitializeRequest(): String =
+        """
+        {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "initialize",
+          "params": {
+            "protocolVersion": "2025-06-18",
+            "capabilities": {},
+            "clientInfo": {
+              "name": "aqt-health-test",
+              "version": "1.0.0"
+            }
+          }
+        }
+        """.trimIndent()
 
     private fun JsonObject.sortEnum(path: String): List<String> =
         this[path]!!.jsonObject["get"]!!.jsonObject["parameters"]!!.jsonArray

@@ -270,6 +270,66 @@ class ReadApiRouteTest {
     }
 
     @Test
+    fun mcpToolsReturnAggregatedHealthData() = testApplication {
+        configureTestApplication()
+        ingestMixedBatch()
+        ingestLaterBatch()
+
+        val sessionId = initializeMcpSession()
+
+        val day = callMcpTool(
+            sessionId = sessionId,
+            id = 3,
+            name = "health_day",
+            arguments = """
+            {
+              "date": "2026-04-19",
+              "timezone": "UTC",
+              "modules": ["steps", "heartRate", "weight", "sleep"],
+              "includeSource": true
+            }
+            """.trimIndent(),
+        )
+        assertEquals(1600, day["steps"]!!.jsonObject["total"]!!.jsonPrimitive.int)
+        assertEquals(2, day["heartRate"]!!.jsonObject["count"]!!.jsonPrimitive.int)
+        assertEquals(83.1, day["weight"]!!.jsonObject["latest"]!!.jsonObject["value"]!!.jsonPrimitive.double)
+        assertEquals(14400, day["sleep"]!!.jsonObject["totalDurationSeconds"]!!.jsonPrimitive.long)
+
+        val steps = callMcpTool(
+            sessionId = sessionId,
+            id = 4,
+            name = "query_health_metric",
+            arguments = """
+            {
+              "family": "steps",
+              "mode": "daily",
+              "date": "2026-04-19"
+            }
+            """.trimIndent(),
+        )
+        assertEquals(1, steps["items"]!!.jsonArray.size)
+        assertEquals(1600, steps["items"]!!.jsonArray[0].jsonObject["steps"]!!.jsonPrimitive.int)
+
+        val invalid = callMcpToolEnvelope(
+            sessionId = sessionId,
+            id = 5,
+            name = "query_health_metric",
+            arguments = """
+            {
+              "family": "steps",
+              "mode": "latest"
+            }
+            """.trimIndent(),
+        )
+        val result = invalid["result"]!!.jsonObject
+        assertEquals(true, result["isError"]!!.jsonPrimitive.boolean)
+        val errorPayload = AppJson.parseToJsonElement(
+            result["content"]!!.jsonArray[0].jsonObject["text"]!!.jsonPrimitive.content
+        ).jsonObject
+        assertEquals("validation_failed", errorPayload["code"]!!.jsonPrimitive.content)
+    }
+
+    @Test
     fun queryModeEndpointsReturnLatestAndDateSpecificData() = testApplication {
         configureTestApplication()
         ingestMixedBatch()
@@ -798,6 +858,89 @@ class ReadApiRouteTest {
         client.get(path) {
             authorized()
         }
+
+    private suspend fun ApplicationTestBuilder.initializeMcpSession(): String {
+        val response = client.post("/mcp") {
+            authorized()
+            contentType(ContentType.Application.Json)
+            header(HttpHeaders.Accept, "application/json, text/event-stream")
+            setBody(
+                """
+                {
+                  "jsonrpc": "2.0",
+                  "id": 1,
+                  "method": "initialize",
+                  "params": {
+                    "protocolVersion": "2025-06-18",
+                    "capabilities": {},
+                    "clientInfo": {
+                      "name": "aqt-health-test",
+                      "version": "1.0.0"
+                    }
+                  }
+                }
+                """.trimIndent()
+            )
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        val sessionId = response.headers["Mcp-Session-Id"]
+        assertNotNull(sessionId)
+
+        client.post("/mcp") {
+            authorized()
+            header("Mcp-Session-Id", sessionId)
+            header("Mcp-Protocol-Version", "2025-06-18")
+            contentType(ContentType.Application.Json)
+            header(HttpHeaders.Accept, "application/json, text/event-stream")
+            setBody("""{"jsonrpc":"2.0","method":"notifications/initialized"}""")
+        }
+
+        return sessionId
+    }
+
+    private suspend fun ApplicationTestBuilder.callMcpTool(
+        sessionId: String,
+        id: Int,
+        name: String,
+        arguments: String,
+    ): JsonObject {
+        val envelope = callMcpToolEnvelope(sessionId, id, name, arguments)
+        val result = envelope["result"]!!.jsonObject
+        assertFalse(result["isError"]?.jsonPrimitive?.boolean ?: false)
+        return AppJson.parseToJsonElement(
+            result["content"]!!.jsonArray[0].jsonObject["text"]!!.jsonPrimitive.content
+        ).jsonObject
+    }
+
+    private suspend fun ApplicationTestBuilder.callMcpToolEnvelope(
+        sessionId: String,
+        id: Int,
+        name: String,
+        arguments: String,
+    ): JsonObject {
+        val response = client.post("/mcp") {
+            authorized()
+            header("Mcp-Session-Id", sessionId)
+            header("Mcp-Protocol-Version", "2025-06-18")
+            contentType(ContentType.Application.Json)
+            header(HttpHeaders.Accept, "application/json, text/event-stream")
+            setBody(
+                """
+                {
+                  "jsonrpc": "2.0",
+                  "id": $id,
+                  "method": "tools/call",
+                  "params": {
+                    "name": "$name",
+                    "arguments": $arguments
+                  }
+                }
+                """.trimIndent()
+            )
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        return response.jsonBody()
+    }
 
     private fun HttpRequestBuilder.authorized() {
         header(HttpHeaders.Authorization, "Bearer test-key")

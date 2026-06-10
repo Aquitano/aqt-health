@@ -3,6 +3,7 @@ package me.aquitano.health.api
 import io.ktor.server.application.*
 import me.aquitano.external.google.GeneratedGoogleHealthClient
 import me.aquitano.external.withings.KtorWithingsClient
+import me.aquitano.health.api.mcp.configureMcpRoutes
 import me.aquitano.health.application.*
 import me.aquitano.health.application.metric.common.MetricsQueryService
 import me.aquitano.health.di.queryServicesModule
@@ -88,6 +89,7 @@ fun Application.module() {
     configureHttp(corsConfig = appConfig.cors)
     configureMetrics(appConfig = appConfig, sharedHttpClient = httpClient)
     configureRoutes(services = services)
+    configureMcpRoutes(services = services)
 }
 
 /**

@@ -57,11 +57,13 @@ dependencies {
     implementation("io.ktor:ktor-openapi-schema")
     implementation("io.ktor:ktor-server-status-pages")
     implementation("io.ktor:ktor-server-cors")
+    implementation("io.ktor:ktor-server-sse")
     implementation("io.ktor:ktor-server-swagger")
     implementation("io.ktor:ktor-serialization-kotlinx-json")
     implementation("io.ktor:ktor-server-config-yaml")
     implementation("io.insert-koin:koin-ktor:$koin_version")
     implementation("io.insert-koin:koin-logger-slf4j:$koin_version")
+    implementation("io.modelcontextprotocol:kotlin-sdk-server:0.12.0")
 
     implementation("ch.qos.logback:logback-classic:$logback_version")
     implementation("net.logstash.logback:logstash-logback-encoder:$logstash_logback_encoder_version")
@@ -82,6 +84,7 @@ dependencies {
 
     testImplementation("io.ktor:ktor-server-test-host")
     testImplementation("io.ktor:ktor-client-mock")
+    testImplementation("io.modelcontextprotocol:kotlin-sdk-client:0.12.0")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit:$kotlin_version")
     testImplementation("org.testcontainers:postgresql:$testcontainers_version")
 }
