@@ -1,5 +1,6 @@
 package me.aquitano.health.infrastructure.repositories
 
+import me.aquitano.health.domain.BatchStatus
 import me.aquitano.health.domain.HealthRecord
 import me.aquitano.health.domain.RequestValidationException
 import me.aquitano.health.domain.ValidationIssue
@@ -22,7 +23,7 @@ import java.time.ZoneOffset
 
 data class ExistingBatch(
     val id: Int,
-    val status: String,
+    val status: BatchStatus,
     val batchExternalId: String?,
 )
 
@@ -351,7 +352,7 @@ class IngestionRepository {
     private fun toExistingBatch(row: ResultRow): ExistingBatch =
         ExistingBatch(
             id = row[IngestionBatchesTable.id].value,
-            status = row[IngestionBatchesTable.status],
+            status = BatchStatus.fromStored(row[IngestionBatchesTable.status]),
             batchExternalId = row[IngestionBatchesTable.batchExternalId],
         )
 }

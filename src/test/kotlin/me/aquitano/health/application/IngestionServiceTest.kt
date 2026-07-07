@@ -2,7 +2,7 @@ package me.aquitano.health.application
 
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.buildJsonObject
-import me.aquitano.health.api.dto.BatchStatus
+import me.aquitano.health.domain.BatchStatus
 import me.aquitano.health.api.dto.IngestionBatchRequest
 import me.aquitano.health.api.dto.StepIntervalDto
 import me.aquitano.health.test.metricWriteService
