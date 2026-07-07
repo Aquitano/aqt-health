@@ -37,6 +37,23 @@ class IdempotencyKeyRouteTest {
     }
 
     @Test
+    fun syncJobSameKeyWithDifferentRequestReturnsConflict() = testApplication {
+        configureTestApplication()
+
+        val first = startSyncJob(key = "sync-job-key-conflict")
+        val second = client.post("/api/v2/providers/google-health/sync-jobs") {
+            authorized()
+            header("Idempotency-Key", "sync-job-key-conflict")
+            contentType(ContentType.Application.Json)
+            setBody("""{"from":"2026-04-02T00:00:00Z","to":"2026-04-03T00:00:00Z","dataTypes":["steps"]}""")
+        }
+
+        assertEquals(HttpStatusCode.Accepted, first.status)
+        assertEquals(HttpStatusCode.Conflict, second.status)
+        assertEquals("idempotency_key_conflict", second.errorCode())
+    }
+
+    @Test
     fun syncJobWithoutKeyCreatesNewJobEachTime() = testApplication {
         configureTestApplication()
 
@@ -68,6 +85,28 @@ class IdempotencyKeyRouteTest {
         assertEquals(HttpStatusCode.Accepted, first.status)
         assertEquals(HttpStatusCode.Accepted, second.status)
         assertEquals(first.jobId(), second.jobId())
+    }
+
+    @Test
+    fun replaySameKeyWithDifferentRequestReturnsConflict() = testApplication {
+        configureTestApplication()
+
+        val first = client.post("/api/v2/admin/replay") {
+            authorized()
+            header("Idempotency-Key", "replay-key-conflict")
+            contentType(ContentType.Application.Json)
+            setBody("""{"scope":"projections"}""")
+        }
+        val second = client.post("/api/v2/admin/replay") {
+            authorized()
+            header("Idempotency-Key", "replay-key-conflict")
+            contentType(ContentType.Application.Json)
+            setBody("""{"scope":"derived"}""")
+        }
+
+        assertEquals(HttpStatusCode.Accepted, first.status)
+        assertEquals(HttpStatusCode.Conflict, second.status)
+        assertEquals("idempotency_key_conflict", second.errorCode())
     }
 
     @Test
@@ -104,6 +143,9 @@ class IdempotencyKeyRouteTest {
 
     private suspend fun HttpResponse.jobId(): String =
         AppJson.parseToJsonElement(bodyAsText()).jsonObject["jobId"]!!.jsonPrimitive.content
+
+    private suspend fun HttpResponse.errorCode(): String =
+        AppJson.parseToJsonElement(bodyAsText()).jsonObject["error"]!!.jsonObject["code"]!!.jsonPrimitive.content
 
     private fun ApplicationTestBuilder.configureTestApplication() {
         val dbConfig = PostgresTestDatabase.config()

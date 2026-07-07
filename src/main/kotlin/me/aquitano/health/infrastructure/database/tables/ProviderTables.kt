@@ -53,6 +53,7 @@ object ProviderSyncJobsTable : Table("provider_sync_jobs") {
     val id = text("id")
     val providerCode = text("provider_code")
     val idempotencyKey = text("idempotency_key").nullable()
+    val idempotencyRequestHash = text("idempotency_request_hash").nullable()
     val providerInstanceId = text("provider_instance_id").nullable()
     val requestedFrom = timestampWithTimeZone("requested_from")
     val requestedTo = timestampWithTimeZone("requested_to")
@@ -105,6 +106,7 @@ object ProviderScheduledSyncConfigsTable : IntIdTable("provider_scheduled_sync_c
 object ProviderSyncIdempotencyTable : Table("provider_sync_idempotency") {
     val providerCode = text("provider_code")
     val idempotencyKey = text("idempotency_key")
+    val requestHash = text("request_hash")
     val responseJson = text("response_json")
     val createdAt = timestampWithTimeZone("created_at")
 

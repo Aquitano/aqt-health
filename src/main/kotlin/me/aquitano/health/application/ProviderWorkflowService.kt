@@ -150,19 +150,29 @@ class ProviderWorkflowService(
         val provider = providerRegistry.getProvider(providerCode)
             ?: throw NotFoundException("Provider '$providerCode' not found")
         val canonicalCode = provider.descriptor.providerCode
-        if (idempotencyKey != null) {
+        val domainRequest = toDomainSyncRequest(request, now)
+        val requestHash = syncRequestHash(request)
+        val canReplaySafely = domainRequest.providerInstanceId != null
+        if (idempotencyKey != null && canReplaySafely) {
             syncIdempotencyRepository.findResponse(canonicalCode, idempotencyKey)
                 ?.let { stored ->
-                    runCatching { AppJson.decodeFromString<ProviderSyncResponseDto>(stored) }
+                    if (stored.requestHash != requestHash) {
+                        throw ConflictException(
+                            "idempotency_key_conflict",
+                            "Idempotency-Key was already used for a different provider sync request.",
+                        )
+                    }
+                    runCatching { AppJson.decodeFromString<ProviderSyncResponseDto>(stored.responseJson) }
                         .getOrNull()
                 }
                 ?.let { return it }
         }
-        val response = provider.sync(toDomainSyncRequest(request, now), now).toDto()
-        if (idempotencyKey != null) {
+        val response = provider.sync(domainRequest, now).toDto()
+        if (idempotencyKey != null && canReplaySafely) {
             syncIdempotencyRepository.storeResponse(
                 providerCode = canonicalCode,
                 idempotencyKey = idempotencyKey,
+                requestHash = requestHash,
                 responseJson = AppJson.encodeToString(response),
                 now = now,
             )
@@ -377,3 +387,12 @@ class ProviderWorkflowService(
             normalizedRecords = normalizedRecords,
         )
 }
+
+private fun syncRequestHash(request: ProviderSyncRequestDto): String =
+    idempotencyRequestHash(
+        request.providerInstanceId?.takeIf { it.isNotBlank() },
+        request.from,
+        request.to,
+        request.dataTypes?.distinct()?.idempotencyListPart(),
+        request.pageSize?.toString(),
+    )
