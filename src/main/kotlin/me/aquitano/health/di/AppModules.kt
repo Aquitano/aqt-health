@@ -139,6 +139,7 @@ fun servicesModule(database: Database, config: AppConfig) = module {
             activitySummaryWriteRepository = get(),
             cardiovascularWriteRepository = get(),
             scalarSampleWriteRepository = get(),
+            derivedRebuildRegistry = get(),
         )
     }
     single { MetricCatalogBootstrap(database) }
@@ -146,16 +147,19 @@ fun servicesModule(database: Database, config: AppConfig) = module {
         StepSummaryService(get<StepDailySummaryDerivationRepository>())
     }
     single { CanonicalStepDerivationService(get<CanonicalStepDerivationRepository>()) }
+    single {
+        DerivedRebuildModuleRegistry(
+            derivedRebuildModules(
+                stepSummaryService = get(),
+                canonicalStepService = get(),
+                sleepNightService = get(),
+            )
+        )
+    }
     single<DerivedRebuildExecutor> {
         TransactionalDerivedRebuildExecutor(
             database = database,
-            registry = DerivedRebuildModuleRegistry(
-                derivedRebuildModules(
-                    stepSummaryService = get(),
-                    canonicalStepService = get(),
-                    sleepNightService = get(),
-                )
-            ),
+            registry = get(),
         )
     }
     single {
@@ -264,6 +268,7 @@ fun servicesModule(database: Database, config: AppConfig) = module {
             mappingService = get(),
             metricWriteService = get(),
             derivedRebuildExecutor = get(),
+            derivedRebuildRegistry = get(),
             replayJobRepository = get(),
             projectionWipeRepository = get(),
             clock = get(),
