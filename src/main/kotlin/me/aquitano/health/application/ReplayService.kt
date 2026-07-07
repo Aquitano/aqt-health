@@ -88,8 +88,21 @@ class ReplayService(
         scope.cancel()
     }
 
-    suspend fun create(request: ReplayRequest, now: Instant): ReplayJobStartResponse {
+    suspend fun create(
+        request: ReplayRequest,
+        now: Instant,
+        idempotencyKey: String? = null,
+    ): ReplayJobStartResponse {
         val plan = validate(request)
+        if (idempotencyKey != null) {
+            replayJobRepository.findByIdempotencyKey(idempotencyKey)?.let { existing ->
+                replayLogger.infoWithContext(
+                    "replay_job_idempotent_replay",
+                    "jobId" to existing.id,
+                )
+                return existing.toStartDto()
+            }
+        }
         val job = replayJobRepository.create(
             id = UUID.randomUUID().toString(),
             scope = plan.scope,
@@ -98,18 +111,22 @@ class ReplayService(
             toDate = plan.toDate,
             wipe = plan.wipe,
             now = now,
+            idempotencyKey = idempotencyKey,
         )
 
         scope.launch {
             runJob(job.id, plan)
         }
 
-        return ReplayJobStartResponse(
-            jobId = job.id,
-            status = ReplayJobStatus.fromStored(job.status),
-            createdAt = job.createdAt.toString(),
-        )
+        return job.toStartDto()
     }
+
+    private fun ReplayJobRecord.toStartDto(): ReplayJobStartResponse =
+        ReplayJobStartResponse(
+            jobId = id,
+            status = ReplayJobStatus.fromStored(status),
+            createdAt = createdAt.toString(),
+        )
 
     suspend fun get(jobId: String): ReplayJobStatusResponse =
         replayJobRepository.get(jobId)?.toDto()

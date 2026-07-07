@@ -5,7 +5,11 @@ import me.aquitano.health.application.providersync.ProviderSyncProgressSink
 import me.aquitano.health.domain.*
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthStateConsumeResult
+import me.aquitano.health.infrastructure.repositories.ProviderSyncIdempotencyRepository
+import me.aquitano.health.shared.AppJson
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
 import me.aquitano.health.infrastructure.logging.*
 import java.security.SecureRandom
 import java.time.Duration
@@ -18,6 +22,7 @@ class ProviderWorkflowService(
     private val providerRegistry: HealthProviderRegistry,
     private val providerOAuthRepository: ProviderOAuthRepository,
     private val providerStatusService: ProviderStatusService,
+    private val syncIdempotencyRepository: ProviderSyncIdempotencyRepository,
 ) {
     private val random = SecureRandom()
 
@@ -139,12 +144,31 @@ class ProviderWorkflowService(
     suspend fun sync(
         providerCode: String,
         request: ProviderSyncRequestDto,
-        now: Instant
-    ): ProviderSyncResponseDto =
-        providerRegistry.getProvider(providerCode)
-            ?.sync(toDomainSyncRequest(request, now), now)
-            ?.toDto()
+        now: Instant,
+        idempotencyKey: String? = null,
+    ): ProviderSyncResponseDto {
+        val provider = providerRegistry.getProvider(providerCode)
             ?: throw NotFoundException("Provider '$providerCode' not found")
+        val canonicalCode = provider.descriptor.providerCode
+        if (idempotencyKey != null) {
+            syncIdempotencyRepository.findResponse(canonicalCode, idempotencyKey)
+                ?.let { stored ->
+                    runCatching { AppJson.decodeFromString<ProviderSyncResponseDto>(stored) }
+                        .getOrNull()
+                }
+                ?.let { return it }
+        }
+        val response = provider.sync(toDomainSyncRequest(request, now), now).toDto()
+        if (idempotencyKey != null) {
+            syncIdempotencyRepository.storeResponse(
+                providerCode = canonicalCode,
+                idempotencyKey = idempotencyKey,
+                responseJson = AppJson.encodeToString(response),
+                now = now,
+            )
+        }
+        return response
+    }
 
     suspend fun sync(
         providerCode: String,

@@ -4,6 +4,7 @@ import me.aquitano.health.infrastructure.database.tables.ProviderSyncJobsTable
 import me.aquitano.health.infrastructure.database.toDbTimestamp
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -50,11 +51,13 @@ class ProviderSyncJobRepository(private val database: Database) {
         dataTypes: List<String>?,
         pageSize: Int?,
         now: Instant,
+        idempotencyKey: String? = null,
     ): ProviderSyncJobRecord =
         suspendDbTransaction(db = database) {
             ProviderSyncJobsTable.insert {
                 it[this.id] = id
                 it[this.providerCode] = providerCode
+                it[this.idempotencyKey] = idempotencyKey
                 it[this.providerInstanceId] = providerInstanceId
                 it[this.requestedFrom] = requestedFrom.toDbTimestamp()
                 it[this.requestedTo] = requestedTo.toDbTimestamp()
@@ -74,6 +77,22 @@ class ProviderSyncJobRepository(private val database: Database) {
 
     suspend fun get(id: String): ProviderSyncJobRecord? =
         suspendDbTransaction(db = database) { getByIdInTransaction(id) }
+
+    suspend fun findByIdempotencyKey(
+        providerCode: String,
+        idempotencyKey: String,
+    ): ProviderSyncJobRecord? =
+        suspendDbTransaction(db = database) {
+            ProviderSyncJobsTable
+                .selectAll()
+                .where {
+                    (ProviderSyncJobsTable.providerCode eq providerCode) and
+                        (ProviderSyncJobsTable.idempotencyKey eq idempotencyKey)
+                }
+                .limit(1)
+                .map { it.toRecord() }
+                .singleOrNull()
+        }
 
     suspend fun latest(providerCode: String? = null): ProviderSyncJobRecord? =
         suspendDbTransaction(db = database) {

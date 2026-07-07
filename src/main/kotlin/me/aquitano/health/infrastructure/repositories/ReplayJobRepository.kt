@@ -44,10 +44,12 @@ class ReplayJobRepository(private val database: Database) {
         toDate: LocalDate?,
         wipe: Boolean,
         now: Instant,
+        idempotencyKey: String? = null,
     ): ReplayJobRecord =
         suspendDbTransaction(db = database) {
             ReplayJobsTable.insert {
                 it[this.id] = id
+                it[this.idempotencyKey] = idempotencyKey
                 it[this.scope] = scope
                 it[this.metricTypes] = metricTypes?.joinToString(",")
                 it[this.fromDate] = fromDate
@@ -68,6 +70,16 @@ class ReplayJobRepository(private val database: Database) {
 
     suspend fun get(id: String): ReplayJobRecord? =
         suspendDbTransaction(db = database) { getByIdInTransaction(id) }
+
+    suspend fun findByIdempotencyKey(idempotencyKey: String): ReplayJobRecord? =
+        suspendDbTransaction(db = database) {
+            ReplayJobsTable
+                .selectAll()
+                .where { ReplayJobsTable.idempotencyKey eq idempotencyKey }
+                .limit(1)
+                .map { it.toRecord() }
+                .singleOrNull()
+        }
 
     suspend fun latest(): ReplayJobRecord? =
         suspendDbTransaction(db = database) {

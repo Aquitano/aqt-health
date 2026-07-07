@@ -48,9 +48,21 @@ class ProviderSyncJobService(
         providerCode: String,
         request: ProviderSyncRequestDto,
         now: Instant,
+        idempotencyKey: String? = null,
     ): ProviderSyncJobStartResponseDto {
         val provider = providerRegistry.getProvider(providerCode)
             ?: throw NotFoundException("Provider '$providerCode' not found")
+        if (idempotencyKey != null) {
+            repository.findByIdempotencyKey(provider.descriptor.providerCode, idempotencyKey)
+                ?.let { existing ->
+                    providerSyncJobLogger.infoWithContext(
+                        "provider_sync_job_idempotent_replay",
+                        "provider" to provider.descriptor.providerCode,
+                        "jobId" to existing.id,
+                    )
+                    return existing.toStartDto()
+                }
+        }
         val domainRequest = workflowService.toDomainSyncRequest(request, now)
         val job = repository.create(
             id = UUID.randomUUID().toString(),
@@ -61,17 +73,14 @@ class ProviderSyncJobService(
             dataTypes = domainRequest.dataTypes,
             pageSize = domainRequest.pageSize,
             now = now,
+            idempotencyKey = idempotencyKey,
         )
 
         scope.launch {
             runJob(job.id, provider.descriptor.providerCode, domainRequest)
         }
 
-        return ProviderSyncJobStartResponseDto(
-            jobId = job.id,
-            status = SyncJobStatus.fromStored(job.status),
-            createdAt = job.createdAt.toString(),
-        )
+        return job.toStartDto()
     }
 
     suspend fun get(jobId: String): ProviderSyncJobStatusResponseDto =
@@ -158,6 +167,13 @@ class ProviderSyncJobService(
             repository.markItemCompleted(jobId, item.dataType, item.from, item.to, clock.now())
         }
     }
+
+    private fun ProviderSyncJobRecord.toStartDto(): ProviderSyncJobStartResponseDto =
+        ProviderSyncJobStartResponseDto(
+            jobId = id,
+            status = SyncJobStatus.fromStored(status),
+            createdAt = createdAt.toString(),
+        )
 
     private fun ProviderSyncJobRecord.toDto(): ProviderSyncJobStatusResponseDto =
         ProviderSyncJobStatusResponseDto(
