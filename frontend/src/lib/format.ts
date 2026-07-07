@@ -1,7 +1,7 @@
 export function formatDateTime(value?: string | number | null): string {
   if (value === undefined || value === null || value === "") return "n/a";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
+  if (Number.isNaN(date.getTime())) return typeof value === "number" ? "n/a" : String(value);
 
   return new Intl.DateTimeFormat("en", {
     dateStyle: "medium",
