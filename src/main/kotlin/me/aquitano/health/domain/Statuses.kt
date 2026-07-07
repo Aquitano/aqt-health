@@ -20,8 +20,11 @@ enum class BatchStatus(val stored: String) {
     Failed("failed");
 
     companion object {
-        fun fromStored(value: String): BatchStatus =
+        fun fromStoredOrNull(value: String): BatchStatus? =
             entries.firstOrNull { it.stored == value }
+
+        fun fromStored(value: String): BatchStatus =
+            fromStoredOrNull(value)
                 ?: error("Unknown ingestion batch status '$value'")
     }
 }

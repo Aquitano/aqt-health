@@ -85,7 +85,7 @@ class IngestionService(
                     return@suspendDbTransaction IngestionTransactionResult.Success(
                         IngestionSummaryResponse(
                             batchId = existingBatch.id,
-                            status = existingBatch.status,
+                            status = BatchStatus.Processed,
                             duplicateBatch = true,
                             recordsReceived = validated.records.size,
                             ingestionRecordsStored = 0,
@@ -118,7 +118,7 @@ class IngestionService(
                 } else if (existingBatch != null) {
                     throw ConflictException(
                         "ingestion_batch_in_progress",
-                        "Batch '${validated.batchExternalId}' already exists with status '${existingBatch.status.stored}'",
+                        "Batch '${validated.batchExternalId}' already exists with status '${existingBatch.storedStatus}'",
                     )
                 }
 

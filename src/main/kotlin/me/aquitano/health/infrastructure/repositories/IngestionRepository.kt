@@ -23,7 +23,8 @@ import java.time.ZoneOffset
 
 data class ExistingBatch(
     val id: Int,
-    val status: BatchStatus,
+    val status: BatchStatus?,
+    val storedStatus: String,
     val batchExternalId: String?,
 )
 
@@ -352,7 +353,8 @@ class IngestionRepository {
     private fun toExistingBatch(row: ResultRow): ExistingBatch =
         ExistingBatch(
             id = row[IngestionBatchesTable.id].value,
-            status = BatchStatus.fromStored(row[IngestionBatchesTable.status]),
+            status = BatchStatus.fromStoredOrNull(row[IngestionBatchesTable.status]),
+            storedStatus = row[IngestionBatchesTable.status],
             batchExternalId = row[IngestionBatchesTable.batchExternalId],
         )
 }
