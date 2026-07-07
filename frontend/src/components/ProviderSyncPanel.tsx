@@ -15,6 +15,7 @@ import type {
   ProviderSyncResponse,
   ProviderSyncJobStatusResponse,
 } from "@/lib/types";
+import { ErrorNotice } from "./ErrorNotice";
 import styles from "./ProviderSyncPanel.module.css";
 
 type ProviderSyncPanelProps = {
@@ -111,8 +112,8 @@ export function ProviderSyncPanel({ catalog, statuses, scheduledSyncConfigs }: P
         <div className={styles.heading}>
           <h2>Provider sync</h2>
         </div>
-        {!catalog.ok ? <ErrorBlock result={catalog} /> : null}
-        {!statuses.ok ? <ErrorBlock result={statuses} /> : null}
+        {!catalog.ok ? <ErrorNotice result={catalog} /> : null}
+        {!statuses.ok ? <ErrorNotice result={statuses} /> : null}
       </section>
     );
   }
@@ -652,7 +653,7 @@ function ProviderAccountRow({
 }
 
 function ScheduledRunResult({ result }: { result: ApiResult<ScheduledSyncRunResponse> }) {
-  if (!result.ok) return <ErrorBlock result={result} />;
+  if (!result.ok) return <ErrorNotice result={result} />;
 
   return (
     <div className={styles.result}>
@@ -673,7 +674,7 @@ function ScheduledRunResult({ result }: { result: ApiResult<ScheduledSyncRunResp
 
 function SyncResult({ result }: { result: ApiResult<ProviderSyncResponse> }) {
   if (!result.ok) {
-    return <ErrorBlock result={result} />;
+    return <ErrorNotice result={result} />;
   }
 
   const created = result.data.batches.reduce(
@@ -699,17 +700,6 @@ function SyncResult({ result }: { result: ApiResult<ProviderSyncResponse> }) {
           ))}
         </ul>
       ) : null}
-    </div>
-  );
-}
-
-function ErrorBlock({ result }: { result: ApiResult<unknown> }) {
-  if (result.ok) return null;
-
-  return (
-    <div className={styles.errorNotice}>
-      {result.status ? <strong>HTTP {result.status}: </strong> : null}
-      {result.message}
     </div>
   );
 }
