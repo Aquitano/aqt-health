@@ -15,6 +15,7 @@ import type {
   ProviderSyncResponse,
   ProviderSyncJobStatusResponse,
 } from "@/lib/types";
+import { formatDateTime } from "@/lib/format";
 import { ErrorNotice } from "./ErrorNotice";
 import styles from "./ProviderSyncPanel.module.css";
 
@@ -764,12 +765,6 @@ function formatDataType(value: string): string {
     .split("-")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
-}
-
-function formatDateTime(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString();
 }
 
 function toIso(value: FormDataEntryValue | null): string | undefined {
