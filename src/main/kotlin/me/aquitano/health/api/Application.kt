@@ -117,7 +117,6 @@ fun Application.module() {
  * hides Koin from the route layer.
  */
 private fun Application.buildApplicationServices(): ApplicationServices {
-    val database by inject<org.jetbrains.exposed.v1.jdbc.Database>()
     val supportRepository by inject<SupportRepository>()
     val apiKeyHasher by inject<ApiKeyHasher>()
     val clock by inject<UtcClock>()
@@ -137,7 +136,6 @@ private fun Application.buildApplicationServices(): ApplicationServices {
     val replayService by inject<ReplayService>()
 
     return ApplicationServices(
-        database = database,
         supportRepository = supportRepository,
         apiKeyHasher = apiKeyHasher,
         clock = clock,
@@ -159,7 +157,6 @@ private fun Application.buildApplicationServices(): ApplicationServices {
 }
 
 data class ApplicationServices(
-    val database: org.jetbrains.exposed.v1.jdbc.Database,
     val supportRepository: SupportRepository,
     val apiKeyHasher: ApiKeyHasher,
     val clock: UtcClock,
