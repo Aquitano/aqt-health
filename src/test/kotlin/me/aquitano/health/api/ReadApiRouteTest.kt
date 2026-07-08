@@ -442,6 +442,18 @@ class ReadApiRouteTest {
     }
 
     @Test
+    fun dailyScalarSummariesRequireATimeRange() = testApplication {
+        configureTestApplication()
+
+        val response = authorizedGet("/api/v2/metrics/heart_rate/daily")
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        assertEquals(
+            "validation_failed",
+            response.jsonBody()["error"]!!.jsonObject["code"]!!.jsonPrimitive.content
+        )
+    }
+
+    @Test
     fun sleepNightsReturnCompleteSessionsByLocalizedEndDate() = testApplication {
         configureTestApplication()
         ingestSleepNightBatch()

@@ -74,7 +74,7 @@ internal fun Route.readRoutes(services: ApplicationServices) {
         tag("Read")
         summary = "Summarize scalar samples per calendar day"
         description =
-            "Returns one count/min/max/avg bucket per calendar day for the metric type within the requested timestamp range, grouped by the `timezone` day boundaries (UTC by default). Replaces per-day summary fan-out with a single ranged read. Unknown metric types return 404."
+            "Returns one count/min/max/avg bucket per calendar day for the metric type within the requested timestamp range, grouped by the `timezone` day boundaries (UTC by default). At least one of `from`/`to` is required to bound the scan. Replaces per-day summary fan-out with a single ranged read. Unknown metric types return 404."
         requiresBearerAuth()
         scalarDailySummaryQueryParameters()
         errorResponses(notFound = true)

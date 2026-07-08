@@ -17,7 +17,10 @@ import me.aquitano.health.application.metric.common.meta
 import me.aquitano.health.application.metric.common.readFilters
 import me.aquitano.health.application.metric.common.summaryFilters
 import me.aquitano.health.domain.NotFoundException
+import me.aquitano.health.domain.RequestValidationException
 import me.aquitano.health.domain.ScalarMetricRegistry
+import me.aquitano.health.domain.ValidationIssue
+import me.aquitano.health.domain.ValidationIssueCodes
 import org.jetbrains.exposed.v1.jdbc.Database
 
 /**
@@ -88,6 +91,17 @@ class ScalarMetricQueryService(
         requireKnown(metricType)
         return dbQuery {
             val filters = params.summaryFilters(SortFields.MEASURED_AT)
+            if (filters.from == null && filters.to == null) {
+                throw RequestValidationException(
+                    listOf(
+                        ValidationIssue(
+                            field = "from",
+                            code = ValidationIssueCodes.Required,
+                            message = "at least one of from or to is required",
+                        )
+                    )
+                )
+            }
             val zone = params.timezone()
             val items = scalarRepository
                 .summarizeDaily(filters, setOf(metricType), canonical = true, zone)
