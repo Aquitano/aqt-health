@@ -1,23 +1,36 @@
 # Refactor plan — status and remaining work
 
-Status as of 2026-07-07. Tracks the five-phase drift/consolidation plan; one PR per branch.
+Status as of 2026-07-08. Tracks the five-phase drift/consolidation plan; one PR per branch.
 
-## Landed (open PRs, all CI-green unless noted)
+## Merged to main
 
-| Item | PR | Branch |
+Batch merged 2026-07-08 (squash). The pairwise import conflicts the earlier merge-order note warned about never materialized as git conflicts, but two issues surfaced post-merge (each PR was only CI-green against its own older base) — both fixed forward in a hotfix PR:
+- **Real semantic break:** `OpenApiParameters.kt` (from #60) imported `BatchStatus` from `api.dto`, but #56 moved it to `me.aquitano.health.domain`. Unresolved reference broke `compileKotlin`. Fixed by updating the import.
+- **Local-only Konsist false positive:** `ArchitectureTest > api layer never references Exposed` (#64) failed locally because `Konsist.scopeFromProduction()` also scanned copies of the source under nested git worktrees (`.claude/worktrees`, `.t3/worktrees`) and stale `bin/` output carrying pre-refactor code. The real `src/main` tree is clean; CI on a fresh checkout was never affected. Fixed by slicing those paths out of the Konsist scope (rule itself unchanged).
+
+Post-merge verification on `main` after the fixes: `./gradlew check` BUILD SUCCESSFUL (unit + Testcontainers integration + Konsist). Frontend contract-drift re-checked against a fresh `generateOpenApi` — the committed generated types **were stale** and drifted (reorder of path/schema emission + a few added endpoint descriptions; no renames or removals). Regenerated and kept; frontend `typecheck` clean, `vitest` 24/24 green against the new types.
+
+| Item | PR | Merged |
 |---|---|---|
-| 1.1 Legacy scalar mappers delegate to registry | [#57](https://github.com/Aquitano/aqt-health/pull/57) | `refactor/legacy-scalar-mappers-registry` |
-| 1.2 Ingestion body schema inferred from DTO | [#59](https://github.com/Aquitano/aqt-health/pull/59) | `refactor/openapi-ingestion-batch-schema` (CI fix in progress) |
-| 1.3 Query-parameter descriptors | [#60](https://github.com/Aquitano/aqt-health/pull/60) | `refactor/query-param-descriptors` |
-| 1.4 Dead code deletion | [#55](https://github.com/Aquitano/aqt-health/pull/55) | `chore/delete-dead-code` |
-| 1.5 Status-enum migration | [#56](https://github.com/Aquitano/aqt-health/pull/56) | `refactor/status-enum-domain` |
-| 2.1 Affected-dates mapping on DerivedRebuildModule | [#65](https://github.com/Aquitano/aqt-health/pull/65) | `refactor/derived-rebuild-affected-dates` |
-| 2.2 Idempotency keys for job-creating POSTs | [#66](https://github.com/Aquitano/aqt-health/pull/66) | `feat/idempotency-keys` |
-| 3.1–3.4 Frontend hygiene | [#58](https://github.com/Aquitano/aqt-health/pull/58) | `chore/frontend-hygiene` |
-| 3.5 Generated types replace hand-written | [#62](https://github.com/Aquitano/aqt-health/pull/62) | `refactor/frontend-generated-types`, stacked on #59 |
-| 4.1 Generic DataTable | [#61](https://github.com/Aquitano/aqt-health/pull/61) | `refactor/generic-data-table` |
-| 4.2 Chart shared helpers | [#63](https://github.com/Aquitano/aqt-health/pull/63) | `refactor/chart-shared-helpers` |
-| 4.6 Read-repository layering + Konsist rules | [#64](https://github.com/Aquitano/aqt-health/pull/64) | `refactor/metric-repository-layering` |
+| 1.1 Legacy scalar mappers delegate to registry | [#57](https://github.com/Aquitano/aqt-health/pull/57) | ✅ |
+| 1.3 Query-parameter descriptors | [#60](https://github.com/Aquitano/aqt-health/pull/60) | ✅ |
+| 1.4 Dead code deletion | [#55](https://github.com/Aquitano/aqt-health/pull/55) | ✅ |
+| 1.5 Status-enum migration | [#56](https://github.com/Aquitano/aqt-health/pull/56) | ✅ |
+| 2.1 Affected-dates mapping on DerivedRebuildModule | [#65](https://github.com/Aquitano/aqt-health/pull/65) | ✅ |
+| 2.2 Idempotency keys for job-creating POSTs | [#66](https://github.com/Aquitano/aqt-health/pull/66) | ✅ |
+| 3.1–3.4 Frontend hygiene | [#58](https://github.com/Aquitano/aqt-health/pull/58) | ✅ |
+| 4.1 Generic DataTable | [#61](https://github.com/Aquitano/aqt-health/pull/61) | ✅ |
+| 4.2 Chart shared helpers | [#63](https://github.com/Aquitano/aqt-health/pull/63) | ✅ |
+| 4.6 Read-repository layering + Konsist rules | [#64](https://github.com/Aquitano/aqt-health/pull/64) | ✅ |
+
+## Open — paused stack
+
+| Item | PR | Branch | State |
+|---|---|---|---|
+| 1.2 Ingestion body schema inferred from DTO | [#59](https://github.com/Aquitano/aqt-health/pull/59) | `refactor/openapi-ingestion-batch-schema` | open, CI-green; base of #62 |
+| 3.5 Generated types replace hand-written | [#62](https://github.com/Aquitano/aqt-health/pull/62) | `refactor/frontend-generated-types` (stacked on #59) | open, **Gradle tests failing** |
+
+Deliberately left unmerged: #62's `Gradle tests` check is red on its base. Needs the failure diagnosed and fixed, then merge #59 first (#62 retargets to main automatically), regenerate frontend types, and merge #62.
 
 ## Plan corrections discovered during execution
 
