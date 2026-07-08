@@ -39,45 +39,38 @@ Deliberately left unmerged: #62's `Gradle tests` check is red on its base. Needs
 - 1.1 caught real drift: Withings emitted `basal_metabolic_rate` in `kcal/day` vs the registry's `kcal` (fixed in #57).
 - Verification note: `./gradlew test` runs only unit tests; the Testcontainers suites run under `./gradlew integrationTest`. CI's `./gradlew check` runs both.
 
-## Suggested merge order
+## Batch merge — done
 
-1. #55, #56, #57, #58, #61, #63, #64, #66 — independent, merge in any order; #55/#56/#60/#64/#65 have trivial import-level conflicts pairwise on `ReadRoutes.kt`, `AdminService.kt`, `AppModules.kt`, `Application.kt`, so rebase-after-each-merge.
-2. #59, then #62 (stacked on #59; retargets to main automatically).
-3. #60, #65 after the above (same central files).
+The Phase 1–4 batch (#56, #58, #60, #61, #63, #64, #65, #66) is merged to `main`; the post-merge semantic breaks were fixed forward in #67 (see above). `main` is green: `./gradlew check` passes, frontend types regenerated to match the merged contract.
 
-After merging: run `generateOpenApi` + frontend codegen on main once to confirm zero contract drift.
+## Remaining work — decisions and status
 
-## Remaining work
+A pre-implementation assessment (2026-07-08) validated each remaining item against the merged `main` and corrected several stale premises. Decisions taken with the maintainer:
 
-### 4.3 + 4.4 — DTO naming standardization + uniform list envelope (one coordinated PR, M)
-Blocked on: all open backend PRs merged (renames touch nearly every DTO file).
-- Pick `XxxRequest`/`XxxResponse`; drop `Dto` and the `ResponseDto` double-suffix (`ProviderDescriptorResponseDto` → `ProviderDescriptorResponse`, `StepIntervalDto` → `StepIntervalRequest`, …). Kotlin renames change OpenAPI component names only, not JSON payloads.
-- Note from 1.2: ingestion record components are now named from `@SerialName` values (`step_interval`, …), so those are unaffected by class renames.
-- 4.4 in the same PR (the one deliberate wire break, per the ADR's batch-wire-breaks rule): give `GET /metrics`, `GET /providers`, `GET /providers/status` the `{items, meta: {nextCursor: null}}` envelope (`providers` key becomes `items`).
-- Regenerate frontend types and update imports in the same PR. Verify: OpenAPI diff shows only component renames + the three envelope changes; frontend typechecks.
+### 4.7 — API error vocabulary (in progress)
+- Enumerate the reachable error `code` values (sourced from `ValidationIssueCodes`) as an OpenAPI enum on `ErrorResponse`; document per-endpoint codes.
+- **Correction:** the three metric-type validators in `MetricQueryValidation.kt` have **zero callers** — they are being **deleted**, not consolidated into `validateMetricType(...)` (that would resurrect dead code). Add a shared `requiredPathParam()` only where hand-rolled null-checks actually remain.
 
-### 4.5 — DI cleanup (M)
-Blocked on: #55, #64, #65, #66 merged (all touch `AppModules.kt`/`Application.kt`).
-- Regroup `AppModules.kt` by feature (ingestion, metrics-read, providers, replay/admin); `singleOf(::Type)` instead of by-name argument lists; delete the `ApplicationServices` bag + `buildApplicationServices()` in favor of route-module-level `inject()` (#64 already deleted its unused `database` field).
-- Register `ProviderSyncPipeline` and its ports as beans (currently default-constructed, unswappable in tests); fix the default-arg construction at `HealthDayQueryService.kt:147`.
-- Follow-up from 1.5 to fold in: `ProviderSyncPipeline.kt` still builds run status from raw strings via `ProviderSyncRunPort.finish(status: String)` — convert to `SyncStatus`.
+### 5.4 — Ranged daily scalar-summary endpoint (in progress)
+- **Made generic:** `GET /api/v2/metrics/{metricType}/daily?from=&to=` (not HR-specific — same effort, reusable) replaces the frontend's up-to-92-request per-day loop (`aqtHealthApi.ts:424-459`).
+- New `ScalarSampleReadRepository` grouped query + `summaryDaily` in `ScalarMetricQueryService` + one route + `ScalarDailySummariesResponse` DTO reusing the `items`+`meta` envelope. Reuses the existing `scalarMetricQueryService` bean. Day-boundary bucketing must match the frontend's existing `dateOnlyToUtcInstant` convention (test-guarded).
+- Suspense-split of the health-data page deferred (conflicts with other frontend work).
 
-### 4.7 — API error vocabulary + validator consolidation (S)
-Blocked on: #60 merged (shares `OpenApiParameters.kt`/`ReadRoutes.kt`).
-- Keep the bespoke error envelope; enumerate all `code` values as an OpenAPI enum and document per-endpoint conflict/upstream codes.
-- Collapse the three copy-pasted metric-type validators (`MetricQueryValidation.kt:10-50`) into `validateMetricType(type, family)`; add shared `requiredPathParam()`.
+### 4.4 — Provider list envelope (queued, after 4.7/5.4)
+- **Descoped:** `/metrics` already uses `items`. Only the 2 provider-list endpoints change: `providers` → `items` on `ProviderCatalogResponseDto` / `ProviderStatusCatalogResponseDto`. **No `meta` field** — provider lists are never paginated, so an always-null `nextCursor` would be cargo-cult. Update the frontend consumer (`aqtHealthApi.ts` ~256-278).
 
-### 5.3 — Generic daily-summary registry (L)
-Blocked on: #64 merged (repository moves), ideally 4.3 too (avoids double renames).
-- Collapse per-metric daily-summary plumbing (activity, step-daily, sleep-summary) into one generic dated-summary table keyed by `kind` + descriptor registry, the way scalars collapsed. Sleep sessions/stages stay bespoke.
-- Target: a new structural daily metric = descriptor + migration, not 15–20 files.
-- Note: 5.2's original premise is gone (tables are already views), so scope this as consolidating the read-side repos/services/routes over the existing views.
+### 4.3 — DTO naming standardization (queued, after 4.4)
+- **Descoped to response DTOs only:** rename `*Dto` → `*Response`/`*Request` for `Provider*`/`Read*`/`Trend*`/`Admin*` (component-name-only changes; JSON unaffected). Regenerate frontend types.
+- **Ingestion renames deferred:** `StepIntervalDto` etc. are ingestion records whose component names come from decoupled string constants in `OpenApi.kt`; renaming collides head-on with the paused **#59** and would risk an ingestion wire-break the plan forbids. Do the ingestion portion only after #59 lands.
 
-### 5.4 — Per-day heart-rate series endpoint (M)
-Independent; can start once #60/#65 merge (touches `ReadRoutes.kt`).
-- Backend: `GET /api/v2/metrics/heart_rate/daily?from=&to=` replacing the frontend's one-call-per-day loop (`aqtHealthApi.ts:424-452`, up to 92 requests).
-- Frontend: consume the new endpoint; Suspense-split the health-data debug tables so they don't block first paint. Conflicts with #58/#62 on `health-data/page.tsx` — land after those merge.
+### 4.5 — DI cleanup (queued, last — rewrites route signatures)
+- Regroup `AppModules.kt` by feature; `singleOf(::Type)`; delete the `ApplicationServices` bag + `buildApplicationServices()` for route-level `inject()`.
+- Fold in the 1.5 follow-up: convert `ProviderSyncRunPort.finish(status: String)` to `SyncStatus`.
+- **Corrections:** the `HealthDayQueryService` default-arg is already gone (no-op); registering `ProviderSyncPipeline` as a bean is optional polish (it's already a default constructor arg, so tests can inject fakes today).
 
-### Small follow-ups (batch into any nearby PR)
-- `HealthDataVisualizations` `bodyMetricConfig` hardcodes hex hues duplicating the `--hue-*` tokens (from 4.2).
-- Per-page visual verification of the DataTable consolidation (#61) and chart token changes (#63) — DOM was preserved by construction, but eyeball each page once.
+### 5.3 — Generic daily-summary registry — DROPPED
+Assessed as over-engineering. Scalars collapsed cleanly because they are homogeneous `(type, timestamp, value)`; daily summaries share only the `(id, date, source)` envelope, not the payload (activity has 13 fields, sleep is entirely different, steps is a count). A generic `kind`-keyed table would need ~25 sparse mostly-null columns or a JSON blob that discards the typed OpenAPI schema. The genuinely shared surface (`items`+`meta`, the `DISTINCT ON` V15 views) is already shared. Not worth the indirection.
+
+### Small follow-ups
+- `HealthDataVisualizations` `bodyMetricConfig` hardcoded hex hues: **not** a clean `var(--hue-*)` swap — only some metrics map to a semantically-matching token, others borrow a cross-named hue, so substitution can change meaning. Needs a deliberate token decision, not a blind replace.
+- One-time per-page visual pass warranted for the chart-token change (#63) — stroke/hue regressions don't surface in unit tests.
