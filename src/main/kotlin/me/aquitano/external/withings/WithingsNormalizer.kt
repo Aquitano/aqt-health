@@ -90,7 +90,7 @@ class WithingsNormalizer {
                 var diastolicMmhg: Int? = null
                 var bpHeartRate: Int? = null
 
-                // Extended body metrics and cardiovascular as individual DTOs
+                // Extended body metrics and cardiovascular as individual records
                 val extendedMetrics = mutableListOf<ExtendedBodyMeasurement>()
                 val cardiovascularMetrics = mutableListOf<Cardiovascular>()
 
