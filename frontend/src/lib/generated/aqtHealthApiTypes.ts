@@ -1273,6 +1273,7 @@ export interface components {
             batchesCount: number;
             emptyCount: number;
             errorCount: number;
+            restartCount?: number;
             errorMessage?: string | null;
             /** Format: date-time */
             createdAt: string;

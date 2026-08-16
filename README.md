@@ -390,6 +390,8 @@ curl -X POST http://localhost:8080/api/v2/providers/google-health/sync-jobs \
 
 Poll `/api/v2/providers/google-health/sync-jobs/{jobId}` for progress and the final summary. The backend owns the provider-safe sequential work after the job is accepted, so frontend reloads or browser closes do not stop the sync job.
 
+Sync jobs also survive backend restarts: unfinished jobs are requeued and rerun on startup, which is safe because ingestion dedupes by provider record ID. The job status reports how often this happened in `restartCount`; after three restarts a job is failed instead of resumed to stop crash loops.
+
 Google Health may return overlapping step intervals with different provider record IDs. To avoid inflated future totals, overlapping Google Health step intervals for the same account are skipped as duplicate metrics during ingestion. This guard is forward-looking only; it does not repair or remove historical rows that were ingested before the guard existed.
 
 ## Withings Provider

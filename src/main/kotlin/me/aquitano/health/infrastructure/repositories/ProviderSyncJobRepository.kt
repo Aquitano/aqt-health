@@ -6,6 +6,7 @@ import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertIgnore
@@ -35,6 +36,7 @@ data class ProviderSyncJobRecord(
     val batchesCount: Int,
     val emptyCount: Int,
     val errorCount: Int,
+    val restartCount: Int,
     val summaryJson: String?,
     val errorMessage: String?,
     val createdAt: Instant,
@@ -44,6 +46,11 @@ data class ProviderSyncJobRecord(
 )
 
 data class ProviderSyncJobCreateResult(val record: ProviderSyncJobRecord, val created: Boolean)
+
+data class ProviderSyncJobRequeueResult(
+    val resumed: List<ProviderSyncJobRecord>,
+    val abandoned: List<ProviderSyncJobRecord>,
+)
 
 class ProviderSyncJobRepository(private val database: Database) {
     suspend fun create(
@@ -76,6 +83,7 @@ class ProviderSyncJobRepository(private val database: Database) {
                     it[batchesCount] = 0
                     it[emptyCount] = 0
                     it[errorCount] = 0
+                    it[restartCount] = 0
                     it[createdAt] = now.toDbTimestamp()
                     it[updatedAt] = now.toDbTimestamp()
                 }
@@ -220,20 +228,46 @@ class ProviderSyncJobRepository(private val database: Database) {
         }
     }
 
-    suspend fun markInterruptedUnfinishedJobs(now: Instant) {
+    /**
+     * Requeues jobs interrupted by a restart so the service can relaunch them, and fails
+     * jobs that have already been restarted [maxRestarts] times to stop crash loops.
+     */
+    suspend fun requeueInterruptedJobs(now: Instant, maxRestarts: Int): ProviderSyncJobRequeueResult =
         suspendDbTransaction(db = database) {
-            listOf("queued", "running").forEach { interruptedStatus ->
-                ProviderSyncJobsTable.update({
-                    ProviderSyncJobsTable.status eq interruptedStatus
-                }) {
+            val interrupted = ProviderSyncJobsTable
+                .selectAll()
+                .where { ProviderSyncJobsTable.status inList listOf("queued", "running") }
+                .map { it.toRecord() }
+            val (abandoned, resumable) = interrupted.partition { it.restartCount >= maxRestarts }
+
+            abandoned.forEach { job ->
+                ProviderSyncJobsTable.update({ ProviderSyncJobsTable.id eq job.id }) {
                     it[status] = "failed"
-                    it[errorMessage] = "Backend stopped before the sync job finished. Start a new sync to resume from completed chunks."
+                    it[errorMessage] =
+                        "Backend restarted $maxRestarts times while this job was unfinished; not resuming again. Start a new sync to resume from completed chunks."
                     it[updatedAt] = now.toDbTimestamp()
                     it[finishedAt] = now.toDbTimestamp()
                 }
             }
+            resumable.forEach { job ->
+                ProviderSyncJobsTable.update({ ProviderSyncJobsTable.id eq job.id }) {
+                    it[status] = "queued"
+                    it[restartCount] = job.restartCount + 1
+                    // The relaunch reruns the full request, so completed progress starts over.
+                    it[completedItems] = 0
+                    it[currentDataType] = null
+                    it[currentFrom] = null
+                    it[currentTo] = null
+                    it[errorMessage] = null
+                    it[updatedAt] = now.toDbTimestamp()
+                }
+            }
+
+            ProviderSyncJobRequeueResult(
+                resumed = resumable.map { it.copy(status = "queued", restartCount = it.restartCount + 1, completedItems = 0) },
+                abandoned = abandoned,
+            )
         }
-    }
 
     private fun getByIdInTransaction(id: String): ProviderSyncJobRecord? =
         ProviderSyncJobsTable
@@ -279,6 +313,7 @@ class ProviderSyncJobRepository(private val database: Database) {
             batchesCount = this[ProviderSyncJobsTable.batchesCount],
             emptyCount = this[ProviderSyncJobsTable.emptyCount],
             errorCount = this[ProviderSyncJobsTable.errorCount],
+            restartCount = this[ProviderSyncJobsTable.restartCount],
             summaryJson = this[ProviderSyncJobsTable.summaryJson],
             errorMessage = this[ProviderSyncJobsTable.errorMessage],
             createdAt = this[ProviderSyncJobsTable.createdAt].toInstant(),
