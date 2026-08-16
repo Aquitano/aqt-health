@@ -126,7 +126,7 @@ describe("ProviderSyncPanel polling", () => {
     expect(screen.getByRole("button", { name: /syncing/i })).toBeDisabled();
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        "/api/providers/google-health/sync-jobs/job-1",
+        "/api/backend/providers/google-health/sync-jobs/job-1",
       );
     });
     await screen.findByText(/1 of 2 windows complete/);

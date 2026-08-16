@@ -1,20 +1,19 @@
 import type { CSSProperties } from "react";
 import { formatDateTime, formatDuration, formatMeasurement, formatNumber } from "@/lib/format";
 import type {
-  ActivitySummaryLatestResponse,
-  BloodPressureLatestResponse,
-  HrvSamplesResponse,
-  RespiratoryRateSamplesResponse,
-  SleepSummaryLatestResponse,
+  ActivitySummariesResponse,
+  BloodPressureMeasurementsResponse,
+  ScalarSamplesResponse,
+  SleepSummariesResponse,
 } from "@/lib/types";
 import styles from "./MetricHighlights.module.css";
 
 type MetricHighlightsProps = {
-  latestActivity?: ActivitySummaryLatestResponse;
-  latestSleepSummary?: SleepSummaryLatestResponse;
-  latestRespiratoryRate?: RespiratoryRateSamplesResponse;
-  latestHrv?: HrvSamplesResponse;
-  latestBloodPressure?: BloodPressureLatestResponse;
+  latestActivity?: ActivitySummariesResponse;
+  latestSleepSummary?: SleepSummariesResponse;
+  latestRespiratoryRate?: ScalarSamplesResponse;
+  latestHrv?: ScalarSamplesResponse;
+  latestBloodPressure?: BloodPressureMeasurementsResponse;
 };
 export function MetricHighlights({
   latestActivity,

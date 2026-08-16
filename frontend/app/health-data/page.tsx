@@ -22,7 +22,7 @@ import { SleepSessionsTable } from "@/components/tables/SleepSessionsTable";
 import { SleepSummariesTable } from "@/components/tables/SleepSummariesTable";
 import { getHealthDataPageSources } from "@/lib/aqtHealthApi";
 import { addUtcDays, parseDateRange } from "@/lib/dates";
-import type { BodyMeasurement, HealthDataPageSources } from "@/lib/types";
+import type { HealthDataPageSources, ScalarSample } from "@/lib/types";
 import { Suspense } from "react";
 
 type PageProps = {
@@ -59,7 +59,6 @@ export default async function HealthDataPage({ searchParams }: PageProps) {
           sources={sources}
           fromDate={range.fromDate}
           toDate={range.toDate}
-          timezone={range.timezone}
         />
       </Suspense>
 
@@ -83,12 +82,10 @@ async function OverviewSection({
   sources,
   fromDate,
   toDate,
-  timezone,
 }: {
   sources: HealthDataPageSources;
   fromDate: string;
   toDate: string;
-  timezone: string;
 }) {
   const [
     health,
@@ -113,14 +110,6 @@ async function OverviewSection({
     sources.latestHrv,
     sources.latestBloodPressure,
   ]);
-
-  console.info(JSON.stringify({
-    event: "health_data_route_overview_completed",
-    page: "/health-data",
-    fromDate,
-    toDate,
-    timezone,
-  }));
 
   const bodyMeasurementItems = bodyMeasurements.ok ? bodyMeasurements.data.items : [];
   const weightTrendItems = bodyMeasurementItems.filter((item) => isWeightTrendItem(item, toDate));
@@ -285,13 +274,13 @@ async function DebugSection({ sources }: { sources: HealthDataPageSources }) {
   );
 }
 
-function isWeightTrendItem(item: BodyMeasurement, toDate: string): boolean {
+function isWeightTrendItem(item: ScalarSample, toDate: string): boolean {
   const from = Date.parse(`${addUtcDays(toDate, -6)}T00:00:00.000Z`);
   const measuredAt = Date.parse(item.measuredAt);
   return item.metricType === "weight" && !Number.isNaN(measuredAt) && measuredAt >= from;
 }
 
-function weightChange(items: BodyMeasurement[]): { value: number; unit: string } | null {
+function weightChange(items: ScalarSample[]): { value: number; unit: string } | null {
   const sorted = [...items].sort((a, b) => b.measuredAt.localeCompare(a.measuredAt) || b.id - a.id);
   const latest = sorted[0];
   const oldest = sorted[sorted.length - 1];

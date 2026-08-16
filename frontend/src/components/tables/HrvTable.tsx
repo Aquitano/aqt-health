@@ -1,9 +1,9 @@
 import { formatDateTime, formatMeasurement } from "@/lib/format";
-import type { HrvSample } from "@/lib/types";
+import type { ScalarSample } from "@/lib/types";
 import { DataTable, type Column } from "./DataTable";
 import { sourceLabel } from "./shared";
 
-const columns: Column<HrvSample>[] = [
+const columns: Column<ScalarSample>[] = [
   { header: "Measured", cell: (item) => formatDateTime(item.measuredAt) },
   { header: "Metric", cell: (item) => item.metricType.toUpperCase() },
   { header: "Value", cell: (item) => formatMeasurement(item.value, item.unit) },
@@ -11,7 +11,7 @@ const columns: Column<HrvSample>[] = [
   { header: "Source", cell: (item) => sourceLabel(item.source), muted: true },
 ];
 
-export function HrvTable({ items }: { items: HrvSample[] }) {
+export function HrvTable({ items }: { items: ScalarSample[] }) {
   return (
     <DataTable
       items={items}

@@ -1,5 +1,5 @@
 import { formatDateTime, formatMeasurement } from "@/lib/format";
-import type { CardiovascularMeasurement } from "@/lib/types";
+import type { ScalarSample } from "@/lib/types";
 import { DataTable, type Column } from "./DataTable";
 import { sourceLabel } from "./shared";
 
@@ -13,14 +13,14 @@ function metricLabel(metricType: string): string {
   return METRIC_LABELS[metricType] ?? metricType;
 }
 
-const columns: Column<CardiovascularMeasurement>[] = [
+const columns: Column<ScalarSample>[] = [
   { header: "Time", cell: (item) => formatDateTime(item.measuredAt) },
   { header: "Metric", cell: (item) => metricLabel(item.metricType) },
   { header: "Value", cell: (item) => formatMeasurement(item.value, item.unit) },
   { header: "Source", cell: (item) => sourceLabel(item.source), muted: true },
 ];
 
-export function CardiovascularTable({ items }: { items: CardiovascularMeasurement[] }) {
+export function CardiovascularTable({ items }: { items: ScalarSample[] }) {
   return (
     <DataTable
       items={items}
