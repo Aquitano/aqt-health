@@ -2,25 +2,25 @@ package me.aquitano.health.application.metric.activity
 
 import me.aquitano.health.api.dto.ActivitySummariesResponse
 import me.aquitano.health.application.metric.activity.repository.CanonicalActivitySummaryDerivationRepository
-import me.aquitano.health.application.metric.common.BaseReadService
 import me.aquitano.health.application.metric.common.QueryParams
 import me.aquitano.health.application.metric.common.dailyLatestReadFilters
 import me.aquitano.health.application.metric.common.dailyReadFilters
 import me.aquitano.health.application.metric.common.keysetPage
 import me.aquitano.health.application.metric.common.meta
 import me.aquitano.health.application.metric.common.toResponse
+import me.aquitano.health.infrastructure.database.suspendDbTransaction
 import org.jetbrains.exposed.v1.jdbc.Database
 import java.time.Instant
 
 class ActivityQueryService(
-    database: Database,
+    private val database: Database,
     private val canonicalRepository: CanonicalActivitySummaryDerivationRepository,
-) : BaseReadService(database) {
+) {
     suspend fun listActivitySummaries(
         params: QueryParams,
         now: Instant,
     ): ActivitySummariesResponse =
-        dbQuery {
+        suspendDbTransaction(db = database) {
             val latest = params.boolean("latest", default = false)
             val filters =
                 if (latest) params.dailyLatestReadFilters(now) else params.dailyReadFilters(now)

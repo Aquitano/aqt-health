@@ -1,7 +1,6 @@
 package me.aquitano.health.application
 
 import me.aquitano.health.application.metric.common.repository.SleepNightReadFilters
-import me.aquitano.health.application.metric.common.sourceInstanceIds
 import me.aquitano.health.application.metric.sleep.derived.SLEEP_NIGHT_ALGORITHM_VERSION
 import me.aquitano.health.application.metric.sleep.derived.SleepNightDerivation
 import me.aquitano.health.application.metric.sleep.repository.SleepNightDerivationRepository

@@ -18,7 +18,6 @@ import me.aquitano.health.application.metric.sleep.repository.SleepStageRow
 import me.aquitano.health.application.metric.common.repository.SourceMetadata
 import me.aquitano.health.domain.ScalarMetricTypes
 import me.aquitano.health.application.metric.common.repository.ReadFilters
-import me.aquitano.health.application.metric.common.sourceInstanceIds
 import org.jetbrains.exposed.v1.jdbc.Database
 import me.aquitano.health.infrastructure.database.suspendDbTransaction
 import java.time.Duration

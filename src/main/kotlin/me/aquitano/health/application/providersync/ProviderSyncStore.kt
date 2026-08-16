@@ -10,12 +10,95 @@ import me.aquitano.health.infrastructure.repositories.ProviderOAuthAccount
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
 import me.aquitano.health.infrastructure.security.TokenCipher
 import java.time.Instant
+import java.util.concurrent.ConcurrentHashMap
 
-class ProviderOAuthSyncAccountPort(
+/**
+ * Persistence seam for [ProviderSyncPipeline]: OAuth account/token access, sync-run bookkeeping,
+ * and batch ingestion. [OAuthProviderSyncStore] is the only production implementation; the
+ * interface exists so pipeline unit tests can fake persistence without a database.
+ */
+interface ProviderSyncStore {
+    suspend fun selectForSync(
+        providerCode: String,
+        providerInstanceId: String?,
+    ): SyncAccount?
+
+    suspend fun findAnyForStatusHint(
+        providerCode: String,
+        providerInstanceId: String?,
+    ): SyncAccount?
+
+    suspend fun decryptAccessToken(account: SyncAccount): String
+
+    suspend fun decryptRefreshToken(account: SyncAccount): String
+
+    suspend fun saveRefreshedToken(
+        account: SyncAccount,
+        tokens: RefreshedTokenSet,
+        now: Instant,
+    )
+
+    suspend fun markNeedsReauth(
+        accountId: Int,
+        code: String,
+        message: String,
+        now: Instant,
+    )
+
+    suspend fun markTokenRefreshFailed(
+        accountId: Int,
+        code: String,
+        message: String,
+        now: Instant,
+    )
+
+    suspend fun startRun(
+        providerCode: String,
+        providerInstanceId: String,
+        requestedFrom: Instant,
+        requestedTo: Instant,
+        startedAt: Instant,
+    ): Int
+
+    suspend fun finishRun(
+        runId: Int,
+        status: SyncStatus,
+        finishedAt: Instant,
+        errorMessage: String?,
+    )
+
+    suspend fun findExistingBatch(
+        providerCode: String,
+        providerInstanceId: String,
+        batchExternalId: String,
+        now: Instant,
+    ): ExistingProviderBatch?
+
+    suspend fun ingest(
+        command: ProviderIngestionCommand,
+        now: Instant,
+    ): ProviderSyncBatch
+}
+
+/**
+ * Production [ProviderSyncStore] over [ProviderOAuthRepository] and [IngestionService]. Token
+ * ciphers are created lazily per provider code from [tokenEncryptionKeys], so one store instance
+ * serves every provider.
+ */
+class OAuthProviderSyncStore(
     private val repository: ProviderOAuthRepository,
-    tokenEncryptionKey: String,
-) : ProviderSyncAccountPort {
-    private val cipher by lazy { TokenCipher(tokenEncryptionKey) }
+    private val ingestionService: IngestionService,
+    private val tokenEncryptionKeys: Map<String, String>,
+) : ProviderSyncStore {
+    private val ciphers = ConcurrentHashMap<String, TokenCipher>()
+
+    private fun cipherFor(providerCode: String): TokenCipher =
+        ciphers.computeIfAbsent(providerCode) {
+            val key = requireNotNull(tokenEncryptionKeys[it]) {
+                "No token encryption key configured for provider '$it'"
+            }
+            TokenCipher(key)
+        }
 
     override suspend fun selectForSync(
         providerCode: String,
@@ -39,19 +122,19 @@ class ProviderOAuthSyncAccountPort(
     }
 
     override suspend fun decryptAccessToken(account: SyncAccount): String =
-        cipher.decrypt(account.encryptedAccessToken)
+        cipherFor(account.providerCode).decrypt(account.encryptedAccessToken)
 
     override suspend fun decryptRefreshToken(account: SyncAccount): String =
-        cipher.decrypt(account.encryptedRefreshToken)
+        cipherFor(account.providerCode).decrypt(account.encryptedRefreshToken)
 
     override suspend fun saveRefreshedToken(
-        accountId: Int,
+        account: SyncAccount,
         tokens: RefreshedTokenSet,
-        previousRefreshToken: String,
         now: Instant,
     ) {
+        val cipher = cipherFor(account.providerCode)
         repository.updateAccessToken(
-            accountId = accountId,
+            accountId = account.id,
             accessTokenCiphertext = cipher.encrypt(tokens.accessToken),
             refreshTokenCiphertext = tokens.refreshToken?.let(cipher::encrypt),
             tokenType = tokens.tokenType,
@@ -78,12 +161,8 @@ class ProviderOAuthSyncAccountPort(
     ) {
         repository.markTokenRefreshFailed(accountId, code, message, now)
     }
-}
 
-class ProviderOAuthSyncRunPort(
-    private val repository: ProviderOAuthRepository,
-) : ProviderSyncRunPort {
-    override suspend fun start(
+    override suspend fun startRun(
         providerCode: String,
         providerInstanceId: String,
         requestedFrom: Instant,
@@ -98,7 +177,7 @@ class ProviderOAuthSyncRunPort(
             startedAt = startedAt,
         )
 
-    override suspend fun finish(
+    override suspend fun finishRun(
         runId: Int,
         status: SyncStatus,
         finishedAt: Instant,
@@ -106,11 +185,7 @@ class ProviderOAuthSyncRunPort(
     ) {
         repository.finishSyncRun(runId, status.stored, finishedAt, errorMessage)
     }
-}
 
-class IngestionProviderSyncPort(
-    private val ingestionService: IngestionService,
-) : ProviderSyncIngestionPort {
     override suspend fun findExistingBatch(
         providerCode: String,
         providerInstanceId: String,

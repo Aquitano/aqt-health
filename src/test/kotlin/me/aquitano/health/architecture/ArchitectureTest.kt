@@ -11,10 +11,14 @@ class ArchitectureTest {
      * nested git worktrees (`.claude/worktrees`, `.t3/worktrees`) and stale IDE output
      * (`bin/`). Those are not this project's production source and can carry pre-refactor
      * code that trips these rules locally even when the real tree is clean. Restrict the
-     * scope to the primary working tree; CI runs on a clean checkout and is unaffected.
+     * scope to the tree under the current project root (markers are matched on the path
+     * relative to it, so the suite also runs from inside a worktree); CI runs on a clean
+     * checkout and is unaffected.
      */
+    private val projectRoot = java.nio.file.Paths.get("").toAbsolutePath().toString()
+
     private val production = Konsist.scopeFromProduction()
-        .slice { file -> NESTED_TREE_MARKERS.none { file.path.contains(it) } }
+        .slice { file -> NESTED_TREE_MARKERS.none { file.path.removePrefix(projectRoot).contains(it) } }
 
     /**
      * Read-model repositories under application/ build Exposed queries but must

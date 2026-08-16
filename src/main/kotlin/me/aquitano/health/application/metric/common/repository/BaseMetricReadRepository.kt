@@ -1,6 +1,5 @@
 package me.aquitano.health.application.metric.common.repository
 
-import me.aquitano.health.application.metric.common.MetricReadRepository
 import me.aquitano.health.domain.RequestValidationException
 import me.aquitano.health.domain.ValidationIssue
 import me.aquitano.health.domain.ValidationIssueCodes
@@ -25,9 +24,9 @@ import java.time.ZoneOffset
  * conversion) so that concrete repositories only contain table-specific
  * query logic.
  */
-abstract class BaseMetricReadRepository : MetricReadRepository {
+abstract class BaseMetricReadRepository {
 
-    override fun sourceMetadataFor(sourceIds: Set<Int>): Map<Int, SourceMetadata> {
+    fun sourceMetadataFor(sourceIds: Set<Int>): Map<Int, SourceMetadata> {
         if (sourceIds.isEmpty()) return emptyMap()
         return SourceInstancesTable
             .innerJoin(SourcesTable)

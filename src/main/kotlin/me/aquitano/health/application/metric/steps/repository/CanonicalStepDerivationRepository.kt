@@ -132,7 +132,7 @@ class CanonicalStepDerivationRepository : BaseMetricReadRepository() {
                 StepSamplesTable.id to filters.sortOrder(),
             )
             .limit(keysetFetchLimit(filters.limit))
-            .map(::toJoinedStepSampleRow)
+            .map(::toStepSampleRow)
         return rows to sourceMetadata(rows.map { it.sourceInstanceId }.toSet(), filters.includeSource)
     }
 
@@ -249,21 +249,4 @@ class CanonicalStepDerivationRepository : BaseMetricReadRepository() {
             sourceInstanceIds = emptySet(),
         ) to sourceMetadata(emptySet(), includeSource)
 
-    private fun toJoinedStepSampleRow(row: ResultRow): StepSampleRow =
-        StepSampleRow(
-            id = row[StepSamplesTable.id].value,
-            sourceInstanceId = row[StepSamplesTable.sourceInstanceId],
-            startAt = row[StepSamplesTable.startAt].toApiString(),
-            endAt = row[StepSamplesTable.endAt].toApiString(),
-            steps = row[StepSamplesTable.steps],
-        )
-
-    private fun toStepSampleRow(row: ResultRow): StepSampleRow =
-        StepSampleRow(
-            id = row[StepSamplesTable.id].value,
-            sourceInstanceId = row[StepSamplesTable.sourceInstanceId],
-            startAt = row[StepSamplesTable.startAt].toApiString(),
-            endAt = row[StepSamplesTable.endAt].toApiString(),
-            steps = row[StepSamplesTable.steps],
-        )
 }
