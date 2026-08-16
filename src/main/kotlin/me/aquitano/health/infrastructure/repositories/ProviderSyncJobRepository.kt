@@ -253,6 +253,8 @@ class ProviderSyncJobRepository(private val database: Database) {
                 ProviderSyncJobsTable.update({ ProviderSyncJobsTable.id eq job.id }) {
                     it[status] = "queued"
                     it[restartCount] = job.restartCount + 1
+                    // The relaunch reruns the full request, so completed progress starts over.
+                    it[completedItems] = 0
                     it[currentDataType] = null
                     it[currentFrom] = null
                     it[currentTo] = null
@@ -262,7 +264,7 @@ class ProviderSyncJobRepository(private val database: Database) {
             }
 
             ProviderSyncJobRequeueResult(
-                resumed = resumable.map { it.copy(status = "queued", restartCount = it.restartCount + 1) },
+                resumed = resumable.map { it.copy(status = "queued", restartCount = it.restartCount + 1, completedItems = 0) },
                 abandoned = abandoned,
             )
         }

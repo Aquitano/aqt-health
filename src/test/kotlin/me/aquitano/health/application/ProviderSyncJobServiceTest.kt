@@ -163,11 +163,14 @@ class ProviderSyncJobServiceTest {
 
         repeat(3) { attempt ->
             repository.markRunning(interruptedId, now)
+            repository.markItemCompleted(interruptedId, "steps", now, now.plusSeconds(3600), now)
             val result = repository.requeueInterruptedJobs(now, maxRestarts = 3)
             assertEquals(listOf(interruptedId), result.resumed.map { it.id })
             assertTrue(result.abandoned.isEmpty())
             assertEquals(attempt + 1, result.resumed.single().restartCount)
-            assertEquals("queued", repository.get(interruptedId)!!.status)
+            val requeued = repository.get(interruptedId)!!
+            assertEquals("queued", requeued.status)
+            assertEquals(0, requeued.completedItems)
         }
 
         repository.markRunning(interruptedId, now)
