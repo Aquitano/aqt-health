@@ -52,19 +52,7 @@ class CanonicalSleepSessionDerivationRepository : BaseMetricReadRepository() {
                 SleepSessionsTable.id to filters.sortOrder(),
             )
             .limit(keysetFetchLimit(filters.limit))
-            .map(::toJoinedSleepSessionRow)
+            .map(::toSleepSessionRow)
         return rows to sourceMetadata(rows.map { it.sourceInstanceId }.toSet(), filters.includeSource)
     }
-
-    private fun toJoinedSleepSessionRow(row: ResultRow): SleepSessionRow =
-        toSleepSessionRow(row)
-
-    private fun toSleepSessionRow(row: ResultRow): SleepSessionRow =
-        SleepSessionRow(
-            id = row[SleepSessionsTable.id].value,
-            sourceInstanceId = row[SleepSessionsTable.sourceInstanceId],
-            startAt = row[SleepSessionsTable.startAt].toApiString(),
-            endAt = row[SleepSessionsTable.endAt].toApiString(),
-            durationSeconds = row[SleepSessionsTable.durationSeconds],
-        )
 }

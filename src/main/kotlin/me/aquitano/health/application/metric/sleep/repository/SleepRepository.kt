@@ -254,51 +254,6 @@ class SleepRepository : BaseMetricReadRepository() {
             durationSeconds = row[SleepStagesTable.durationSeconds],
         )
 
-    private fun toSleepSessionRow(row: ResultRow): SleepSessionRow =
-        SleepSessionRow(
-            id = row[SleepSessionsTable.id].value,
-            sourceInstanceId = row[SleepSessionsTable.sourceInstanceId],
-            startAt = row[SleepSessionsTable.startAt].toApiString(),
-            endAt = row[SleepSessionsTable.endAt].toApiString(),
-            durationSeconds = row[SleepSessionsTable.durationSeconds],
-        )
-
-    private fun toSleepSummaryRow(row: ResultRow): SleepSummaryRow =
-        SleepSummaryRow(
-            id = row[SleepSummariesTable.id].value,
-            sourceInstanceId = row[SleepSummariesTable.sourceInstanceId],
-            startAt = row[SleepSummariesTable.startAt].toApiString(),
-            endAt = row[SleepSummariesTable.endAt].toApiString(),
-            timeInBedSeconds = row[SleepSummariesTable.timeInBedSeconds],
-            totalSleepSeconds = row[SleepSummariesTable.totalSleepSeconds],
-            lightSleepSeconds = row[SleepSummariesTable.lightSleepSeconds],
-            deepSleepSeconds = row[SleepSummariesTable.deepSleepSeconds],
-            remSleepSeconds = row[SleepSummariesTable.remSleepSeconds],
-            sleepEfficiencyPercent = row[SleepSummariesTable.sleepEfficiencyPercent],
-            sleepLatencySeconds = row[SleepSummariesTable.sleepLatencySeconds],
-            wakeupLatencySeconds = row[SleepSummariesTable.wakeupLatencySeconds],
-            wakeupDurationSeconds = row[SleepSummariesTable.wakeupDurationSeconds],
-            wakeupCount = row[SleepSummariesTable.wakeupCount],
-            wasoSeconds = row[SleepSummariesTable.wasoSeconds],
-            sleepScore = row[SleepSummariesTable.sleepScore],
-            remEpisodesCount = row[SleepSummariesTable.remEpisodesCount],
-            outOfBedCount = row[SleepSummariesTable.outOfBedCount],
-            awakeDurationSeconds = row[SleepSummariesTable.awakeDurationSeconds],
-            overnightHrvRmssd = row[SleepSummariesTable.overnightHrvRmssd],
-            respiratoryRhythm = row[SleepSummariesTable.respiratoryRhythm],
-            breathingQuality = row[SleepSummariesTable.breathingQuality],
-            snoringDurationSeconds = row[SleepSummariesTable.snoringDurationSeconds],
-            apneaHypopneaIndex = row[SleepSummariesTable.apneaHypopneaIndex],
-            movementScore = row[SleepSummariesTable.movementScore],
-            snoringEpisodeCount = row[SleepSummariesTable.snoringEpisodeCount],
-            hrAverageBpm = row[SleepSummariesTable.hrAverageBpm],
-            hrMinBpm = row[SleepSummariesTable.hrMinBpm],
-            hrMaxBpm = row[SleepSummariesTable.hrMaxBpm],
-            rrAverage = row[SleepSummariesTable.rrAverage],
-            rrMin = row[SleepSummariesTable.rrMin],
-            rrMax = row[SleepSummariesTable.rrMax],
-        )
-
     fun sleepStagesBySession(sessionIds: List<Int>): Map<Int, List<SleepStageRow>> {
         if (sessionIds.isEmpty()) return emptyMap()
         return SleepStagesTable.selectAll()

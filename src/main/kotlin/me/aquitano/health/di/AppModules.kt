@@ -14,7 +14,6 @@ import me.aquitano.external.withings.WithingsNormalizer
 import me.aquitano.external.withings.WithingsProvider
 import me.aquitano.health.application.*
 import me.aquitano.health.application.metric.activity.ActivityQueryService
-import me.aquitano.health.application.metric.activity.repository.ActivitySummaryRepository
 import me.aquitano.health.application.metric.activity.repository.ActivitySummaryWriteRepository
 import me.aquitano.health.application.metric.activity.repository.CanonicalActivitySummaryDerivationRepository
 import me.aquitano.health.application.metric.cardiovascular.CardiovascularQueryService
@@ -38,13 +37,9 @@ import me.aquitano.health.application.metric.steps.repository.CanonicalStepDeriv
 import me.aquitano.health.application.metric.steps.repository.StepDailySummaryDerivationRepository
 import me.aquitano.health.application.metric.steps.repository.StepRepository
 import me.aquitano.health.application.metric.steps.repository.StepWriteRepository
-import me.aquitano.health.application.providersync.IngestionProviderSyncPort
-import me.aquitano.health.application.providersync.ProviderOAuthSyncAccountPort
-import me.aquitano.health.application.providersync.ProviderOAuthSyncRunPort
-import me.aquitano.health.application.providersync.ProviderSyncAccountPort
-import me.aquitano.health.application.providersync.ProviderSyncIngestionPort
+import me.aquitano.health.application.providersync.OAuthProviderSyncStore
 import me.aquitano.health.application.providersync.ProviderSyncPipeline
-import me.aquitano.health.application.providersync.ProviderSyncRunPort
+import me.aquitano.health.application.providersync.ProviderSyncStore
 import me.aquitano.health.infrastructure.config.AppConfig
 import me.aquitano.health.infrastructure.repositories.IngestionRepository
 import me.aquitano.health.infrastructure.repositories.PendingDerivedRebuildRepository
@@ -61,7 +56,6 @@ import me.aquitano.health.shared.AppJson
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.koin.core.module.dsl.bind
 import org.koin.core.module.dsl.singleOf
-import org.koin.core.qualifier.named
 import org.koin.dsl.module
 
 /**
@@ -157,7 +151,6 @@ fun ingestionModule() = module {
  */
 fun metricsReadModule() = module {
     // Read repositories
-    singleOf(::ActivitySummaryRepository)
     singleOf(::CanonicalActivitySummaryDerivationRepository)
     singleOf(::CardiovascularRepository)
     singleOf(::ScalarSampleReadRepository)
@@ -191,7 +184,7 @@ fun metricsReadModule() = module {
 }
 
 /**
- * External health providers: OAuth/sync persistence, provider HTTP clients, the per-provider sync
+ * External health providers: OAuth/sync persistence, provider HTTP clients, the shared sync
  * pipeline, and the provider-facing discovery, status, workflow, and scheduling services.
  */
 fun providersModule(config: AppConfig) = module {
@@ -216,31 +209,19 @@ fun providersModule(config: AppConfig) = module {
     }
     single { KtorWithingsClient(get(), config.withings) }
 
-    // Provider sync pipeline. The run and ingestion ports are provider-agnostic and shared; the
-    // account port carries a provider-specific token-encryption key, so it and the pipeline are
-    // bound per provider under the provider code qualifier.
-    singleOf(::ProviderOAuthSyncRunPort) { bind<ProviderSyncRunPort>() }
-    singleOf(::IngestionProviderSyncPort) { bind<ProviderSyncIngestionPort>() }
-    single<ProviderSyncAccountPort>(named(GOOGLE_HEALTH_PROVIDER_CODE)) {
-        ProviderOAuthSyncAccountPort(get(), config.googleHealth.tokenEncryptionKey)
-    }
-    single(named(GOOGLE_HEALTH_PROVIDER_CODE)) {
-        ProviderSyncPipeline(
-            accounts = get(named(GOOGLE_HEALTH_PROVIDER_CODE)),
-            runs = get(),
-            ingestion = get(),
+    // Provider sync pipeline. One store and one pipeline serve every provider; the store picks
+    // the token cipher per provider code from the configured encryption keys.
+    single<ProviderSyncStore> {
+        OAuthProviderSyncStore(
+            repository = get(),
+            ingestionService = get(),
+            tokenEncryptionKeys = mapOf(
+                GOOGLE_HEALTH_PROVIDER_CODE to config.googleHealth.tokenEncryptionKey,
+                WITHINGS_PROVIDER_CODE to config.withings.tokenEncryptionKey,
+            ),
         )
     }
-    single<ProviderSyncAccountPort>(named(WITHINGS_PROVIDER_CODE)) {
-        ProviderOAuthSyncAccountPort(get(), config.withings.tokenEncryptionKey)
-    }
-    single(named(WITHINGS_PROVIDER_CODE)) {
-        ProviderSyncPipeline(
-            accounts = get(named(WITHINGS_PROVIDER_CODE)),
-            runs = get(),
-            ingestion = get(),
-        )
-    }
+    single { ProviderSyncPipeline(store = get()) }
 
     // Providers
     single {
@@ -249,7 +230,7 @@ fun providersModule(config: AppConfig) = module {
             repository = get(),
             client = get<GeneratedGoogleHealthClient>(),
             normalizer = GoogleHealthNormalizer(),
-            syncPipeline = get(named(GOOGLE_HEALTH_PROVIDER_CODE)),
+            syncPipeline = get(),
         )
     }
     single {
@@ -258,7 +239,7 @@ fun providersModule(config: AppConfig) = module {
             repository = get(),
             client = get<KtorWithingsClient>(),
             normalizer = WithingsNormalizer(),
-            syncPipeline = get(named(WITHINGS_PROVIDER_CODE)),
+            syncPipeline = get(),
         )
     }
     single {

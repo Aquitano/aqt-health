@@ -576,12 +576,11 @@ class GoogleHealthProviderTest {
             client = client,
             normalizer = GoogleHealthNormalizer(),
             syncPipeline = me.aquitano.health.application.providersync.ProviderSyncPipeline(
-                accounts = me.aquitano.health.application.providersync.ProviderOAuthSyncAccountPort(
-                    providerRepository,
-                    config.tokenEncryptionKey,
+                store = me.aquitano.health.application.providersync.OAuthProviderSyncStore(
+                    repository = providerRepository,
+                    ingestionService = ingestionService,
+                    tokenEncryptionKeys = mapOf(GOOGLE_HEALTH_PROVIDER_CODE to config.tokenEncryptionKey),
                 ),
-                runs = me.aquitano.health.application.providersync.ProviderOAuthSyncRunPort(providerRepository),
-                ingestion = me.aquitano.health.application.providersync.IngestionProviderSyncPort(ingestionService),
                 clock = UtcClock.fixed(now),
             ),
         )

@@ -7,7 +7,6 @@ import me.aquitano.health.api.dto.ScalarDailySummariesResponse
 import me.aquitano.health.api.dto.ScalarDailySummaryResponse
 import me.aquitano.health.api.dto.ScalarSamplesResponse
 import me.aquitano.health.api.dto.ScalarSummaryResponse
-import me.aquitano.health.application.metric.common.BaseReadService
 import me.aquitano.health.application.metric.common.Orders
 import me.aquitano.health.application.metric.common.QueryParamSpecs
 import me.aquitano.health.application.metric.common.QueryParams
@@ -21,6 +20,7 @@ import me.aquitano.health.domain.RequestValidationException
 import me.aquitano.health.domain.ScalarMetricRegistry
 import me.aquitano.health.domain.ValidationIssue
 import me.aquitano.health.domain.ValidationIssueCodes
+import me.aquitano.health.infrastructure.database.suspendDbTransaction
 import org.jetbrains.exposed.v1.jdbc.Database
 
 /**
@@ -29,9 +29,9 @@ import org.jetbrains.exposed.v1.jdbc.Database
  * Unknown metric types are a 404, matching the catalog as the source of truth.
  */
 class ScalarMetricQueryService(
-    database: Database,
+    private val database: Database,
     private val scalarRepository: ScalarSampleReadRepository,
-) : BaseReadService(database) {
+) {
     fun catalog(): MetricTypeCatalogResponse =
         MetricTypeCatalogResponse(
             items = ScalarMetricRegistry.descriptors.map {
@@ -48,7 +48,7 @@ class ScalarMetricQueryService(
     suspend fun list(metricType: String, params: QueryParams): ScalarSamplesResponse {
         requireKnown(metricType)
         val raw = params.boolean(QueryParamSpecs.raw)
-        return dbQuery {
+        return suspendDbTransaction(db = database) {
             val filters = params.readFilters(
                 sortSpec = QueryParamSpecs.sortByMeasuredAt,
                 latestSupported = true,
@@ -71,7 +71,7 @@ class ScalarMetricQueryService(
 
     suspend fun summary(metricType: String, params: QueryParams): ScalarSummaryResponse {
         requireKnown(metricType)
-        return dbQuery {
+        return suspendDbTransaction(db = database) {
             val filters = params.summaryFilters(SortFields.MEASURED_AT)
             val summary = scalarRepository.summarize(filters, setOf(metricType), canonical = true)
             val (latest, sourceMetadata) =
@@ -89,7 +89,7 @@ class ScalarMetricQueryService(
 
     suspend fun summaryDaily(metricType: String, params: QueryParams): ScalarDailySummariesResponse {
         requireKnown(metricType)
-        return dbQuery {
+        return suspendDbTransaction(db = database) {
             val filters = params.summaryFilters(SortFields.MEASURED_AT)
             if (filters.from == null && filters.to == null) {
                 throw RequestValidationException(
