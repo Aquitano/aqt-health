@@ -71,6 +71,7 @@ object ProviderSyncJobsTable : Table("provider_sync_jobs") {
     val batchesCount = integer("batches_count")
     val emptyCount = integer("empty_count")
     val errorCount = integer("error_count")
+    val restartCount = integer("restart_count")
     val summaryJson = text("summary_json").nullable()
     val errorMessage = text("error_message").nullable()
     val createdAt = timestampWithTimeZone("created_at")

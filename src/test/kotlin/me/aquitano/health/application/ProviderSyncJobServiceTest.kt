@@ -131,6 +131,90 @@ class ProviderSyncJobServiceTest {
         assertEquals(2, provider.syncCalls.get())
     }
 
+    @Test
+    fun requeueInterruptedJobsRequeuesUntilRestartCap() = runBlocking {
+        val database = database()
+        val repository = ProviderSyncJobRepository(database)
+        val interruptedId = UUID.randomUUID().toString()
+        val finishedId = UUID.randomUUID().toString()
+        listOf(interruptedId, finishedId).forEach { id ->
+            repository.create(
+                id = id,
+                providerCode = "blocking_provider",
+                providerInstanceId = null,
+                requestedFrom = now,
+                requestedTo = now.plusSeconds(3600),
+                dataTypes = null,
+                pageSize = null,
+                now = now,
+            )
+        }
+        repository.markRunning(finishedId, now)
+        repository.finish(
+            id = finishedId,
+            status = "processed",
+            batchesCount = 0,
+            emptyCount = 0,
+            errorCount = 0,
+            summaryJson = null,
+            errorMessage = null,
+            now = now,
+        )
+
+        repeat(3) { attempt ->
+            repository.markRunning(interruptedId, now)
+            val result = repository.requeueInterruptedJobs(now, maxRestarts = 3)
+            assertEquals(listOf(interruptedId), result.resumed.map { it.id })
+            assertTrue(result.abandoned.isEmpty())
+            assertEquals(attempt + 1, result.resumed.single().restartCount)
+            assertEquals("queued", repository.get(interruptedId)!!.status)
+        }
+
+        repository.markRunning(interruptedId, now)
+        val capped = repository.requeueInterruptedJobs(now, maxRestarts = 3)
+        assertTrue(capped.resumed.isEmpty())
+        assertEquals(listOf(interruptedId), capped.abandoned.map { it.id })
+
+        val abandoned = repository.get(interruptedId)!!
+        assertEquals("failed", abandoned.status)
+        assertEquals(3, abandoned.restartCount)
+        assertEquals("processed", repository.get(finishedId)!!.status)
+    }
+
+    @Test
+    fun startResumesInterruptedJob() = runBlocking {
+        val provider = CountingProvider()
+        val fixture = Fixture(provider)
+        val repository = ProviderSyncJobRepository(fixture.database)
+        val jobId = UUID.randomUUID().toString()
+        repository.create(
+            id = jobId,
+            providerCode = provider.providerCode,
+            providerInstanceId = null,
+            requestedFrom = now,
+            requestedTo = now.plusSeconds(3600),
+            dataTypes = listOf("steps"),
+            pageSize = null,
+            now = now,
+        )
+        repository.markRunning(jobId, now)
+
+        fixture.service.start(now)
+
+        val terminal = withTimeout(30_000) {
+            var job = fixture.service.get(jobId)
+            while (!job.status.terminal) {
+                delay(50)
+                job = fixture.service.get(jobId)
+            }
+            job
+        }
+
+        assertEquals(SyncJobStatus.Processed, terminal.status)
+        assertEquals(1, terminal.restartCount)
+        assertEquals(1, provider.syncCalls.get())
+    }
+
     private fun database(): Database = DatabaseFactory().initialize(PostgresTestDatabase.config())
 
     private inner class Fixture(provider: HealthProvider) {

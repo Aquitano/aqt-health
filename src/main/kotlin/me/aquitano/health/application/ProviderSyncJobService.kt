@@ -35,9 +35,33 @@ class ProviderSyncJobService(
     private val clock: me.aquitano.health.infrastructure.time.UtcClock,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
 ) {
+    /**
+     * Resumes jobs interrupted by a restart. Re-running a job from the start is safe because
+     * ingestion writes dedupe by provider record id; already-synced windows only cost a
+     * provider re-fetch. Jobs restarted [MAX_JOB_RESTARTS] times are failed to stop crash loops.
+     */
     fun start(now: Instant) {
         scope.launch {
-            repository.markInterruptedUnfinishedJobs(now)
+            val requeued = repository.requeueInterruptedJobs(now, MAX_JOB_RESTARTS)
+            requeued.abandoned.forEach { job ->
+                providerSyncJobLogger.warnWithContext(
+                    "provider_sync_job_abandoned",
+                    "provider" to job.providerCode,
+                    "jobId" to job.id,
+                    "restartCount" to job.restartCount,
+                )
+            }
+            requeued.resumed.forEach { job ->
+                providerSyncJobLogger.infoWithContext(
+                    "provider_sync_job_resumed",
+                    "provider" to job.providerCode,
+                    "jobId" to job.id,
+                    "restartCount" to job.restartCount,
+                )
+                scope.launch {
+                    runJob(job.id, job.providerCode, job.toDomainRequest())
+                }
+            }
         }
     }
 
@@ -214,6 +238,7 @@ class ProviderSyncJobService(
             batchesCount = batchesCount,
             emptyCount = emptyCount,
             errorCount = errorCount,
+            restartCount = restartCount,
             errorMessage = errorMessage,
             createdAt = createdAt.toString(),
             startedAt = startedAt?.toString(),
@@ -235,6 +260,17 @@ class ProviderSyncJobService(
             ProviderSyncJobItemResponse(dataType, from.toString(), to.toString())
         }
 }
+
+private const val MAX_JOB_RESTARTS = 3
+
+private fun ProviderSyncJobRecord.toDomainRequest(): DomainProviderSyncRequest =
+    DomainProviderSyncRequest(
+        providerInstanceId = providerInstanceId,
+        from = requestedFrom,
+        to = requestedTo,
+        dataTypes = dataTypes,
+        pageSize = pageSize,
+    )
 
 private fun syncJobRequestHash(request: ProviderSyncRequest): String =
     idempotencyRequestHash(

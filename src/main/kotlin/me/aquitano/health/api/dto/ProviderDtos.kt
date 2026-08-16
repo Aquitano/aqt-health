@@ -201,6 +201,8 @@ data class ProviderSyncJobStatusResponse(
     val batchesCount: Int,
     val emptyCount: Int,
     val errorCount: Int,
+    /** How many backend restarts this job survived and was resumed after. */
+    val restartCount: Int = 0,
     val errorMessage: String? = null,
     @JsonSchema.Format("date-time")
     val createdAt: String,
