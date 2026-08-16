@@ -36,6 +36,7 @@ aqtHealth:
     origins: "$AQT_HEALTH_CORS_ORIGINS:http://localhost:3000"
   openObserve:
     url: "$OPENOBSERVE_URL:"
+    org: "$OPENOBSERVE_ORG:"
     user: "$OPENOBSERVE_USER:"
     password: "$OPENOBSERVE_PASSWORD:"
 
