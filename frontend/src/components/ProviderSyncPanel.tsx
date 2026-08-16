@@ -57,7 +57,7 @@ export function ProviderSyncPanel({ catalog, statuses, scheduledSyncConfigs }: P
       while (!stopped) {
         try {
           const response = await fetch(
-            `/api/providers/${encodeURIComponent(pollingJob.providerCode)}/sync-jobs/${encodeURIComponent(pollingJob.jobId)}`,
+            `/api/backend/providers/${encodeURIComponent(pollingJob.providerCode)}/sync-jobs/${encodeURIComponent(pollingJob.jobId)}`,
           );
           const body = (await response.json()) as ApiResult<ProviderSyncJobStatusResponse>;
           if (!body.ok) {
@@ -154,7 +154,7 @@ export function ProviderSyncPanel({ catalog, statuses, scheduledSyncConfigs }: P
     startTransition(async () => {
       try {
         const response = await fetch(
-          `/api/providers/${encodeURIComponent(selectedProvider.descriptor.providerCode)}/sync-jobs`,
+          `/api/backend/providers/${encodeURIComponent(selectedProvider.descriptor.providerCode)}/sync-jobs`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -192,7 +192,7 @@ export function ProviderSyncPanel({ catalog, statuses, scheduledSyncConfigs }: P
 
     startOAuthTransition(async () => {
       const response = await fetch(
-        `/api/providers/${encodeURIComponent(selectedProvider.descriptor.providerCode)}/oauth/start`,
+        `/api/backend/providers/${encodeURIComponent(selectedProvider.descriptor.providerCode)}/oauth/start`,
         { method: "POST" },
       );
       const body = (await response.json()) as ApiResult<ProviderOAuthStartResponse>;
@@ -213,7 +213,7 @@ export function ProviderSyncPanel({ catalog, statuses, scheduledSyncConfigs }: P
     startAccountActionTransition(async () => {
       try {
         const response = await fetch(
-          `/api/providers/${encodeURIComponent(selectedProvider.descriptor.providerCode)}/accounts/${encodeURIComponent(providerInstanceId)}/disconnect`,
+          `/api/backend/providers/${encodeURIComponent(selectedProvider.descriptor.providerCode)}/accounts/${encodeURIComponent(providerInstanceId)}/disconnect`,
           { method: "POST" },
         );
         const body = (await response.json()) as ApiResult<unknown>;
@@ -239,7 +239,7 @@ export function ProviderSyncPanel({ catalog, statuses, scheduledSyncConfigs }: P
     startAccountActionTransition(async () => {
       try {
         const response = await fetch(
-          `/api/providers/${encodeURIComponent(selectedProvider.descriptor.providerCode)}/accounts/${encodeURIComponent(providerInstanceId)}/reconnect`,
+          `/api/backend/providers/${encodeURIComponent(selectedProvider.descriptor.providerCode)}/accounts/${encodeURIComponent(providerInstanceId)}/reconnect`,
           { method: "POST" },
         );
         const body = (await response.json()) as ApiResult<ProviderOAuthStartResponse>;
@@ -268,7 +268,7 @@ export function ProviderSyncPanel({ catalog, statuses, scheduledSyncConfigs }: P
     startScheduledTransition(async () => {
       try {
         const response = await fetch(
-          `/api/providers/${encodeURIComponent(selectedProvider.descriptor.providerCode)}/accounts/${encodeURIComponent(providerInstanceId)}/scheduled-sync`,
+          `/api/backend/providers/${encodeURIComponent(selectedProvider.descriptor.providerCode)}/accounts/${encodeURIComponent(providerInstanceId)}/scheduled-sync`,
           {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
@@ -300,7 +300,7 @@ export function ProviderSyncPanel({ catalog, statuses, scheduledSyncConfigs }: P
     startScheduledTransition(async () => {
       try {
         const response = await fetch(
-          `/api/providers/${encodeURIComponent(selectedProvider.descriptor.providerCode)}/accounts/${encodeURIComponent(providerInstanceId)}/scheduled-sync/run`,
+          `/api/backend/providers/${encodeURIComponent(selectedProvider.descriptor.providerCode)}/accounts/${encodeURIComponent(providerInstanceId)}/scheduled-sync/run`,
           { method: "POST" },
         );
         const body = (await response.json()) as ApiResult<ScheduledSyncRunResponse>;

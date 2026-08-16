@@ -5,26 +5,13 @@ import type {
   HealthDayResponse,
   IngestionBatchDetailResponse,
   IngestionsPageData,
-  MetricCatalogResponse,
-  ProviderCatalogResponse,
-  ProviderDisconnectResponse,
-  ProviderOAuthStartResponse,
-  ProviderAccountListResponse,
-  ProviderAccountStatus,
   ProviderSyncPageData,
   TrendsPageData,
-  ProviderStatusCatalogResponse,
-  ProviderSyncRequest,
-  ProviderSyncJobStartResponse,
-  ProviderSyncJobStatusResponse,
-  ProviderSyncResponse,
   ScheduledSyncConfig,
-  ScheduledSyncConfigUpdateRequest,
-  ScheduledSyncRunResponse,
   HealthStatusData,
   HeartRateDailyPoint,
- } from "./types";
-import { createAqtHealthClient } from "./aqtHealthClient";
+} from "./types";
+import { aqtHealthClient, toProviderCode } from "./aqtHealthClient";
 import {
   addUtcDays,
   dateOnlyToUtcInstant,
@@ -32,10 +19,9 @@ import {
 } from "./dates";
 
 export async function getHealthStatus(): Promise<HealthStatusData> {
-  const client = createAqtHealthClient();
   return {
-    apiBaseUrl: client.apiBaseUrl,
-    health: await client.getHealth(),
+    apiBaseUrl: aqtHealthClient.apiBaseUrl,
+    health: await aqtHealthClient.getHealth(),
   };
 }
 
@@ -52,7 +38,7 @@ export function getHealthDataPageSources(
   toDate: string,
   timezone: string,
 ): HealthDataPageSources {
-  const client = createAqtHealthClient();
+  const client = aqtHealthClient;
   const measurementsFrom = dateOnlyToUtcInstant(fromDate);
   const measurementsTo = dayAfterDateOnlyToUtcInstant(toDate);
 
@@ -85,7 +71,7 @@ export function getHealthDataPageSources(
       limit: 5000,
     }),
     latestHeartRate: client.listHeartRateSamples({ latest: true, includeSource: true }),
-    heartRateDaily: fetchHeartRateDaily(client, fromDate, toDate),
+    heartRateDaily: fetchHeartRateDaily(fromDate, toDate),
     sleepNights: client.listSleepNights({ fromDate, toDate, timezone, includeSource: true }),
     sleepSummaries: client.listSleepSummaries({
       from: measurementsFrom,
@@ -142,7 +128,7 @@ export function getHealthDataPageSources(
       limit: 5000,
     }),
     latestExtendedBodyMeasurement: client.getLatestExtendedBodyMeasurement({ includeSource: true }),
-    metricCatalog: getMetricCatalog(),
+    metricCatalog: client.getMetricCatalog(),
   };
 }
 
@@ -150,7 +136,7 @@ export async function getTrendsPageData(
   toDate: string,
   days: number,
 ): Promise<TrendsPageData> {
-  const client = createAqtHealthClient();
+  const client = aqtHealthClient;
   const fromDate = addUtcDays(toDate, -(days - 1));
   const from = dateOnlyToUtcInstant(fromDate);
   const to = dayAfterDateOnlyToUtcInstant(toDate);
@@ -202,23 +188,25 @@ export async function getTrendsPageData(
 }
 
 export async function getProviderSyncPageData(): Promise<ProviderSyncPageData> {
-  const client = createAqtHealthClient();
+  const client = aqtHealthClient;
   const [health, providerCatalog, providerStatuses] = await Promise.all([
     client.getHealth(),
-    getProviderCatalog(),
-    getProviderStatuses(),
+    client.listProviders(),
+    client.listProviderStatuses(),
   ]);
   const scheduledSyncConfigs =
     providerStatuses.ok
       ? await Promise.all(
-          providerStatuses.data.items.flatMap((provider) =>
-            provider.accounts.map((account) =>
+          providerStatuses.data.items.flatMap((provider) => {
+            const providerCode = toProviderCode(provider.providerCode);
+            if (!providerCode) return [];
+            return provider.accounts.map((account) =>
               client.getScheduledSyncConfig(
-                provider.providerCode,
+                providerCode,
                 account.providerInstanceId,
               ) as Promise<ApiResult<ScheduledSyncConfig>>,
-            ),
-          ),
+            );
+          }),
         )
       : [];
 
@@ -235,7 +223,7 @@ export async function getIngestionsPageData(options: {
   limit: string;
   status?: string;
 }): Promise<IngestionsPageData> {
-  const client = createAqtHealthClient();
+  const client = aqtHealthClient;
   const limit = toPositiveInteger(options.limit) ?? 25;
   const status = ingestionStatus(options.status);
 
@@ -261,7 +249,7 @@ export async function getIngestionBatchDetail(
     return { ok: false, message: "Ingestion batch id must be a positive integer." };
   }
 
-  return createAqtHealthClient().getIngestionBatch(parsed);
+  return aqtHealthClient.getIngestionBatch(parsed);
 }
 
 export async function getHealthDay(paramsValue: {
@@ -270,100 +258,12 @@ export async function getHealthDay(paramsValue: {
   modules: HealthDayModuleName[];
   includeSource?: boolean;
 }): Promise<ApiResult<HealthDayResponse>> {
-  return createAqtHealthClient().getHealthDay({
+  return aqtHealthClient.getHealthDay({
     date: paramsValue.date,
     timezone: paramsValue.timezone,
     modules: paramsValue.modules.join(","),
     includeSource: paramsValue.includeSource ?? false,
   });
-}
-
-export async function getMetricCatalog(): Promise<ApiResult<MetricCatalogResponse>> {
-  return createAqtHealthClient().getMetricCatalog();
-}
-
-export async function getProviderCatalog(): Promise<ApiResult<ProviderCatalogResponse>> {
-  return createAqtHealthClient().listProviders();
-}
-
-export async function getProviderStatuses(): Promise<ApiResult<ProviderStatusCatalogResponse>> {
-  return createAqtHealthClient().listProviderStatuses();
-}
-
-export async function startProviderOAuth(
-  providerCode: string,
-): Promise<ApiResult<ProviderOAuthStartResponse>> {
-  return createAqtHealthClient().startProviderOAuth(providerCode);
-}
-
-export async function listProviderAccounts(
-  providerCode: string,
-): Promise<ApiResult<ProviderAccountListResponse>> {
-  return createAqtHealthClient().listProviderAccounts(providerCode);
-}
-
-export async function getProviderAccount(
-  providerCode: string,
-  providerInstanceId: string,
-): Promise<ApiResult<ProviderAccountStatus>> {
-  return createAqtHealthClient().getProviderAccount(providerCode, providerInstanceId);
-}
-
-export async function disconnectProviderAccount(
-  providerCode: string,
-  providerInstanceId: string,
-): Promise<ApiResult<ProviderDisconnectResponse>> {
-  return createAqtHealthClient().disconnectProviderAccount(providerCode, providerInstanceId);
-}
-
-export async function reconnectProviderAccount(
-  providerCode: string,
-  providerInstanceId: string,
-): Promise<ApiResult<ProviderOAuthStartResponse>> {
-  return createAqtHealthClient().reconnectProviderAccount(providerCode, providerInstanceId);
-}
-
-export async function syncProvider(
-  providerCode: string,
-  payload: ProviderSyncRequest,
-): Promise<ApiResult<ProviderSyncResponse>> {
-  return createAqtHealthClient().syncProvider(providerCode, payload);
-}
-
-export async function startProviderSyncJob(
-  providerCode: string,
-  payload: ProviderSyncRequest,
-): Promise<ApiResult<ProviderSyncJobStartResponse>> {
-  return createAqtHealthClient().startProviderSyncJob(providerCode, payload);
-}
-
-export async function getProviderSyncJob(
-  providerCode: string,
-  jobId: string,
-): Promise<ApiResult<ProviderSyncJobStatusResponse>> {
-  return createAqtHealthClient().getProviderSyncJob(providerCode, jobId);
-}
-
-export async function getScheduledSyncConfig(
-  providerCode: string,
-  providerInstanceId: string,
-): Promise<ApiResult<ScheduledSyncConfig>> {
-  return createAqtHealthClient().getScheduledSyncConfig(providerCode, providerInstanceId);
-}
-
-export async function updateScheduledSyncConfig(
-  providerCode: string,
-  providerInstanceId: string,
-  payload: ScheduledSyncConfigUpdateRequest,
-): Promise<ApiResult<ScheduledSyncConfig>> {
-  return createAqtHealthClient().updateScheduledSyncConfig(providerCode, providerInstanceId, payload);
-}
-
-export async function runScheduledSyncNow(
-  providerCode: string,
-  providerInstanceId: string,
-): Promise<ApiResult<ScheduledSyncRunResponse>> {
-  return createAqtHealthClient().runScheduledSyncNow(providerCode, providerInstanceId);
 }
 
 /** Bounds the daily heart-rate query window to the most recent stretch of days. */
@@ -375,14 +275,13 @@ const MAX_HEART_RATE_DAILY_DAYS = 92;
  * charting hundreds of thousands of raw samples or fanning out one request per day.
  */
 async function fetchHeartRateDaily(
-  client: ReturnType<typeof createAqtHealthClient>,
   fromDate: string,
   toDate: string,
 ): Promise<HeartRateDailyPoint[]> {
   const earliest = addUtcDays(toDate, -(MAX_HEART_RATE_DAILY_DAYS - 1));
   const from = fromDate < earliest ? earliest : fromDate;
 
-  const result = await client.getScalarDailySummaries("heart_rate", {
+  const result = await aqtHealthClient.getScalarDailySummaries("heart_rate", {
     from: dateOnlyToUtcInstant(from),
     to: dayAfterDateOnlyToUtcInstant(toDate),
   });

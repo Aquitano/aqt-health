@@ -10,11 +10,9 @@ import {
 } from "./charts/HealthMetricChart";
 import type {
   ActivitySummariesResponse,
-  BodyMeasurement,
-  BodyMeasurementsResponse,
   HeartRateDailyPoint,
-  HrvSamplesResponse,
-  RespiratoryRateSamplesResponse,
+  ScalarSample,
+  ScalarSamplesResponse,
   SleepNightsResponse,
   SleepSummariesResponse,
   StepDailySummariesResponse,
@@ -34,12 +32,12 @@ const bodyMetricOrder = ["weight", "body_fat", "muscle", "water", "visceral_fat"
 
 type HealthDataVisualizationsProps = {
   activitySummaries?: ActivitySummariesResponse;
-  bodyMeasurements?: BodyMeasurementsResponse;
+  bodyMeasurements?: ScalarSamplesResponse;
   dailySteps?: StepDailySummariesResponse;
   heartRateDaily: HeartRateDailyPoint[];
-  hrvSamples?: HrvSamplesResponse;
+  hrvSamples?: ScalarSamplesResponse;
   sleepNights?: SleepNightsResponse;
-  respiratoryRates?: RespiratoryRateSamplesResponse;
+  respiratoryRates?: ScalarSamplesResponse;
   sleepSummaries?: SleepSummariesResponse;
   fromDate: string;
   toDate: string;
@@ -298,7 +296,7 @@ type NormalizedChart = {
   defaultVisibleMetricKeys: string[];
 };
 
-function buildBodyChart(items: BodyMeasurement[]): NormalizedChart {
+function buildBodyChart(items: ScalarSample[]): NormalizedChart {
   const supported = items.filter((item) => item.metricType in bodyMetricConfig);
   const presentMetricKeys = bodyMetricOrder.filter((metricKey) =>
     supported.some((item) => item.metricType === metricKey),
@@ -321,7 +319,7 @@ function buildBodyChart(items: BodyMeasurement[]): NormalizedChart {
   };
 }
 
-function buildWeightChart(items: BodyMeasurement[]): NormalizedChart {
+function buildWeightChart(items: ScalarSample[]): NormalizedChart {
   const weightItems = items.filter((item) => item.metricType === "weight");
   return {
     series: weightItems.length
@@ -518,7 +516,7 @@ function buildSleepSummaryChart(items: SleepSummariesResponse["items"]): Normali
   );
 }
 
-function buildRespiratoryRateChart(items: RespiratoryRateSamplesResponse["items"]): NormalizedChart {
+function buildRespiratoryRateChart(items: ScalarSamplesResponse["items"]): NormalizedChart {
   const details = [...items]
     .sort((a, b) => a.measuredAt.localeCompare(b.measuredAt) || a.id - b.id)
     .map((item) => ({
@@ -538,7 +536,7 @@ function buildRespiratoryRateChart(items: RespiratoryRateSamplesResponse["items"
   );
 }
 
-function buildHrvChart(items: HrvSamplesResponse["items"]): NormalizedChart {
+function buildHrvChart(items: ScalarSamplesResponse["items"]): NormalizedChart {
   const presentMetricKeys = Array.from(new Set(items.map((item) => item.metricType))).sort();
   const details = [...items]
     .sort((a, b) => a.measuredAt.localeCompare(b.measuredAt) || a.id - b.id)
@@ -564,11 +562,11 @@ function buildHrvChart(items: HrvSamplesResponse["items"]): NormalizedChart {
   );
 }
 
-function measurementsToData(items: BodyMeasurement[]): HealthChartDatum[] {
+function measurementsToData(items: ScalarSample[]): HealthChartDatum[] {
   return detailsToData(measurementsToDetails(items));
 }
 
-function measurementsToDetails(items: BodyMeasurement[]): ChartPointDetail[] {
+function measurementsToDetails(items: ScalarSample[]): ChartPointDetail[] {
   return [...items]
     .sort((a, b) => a.measuredAt.localeCompare(b.measuredAt) || a.id - b.id)
     .map((item) => ({

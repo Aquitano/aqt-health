@@ -1,5 +1,5 @@
 import { formatDateTime, formatMeasurement } from "@/lib/format";
-import type { ExtendedBodyMeasurement } from "@/lib/types";
+import type { ScalarSample } from "@/lib/types";
 import { DataTable, type Column } from "./DataTable";
 import { sourceLabel } from "./shared";
 
@@ -19,7 +19,7 @@ function metricLabel(metricType: string): string {
   return METRIC_LABELS[metricType] ?? metricType;
 }
 
-const columns: Column<ExtendedBodyMeasurement>[] = [
+const columns: Column<ScalarSample>[] = [
   { header: "Time", cell: (item) => formatDateTime(item.measuredAt) },
   { header: "Metric", cell: (item) => metricLabel(item.metricType) },
   { header: "Value", cell: (item) => formatMeasurement(item.value, item.unit) },
@@ -27,7 +27,7 @@ const columns: Column<ExtendedBodyMeasurement>[] = [
   { header: "Source", cell: (item) => sourceLabel(item.source), muted: true },
 ];
 
-export function ExtendedBodyMeasurementsTable({ items }: { items: ExtendedBodyMeasurement[] }) {
+export function ExtendedBodyMeasurementsTable({ items }: { items: ScalarSample[] }) {
   return (
     <DataTable
       items={items}
