@@ -96,6 +96,7 @@ Environment variables:
 - `AQT_HEALTH_LOG_FILE_ROLLOVER`: rolling JSON log archive pattern, default `build/logs/aqt-health.%d{yyyy-MM-dd}.%i.jsonl.gz`
 - `OPENOBSERVE_LOG_URL`: optional OpenObserve HTTP ingestion endpoint for direct app log delivery
 - `OPENOBSERVE_AUTHORIZATION`: optional full OpenObserve authorization header value, for example `Basic ...`
+- `OPENOBSERVE_URL`, `OPENOBSERVE_ORG`, `OPENOBSERVE_USER`, `OPENOBSERVE_PASSWORD`: optional OpenObserve Prometheus remote-write target for the metrics pusher; `OPENOBSERVE_ORG` is not needed when the URL already contains the full `/prometheus/api/v1/write` path
 
 If `AQT_HEALTH_BOOTSTRAP_API_KEY` is set, the app hashes it with SHA-256 and stores only `sha256:<hex>` in `api_clients`. If it is blank, startup still succeeds, but protected endpoints require a client row to exist in PostgreSQL.
 
