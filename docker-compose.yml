@@ -9,6 +9,7 @@ services:
       POSTGRES_PASSWORD: ${AQT_HEALTH_DB_PASSWORD:-aqt_health}
     volumes:
       - aqt_health_pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${AQT_HEALTH_DB_USER:-aqt_health} -d ${POSTGRES_DB:-aqt_health}"]
       interval: 10s
@@ -43,11 +44,32 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/v2/admin/health || exit 1"]
       interval: 30s
       timeout: 5s
       start_period: 60s
+      retries: 3
+
+  frontend:
+    build:
+      context: frontend
+      dockerfile: Dockerfile
+    ports:
+      - "${AQT_HEALTH_FRONTEND_PORT:-3000}:3000"
+    environment:
+      AQT_HEALTH_API_BASE_URL: ${AQT_HEALTH_API_BASE_URL:-http://app:8080}
+      AQT_HEALTH_API_KEY: ${AQT_HEALTH_API_KEY:-}
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
       retries: 3
 
 volumes:

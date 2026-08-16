@@ -178,6 +178,24 @@ Set these variables in the frontend runtime:
 - `AQT_HEALTH_API_BASE_URL`: backend API URL
 - `AQT_HEALTH_API_KEY`: backend API key used only by the frontend server
 
+In production the frontend refuses to start a request path without `AQT_HEALTH_API_BASE_URL`; there is no silent localhost fallback outside dev and build.
+
+### Frontend Container
+
+`frontend/Dockerfile` builds a standalone Next.js server image (Bun build stage, Node runtime, non-root user). The compose file wires it up as the `frontend` service:
+
+```bash
+AQT_HEALTH_API_KEY=<backend-api-key> docker compose up -d frontend
+```
+
+Compose variables:
+
+- `AQT_HEALTH_FRONTEND_PORT`: host port, default `3000`
+- `AQT_HEALTH_API_BASE_URL`: defaults to `http://app:8080` (container-to-container)
+- `AQT_HEALTH_API_KEY`: backend API key for the frontend proxy, typically the bootstrap key
+
+The container exposes `GET /api/health` as an unauthenticated liveness probe. The frontend has no authentication of its own; deploy it behind an authenticating reverse proxy and do not publish its port directly.
+
 ## Health Check
 
 Unauthenticated:

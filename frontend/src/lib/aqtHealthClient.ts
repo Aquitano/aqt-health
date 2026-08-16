@@ -80,7 +80,22 @@ const backendRequestTimeoutMs = 8_000;
 const longRunningBackendRequestTimeoutMs = 300_000;
 
 export function apiBaseUrlFromEnv(): string {
-  return process.env.AQT_HEALTH_API_BASE_URL ?? defaultBaseUrl;
+  const configured = process.env.AQT_HEALTH_API_BASE_URL;
+  if (configured) {
+    return configured;
+  }
+  // Mirror the backend's fail-fast production validation: a production server
+  // must not silently fall back to localhost. `next build` prerenders no
+  // backend-dependent pages, so the default is only allowed there and in dev.
+  if (
+    process.env.NODE_ENV === "production" &&
+    process.env.NEXT_PHASE !== "phase-production-build"
+  ) {
+    throw new Error(
+      "AQT_HEALTH_API_BASE_URL must be set when running the production server.",
+    );
+  }
+  return defaultBaseUrl;
 }
 
 export function createAqtHealthClient() {
