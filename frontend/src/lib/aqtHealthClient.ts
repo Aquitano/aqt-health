@@ -34,7 +34,7 @@ const PROVIDER_CODE_SET: Record<ProviderCode, true> = { "google-health": true, w
 
 /** Narrows a runtime string (path segment, API response field) to a known provider code. */
 export function toProviderCode(value: string): ProviderCode | null {
-  return value in PROVIDER_CODE_SET ? (value as ProviderCode) : null;
+  return Object.hasOwn(PROVIDER_CODE_SET, value) ? (value as ProviderCode) : null;
 }
 
 const bodyMetricTypes = ["weight", "body_fat", "muscle", "water", "visceral_fat"];

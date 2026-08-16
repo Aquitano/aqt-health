@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GET, POST, PUT } from "./route";
 
 const mocks = vi.hoisted(() => ({
+  startProviderOAuth: vi.fn(),
   startProviderSyncJob: vi.fn(),
   getProviderSyncJob: vi.fn(),
   updateScheduledSyncConfig: vi.fn(),
@@ -12,6 +13,7 @@ vi.mock("@/lib/aqtHealthClient", async (importOriginal) => {
   return {
     ...actual,
     aqtHealthClient: {
+      startProviderOAuth: mocks.startProviderOAuth,
       startProviderSyncJob: mocks.startProviderSyncJob,
       getProviderSyncJob: mocks.getProviderSyncJob,
       updateScheduledSyncConfig: mocks.updateScheduledSyncConfig,
@@ -25,6 +27,7 @@ function context(...path: string[]) {
 
 describe("backend proxy route", () => {
   beforeEach(() => {
+    mocks.startProviderOAuth.mockReset();
     mocks.startProviderSyncJob.mockReset();
     mocks.getProviderSyncJob.mockReset();
     mocks.updateScheduledSyncConfig.mockReset();
@@ -117,6 +120,18 @@ describe("backend proxy route", () => {
 
     expect(response.status).toBe(404);
     expect(mocks.startProviderSyncJob).not.toHaveBeenCalled();
+  });
+
+  it("rejects inherited object property names as provider codes", async () => {
+    const response = await POST(
+      new Request("http://frontend.test/api/backend/providers/constructor/oauth/start", {
+        method: "POST",
+      }),
+      context("providers", "constructor", "oauth", "start"),
+    );
+
+    expect(response.status).toBe(404);
+    expect(mocks.startProviderOAuth).not.toHaveBeenCalled();
   });
 
   it("rejects paths outside the allowlist", async () => {
