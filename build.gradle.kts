@@ -17,7 +17,7 @@ plugins {
     id("io.ktor.plugin") version "3.5.0"
     id("org.jetbrains.kotlin.plugin.serialization") version "2.3.0"
 
-    id("com.github.ben-manes.versions") version "0.54.0"
+    id("com.github.ben-manes.versions") version "0.61.0"
 }
 
 group = "me.aquitano"
@@ -50,7 +50,7 @@ dependencies {
     implementation("io.ktor:ktor-server-core")
     implementation("io.ktor:ktor-server-content-negotiation")
     implementation("io.ktor:ktor-server-metrics-micrometer")
-    implementation("io.micrometer:micrometer-registry-prometheus:1.16.5")
+    implementation("io.micrometer:micrometer-registry-prometheus:1.17.0")
     implementation("org.xerial.snappy:snappy-java:1.1.10.8")
     implementation("io.ktor:ktor-server-netty")
     implementation("io.ktor:ktor-server-openapi")
