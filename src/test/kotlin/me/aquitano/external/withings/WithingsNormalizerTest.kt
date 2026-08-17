@@ -10,7 +10,9 @@ import me.aquitano.health.api.dto.BloodPressure
 import me.aquitano.health.api.dto.ScalarSample
 import me.aquitano.health.api.dto.SleepSummary
 import me.aquitano.health.api.dto.SleepSession
+import me.aquitano.health.api.dto.IngestionBatchRequest
 import me.aquitano.health.api.dto.StepInterval
+import me.aquitano.health.application.IngestionMappingService
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -46,6 +48,58 @@ class WithingsNormalizerTest {
         assertEquals(40.2, samples.getValue("muscle").value, 0.000001)
         assertEquals(50.1, samples.getValue("water").value, 0.000001)
         assertEquals(9.0, samples.getValue("visceral_fat").value, 0.000001)
+    }
+
+    @Test
+    fun aRepeatedMeasureTypeCollapsesToOneSampleInsteadOfFailingTheBatch() {
+        val result = normalizer.normalize(
+            fetchResult(
+                "measures",
+                buildJsonObject {
+                    put("grpid", 987)
+                    put("date", 1775001600)
+                    putJsonArray("measures") {
+                        addMeasure(type = 1, value = 80136, unit = -3)
+                        addMeasure(type = 1, value = 80500, unit = -3)
+                    }
+                }
+            )
+        )
+
+        val sample = assertIs<ScalarSample>(result.records.single())
+        assertEquals("withings:measure:987:weight", sample.providerRecordId)
+        // Last value wins, matching how the per-field accumulators used to resolve repeats.
+        assertEquals(80.5, sample.value, 0.000001)
+        assertAcceptedByIngestion(result.records)
+    }
+
+    @Test
+    fun aRepeatedSegmentalZoneCollapsesToOneSample() {
+        val result = normalizer.normalize(
+            fetchResult(
+                "measures",
+                buildJsonObject {
+                    put("grpid", 654)
+                    put("date", 1775001600)
+                    putJsonArray("measures") {
+                        addSegmentalMeasure(type = 137, value = 32, unit = -1, zone = "left_arm")
+                        addSegmentalMeasure(type = 137, value = 34, unit = -1, zone = "left_arm")
+                        addSegmentalMeasure(type = 137, value = 36, unit = -1, zone = "right_arm")
+                    }
+                }
+            )
+        )
+
+        val samples = result.records.filterIsInstance<ScalarSample>()
+        assertEquals(
+            listOf(
+                "withings:measure:654:segmental_muscle_mass:left_arm",
+                "withings:measure:654:segmental_muscle_mass:right_arm",
+            ),
+            samples.map { it.providerRecordId },
+        )
+        assertEquals(3.4, samples[0].value, 0.000001)
+        assertAcceptedByIngestion(result.records)
     }
 
     @Test
@@ -442,6 +496,35 @@ class WithingsNormalizerTest {
         )
 
         assertTrue(result.records.isEmpty())
+    }
+
+    /** Ingestion rejects a whole batch that repeats a providerRecordId, so prove it takes these. */
+    private fun assertAcceptedByIngestion(records: List<me.aquitano.health.api.dto.IngestionRecord>) {
+        IngestionMappingService().validateAndMap(
+            IngestionBatchRequest(
+                provider = "withings",
+                providerInstanceId = "scale-1",
+                ingestedAt = "2026-04-01T10:00:00Z",
+                sourcePayload = buildJsonObject { },
+                records = records,
+            )
+        )
+    }
+
+    private fun kotlinx.serialization.json.JsonArrayBuilder.addSegmentalMeasure(
+        type: Int,
+        value: Int,
+        unit: Int,
+        zone: String,
+    ) {
+        add(
+            buildJsonObject {
+                put("type", type)
+                put("value", value)
+                put("unit", unit)
+                put("zone", zone)
+            }
+        )
     }
 
     private fun fetchResult(dataType: String, vararg records: kotlinx.serialization.json.JsonObject): WithingsFetchResult =
