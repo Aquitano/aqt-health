@@ -44,14 +44,18 @@ type HealthDataVisualizationsProps = {
   timezone: string;
 };
 
-type ModalChart = {
+type ModalChart = NormalizedChart & {
   title: string;
   description?: string;
-  series: HealthChartSeries[];
-  data: HealthChartDatum[];
-  defaultVisibleMetricKeys: string[];
   summaries: ChartSummary[];
-  details: ChartPointDetail[];
+};
+
+type ChartCard = {
+  key: string;
+  title: string;
+  description: string;
+  chart: NormalizedChart;
+  height: number;
 };
 
 export function HealthDataVisualizations({
@@ -82,6 +86,96 @@ export function HealthDataVisualizations({
   const hrvChart = useMemo(() => buildHrvChart(hrvSamples?.items ?? []), [hrvSamples]);
   const dateLabel = `${fromDate} to ${toDate} (${timezone})`;
 
+  // The key remounts HealthMetricChart when the chart's shape changes so its
+  // internal visible-series state resets.
+  const primaryCharts: ChartCard[] = [
+    {
+      key: `body-${bodyChart.defaultVisibleMetricKeys.join("-")}-${bodyChart.data.length}`,
+      title: "Body composition",
+      description: "All body measurements available in the selected range.",
+      chart: bodyChart,
+      height: 320,
+    },
+    {
+      key: `weight-${weightChart.data.length}`,
+      title: "Weight trend",
+      description: "Weight measurements with latest, range, and movement detail.",
+      chart: weightChart,
+      height: 320,
+    },
+  ];
+  const secondaryCharts: ChartCard[] = [
+    {
+      key: `steps-${stepsChart.data.length}`,
+      title: "Daily steps",
+      description: "Daily totals from normalized step summaries.",
+      chart: stepsChart,
+      height: 260,
+    },
+    {
+      key: `activity-${activityChart.data.length}`,
+      title: "Activity summaries",
+      description: "Distance, energy, active minutes, and daily heart-rate ranges.",
+      chart: activityChart,
+      height: 260,
+    },
+    {
+      key: `heart-${heartRateChart.data.length}`,
+      title: "Heart-rate detail",
+      description: "Daily average, minimum, and maximum across the selected range.",
+      chart: heartRateChart,
+      height: 260,
+    },
+    {
+      key: `sleep-${sleepChart.data.length}`,
+      title: "Sleep sessions",
+      description: "Sleep duration by recorded session.",
+      chart: sleepChart,
+      height: 260,
+    },
+    {
+      key: `sleep-summary-${sleepSummaryChart.data.length}`,
+      title: "Sleep summaries",
+      description: "Sleep score, efficiency, and duration totals.",
+      chart: sleepSummaryChart,
+      height: 260,
+    },
+    {
+      key: `respiratory-${respiratoryRateChart.data.length}`,
+      title: "Respiratory rate",
+      description: "Breaths per minute across the selected range.",
+      chart: respiratoryRateChart,
+      height: 260,
+    },
+    {
+      key: `hrv-${hrvChart.data.length}`,
+      title: "HRV",
+      description: "Heart-rate variability samples by metric type.",
+      chart: hrvChart,
+      height: 260,
+    },
+  ];
+
+  const renderChart = ({ key, title, description, chart, height }: ChartCard) => (
+    <HealthMetricChart
+      key={key}
+      title={title}
+      description={description}
+      series={chart.series}
+      data={chart.data}
+      defaultVisibleMetricKeys={chart.defaultVisibleMetricKeys}
+      height={height}
+      onExpand={(visible) =>
+        openModal({
+          title,
+          description: dateLabel,
+          chart,
+          visibleMetricKeys: visible,
+        })
+      }
+    />
+  );
+
   return (
     <section className={styles.section} aria-label="Health visualizations" data-reveal>
       <div className={styles.heading}>
@@ -91,164 +185,9 @@ export function HealthDataVisualizations({
         </div>
       </div>
 
-      <div className={styles.primaryGrid}>
-        <HealthMetricChart
-          key={`body-${bodyChart.defaultVisibleMetricKeys.join("-")}-${bodyChart.data.length}`}
-          title="Body composition"
-          description="All body measurements available in the selected range."
-          series={bodyChart.series}
-          data={bodyChart.data}
-          defaultVisibleMetricKeys={bodyChart.defaultVisibleMetricKeys}
-          height={320}
-          onExpand={(visible) =>
-            openModal({
-              title: "Body composition",
-              description: dateLabel,
-              chart: bodyChart,
-              visibleMetricKeys: visible,
-            })
-          }
-        />
-        <HealthMetricChart
-          key={`weight-${weightChart.data.length}`}
-          title="Weight trend"
-          description="Weight measurements with latest, range, and movement detail."
-          series={weightChart.series}
-          data={weightChart.data}
-          defaultVisibleMetricKeys={weightChart.defaultVisibleMetricKeys}
-          height={320}
-          onExpand={(visible) =>
-            openModal({
-              title: "Weight trend",
-              description: dateLabel,
-              chart: weightChart,
-              visibleMetricKeys: visible,
-            })
-          }
-        />
-      </div>
+      <div className={styles.primaryGrid}>{primaryCharts.map(renderChart)}</div>
 
-      <div className={styles.secondaryGrid}>
-        <HealthMetricChart
-          key={`steps-${stepsChart.data.length}`}
-          title="Daily steps"
-          description="Daily totals from normalized step summaries."
-          series={stepsChart.series}
-          data={stepsChart.data}
-          defaultVisibleMetricKeys={stepsChart.defaultVisibleMetricKeys}
-          height={260}
-          onExpand={(visible) =>
-            openModal({
-              title: "Daily steps",
-              description: dateLabel,
-              chart: stepsChart,
-              visibleMetricKeys: visible,
-            })
-          }
-        />
-        <HealthMetricChart
-          key={`activity-${activityChart.data.length}`}
-          title="Activity summaries"
-          description="Distance, energy, active minutes, and daily heart-rate ranges."
-          series={activityChart.series}
-          data={activityChart.data}
-          defaultVisibleMetricKeys={activityChart.defaultVisibleMetricKeys}
-          height={260}
-          onExpand={(visible) =>
-            openModal({
-              title: "Activity summaries",
-              description: dateLabel,
-              chart: activityChart,
-              visibleMetricKeys: visible,
-            })
-          }
-        />
-        <HealthMetricChart
-          key={`heart-${heartRateChart.data.length}`}
-          title="Heart-rate detail"
-          description="Daily average, minimum, and maximum across the selected range."
-          series={heartRateChart.series}
-          data={heartRateChart.data}
-          defaultVisibleMetricKeys={heartRateChart.defaultVisibleMetricKeys}
-          height={260}
-          onExpand={(visible) =>
-            openModal({
-              title: "Heart-rate detail",
-              description: dateLabel,
-              chart: heartRateChart,
-              visibleMetricKeys: visible,
-            })
-          }
-        />
-        <HealthMetricChart
-          key={`sleep-${sleepChart.data.length}`}
-          title="Sleep sessions"
-          description="Sleep duration by recorded session."
-          series={sleepChart.series}
-          data={sleepChart.data}
-          defaultVisibleMetricKeys={sleepChart.defaultVisibleMetricKeys}
-          height={260}
-          onExpand={(visible) =>
-            openModal({
-              title: "Sleep sessions",
-              description: dateLabel,
-              chart: sleepChart,
-              visibleMetricKeys: visible,
-            })
-          }
-        />
-        <HealthMetricChart
-          key={`sleep-summary-${sleepSummaryChart.data.length}`}
-          title="Sleep summaries"
-          description="Sleep score, efficiency, and duration totals."
-          series={sleepSummaryChart.series}
-          data={sleepSummaryChart.data}
-          defaultVisibleMetricKeys={sleepSummaryChart.defaultVisibleMetricKeys}
-          height={260}
-          onExpand={(visible) =>
-            openModal({
-              title: "Sleep summaries",
-              description: dateLabel,
-              chart: sleepSummaryChart,
-              visibleMetricKeys: visible,
-            })
-          }
-        />
-        <HealthMetricChart
-          key={`respiratory-${respiratoryRateChart.data.length}`}
-          title="Respiratory rate"
-          description="Breaths per minute across the selected range."
-          series={respiratoryRateChart.series}
-          data={respiratoryRateChart.data}
-          defaultVisibleMetricKeys={respiratoryRateChart.defaultVisibleMetricKeys}
-          height={260}
-          onExpand={(visible) =>
-            openModal({
-              title: "Respiratory rate",
-              description: dateLabel,
-              chart: respiratoryRateChart,
-              visibleMetricKeys: visible,
-            })
-          }
-        />
-        <HealthMetricChart
-          key={`hrv-${hrvChart.data.length}`}
-          title="HRV"
-          description="Heart-rate variability samples by metric type."
-          series={hrvChart.series}
-          data={hrvChart.data}
-          defaultVisibleMetricKeys={hrvChart.defaultVisibleMetricKeys}
-          height={260}
-          onExpand={(visible) =>
-            openModal({
-              title: "HRV",
-              description: dateLabel,
-              chart: hrvChart,
-              visibleMetricKeys: visible,
-            })
-          }
-        />
-      </div>
+      <div className={styles.secondaryGrid}>{secondaryCharts.map(renderChart)}</div>
 
       {modalChart ? (
         <ExpandedChartModal

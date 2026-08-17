@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { StatusBar } from "@/components/StatusBar";
 import { IngestionBatchesTable } from "@/components/tables/IngestionBatchesTable";
 import { getIngestionsPageData } from "@/lib/aqtHealthApi";
+import { first } from "@/lib/dates";
 import styles from "./IngestionsPage.module.css";
 
 type PageProps = {
@@ -12,8 +13,7 @@ type PageProps = {
 export default async function IngestionsPage({ searchParams }: PageProps) {
   const params = (await searchParams) ?? {};
   const limit = first(params.limit) ?? "25";
-  const status = ingestionStatus(first(params.status));
-  const data = await getIngestionsPageData({ limit, status });
+  const data = await getIngestionsPageData({ limit, status: params.status });
 
   return (
     <>
@@ -60,14 +60,4 @@ export default async function IngestionsPage({ searchParams }: PageProps) {
       </div>
     </>
   );
-}
-
-function first(value?: string | string[]): string | undefined {
-  if (Array.isArray(value)) return value[0];
-  return value;
-}
-
-function ingestionStatus(value?: string): "processed" | "failed" | undefined {
-  if (value === "processed" || value === "failed") return value;
-  return undefined;
 }

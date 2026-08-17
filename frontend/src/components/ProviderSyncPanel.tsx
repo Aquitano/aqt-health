@@ -15,7 +15,7 @@ import type {
   ProviderSyncResponse,
   ProviderSyncJobStatusResponse,
 } from "@/lib/types";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, toPositiveInteger } from "@/lib/format";
 import { ErrorNotice } from "./ErrorNotice";
 import styles from "./ProviderSyncPanel.module.css";
 
@@ -36,7 +36,6 @@ export function ProviderSyncPanel({ catalog, statuses, scheduledSyncConfigs }: P
   const [result, setResult] = useState<ApiResult<ProviderSyncResponse> | null>(null);
   const [syncJob, setSyncJob] = useState<ProviderSyncJobStatusResponse | null>(null);
   const [activeSyncJob, setActiveSyncJob] = useState<ActiveSyncJob | null>(() => readStoredSyncJob());
-  const [isSyncing, setIsSyncing] = useState(() => activeSyncJob != null);
   const [oauthError, setOAuthError] = useState<string | null>(null);
   const [accountActionError, setAccountActionError] = useState<string | null>(null);
   const [pendingAccountAction, setPendingAccountAction] = useState<string | null>(null);
@@ -56,14 +55,12 @@ export function ProviderSyncPanel({ catalog, statuses, scheduledSyncConfigs }: P
     async function poll() {
       while (!stopped) {
         try {
-          const response = await fetch(
-            `/api/backend/providers/${encodeURIComponent(pollingJob.providerCode)}/sync-jobs/${encodeURIComponent(pollingJob.jobId)}`,
+          const body = await proxyFetch<ProviderSyncJobStatusResponse>(
+            `/providers/${encodeURIComponent(pollingJob.providerCode)}/sync-jobs/${encodeURIComponent(pollingJob.jobId)}`,
           );
-          const body = (await response.json()) as ApiResult<ProviderSyncJobStatusResponse>;
           if (!body.ok) {
             setResult(body);
             setSyncJob(null);
-            setIsSyncing(false);
             clearStoredSyncJob();
             setActiveSyncJob(null);
             return;
@@ -76,7 +73,6 @@ export function ProviderSyncPanel({ catalog, statuses, scheduledSyncConfigs }: P
                 ? { ok: true, data: body.data.summary }
                 : { ok: false, message: body.data.errorMessage ?? "Provider sync job failed." },
             );
-            setIsSyncing(false);
             clearStoredSyncJob();
             setActiveSyncJob(null);
             router.refresh();
@@ -90,7 +86,6 @@ export function ProviderSyncPanel({ catalog, statuses, scheduledSyncConfigs }: P
             message: error instanceof Error ? error.message : "Provider sync status check failed.",
           });
           setSyncJob(null);
-          setIsSyncing(false);
           clearStoredSyncJob();
           setActiveSyncJob(null);
           return;
@@ -138,7 +133,6 @@ export function ProviderSyncPanel({ catalog, statuses, scheduledSyncConfigs }: P
     if (!selectedProvider || !canSync) return;
     setResult(null);
     setSyncJob(null);
-    setIsSyncing(true);
 
     const formData = new FormData(event.currentTarget);
     const dataTypes = selectedDataTypes(formData);
@@ -153,18 +147,16 @@ export function ProviderSyncPanel({ catalog, statuses, scheduledSyncConfigs }: P
 
     startTransition(async () => {
       try {
-        const response = await fetch(
-          `/api/backend/providers/${encodeURIComponent(selectedProvider.descriptor.providerCode)}/sync-jobs`,
+        const body = await proxyFetch<{ jobId: string }>(
+          `/providers/${encodeURIComponent(selectedProvider.descriptor.providerCode)}/sync-jobs`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
           },
         );
-        const body = (await response.json()) as ApiResult<{ jobId: string }>;
         if (!body.ok) {
           setResult(body);
-          setIsSyncing(false);
           return;
         }
 
@@ -179,7 +171,6 @@ export function ProviderSyncPanel({ catalog, statuses, scheduledSyncConfigs }: P
           ok: false,
           message: error instanceof Error ? error.message : "Provider sync failed. Try again.",
         });
-        setIsSyncing(false);
       }
     });
   }
@@ -191,11 +182,10 @@ export function ProviderSyncPanel({ catalog, statuses, scheduledSyncConfigs }: P
     setAccountActionError(null);
 
     startOAuthTransition(async () => {
-      const response = await fetch(
-        `/api/backend/providers/${encodeURIComponent(selectedProvider.descriptor.providerCode)}/oauth/start`,
+      const body = await proxyFetch<ProviderOAuthStartResponse>(
+        `/providers/${encodeURIComponent(selectedProvider.descriptor.providerCode)}/oauth/start`,
         { method: "POST" },
       );
-      const body = (await response.json()) as ApiResult<ProviderOAuthStartResponse>;
       if (body.ok) {
         window.location.assign(body.data.authorizationUrl);
       } else {
@@ -204,52 +194,28 @@ export function ProviderSyncPanel({ catalog, statuses, scheduledSyncConfigs }: P
     });
   }
 
-  function onDisconnect(providerInstanceId: string) {
+  function onAccountAction(action: "disconnect" | "reconnect", providerInstanceId: string) {
     if (!selectedProvider) return;
     setResult(null);
     setAccountActionError(null);
-    setPendingAccountAction(`disconnect:${providerInstanceId}`);
+    setPendingAccountAction(`${action}:${providerInstanceId}`);
+    const url = `/providers/${encodeURIComponent(selectedProvider.descriptor.providerCode)}/accounts/${encodeURIComponent(providerInstanceId)}/${action}`;
 
     startAccountActionTransition(async () => {
       try {
-        const response = await fetch(
-          `/api/backend/providers/${encodeURIComponent(selectedProvider.descriptor.providerCode)}/accounts/${encodeURIComponent(providerInstanceId)}/disconnect`,
-          { method: "POST" },
-        );
-        const body = (await response.json()) as ApiResult<unknown>;
-        if (body.ok) {
-          router.refresh();
+        if (action === "reconnect") {
+          const body = await proxyFetch<ProviderOAuthStartResponse>(url, { method: "POST" });
+          if (body.ok) window.location.assign(body.data.authorizationUrl);
+          else setAccountActionError(body.message);
         } else {
-          setAccountActionError(body.message);
+          const body = await proxyFetch<unknown>(url, { method: "POST" });
+          if (body.ok) router.refresh();
+          else setAccountActionError(body.message);
         }
       } catch {
-        setAccountActionError("Disconnect failed. Try again.");
-      } finally {
-        setPendingAccountAction(null);
-      }
-    });
-  }
-
-  function onReconnect(providerInstanceId: string) {
-    if (!selectedProvider) return;
-    setResult(null);
-    setAccountActionError(null);
-    setPendingAccountAction(`reconnect:${providerInstanceId}`);
-
-    startAccountActionTransition(async () => {
-      try {
-        const response = await fetch(
-          `/api/backend/providers/${encodeURIComponent(selectedProvider.descriptor.providerCode)}/accounts/${encodeURIComponent(providerInstanceId)}/reconnect`,
-          { method: "POST" },
+        setAccountActionError(
+          `${action === "disconnect" ? "Disconnect" : "Reconnect"} failed. Try again.`,
         );
-        const body = (await response.json()) as ApiResult<ProviderOAuthStartResponse>;
-        if (body.ok) {
-          window.location.assign(body.data.authorizationUrl);
-        } else {
-          setAccountActionError(body.message);
-        }
-      } catch {
-        setAccountActionError("Reconnect failed. Try again.");
       } finally {
         setPendingAccountAction(null);
       }
@@ -267,8 +233,8 @@ export function ProviderSyncPanel({ catalog, statuses, scheduledSyncConfigs }: P
 
     startScheduledTransition(async () => {
       try {
-        const response = await fetch(
-          `/api/backend/providers/${encodeURIComponent(selectedProvider.descriptor.providerCode)}/accounts/${encodeURIComponent(providerInstanceId)}/scheduled-sync`,
+        const body = await proxyFetch<ScheduledSyncConfig>(
+          `/providers/${encodeURIComponent(selectedProvider.descriptor.providerCode)}/accounts/${encodeURIComponent(providerInstanceId)}/scheduled-sync`,
           {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
@@ -280,7 +246,6 @@ export function ProviderSyncPanel({ catalog, statuses, scheduledSyncConfigs }: P
             }),
           },
         );
-        const body = (await response.json()) as ApiResult<ScheduledSyncConfig>;
         if (body.ok) router.refresh();
         else setScheduledError(body.message);
       } catch {
@@ -299,11 +264,10 @@ export function ProviderSyncPanel({ catalog, statuses, scheduledSyncConfigs }: P
 
     startScheduledTransition(async () => {
       try {
-        const response = await fetch(
-          `/api/backend/providers/${encodeURIComponent(selectedProvider.descriptor.providerCode)}/accounts/${encodeURIComponent(providerInstanceId)}/scheduled-sync/run`,
+        const body = await proxyFetch<ScheduledSyncRunResponse>(
+          `/providers/${encodeURIComponent(selectedProvider.descriptor.providerCode)}/accounts/${encodeURIComponent(providerInstanceId)}/scheduled-sync/run`,
           { method: "POST" },
         );
-        const body = (await response.json()) as ApiResult<ScheduledSyncRunResponse>;
         setScheduledResult(body);
         if (body.ok) router.refresh();
       } catch {
@@ -346,8 +310,8 @@ export function ProviderSyncPanel({ catalog, statuses, scheduledSyncConfigs }: P
           accountActionError={accountActionError}
           oauthError={oauthError}
           pendingAccountAction={pendingAccountAction}
-          onDisconnect={onDisconnect}
-          onReconnect={onReconnect}
+          onDisconnect={(providerInstanceId) => onAccountAction("disconnect", providerInstanceId)}
+          onReconnect={(providerInstanceId) => onAccountAction("reconnect", providerInstanceId)}
           onRunScheduled={onRunScheduled}
           onStartOAuth={onStartOAuth}
           onToggleScheduled={onToggleScheduled}
@@ -390,13 +354,13 @@ export function ProviderSyncPanel({ catalog, statuses, scheduledSyncConfigs }: P
                     type="checkbox"
                     value={dataType}
                   />
-                  <span>{formatDataType(dataType)}</span>
+                  <span>{formatStatus(dataType)}</span>
                 </label>
               ))}
             </div>
           </fieldset>
-          <button className={styles.submit} type="submit" disabled={isPending || isSyncing || !canSync}>
-            {isPending || isSyncing ? (
+          <button className={styles.submit} type="submit" disabled={isPending || activeSyncJob !== null || !canSync}>
+            {isPending || activeSyncJob !== null ? (
               <>
                 <span className={styles.spinner} />
                 Syncing...
@@ -428,10 +392,10 @@ function SyncProgressView({ job }: { job: ProviderSyncJobStatusResponse }) {
   const startedAt = job.startedAt ?? job.createdAt;
   const elapsedSeconds = Math.max(0, Math.round((new Date(job.updatedAt).getTime() - new Date(startedAt).getTime()) / 1000));
   const currentLabel = job.currentItem
-    ? `${formatDataType(job.currentItem.dataType)} ${formatWindowLabel(new Date(job.currentItem.from), new Date(job.currentItem.to))}`
+    ? `${formatStatus(job.currentItem.dataType)} ${formatWindowLabel(new Date(job.currentItem.from), new Date(job.currentItem.to))}`
     : "Waiting for backend worker";
   const lastLabel = job.lastCompletedItem
-    ? `${formatDataType(job.lastCompletedItem.dataType)} ${formatWindowLabel(new Date(job.lastCompletedItem.from), new Date(job.lastCompletedItem.to))}`
+    ? `${formatStatus(job.lastCompletedItem.dataType)} ${formatWindowLabel(new Date(job.lastCompletedItem.from), new Date(job.lastCompletedItem.to))}`
     : null;
 
   return (
@@ -750,9 +714,15 @@ export function primaryOAuthLabel(status: ProviderStatus): string {
 
 export function formatStatus(value: string): string {
   return value
-    .split("_")
+    .split(/[_-]/)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+async function proxyFetch<T>(path: string, init?: RequestInit): Promise<ApiResult<T>> {
+  const url = `/api/backend${path}`;
+  const response = await (init ? fetch(url, init) : fetch(url));
+  return (await response.json()) as ApiResult<T>;
 }
 
 function selectedDataTypes(formData: FormData): string[] | undefined {
@@ -760,25 +730,11 @@ function selectedDataTypes(formData: FormData): string[] | undefined {
   return dataTypes.length > 0 ? dataTypes : undefined;
 }
 
-function formatDataType(value: string): string {
-  return value
-    .split("-")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
 function toIso(value: FormDataEntryValue | null): string | undefined {
   if (typeof value !== "string" || !value) return undefined;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return undefined;
   return date.toISOString();
-}
-
-function toPositiveInteger(value: FormDataEntryValue | null): number | undefined {
-  if (typeof value !== "string" || !value) return undefined;
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed <= 0) return undefined;
-  return parsed;
 }
 
 function formatWindowLabel(from: Date, to: Date): string {

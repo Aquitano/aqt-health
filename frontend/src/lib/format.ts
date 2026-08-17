@@ -49,3 +49,11 @@ export function formatFullDate(value: string): string {
 function parseDay(value: string): Date {
   return new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00` : value);
 }
+
+/** Parses a positive integer from a form or query string; anything else is undefined. */
+export function toPositiveInteger(value: unknown): number | undefined {
+  if (typeof value !== "string" || !value) return undefined;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) return undefined;
+  return parsed;
+}

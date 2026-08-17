@@ -17,7 +17,6 @@ type ClientResponse<T> = {
 type ClientOptions = {
   protected?: boolean;
 };
-type AqtOpenApiClient = ReturnType<typeof createClient<paths>>;
 
 /** Query parameters of a GET endpoint in the generated OpenAPI paths. */
 type GetQuery<Path extends keyof paths> = paths[Path] extends {
@@ -55,7 +54,7 @@ const defaultBaseUrl = "http://localhost:8080";
 const backendRequestTimeoutMs = 8_000;
 const longRunningBackendRequestTimeoutMs = 300_000;
 
-export function apiBaseUrlFromEnv(): string {
+function apiBaseUrlFromEnv(): string {
   const configured = process.env.AQT_HEALTH_API_BASE_URL;
   if (configured) {
     return configured;
@@ -78,10 +77,6 @@ const apiBaseUrl = apiBaseUrlFromEnv();
 const rawClient = createClient<paths>({
   baseUrl: apiBaseUrl,
   fetch: (input: Request) => fetchWithTimeout(input),
-});
-const longRunningClient = createClient<paths>({
-  baseUrl: apiBaseUrl,
-  fetch: (input: Request) => fetchWithTimeout(input, undefined, longRunningBackendRequestTimeoutMs),
 });
 
 export const aqtHealthClient = {
@@ -176,11 +171,13 @@ export const aqtHealthClient = {
 
   runScheduledSyncNow: (providerCode: ProviderCode, providerInstanceId: string) =>
     call<ScheduledSyncRunResponse>((headers) =>
-      longRunningClient.POST(
+      rawClient.POST(
         "/api/v2/providers/{providerCode}/accounts/{providerInstanceId}/scheduled-sync/run",
         {
           headers,
           params: { path: { providerCode, providerInstanceId } },
+          fetch: (input: Request) =>
+            fetchWithTimeout(input, undefined, longRunningBackendRequestTimeoutMs),
         },
       ),
     ),
@@ -200,11 +197,6 @@ export const aqtHealthClient = {
         headers,
         params: { path: { providerCode, jobId } },
       }),
-    ),
-
-  getMetricCatalog: () =>
-    call<ApiSchema<"MetricTypeCatalogResponse">>((headers) =>
-      rawClient.GET("/api/v2/metrics", { headers }),
     ),
 
   getHealthDay: (query: GetQuery<"/api/v2/health/day">) =>
@@ -240,7 +232,7 @@ export const aqtHealthClient = {
     ),
 
   listHeartRateSamples: (query: ScalarSamplesQuery) =>
-    listScalarMetric(rawClient, "heart_rate", query),
+    listScalarMetric("heart_rate", query),
 
   getScalarSummary: (metricType: string, query: GetQuery<"/api/v2/metrics/{metricType}/summary">) =>
     call<ApiSchema<"ScalarSummaryResponse">>((headers) =>
@@ -262,10 +254,10 @@ export const aqtHealthClient = {
     ),
 
   listRespiratoryRateSamples: (query: ScalarSamplesQuery) =>
-    listScalarMetric(rawClient, "respiratory_rate", query),
+    listScalarMetric("respiratory_rate", query),
 
   listHrvSamples: (query: ScalarSamplesQuery) =>
-    listScalarMetric(rawClient, "hrv_rmssd", query),
+    listScalarMetric("hrv_rmssd", query),
 
   listSleepNights: (query: GetQuery<"/api/v2/sleep/nights">) =>
     call<ApiSchema<"SleepNightsResponse">>((headers) =>
@@ -292,10 +284,10 @@ export const aqtHealthClient = {
     ),
 
   getLatestBodyMeasurement: (query: ScalarSamplesQuery) =>
-    listScalarMetric(rawClient, "weight", { ...query, latest: true }),
+    listScalarMetric("weight", { ...query, latest: true }),
 
   listBodyMeasurements: (query: ScalarSamplesQuery) =>
-    listScalarMetrics(rawClient, bodyMetricTypes, query),
+    listScalarMetrics(bodyMetricTypes, query),
 
   getDashboardSummary: (query: GetQuery<"/api/v2/dashboard/summary">) =>
     call<ApiSchema<"DashboardSummaryResponse">>((headers) =>
@@ -330,29 +322,20 @@ export const aqtHealthClient = {
     ),
 
   listCardiovascular: (query: ScalarSamplesQuery) =>
-    listScalarMetrics(rawClient, cardiovascularMetricTypes, query),
-
-  getLatestCardiovascular: (query: ScalarSamplesQuery) =>
-    listScalarMetrics(rawClient, cardiovascularMetricTypes, { ...query, latest: true }),
+    listScalarMetrics(cardiovascularMetricTypes, query),
 
   listExtendedBodyMeasurements: (query: ScalarSamplesQuery) =>
-    listScalarMetrics(rawClient, extendedBodyMetricTypes, query),
-
-  getLatestExtendedBodyMeasurement: (query: ScalarSamplesQuery) =>
-    listScalarMetrics(rawClient, extendedBodyMetricTypes, { ...query, latest: true }),
+    listScalarMetrics(extendedBodyMetricTypes, query),
 };
-
-export type AqtHealthClient = typeof aqtHealthClient;
 
 type ScalarSamplesQuery = GetQuery<"/api/v2/metrics/{metricType}">;
 
 function listScalarMetric(
-  client: AqtOpenApiClient,
   metricType: string,
   query: ScalarSamplesQuery,
 ): Promise<ApiResult<ApiSchema<"ScalarSamplesResponse">>> {
   return call<ApiSchema<"ScalarSamplesResponse">>((headers) =>
-    client.GET("/api/v2/metrics/{metricType}", {
+    rawClient.GET("/api/v2/metrics/{metricType}", {
       headers,
       params: { path: { metricType }, query },
     }),
@@ -360,24 +343,22 @@ function listScalarMetric(
 }
 
 function listScalarMetrics(
-  client: AqtOpenApiClient,
   metricTypes: string[],
   query: ScalarSamplesQuery,
 ): Promise<ApiResult<ApiSchema<"ScalarSamplesResponse">>> {
   return call<ApiSchema<"ScalarSamplesResponse">>((headers) =>
-    mergedScalarMetrics(client, metricTypes, query, headers),
+    mergedScalarMetrics(metricTypes, query, headers),
   );
 }
 
 async function mergedScalarMetrics(
-  client: AqtOpenApiClient,
   metricTypes: string[],
   query: ScalarSamplesQuery,
   headers: HeadersInit,
 ): Promise<ClientResponse<ApiSchema<"ScalarSamplesResponse">>> {
   const responses = await Promise.all(
     metricTypes.map((metricType) =>
-      client.GET("/api/v2/metrics/{metricType}", {
+      rawClient.GET("/api/v2/metrics/{metricType}", {
         headers,
         params: { path: { metricType }, query },
       }),
