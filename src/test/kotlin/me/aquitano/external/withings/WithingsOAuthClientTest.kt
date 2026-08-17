@@ -256,7 +256,7 @@ class WithingsOAuthClientTest {
     }
 
     @Test
-    fun fetchSleepSplitsMoreThanTwentyFourHoursIntoWindows() = runBlocking {
+    fun fetchSleepSendsRequestedWindowAsEpochSeconds() = runBlocking {
         val forms = mutableListOf<Map<String, List<String>>>()
         val client = client { request ->
             forms.add(request.formParameters())
@@ -266,15 +266,13 @@ class WithingsOAuthClientTest {
         client.fetchSleep(
             accessToken = "token",
             from = Instant.parse("2026-04-01T00:00:00Z"),
-            to = Instant.parse("2026-04-03T00:00:00Z"),
+            to = Instant.parse("2026-04-02T00:00:00Z"),
             dataFields = listOf("state"),
         )
 
-        assertEquals(2, forms.size)
+        assertEquals(1, forms.size)
         assertEquals(listOf("1775001600"), forms[0]["startdate"])
         assertEquals(listOf("1775088000"), forms[0]["enddate"])
-        assertEquals(listOf("1775088000"), forms[1]["startdate"])
-        assertEquals(listOf("1775174400"), forms[1]["enddate"])
         assertNull(forms[0]["meastypes"])
     }
 

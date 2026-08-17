@@ -310,15 +310,8 @@ class WithingsNormalizer {
                 val start = record.longOrNull("startdate") ?: return@forEach
                 val end = record.longOrNull("enddate") ?: return@forEach
                 if (start >= end) return@forEach
-                add(
-                    SleepSession(
-                        providerRecordId = "withings:sleep-summary:$start:$end",
-                        startAt = Instant.ofEpochSecond(start).toString(),
-                        endAt = Instant.ofEpochSecond(end).toString(),
-                        stages = emptyList(),
-                    )
-                )
-
+                // No SleepSession here: the `sleep` data type emits the stage-derived session for
+                // the same night, and emitting one from the summary duplicates every night.
                 val data = record["data"] as? JsonObject ?: record
                 val totalSleepSeconds =
                     data.nonNegativeLong("total_sleep_time")

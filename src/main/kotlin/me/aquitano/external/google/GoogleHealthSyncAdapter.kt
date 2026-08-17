@@ -1,15 +1,13 @@
 package me.aquitano.external.google
 
 import me.aquitano.health.application.providersync.PROVIDER_REQUEST_INTERVAL
-import me.aquitano.health.application.providersync.PROVIDER_SAFE_WINDOW
 import me.aquitano.health.application.providersync.ProviderFetchedBatch
 import me.aquitano.health.application.providersync.ProviderSyncAdapter
 import me.aquitano.health.application.providersync.ProviderSyncItem
 import me.aquitano.health.application.providersync.ProviderSyncPlan
 import me.aquitano.health.application.providersync.RefreshedTokenSet
 import me.aquitano.health.application.providersync.SyncAccount
-import me.aquitano.health.application.providersync.SyncWindow
-import me.aquitano.health.application.providersync.syncWindows
+import me.aquitano.health.application.providersync.dailySyncWindows
 import me.aquitano.health.domain.ConflictException
 import me.aquitano.health.domain.ProviderSyncRequest
 import me.aquitano.health.domain.RequestValidationException
@@ -19,7 +17,6 @@ import me.aquitano.health.domain.ValidationIssueCodes
 import me.aquitano.health.infrastructure.repositories.ACCOUNT_STATUS_NEEDS_REAUTH
 import java.time.Duration
 import java.time.Instant
-import java.time.temporal.ChronoUnit
 
 class GoogleHealthSyncAdapter(
     private val client: GoogleHealthClient,
@@ -54,7 +51,7 @@ class GoogleHealthSyncAdapter(
             requestedFrom = request.from,
             requestedTo = request.to,
             items = dataTypes.distinct().flatMap { dataType ->
-                syncWindows(dataType, request.from, request.to).map { window ->
+                dailySyncWindows(request.from, request.to).map { window ->
                     ProviderSyncItem(
                         dataType = dataType,
                         from = window.from,
@@ -137,26 +134,10 @@ class GoogleHealthSyncAdapter(
     private fun pageSizeFor(dataType: String, pageSize: Int): Int =
         if (dataType == "sleep") pageSize.coerceAtMost(25) else pageSize.coerceAtMost(10000)
 
-    // Heart-rate windows are one day, anchored to UTC midnight, so overlapping re-syncs (the
-    // scheduled lookback) produce identical batch external ids for elapsed days and dedupe
-    // against already-processed batches instead of re-fetching and re-ingesting hundreds of
-    // thousands of samples on every run. Only the current, still-open day window keeps a
-    // moving `to` and is re-ingested until the day completes.
-    private fun syncWindows(
-        dataType: String,
-        from: Instant,
-        to: Instant,
-    ): List<SyncWindow> =
-        if (dataType == "heart-rate") {
-            syncWindows(from.truncatedTo(ChronoUnit.DAYS), to, Duration.ofDays(1))
-        } else {
-            syncWindows(from, to, PROVIDER_SAFE_WINDOW)
-        }
-
     private fun batchExternalId(
         providerInstanceId: String,
         dataType: String,
         from: Instant,
         to: Instant,
-    ): String = "google-health:$providerInstanceId:$dataType:$from:$to"
+    ): String = "$GOOGLE_HEALTH_PROVIDER_CODE:$providerInstanceId:$dataType:$from:$to"
 }

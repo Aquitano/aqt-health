@@ -149,7 +149,7 @@ class WithingsNormalizerTest {
     }
 
     @Test
-    fun sleepSummaryCreatesSleepSessionWithoutStages() {
+    fun sleepSummaryDoesNotCreateSleepSession() {
         val result = normalizer.normalize(
             fetchResult(
                 "sleep-summary",
@@ -164,13 +164,8 @@ class WithingsNormalizerTest {
             )
         )
 
-        val sleep = assertIs<SleepSession>(
-            result.records.filterIsInstance<SleepSession>().single()
-        )
-        assertEquals("withings:sleep-summary:1775001600:1775023200", sleep.providerRecordId)
-        assertEquals("2026-04-01T00:00:00Z", sleep.startAt)
-        assertEquals("2026-04-01T06:00:00Z", sleep.endAt)
-        assertTrue(sleep.stages.isEmpty())
+        assertTrue(result.records.filterIsInstance<SleepSession>().isEmpty())
+        assertEquals(1, result.records.filterIsInstance<SleepSummary>().size)
     }
 
     @Test
