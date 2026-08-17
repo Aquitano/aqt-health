@@ -265,7 +265,7 @@ class GoogleHealthProviderTest {
         insertFailedGoogleBatch(
             fixture.dbPath,
             providerInstanceId = "google-user-1",
-            batchExternalId = "google-health:google-user-1:steps:2026-04-01T00:00:00Z:2026-04-02T00:00:00Z",
+            batchExternalId = "google_health:google-user-1:steps:2026-04-01T00:00:00Z:2026-04-02T00:00:00Z",
         )
         fixture.client.fetchResults += listOf(stepsFetchResult())
 
@@ -286,14 +286,14 @@ class GoogleHealthProviderTest {
             1,
             singleInt(
                 fixture.dbPath,
-                "SELECT COUNT(*) FROM ingestion_batches WHERE status = 'processed' AND batch_external_id = 'google-health:google-user-1:steps:2026-04-01T00:00:00Z:2026-04-02T00:00:00Z'"
+                "SELECT COUNT(*) FROM ingestion_batches WHERE status = 'processed' AND batch_external_id = 'google_health:google-user-1:steps:2026-04-01T00:00:00Z:2026-04-02T00:00:00Z'"
             )
         )
         assertEquals(
             1,
             singleInt(
                 fixture.dbPath,
-                "SELECT COUNT(*) FROM ingestion_batches WHERE status = 'failed' AND batch_external_id LIKE 'google-health:google-user-1:steps:2026-04-01T00:00:00Z:2026-04-02T00:00:00Z#failed:%'"
+                "SELECT COUNT(*) FROM ingestion_batches WHERE status = 'failed' AND batch_external_id LIKE 'google_health:google-user-1:steps:2026-04-01T00:00:00Z:2026-04-02T00:00:00Z#failed:%'"
             )
         )
     }
@@ -308,7 +308,7 @@ class GoogleHealthProviderTest {
         val first = fixture.provider.sync(
             ProviderSyncRequest(
                 from = Instant.parse("2026-04-01T00:00:00Z"),
-                to = Instant.parse("2026-04-02T00:00:00Z"),
+                to = Instant.parse("2026-04-01T12:00:00Z"),
                 dataTypes = listOf("steps"),
             ),
             fixture.now,
@@ -360,7 +360,7 @@ class GoogleHealthProviderTest {
         val first = fixture.provider.sync(
             ProviderSyncRequest(
                 from = Instant.parse("2026-04-01T00:00:00Z"),
-                to = Instant.parse("2026-04-02T00:00:00Z"),
+                to = Instant.parse("2026-04-01T12:00:00Z"),
                 dataTypes = listOf("steps"),
             ),
             fixture.now,
@@ -460,7 +460,7 @@ class GoogleHealthProviderTest {
     }
 
     @Test
-    fun syncChunksLongGoogleRangesByProviderSafeWindowAndSkipsCachedChunks() = runBlocking {
+    fun syncChunksLongGoogleRangesByDayAndSkipsCachedChunks() = runBlocking {
         val fixture = Fixture()
         fixture.storeAccount(accessToken = "access-token", refreshToken = "refresh-token")
         fixture.client.fetchResults += listOf(stepsFetchResult())
@@ -468,23 +468,23 @@ class GoogleHealthProviderTest {
         fixture.client.fetchResults += listOf(stepsFetchResult())
 
         val request = ProviderSyncRequest(
-            from = Instant.parse("2026-04-01T00:00:00Z"),
-            to = Instant.parse("2026-07-01T00:00:00Z"),
+            from = Instant.parse("2026-04-01T06:00:00Z"),
+            to = Instant.parse("2026-04-04T00:00:00Z"),
             dataTypes = listOf("steps"),
         )
         val first = fixture.provider.sync(request, fixture.now)
         val second = fixture.provider.sync(request, fixture.now.plusSeconds(60))
 
-        assertEquals("2026-04-01T00:00:00Z", first.requestedFrom.toString())
-        assertEquals("2026-07-01T00:00:00Z", first.requestedTo.toString())
+        assertEquals("2026-04-01T06:00:00Z", first.requestedFrom.toString())
+        assertEquals("2026-04-04T00:00:00Z", first.requestedTo.toString())
         assertEquals(3, first.batches.size)
         assertEquals(3, second.batches.size)
         assertTrue(second.batches.all { it.duplicateBatch })
         assertEquals(
             listOf(
-                FetchRequest("steps", Instant.parse("2026-04-01T00:00:00Z"), Instant.parse("2026-05-02T00:00:00Z")),
-                FetchRequest("steps", Instant.parse("2026-05-02T00:00:00Z"), Instant.parse("2026-06-02T00:00:00Z")),
-                FetchRequest("steps", Instant.parse("2026-06-02T00:00:00Z"), Instant.parse("2026-07-01T00:00:00Z")),
+                FetchRequest("steps", Instant.parse("2026-04-01T00:00:00Z"), Instant.parse("2026-04-02T00:00:00Z")),
+                FetchRequest("steps", Instant.parse("2026-04-02T00:00:00Z"), Instant.parse("2026-04-03T00:00:00Z")),
+                FetchRequest("steps", Instant.parse("2026-04-03T00:00:00Z"), Instant.parse("2026-04-04T00:00:00Z")),
             ),
             fixture.client.fetchRequests,
         )

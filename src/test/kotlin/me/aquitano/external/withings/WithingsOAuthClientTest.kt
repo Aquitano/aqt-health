@@ -256,7 +256,7 @@ class WithingsOAuthClientTest {
     }
 
     @Test
-    fun fetchSleepSplitsMoreThanTwentyFourHoursIntoWindows() = runBlocking {
+    fun fetchSleepSendsRequestedWindowAsEpochSeconds() = runBlocking {
         val forms = mutableListOf<Map<String, List<String>>>()
         val client = client { request ->
             forms.add(request.formParameters())
@@ -270,11 +270,10 @@ class WithingsOAuthClientTest {
             dataFields = listOf("state"),
         )
 
-        assertEquals(2, forms.size)
+        // A multi-day range stays one request: window splitting is the sync adapter's job.
+        assertEquals(1, forms.size)
         assertEquals(listOf("1775001600"), forms[0]["startdate"])
-        assertEquals(listOf("1775088000"), forms[0]["enddate"])
-        assertEquals(listOf("1775088000"), forms[1]["startdate"])
-        assertEquals(listOf("1775174400"), forms[1]["enddate"])
+        assertEquals(listOf("1775174400"), forms[0]["enddate"])
         assertNull(forms[0]["meastypes"])
     }
 

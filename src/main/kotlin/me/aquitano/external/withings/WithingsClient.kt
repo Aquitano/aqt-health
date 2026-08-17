@@ -1,7 +1,5 @@
 package me.aquitano.external.withings
 
-import java.time.Duration
-import me.aquitano.health.application.providersync.syncWindows
 import me.aquitano.health.shared.stringOrNull
 import io.ktor.client.*
 import io.ktor.client.call.*
@@ -224,24 +222,17 @@ class KtorWithingsClient(
         to: Instant,
         dataFields: List<String>,
     ): WithingsFetchResult {
-        val results = syncWindows(from, to, Duration.ofDays(1)).map { window ->
-            fetchPaged(
-                accessToken = accessToken,
-                dataType = "sleep",
-                endpoint = sleepEndpoint(),
-                action = "get",
-                recordsKey = "series",
-                baseParameters = buildList {
-                    add("startdate" to window.from.epochSecond.toString())
-                    add("enddate" to window.to.epochSecond.toString())
-                    add("data_fields" to dataFields.joinToString(","))
-                },
-            )
-        }
-        return WithingsFetchResult(
+        return fetchPaged(
+            accessToken = accessToken,
             dataType = "sleep",
-            pages = results.flatMap { it.pages },
-            records = results.flatMap { it.records },
+            endpoint = sleepEndpoint(),
+            action = "get",
+            recordsKey = "series",
+            baseParameters = listOf(
+                "startdate" to from.epochSecond.toString(),
+                "enddate" to to.epochSecond.toString(),
+                "data_fields" to dataFields.joinToString(","),
+            ),
         )
     }
 

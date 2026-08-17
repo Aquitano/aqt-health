@@ -5,6 +5,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.putJsonObject
 import me.aquitano.health.application.HealthProviderRegistry
 import me.aquitano.health.application.IngestionMappingService
 import me.aquitano.health.application.IngestionService
@@ -114,8 +115,9 @@ class WithingsProviderTest {
         assertEquals("processed", summary.status)
         assertEquals(4, summary.batches.size)
         assertEquals(1, countRows(fixture.dbPath, "step_samples"))
-        assertEquals(2, countRows(fixture.dbPath, "sleep_sessions"))
+        assertEquals(1, countRows(fixture.dbPath, "sleep_sessions"))
         assertEquals(1, countRows(fixture.dbPath, "sleep_stages"))
+        assertEquals(1, countRows(fixture.dbPath, "sleep_summaries"))
         assertEquals(
             4,
             singleInt(
@@ -247,7 +249,7 @@ class WithingsProviderTest {
         val summary = fixture.provider.sync(
             ProviderSyncRequest(
                 from = Instant.parse("2026-05-01T00:00:00Z"),
-                to = Instant.parse("2026-05-11T00:00:00Z"),
+                to = Instant.parse("2026-05-02T00:00:00Z"),
                 dataTypes = listOf("activity", "sleep"),
             ),
             fixture.now,
@@ -390,28 +392,28 @@ class WithingsProviderTest {
     }
 
     @Test
-    fun syncChunksLongRangesAndSkipsCachedChunks() = runBlocking {
+    fun syncChunksLongRangesByDayAndSkipsCachedChunks() = runBlocking {
         val fixture = Fixture()
         fixture.seedAccount()
         val request = ProviderSyncRequest(
-            from = Instant.parse("2026-04-01T00:00:00Z"),
-            to = Instant.parse("2026-07-01T00:00:00Z"),
+            from = Instant.parse("2026-04-01T06:00:00Z"),
+            to = Instant.parse("2026-04-04T00:00:00Z"),
             dataTypes = listOf("activity"),
         )
 
         val first = fixture.provider.sync(request, fixture.now)
         val second = fixture.provider.sync(request, fixture.now.plusSeconds(1))
 
-        assertEquals("2026-04-01T00:00:00Z", first.requestedFrom.toString())
-        assertEquals("2026-07-01T00:00:00Z", first.requestedTo.toString())
+        assertEquals("2026-04-01T06:00:00Z", first.requestedFrom.toString())
+        assertEquals("2026-04-04T00:00:00Z", first.requestedTo.toString())
         assertEquals(3, first.batches.size)
         assertEquals(3, second.batches.size)
         assertTrue(second.batches.all { it.duplicateBatch })
         assertEquals(
             listOf(
-                WithingsFetchRequest("activity", Instant.parse("2026-04-01T00:00:00Z"), Instant.parse("2026-05-02T00:00:00Z")),
-                WithingsFetchRequest("activity", Instant.parse("2026-05-02T00:00:00Z"), Instant.parse("2026-06-02T00:00:00Z")),
-                WithingsFetchRequest("activity", Instant.parse("2026-06-02T00:00:00Z"), Instant.parse("2026-07-01T00:00:00Z")),
+                WithingsFetchRequest("activity", Instant.parse("2026-04-01T00:00:00Z"), Instant.parse("2026-04-02T00:00:00Z")),
+                WithingsFetchRequest("activity", Instant.parse("2026-04-02T00:00:00Z"), Instant.parse("2026-04-03T00:00:00Z")),
+                WithingsFetchRequest("activity", Instant.parse("2026-04-03T00:00:00Z"), Instant.parse("2026-04-04T00:00:00Z")),
             ),
             fixture.client.fetchRequests,
         )
@@ -629,6 +631,10 @@ class WithingsProviderTest {
                         put("startdate", 1775001600)
                         put("enddate", 1775023200)
                         put("date", "2026-04-01")
+                        putJsonObject("data") {
+                            put("total_timeinbed", 21600)
+                            put("total_sleep_time", 18000)
+                        }
                     }
                 ),
             )
