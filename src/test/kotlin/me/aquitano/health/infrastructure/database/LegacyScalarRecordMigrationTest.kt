@@ -45,7 +45,7 @@ class LegacyScalarRecordMigrationTest {
         }
 
         assertEquals(
-            setOf("heart_rate", "hrv_rmssd", "weight", "muscle", "body_fat"),
+            setOf("heart_rate", "hrv_rmssd", "weight", "muscle", "body_fat", "visceral_fat"),
             samplesByMetricType.keys,
         )
         assertEquals(64.0, samplesByMetricType.getValue("heart_rate").first.value)
@@ -78,18 +78,24 @@ class LegacyScalarRecordMigrationTest {
             "body-fat:2026-04-19T07:00:00Z:none:abc123",
             samplesByMetricType.getValue("body_fat").second.providerRecordId,
         )
+        // A single-metric Withings group is the one case that is renamed without fanning out.
+        assertEquals(
+            "withings:measure:456:visceral_fat",
+            samplesByMetricType.getValue("visceral_fat").second.providerRecordId,
+        )
         assertEquals(
             mapOf(
                 "weight" to "withings:measure:123:weight",
                 "muscle" to "withings:measure:123:muscle",
                 "body_fat" to "body-fat:2026-04-19T07:00:00Z:none:abc123",
+                "visceral_fat" to "withings:measure:456:visceral_fat",
                 "heart_rate" to "withings:measure:123:heart_rate",
             ),
             sampleProviderRecordIds(config),
         )
         val recordIdByMetricType = samplesByMetricType.mapValues { (_, value) -> value.second.id }
         assertEquals(
-            listOf("heart_rate", "weight", "muscle", "body_fat")
+            listOf("heart_rate", "weight", "muscle", "body_fat", "visceral_fat")
                 .associateWith { recordIdByMetricType.getValue(it) },
             sampleIngestionRecordIds(config),
         )
@@ -136,7 +142,12 @@ class LegacyScalarRecordMigrationTest {
                    -- the normalizer still emits verbatim, so the conversion must not rename it.
                    (4, 1, 'body_measurement', 'body-fat:2026-04-19T07:00:00Z:none:abc123',
                     '{"type":"body_measurement","providerRecordId":"body-fat:2026-04-19T07:00:00Z:none:abc123","measuredAt":"2026-04-19T07:00:00Z","bodyFatPercent":18.2}',
-                    '2026-04-19T07:00:00Z', NULL, '2026-04-19T10:00:00Z');
+                    '2026-04-19T07:00:00Z', NULL, '2026-04-19T10:00:00Z'),
+                   -- A Withings group carrying one metric still has to be renamed, because its
+                   -- normalizer moved off the :body id even when the group holds a single measure.
+                   (5, 1, 'body_measurement', 'withings:measure:456:body',
+                    '{"type":"body_measurement","providerRecordId":"withings:measure:456:body","measuredAt":"2026-04-20T07:00:00Z","visceralFatRating":9.0}',
+                    '2026-04-20T07:00:00Z', NULL, '2026-04-20T10:00:00Z');
 
             -- The seed writes explicit ids, so advance the identity sequence the way a real
             -- database's would already be before V21 inserts its expanded records.
@@ -148,7 +159,8 @@ class LegacyScalarRecordMigrationTest {
             VALUES (1, 1, 'withings:measure:123:heart-pulse', '2026-04-19T08:30:00Z', 'heart_rate', 64, 'bpm', 'resting', NULL, '2026-04-19T10:00:00Z'),
                    (1, 3, 'withings:measure:123:body', '2026-04-19T07:00:00Z', 'weight', 82.4, 'kg', NULL, NULL, '2026-04-19T10:00:00Z'),
                    (1, 3, 'withings:measure:123:body', '2026-04-19T07:00:00Z', 'muscle', 34.7, 'kg', NULL, NULL, '2026-04-19T10:00:00Z'),
-                   (1, 4, 'body-fat:2026-04-19T07:00:00Z:none:abc123', '2026-04-19T07:00:00Z', 'body_fat', 18.2, 'percent', NULL, NULL, '2026-04-19T10:00:00Z');
+                   (1, 4, 'body-fat:2026-04-19T07:00:00Z:none:abc123', '2026-04-19T07:00:00Z', 'body_fat', 18.2, 'percent', NULL, NULL, '2026-04-19T10:00:00Z'),
+                   (1, 5, 'withings:measure:456:body', '2026-04-20T07:00:00Z', 'visceral_fat', 9.0, 'rating', NULL, NULL, '2026-04-20T10:00:00Z');
             """.trimIndent(),
         )
     }
