@@ -81,15 +81,13 @@ SET record_type            = 'scalar',
         'segment', normalized_record_json -> 'segment'))
 WHERE record_type = 'extended_body_measurement';
 
--- body_measurement was the one multi-value record type: it fans out into one scalar record
--- per populated metric. The scalar_samples rows it produced are repointed at their new
--- record and given the per-metric provider record id the normalizers now emit, so a re-sync
--- deduplicates against them instead of inserting a second copy.
--- One row per (legacy record, populated metric), carrying the provider record id the
--- normalizers now emit for it. A Withings measure group always takes the per-metric id.
--- Any other record keeps its id when it holds a single metric, which is exactly what a
--- single-metric producer (Google weight and body fat) still emits; only a genuine fan-out
--- needs the suffix, to keep its records distinct.
+-- body_measurement was the one multi-value record type, so it expands into one scalar record
+-- per populated metric, each carrying the provider record id the normalizers now emit for it.
+-- A Withings measure group always takes the per-metric id. Any other record keeps its id when
+-- it holds a single metric, which is exactly what a single-metric producer (Google weight and
+-- body fat) still emits; only a genuine fan-out needs the suffix, to keep its records distinct.
+-- Getting these ids right is what lets a re-sync deduplicate against the migrated rows instead
+-- of inserting a second copy of every sample.
 CREATE TEMP TABLE legacy_body_expansion AS
 SELECT r.id                              AS legacy_record_id,
        r.batch_id,
