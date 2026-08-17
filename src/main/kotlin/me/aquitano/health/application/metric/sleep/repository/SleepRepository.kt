@@ -168,23 +168,6 @@ class SleepRepository : BaseMetricReadRepository() {
         return row to sourceMetadata(listOfNotNull(row?.sourceInstanceId).toSet(), filters.includeSource)
     }
 
-    fun avgSleepDuration(filters: ReadFilters): Long? {
-        val where = timestampConditions(
-            filters = filters,
-            sourceInstanceIdColumn = SleepSessionsTable.sourceInstanceId,
-            fromColumn = SleepSessionsTable.startAt,
-            toColumn = SleepSessionsTable.endAt,
-            mode = TimeFilterMode.OVERLAPS_WINDOW_INCLUSIVE_FROM,
-        ).whereOrNull() ?: return null
-
-        val avgExpression = SleepSessionsTable.durationSeconds.avg()
-        return SleepSessionsTable
-            .select(avgExpression)
-            .where(where)
-            .singleOrNull()
-            ?.let { it[avgExpression]?.toLong() }
-    }
-
     private fun toSleepStageRow(row: ResultRow): SleepStageRow =
         SleepStageRow(
             stage = row[SleepStagesTable.stage],

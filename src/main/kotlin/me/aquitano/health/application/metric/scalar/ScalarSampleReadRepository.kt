@@ -7,7 +7,6 @@ import me.aquitano.health.application.metric.common.repository.SourceMetadata
 import me.aquitano.health.infrastructure.database.tables.CanonicalScalarSamplesView
 import me.aquitano.health.infrastructure.database.tables.MetricCatalogTable
 import me.aquitano.health.infrastructure.database.tables.ScalarSamplesTable
-import me.aquitano.health.infrastructure.database.toDbTimestamp
 import me.aquitano.health.application.metric.common.repository.BaseMetricReadRepository
 import me.aquitano.health.application.metric.common.repository.TimeFilterMode
 import org.jetbrains.exposed.v1.core.JoinType
@@ -17,14 +16,11 @@ import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.avg
 import org.jetbrains.exposed.v1.core.count
-import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
-import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.core.max
 import org.jetbrains.exposed.v1.core.min
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
-import java.time.Instant
 import java.time.ZoneId
 
 /**
@@ -101,22 +97,6 @@ class ScalarSampleReadRepository : BaseMetricReadRepository() {
         canonical: Boolean,
     ): Pair<ScalarSampleRow?, Map<Int, SourceMetadata>> =
         latest(filters, metricTypes, canonical, mode = TimeFilterMode.BEFORE_FROM)
-
-    /** Unfiltered "latest sample strictly before" lookup used by trend computations. */
-    fun latestBefore(before: Instant, metricType: String): ScalarSampleRow? =
-        rawSource.query
-            .selectAll()
-            .where {
-                (ScalarSamplesTable.measuredAt less before.toDbTimestamp()) and
-                    (ScalarSamplesTable.metricType eq metricType)
-            }
-            .orderBy(
-                ScalarSamplesTable.measuredAt to SortOrder.DESC,
-                ScalarSamplesTable.id to SortOrder.DESC,
-            )
-            .limit(1)
-            .map { rawSource.toRow(it) }
-            .singleOrNull()
 
     fun summarize(
         filters: ReadFilters,

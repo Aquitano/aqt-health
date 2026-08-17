@@ -33,7 +33,6 @@ import me.aquitano.health.application.metric.steps.StepQueryService
 import me.aquitano.health.application.metric.steps.derived.CanonicalStepDerivationService
 import me.aquitano.health.application.metric.steps.repository.CanonicalStepDerivationRepository
 import me.aquitano.health.application.metric.steps.repository.StepDailySummaryDerivationRepository
-import me.aquitano.health.application.metric.steps.repository.StepRepository
 import me.aquitano.health.application.metric.steps.repository.StepWriteRepository
 import me.aquitano.health.application.providersync.OAuthProviderSyncStore
 import me.aquitano.health.application.providersync.ProviderSyncPipeline
@@ -149,7 +148,6 @@ fun metricsReadModule() = module {
     singleOf(::CardiovascularRepository)
     singleOf(::ScalarSampleReadRepository)
     singleOf(::SleepRepository)
-    singleOf(::StepRepository)
     singleOf(::CanonicalStepDerivationRepository)
     singleOf(::CanonicalSleepSessionDerivationRepository)
     singleOf(::CanonicalSleepSummaryDerivationRepository)

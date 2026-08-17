@@ -3,6 +3,7 @@ package me.aquitano.health.application.metric.steps.repository
 import me.aquitano.health.domain.StepIntervalRecord
 import me.aquitano.health.infrastructure.database.tables.StepSamplesTable
 import me.aquitano.health.infrastructure.database.toDbTimestamp
+import me.aquitano.health.shared.normalizeProviderCode
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greater
@@ -21,7 +22,7 @@ class StepWriteRepository {
         record: StepIntervalRecord,
         now: Instant,
     ): Boolean {
-        if (provider == GOOGLE_HEALTH_PROVIDER_CODE && stepSampleOverlaps(
+        if (normalizeProviderCode(provider) == GOOGLE_HEALTH_PROVIDER_CODE && stepSampleOverlaps(
                 sourceInstanceId,
                 record,
             )

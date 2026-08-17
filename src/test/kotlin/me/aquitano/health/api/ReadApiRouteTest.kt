@@ -613,6 +613,18 @@ class ReadApiRouteTest {
             dashboard.jsonBody()["latestHeartRate"]!!.jsonObject["value"]!!.jsonPrimitive.double
         )
 
+        // Trends read the same canonical layer: across both providers the raw numbers would be
+        // 3000 steps, a 59.0 bpm average and a 28950s sleep average.
+        val trends = authorizedGet("/api/v2/dashboard/trends?toDate=2026-04-19&periodDays=1").jsonBody()
+        assertEquals(1000, trends["steps"]!!.jsonObject["currentTotal"]!!.jsonPrimitive.int)
+        assertEquals(1000, trends["steps"]!!.jsonObject["dailyAverage"]!!.jsonPrimitive.int)
+        assertEquals(58.0, trends["heartRate"]!!.jsonObject["currentAvg"]!!.jsonPrimitive.double)
+        assertEquals(28800, trends["sleep"]!!.jsonObject["currentAvgSeconds"]!!.jsonPrimitive.int)
+        assertEquals(
+            81.8,
+            trends["weight"]!!.jsonObject["latest"]!!.jsonObject["value"]!!.jsonPrimitive.double
+        )
+
         val day =
             authorizedGet("/api/v2/health/day?date=2026-04-19&timezone=UTC&modules=steps,heartRate,weight,sleep&includeSource=true")
         assertEquals(1000, day.jsonBody()["steps"]!!.jsonObject["total"]!!.jsonPrimitive.int)

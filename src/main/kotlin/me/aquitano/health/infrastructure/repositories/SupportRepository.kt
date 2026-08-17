@@ -5,6 +5,7 @@ import me.aquitano.health.infrastructure.database.toDbTimestamp
 import me.aquitano.health.infrastructure.database.tables.ApiClientsTable
 import me.aquitano.health.infrastructure.database.tables.SourceInstancesTable
 import me.aquitano.health.infrastructure.database.tables.SourcesTable
+import me.aquitano.health.shared.normalizeProviderCode
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -68,18 +69,23 @@ class SupportRepository(
             ApiClientRef(id = client.id.value, name = client.name)
         }
 
+    /**
+     * [provider] is normalized before it reaches sources.code: a wire-spelled code such as
+     * `google-health` would otherwise create a second source that matches no provider_ranks row.
+     */
     fun resolveOrCreateSourceInstanceInTransaction(
         provider: String,
         providerInstanceId: String,
         now: Instant
     ): SourceInstanceRef {
+        val providerCode = normalizeProviderCode(provider)
         val sourceId = SourcesTable.insertIgnoreAndGetId {
-            it[code] = provider
+            it[code] = providerCode
             it[displayName] = null
             it[createdAt] = now.toDbTimestamp()
         }?.value ?: SourcesTable
             .select(SourcesTable.id)
-            .where { SourcesTable.code eq provider }
+            .where { SourcesTable.code eq providerCode }
             .limit(1)
             .single()[SourcesTable.id].value
 

@@ -80,12 +80,12 @@ class ProviderSyncJobService(
         val domainRequest = workflowService.toDomainSyncRequest(request, now)
         val requestHash = syncRequestHash(request)
         if (idempotencyKey != null) {
-            repository.findByIdempotencyKey(provider.descriptor.providerCode, idempotencyKey)
+            repository.findByIdempotencyKey(provider.providerCode, idempotencyKey)
                 ?.let { existing ->
                     existing.requireMatchingIdempotencyRequest(requestHash)
                     providerSyncJobLogger.infoWithContext(
                         "provider_sync_job_idempotent_replay",
-                        "provider" to provider.descriptor.providerCode,
+                        "provider" to provider.providerCode,
                         "jobId" to existing.id,
                     )
                     return existing.toStartDto()
@@ -93,7 +93,7 @@ class ProviderSyncJobService(
         }
         val result = repository.create(
             id = UUID.randomUUID().toString(),
-            providerCode = provider.descriptor.providerCode,
+            providerCode = provider.providerCode,
             providerInstanceId = domainRequest.providerInstanceId,
             requestedFrom = domainRequest.from,
             requestedTo = domainRequest.to,
@@ -109,12 +109,12 @@ class ProviderSyncJobService(
         }
         if (result.created) {
             scope.launch {
-                runJob(job.id, provider.descriptor.providerCode, domainRequest)
+                runJob(job.id, provider.providerCode, domainRequest)
             }
         } else {
             providerSyncJobLogger.infoWithContext(
                 "provider_sync_job_idempotent_replay",
-                "provider" to provider.descriptor.providerCode,
+                "provider" to provider.providerCode,
                 "jobId" to job.id,
             )
         }
@@ -128,7 +128,7 @@ class ProviderSyncJobService(
 
     suspend fun latest(providerCode: String?): ProviderSyncJobStatusResponse? {
         val canonicalProviderCode = providerCode
-            ?.let { providerRegistry.getProvider(it)?.descriptor?.providerCode }
+            ?.let { providerRegistry.getProvider(it)?.providerCode }
             ?: providerCode
         return repository.latest(canonicalProviderCode)?.toDto()
     }
@@ -222,10 +222,17 @@ class ProviderSyncJobService(
         )
     }
 
+    /**
+     * provider_sync_jobs stores the internal provider code so it correlates with scheduled_syncs
+     * and provider_sync_runs; API responses keep returning the hyphenated wire code.
+     */
+    private fun wireProviderCode(providerCode: String): String =
+        providerRegistry.getProviderDescriptor(providerCode)?.providerCode ?: providerCode
+
     private fun ProviderSyncJobRecord.toDto(): ProviderSyncJobStatusResponse =
         ProviderSyncJobStatusResponse(
             jobId = id,
-            providerCode = providerCode,
+            providerCode = wireProviderCode(providerCode),
             providerInstanceId = providerInstanceId,
             requestedFrom = requestedFrom.toString(),
             requestedTo = requestedTo.toString(),

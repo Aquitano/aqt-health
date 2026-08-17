@@ -6,9 +6,9 @@ import me.aquitano.health.api.dto.IngestionRecord
 import me.aquitano.health.domain.ValidationIssue
 import me.aquitano.health.domain.ValidationIssueCodes
 import me.aquitano.health.shared.AppJson
+import me.aquitano.health.shared.normalizeProviderCode
 import java.time.Instant
 import java.time.LocalDate
-import java.util.Locale
 
 /**
  * Field-level validation helpers shared by the ingestion batch validator and the
@@ -24,8 +24,7 @@ internal fun normalizeProvider(
     issues: MutableList<ValidationIssue>
 ): String? {
     val normalized = requiredNonBlank(value, "provider", issues)
-        ?.lowercase(Locale.US)
-        ?.replace('-', '_')
+        ?.let(::normalizeProviderCode)
     if (normalized != null && !normalized.matches(Regex("[a-z0-9_]+"))) {
         issues.add(
             ValidationIssue(

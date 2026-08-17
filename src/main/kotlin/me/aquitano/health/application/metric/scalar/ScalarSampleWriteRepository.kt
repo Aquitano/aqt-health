@@ -110,6 +110,7 @@ class ScalarSampleWriteRepository {
                 .select(
                     ScalarSamplesTable.measuredAt,
                     ScalarSamplesTable.metricType,
+                    ScalarSamplesTable.context,
                     ScalarSamplesTable.segment,
                 )
                 .where {
@@ -121,6 +122,7 @@ class ScalarSampleWriteRepository {
                     keys += SampleKey.ByNatural(
                         measuredAt = row[ScalarSamplesTable.measuredAt].toInstant(),
                         metricType = row[ScalarSamplesTable.metricType],
+                        context = row[ScalarSamplesTable.context] ?: "",
                         segment = row[ScalarSamplesTable.segment] ?: "",
                     )
                 }
@@ -137,8 +139,8 @@ private data class SampleRow(
 
 /**
  * Dedup key. Rows carrying a provider record id mirror scalar_samples_provider_record_uq; id-less
- * rows fall back to the natural key (scalar_samples_natural_key_uq), both coalescing NULL segment
- * to ''.
+ * rows fall back to the natural key (scalar_samples_natural_key_uq), both coalescing NULL context
+ * and segment to ''.
  */
 private sealed interface SampleKey {
     data class ByRecord(
@@ -150,6 +152,7 @@ private sealed interface SampleKey {
     data class ByNatural(
         val measuredAt: Instant,
         val metricType: String,
+        val context: String,
         val segment: String,
     ) : SampleKey
 }
@@ -164,6 +167,7 @@ private fun SampleRow.uniqueKey(): SampleKey =
     } ?: SampleKey.ByNatural(
         measuredAt = record.measuredAt,
         metricType = value.metricType,
+        context = value.context ?: "",
         segment = value.segment ?: "",
     )
 

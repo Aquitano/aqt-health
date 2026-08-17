@@ -7,6 +7,7 @@ import io.ktor.server.config.*
 import io.ktor.server.testing.*
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import me.aquitano.health.infrastructure.config.DatabaseConfig
 import me.aquitano.health.shared.AppJson
 import me.aquitano.health.test.PostgresTestDatabase
 import kotlin.test.Test
@@ -63,7 +64,7 @@ class GoogleHealthProviderRouteTest {
 
     @Test
     fun syncJobLongHistoricalRangeIsAcceptedAndPollable() = testApplication {
-        configureTestApplication()
+        val dbConfig = configureTestApplication()
 
         val startResponse = client.post("/api/v2/providers/google-health/sync-jobs") {
             authorized()
@@ -84,6 +85,12 @@ class GoogleHealthProviderRouteTest {
         val statusBody = AppJson.parseToJsonElement(statusResponse.bodyAsText()).jsonObject
         assertEquals(jobId, statusBody["jobId"]!!.jsonPrimitive.content)
         assertEquals("google-health", statusBody["providerCode"]!!.jsonPrimitive.content)
+        // Stored as the internal code so provider_sync_jobs correlates with scheduled_syncs and
+        // provider_sync_runs; the wire code is restored on read.
+        assertEquals(
+            "google_health",
+            singleString(dbConfig, "SELECT provider_code FROM provider_sync_jobs")
+        )
     }
 
     @Test
@@ -121,7 +128,7 @@ class GoogleHealthProviderRouteTest {
 
     private fun ApplicationTestBuilder.configureTestApplication(
         withClientSecret: Boolean = true,
-    ) {
+    ): DatabaseConfig {
         val dbConfig = PostgresTestDatabase.config()
         val configValues = mutableMapOf(
             "ktor.application.modules.size" to "1",
@@ -142,7 +149,18 @@ class GoogleHealthProviderRouteTest {
         environment {
             config = MapApplicationConfig(*configValues.map { it.key to it.value }.toTypedArray())
         }
+        return dbConfig
     }
+
+    private fun singleString(dbConfig: DatabaseConfig, sql: String): String =
+        PostgresTestDatabase.connection(dbConfig).use { connection ->
+            connection.createStatement().use { statement ->
+                statement.executeQuery(sql).use { resultSet ->
+                    resultSet.next()
+                    resultSet.getString(1)
+                }
+            }
+        }
 
     private fun HttpRequestBuilder.authorized() {
         header(HttpHeaders.Authorization, "Bearer test-key")

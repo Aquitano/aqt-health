@@ -3,6 +3,7 @@ package me.aquitano.health.application.metric.steps.derived
 import me.aquitano.health.application.MetricCatalogBootstrap
 import me.aquitano.health.application.metric.steps.repository.CanonicalStepBucketContributionOutput
 import me.aquitano.health.domain.MetricFamilies
+import me.aquitano.health.shared.normalizeProviderCode
 import me.aquitano.health.application.metric.steps.repository.CanonicalStepDerivationRepository
 import me.aquitano.health.application.metric.steps.repository.CanonicalStepOutput
 import me.aquitano.health.application.metric.steps.repository.CanonicalStepSampleOutput
@@ -118,9 +119,7 @@ class CanonicalStepDerivationService(
     // seeds into provider_ranks, so the in-memory and database rankings cannot drift.
     private fun stepProviderRank(provider: String?): Int {
         val normalized = provider
-            ?.trim()
-            ?.lowercase()
-            ?.replace('-', '_')
+            ?.let(::normalizeProviderCode)
             ?.takeIf { it.isNotBlank() }
             ?: return UNKNOWN_PROVIDER_RANK
         val index = MetricCatalogBootstrap.providerRanks

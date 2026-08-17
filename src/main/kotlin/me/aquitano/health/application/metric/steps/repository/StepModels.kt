@@ -31,6 +31,6 @@ data class StepDailySummaryRow(
 
 data class DashboardStepsSummaryRow(
     val steps: Int,
-    val sampleCount: Int,
+    val dayCount: Int,
 )
 
