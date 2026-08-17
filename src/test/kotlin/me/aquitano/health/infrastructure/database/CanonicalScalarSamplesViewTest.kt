@@ -17,8 +17,8 @@ class CanonicalScalarSamplesViewTest {
     fun crossProviderCollisionKeepsOnlyTopRankedProvider() {
         val fixture = Fixture()
         // heart_rate family: google_health(0) beats withings(2); same 30s bin
-        fixture.insertSample(GOOGLE, "2026-04-19T08:00:01Z", "heart_rate", 60.0, "bpm", context = "resting")
-        fixture.insertSample(WITHINGS, "2026-04-19T08:00:11Z", "heart_rate", 70.0, "bpm", context = "resting")
+        fixture.insertSample(GOOGLE, "2026-04-19T08:00:01Z", "heart_rate", 60.0, context = "resting")
+        fixture.insertSample(WITHINGS, "2026-04-19T08:00:11Z", "heart_rate", 70.0, context = "resting")
 
         assertEquals(listOf(60.0), fixture.canonicalValues("heart_rate"))
     }
@@ -26,9 +26,9 @@ class CanonicalScalarSamplesViewTest {
     @Test
     fun singleProviderBinPassesAllSamplesThrough() {
         val fixture = Fixture()
-        fixture.insertSample(WITHINGS, "2026-04-19T08:00:01Z", "heart_rate", 70.0, "bpm", context = "resting")
-        fixture.insertSample(WITHINGS, "2026-04-19T08:00:11Z", "heart_rate", 71.0, "bpm", context = "resting")
-        fixture.insertSample(WITHINGS, "2026-04-19T08:00:21Z", "heart_rate", 72.0, "bpm", context = "resting")
+        fixture.insertSample(WITHINGS, "2026-04-19T08:00:01Z", "heart_rate", 70.0, context = "resting")
+        fixture.insertSample(WITHINGS, "2026-04-19T08:00:11Z", "heart_rate", 71.0, context = "resting")
+        fixture.insertSample(WITHINGS, "2026-04-19T08:00:21Z", "heart_rate", 72.0, context = "resting")
 
         assertEquals(listOf(70.0, 71.0, 72.0), fixture.canonicalValues("heart_rate"))
     }
@@ -36,10 +36,10 @@ class CanonicalScalarSamplesViewTest {
     @Test
     fun samplesOutsideTheCollidingBinSurvive() {
         val fixture = Fixture()
-        fixture.insertSample(GOOGLE, "2026-04-19T08:00:01Z", "heart_rate", 60.0, "bpm", context = "resting")
-        fixture.insertSample(WITHINGS, "2026-04-19T08:00:11Z", "heart_rate", 70.0, "bpm", context = "resting")
+        fixture.insertSample(GOOGLE, "2026-04-19T08:00:01Z", "heart_rate", 60.0, context = "resting")
+        fixture.insertSample(WITHINGS, "2026-04-19T08:00:11Z", "heart_rate", 70.0, context = "resting")
         // next 30s bin holds only withings, so it passes through
-        fixture.insertSample(WITHINGS, "2026-04-19T08:00:41Z", "heart_rate", 71.0, "bpm", context = "resting")
+        fixture.insertSample(WITHINGS, "2026-04-19T08:00:41Z", "heart_rate", 71.0, context = "resting")
 
         assertEquals(listOf(60.0, 71.0), fixture.canonicalValues("heart_rate"))
     }
@@ -48,8 +48,8 @@ class CanonicalScalarSamplesViewTest {
     fun contextPartitionsIndependently() {
         val fixture = Fixture()
         // same bin, different contexts: both survive even across providers
-        fixture.insertSample(GOOGLE, "2026-04-19T08:00:01Z", "heart_rate", 60.0, "bpm", context = "active")
-        fixture.insertSample(WITHINGS, "2026-04-19T08:00:11Z", "heart_rate", 55.0, "bpm", context = "resting")
+        fixture.insertSample(GOOGLE, "2026-04-19T08:00:01Z", "heart_rate", 60.0, context = "active")
+        fixture.insertSample(WITHINGS, "2026-04-19T08:00:11Z", "heart_rate", 55.0, context = "resting")
 
         assertEquals(listOf(60.0, 55.0), fixture.canonicalValues("heart_rate"))
     }
@@ -58,8 +58,8 @@ class CanonicalScalarSamplesViewTest {
     fun sleepContextHeartRateRanksByTheSleepFamily() {
         val fixture = Fixture()
         // sleep family: withings(0) beats google_health(1)
-        fixture.insertSample(GOOGLE, "2026-04-19T03:00:01Z", "heart_rate", 58.0, "bpm", context = "sleep")
-        fixture.insertSample(WITHINGS, "2026-04-19T03:00:11Z", "heart_rate", 52.0, "bpm", context = "sleep")
+        fixture.insertSample(GOOGLE, "2026-04-19T03:00:01Z", "heart_rate", 58.0, context = "sleep")
+        fixture.insertSample(WITHINGS, "2026-04-19T03:00:11Z", "heart_rate", 52.0, context = "sleep")
 
         assertEquals(listOf(52.0), fixture.canonicalValues("heart_rate"))
     }
@@ -68,10 +68,10 @@ class CanonicalScalarSamplesViewTest {
     fun segmentPartitionsIndependently() {
         val fixture = Fixture()
         fixture.insertSample(
-            WITHINGS, "2026-04-19T07:00:01Z", "segmental_muscle_mass", 3.2, "kg", segment = "left_arm",
+            WITHINGS, "2026-04-19T07:00:01Z", "segmental_muscle_mass", 3.2, segment = "left_arm",
         )
         fixture.insertSample(
-            WITHINGS, "2026-04-19T07:00:02Z", "segmental_muscle_mass", 3.4, "kg", segment = "right_arm",
+            WITHINGS, "2026-04-19T07:00:02Z", "segmental_muscle_mass", 3.4, segment = "right_arm",
         )
 
         assertEquals(listOf(3.2, 3.4), fixture.canonicalValues("segmental_muscle_mass"))
@@ -103,14 +103,13 @@ class CanonicalScalarSamplesViewTest {
             measuredAt: String,
             metricType: String,
             value: Double,
-            unit: String,
             context: String? = null,
             segment: String? = null,
         ) {
             execute(
                 """
-                INSERT INTO scalar_samples (source_instance_id, measured_at, metric_type, value, unit, context, segment, created_at)
-                VALUES ($sourceInstanceId, '$measuredAt', '$metricType', $value, '$unit',
+                INSERT INTO scalar_samples (source_instance_id, measured_at, metric_type, value, context, segment, created_at)
+                VALUES ($sourceInstanceId, '$measuredAt', '$metricType', $value,
                         ${context?.let { "'$it'" } ?: "NULL"}, ${segment?.let { "'$it'" } ?: "NULL"},
                         '2026-04-19T10:00:00Z')
                 """.trimIndent()

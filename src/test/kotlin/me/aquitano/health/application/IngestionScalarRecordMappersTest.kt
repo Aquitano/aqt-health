@@ -76,9 +76,9 @@ class IngestionScalarRecordMappersTest {
     }
 
     @Test
-    fun unitIsOptionalAndFilledFromTheRegistry() {
-        val record = assertNotNull(map("weight", 80.0))
-        assertEquals(ScalarMetricRegistry.get("weight").unit, record.values.single().unit)
+    fun unitIsOptionalAndMustMatchTheRegistryWhenPresent() {
+        assertNotNull(map("weight", 80.0))
+        assertNotNull(map("weight", 80.0, unit = ScalarMetricRegistry.get("weight").unit))
 
         val issues = mutableListOf<ValidationIssue>()
         assertNull(map("weight", 80.0, unit = "lbs", issues = issues))

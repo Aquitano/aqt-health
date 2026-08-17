@@ -4,12 +4,14 @@ import me.aquitano.health.application.metric.common.keysetFetchLimit
 import me.aquitano.health.application.metric.common.repository.ReadFilters
 import me.aquitano.health.application.metric.common.repository.SourceMetadata
 import me.aquitano.health.infrastructure.database.tables.CanonicalScalarSamplesView
+import me.aquitano.health.infrastructure.database.tables.MetricCatalogTable
 import me.aquitano.health.infrastructure.database.tables.ScalarSamplesTable
 import me.aquitano.health.infrastructure.database.toDbTimestamp
 import me.aquitano.health.application.metric.common.repository.BaseMetricReadRepository
 import me.aquitano.health.application.metric.common.repository.TimeFilterMode
 import org.jetbrains.exposed.v1.core.Expression
 import org.jetbrains.exposed.v1.core.Function
+import org.jetbrains.exposed.v1.core.JoinType
 import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.QueryBuilder
 import org.jetbrains.exposed.v1.core.ResultRow
@@ -108,7 +110,7 @@ class ScalarSampleReadRepository : BaseMetricReadRepository() {
 
     /** Unfiltered "latest sample strictly before" lookup used by trend computations. */
     fun latestBefore(before: Instant, metricType: String): ScalarSampleRow? =
-        ScalarSamplesTable
+        rawSource.query
             .selectAll()
             .where {
                 (ScalarSamplesTable.measuredAt less before.toDbTimestamp()) and
@@ -195,7 +197,7 @@ class ScalarSampleReadRepository : BaseMetricReadRepository() {
 
     /** Adapts the raw table and the canonical view to one column vocabulary. */
     private interface ScalarSource {
-        val query: org.jetbrains.exposed.v1.core.Table
+        val query: org.jetbrains.exposed.v1.core.ColumnSet
         val sourceInstanceId: org.jetbrains.exposed.v1.core.Column<Int>
         val measuredAt: org.jetbrains.exposed.v1.core.Column<java.time.OffsetDateTime>
         val metricType: org.jetbrains.exposed.v1.core.Column<String>
@@ -205,8 +207,18 @@ class ScalarSampleReadRepository : BaseMetricReadRepository() {
         fun toRow(row: ResultRow): ScalarSampleRow
     }
 
+    // The unit lives only in metric_catalog (see V22), so raw reads join it to expose the
+    // same shape the canonical view already does.
+    private val rawScalarSamples =
+        ScalarSamplesTable.join(
+            MetricCatalogTable,
+            JoinType.INNER,
+            onColumn = ScalarSamplesTable.metricType,
+            otherColumn = MetricCatalogTable.metricType,
+        )
+
     private val rawSource = object : ScalarSource {
-        override val query get() = ScalarSamplesTable
+        override val query get() = rawScalarSamples
         override val sourceInstanceId get() = ScalarSamplesTable.sourceInstanceId
         override val measuredAt get() = ScalarSamplesTable.measuredAt
         override val metricType get() = ScalarSamplesTable.metricType
@@ -220,7 +232,7 @@ class ScalarSampleReadRepository : BaseMetricReadRepository() {
                 measuredAt = row[ScalarSamplesTable.measuredAt].toInstant(),
                 metricType = row[ScalarSamplesTable.metricType],
                 value = row[ScalarSamplesTable.value],
-                unit = row[ScalarSamplesTable.unit],
+                unit = row[MetricCatalogTable.unit],
                 context = row[ScalarSamplesTable.context],
                 segment = row[ScalarSamplesTable.segment],
             )

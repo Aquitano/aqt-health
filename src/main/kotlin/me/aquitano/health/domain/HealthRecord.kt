@@ -58,7 +58,6 @@ data class ScalarSampleRecord(
 data class ScalarValue(
     val metricType: String,
     val value: Double,
-    val unit: String,
     val context: String? = null,
     val segment: String? = null,
 )

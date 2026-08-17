@@ -257,7 +257,6 @@ class DatabaseFactoryTest {
                         measured_at,
                         metric_type,
                         value,
-                        unit,
                         context,
                         segment,
                         created_at
@@ -269,7 +268,6 @@ class DatabaseFactoryTest {
                         '2026-04-19T10:00:00Z',
                         'not_a_metric',
                         64,
-                        'bpm',
                         'resting',
                         NULL,
                         '2026-04-19T10:00:00Z'

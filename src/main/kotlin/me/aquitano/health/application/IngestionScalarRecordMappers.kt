@@ -100,7 +100,6 @@ internal fun mapScalarSample(
                 ScalarValue(
                     metricType = descriptor.metricType,
                     value = dto.value,
-                    unit = descriptor.unit,
                     context = context,
                     segment = dto.segment,
                 )

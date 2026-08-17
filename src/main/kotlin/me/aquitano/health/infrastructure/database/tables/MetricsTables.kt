@@ -161,13 +161,12 @@ object ScalarSamplesTable : LongIdTable("scalar_samples") {
     val measuredAt = timestampWithTimeZone("measured_at")
     val metricType = text("metric_type")
     val value = double("value")
-    val unit = text("unit")
     val context = text("context").nullable()
     val segment = text("segment").nullable()
     val createdAt = timestampWithTimeZone("created_at")
 }
 
-/** Read-only mapping of the canonical_scalar_samples view (see V14). */
+/** Read-only mapping of the canonical_scalar_samples view (see V22). */
 object CanonicalScalarSamplesView : Table("canonical_scalar_samples") {
     val id = long("id")
     val sourceInstanceId = integer("source_instance_id")
