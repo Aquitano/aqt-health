@@ -1,10 +1,8 @@
 package me.aquitano.health.api.dto
 
 import io.ktor.openapi.*
-import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonNames
 import kotlinx.serialization.json.JsonElement
 import me.aquitano.health.domain.BatchStatus
 
@@ -54,31 +52,6 @@ data class SleepStage(
     @JsonSchema.Format("date-time")
     val endAt: String,
 )
-
-@Serializable
-@SerialName("body_measurement")
-data class BodyMeasurement(
-    override val providerRecordId: String? = null,
-    @JsonSchema.Format("date-time")
-    val measuredAt: String,
-    val weightKg: Double? = null,
-    val bodyFatPercent: Double? = null,
-    val muscleKg: Double? = null,
-    @OptIn(ExperimentalSerializationApi::class)
-    @JsonNames("waterPercent")
-    val bodyWaterPercent: Double? = null,
-    val visceralFatRating: Double? = null,
-) : IngestionRecord()
-
-@Serializable
-@SerialName("heart_rate")
-data class HeartRate(
-    override val providerRecordId: String? = null,
-    @JsonSchema.Format("date-time")
-    val measuredAt: String,
-    val bpm: Int,
-    val context: String? = null,
-) : IngestionRecord()
 
 @Serializable
 @SerialName("activity_summary")
@@ -138,28 +111,6 @@ data class SleepSummary(
 ) : IngestionRecord()
 
 @Serializable
-@SerialName("respiratory_rate")
-data class RespiratoryRate(
-    override val providerRecordId: String? = null,
-    @JsonSchema.Format("date-time")
-    val measuredAt: String,
-    val breathsPerMinute: Int,
-    val context: String? = null,
-) : IngestionRecord()
-
-@Serializable
-@SerialName("hrv")
-data class Hrv(
-    override val providerRecordId: String? = null,
-    @JsonSchema.Format("date-time")
-    val measuredAt: String,
-    val metricType: String,
-    val value: Double,
-    val unit: String,
-    val context: String? = null,
-) : IngestionRecord()
-
-@Serializable
 @SerialName("blood_pressure")
 data class BloodPressure(
     override val providerRecordId: String? = null,
@@ -170,29 +121,10 @@ data class BloodPressure(
     val heartRateBpm: Int? = null,
 ) : IngestionRecord()
 
-@Serializable
-@SerialName("cardiovascular")
-data class Cardiovascular(
-    override val providerRecordId: String? = null,
-    @JsonSchema.Format("date-time")
-    val measuredAt: String,
-    val metricType: String,
-    val value: Double,
-    val unit: String,
-) : IngestionRecord()
-
-@Serializable
-@SerialName("extended_body_measurement")
-data class ExtendedBodyMeasurement(
-    override val providerRecordId: String? = null,
-    @JsonSchema.Format("date-time")
-    val measuredAt: String,
-    val metricType: String,
-    val value: Double,
-    val unit: String,
-    val segment: String? = null,
-) : IngestionRecord()
-
+/**
+ * Every point-in-time scalar metric on the wire. [unit] is optional: when omitted it is
+ * filled from the ScalarMetricRegistry descriptor, when present it must match it.
+ */
 @Serializable
 @SerialName("scalar")
 data class ScalarSample(
@@ -201,7 +133,7 @@ data class ScalarSample(
     val measuredAt: String,
     val metricType: String,
     val value: Double,
-    val unit: String,
+    val unit: String? = null,
     val context: String? = null,
     val segment: String? = null,
 ) : IngestionRecord()

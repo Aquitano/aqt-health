@@ -844,92 +844,6 @@ export interface components {
              */
             type: "blood_pressure";
         };
-        /** body_measurement */
-        body_measurement: {
-            providerRecordId?: string | null;
-            /** Format: date-time */
-            measuredAt: string;
-            weightKg?: number | null;
-            bodyFatPercent?: number | null;
-            muscleKg?: number | null;
-            bodyWaterPercent?: number | null;
-            visceralFatRating?: number | null;
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "body_measurement";
-        };
-        /** cardiovascular */
-        cardiovascular: {
-            providerRecordId?: string | null;
-            /** Format: date-time */
-            measuredAt: string;
-            metricType: string;
-            value: number;
-            unit: string;
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "cardiovascular";
-        };
-        /** extended_body_measurement */
-        extended_body_measurement: {
-            providerRecordId?: string | null;
-            /** Format: date-time */
-            measuredAt: string;
-            metricType: string;
-            value: number;
-            unit: string;
-            segment?: string | null;
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "extended_body_measurement";
-        };
-        /** heart_rate */
-        heart_rate: {
-            providerRecordId?: string | null;
-            /** Format: date-time */
-            measuredAt: string;
-            bpm: number;
-            context?: string | null;
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "heart_rate";
-        };
-        /** hrv */
-        hrv: {
-            providerRecordId?: string | null;
-            /** Format: date-time */
-            measuredAt: string;
-            metricType: string;
-            value: number;
-            unit: string;
-            context?: string | null;
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "hrv";
-        };
-        /** respiratory_rate */
-        respiratory_rate: {
-            providerRecordId?: string | null;
-            /** Format: date-time */
-            measuredAt: string;
-            breathsPerMinute: number;
-            context?: string | null;
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "respiratory_rate";
-        };
         /** scalar */
         scalar: {
             providerRecordId?: string | null;
@@ -937,7 +851,7 @@ export interface components {
             measuredAt: string;
             metricType: string;
             value: number;
-            unit: string;
+            unit?: string | null;
             context?: string | null;
             segment?: string | null;
             /**
@@ -1024,7 +938,7 @@ export interface components {
             type: "step_interval";
         };
         /** IngestionRecord */
-        IngestionRecord: components["schemas"]["activity_summary"] | components["schemas"]["blood_pressure"] | components["schemas"]["body_measurement"] | components["schemas"]["cardiovascular"] | components["schemas"]["extended_body_measurement"] | components["schemas"]["heart_rate"] | components["schemas"]["hrv"] | components["schemas"]["respiratory_rate"] | components["schemas"]["scalar"] | components["schemas"]["sleep_session"] | components["schemas"]["sleep_summary"] | components["schemas"]["step_interval"];
+        IngestionRecord: components["schemas"]["activity_summary"] | components["schemas"]["blood_pressure"] | components["schemas"]["scalar"] | components["schemas"]["sleep_session"] | components["schemas"]["sleep_summary"] | components["schemas"]["step_interval"];
         /** IngestionBatchRequest */
         IngestionBatchRequest: {
             provider?: string | null;

@@ -8,6 +8,8 @@ import me.aquitano.health.shared.doubleOrNull
 import me.aquitano.health.shared.longOrNull
 import me.aquitano.health.shared.objOrNull
 import me.aquitano.health.shared.stringOrNull
+import me.aquitano.health.domain.BodyMetricTypes
+import me.aquitano.health.domain.ScalarMetricTypes
 import java.security.MessageDigest
 import java.util.*
 
@@ -111,7 +113,7 @@ class GoogleHealthNormalizer {
     private fun normalizeHeartRate(
         dataType: String,
         point: JsonObject
-    ): HeartRate? {
+    ): ScalarSample? {
         val heartRate =
             point.objOrNull("heartRate") ?: point.objOrNull("heart_rate") ?: return null
         val sampleTime = heartRate.objOrNull("sampleTime") ?: return null
@@ -119,7 +121,7 @@ class GoogleHealthNormalizer {
         val bpm = heartRate.longOrNull("beatsPerMinute") ?: heartRate.longOrNull("bpm")
         ?: return null
         if (bpm !in 25..250) return null
-        return HeartRate(
+        return ScalarSample(
             providerRecordId = providerRecordId(
                 dataType,
                 point,
@@ -127,7 +129,8 @@ class GoogleHealthNormalizer {
                 null
             ),
             measuredAt = measuredAt,
-            bpm = bpm.toInt(),
+            metricType = ScalarMetricTypes.HEART_RATE,
+            value = bpm.toDouble(),
             context = mapHeartRateContext(
                 heartRate.objOrNull("metadata")?.stringOrNull("motionContext")
             )
@@ -137,13 +140,13 @@ class GoogleHealthNormalizer {
     private fun normalizeWeight(
         dataType: String,
         point: JsonObject
-    ): BodyMeasurement? {
+    ): ScalarSample? {
         val weight = point.objOrNull("weight") ?: return null
         val sampleTime = weight.objOrNull("sampleTime") ?: return null
         val measuredAt = sampleTime.stringOrNull("physicalTime") ?: return null
         val grams = weight.doubleOrNull("weightGrams") ?: return null
         if (grams <= 0.0) return null
-        return BodyMeasurement(
+        return ScalarSample(
             providerRecordId = providerRecordId(
                 dataType,
                 point,
@@ -151,21 +154,22 @@ class GoogleHealthNormalizer {
                 null
             ),
             measuredAt = measuredAt,
-            weightKg = grams / 1000.0
+            metricType = BodyMetricTypes.WEIGHT,
+            value = grams / 1000.0,
         )
     }
 
     private fun normalizeBodyFat(
         dataType: String,
         point: JsonObject
-    ): BodyMeasurement? {
+    ): ScalarSample? {
         val bodyFat =
             point.objOrNull("bodyFat") ?: point.objOrNull("body_fat") ?: return null
         val sampleTime = bodyFat.objOrNull("sampleTime") ?: return null
         val measuredAt = sampleTime.stringOrNull("physicalTime") ?: return null
         val percentage = bodyFat.doubleOrNull("percentage") ?: return null
         if (percentage !in 0.0..100.0) return null
-        return BodyMeasurement(
+        return ScalarSample(
             providerRecordId = providerRecordId(
                 dataType,
                 point,
@@ -173,7 +177,8 @@ class GoogleHealthNormalizer {
                 null
             ),
             measuredAt = measuredAt,
-            bodyFatPercent = percentage
+            metricType = BodyMetricTypes.BODY_FAT,
+            value = percentage,
         )
     }
 

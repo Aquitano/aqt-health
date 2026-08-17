@@ -5,11 +5,9 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
-import me.aquitano.health.api.dto.BodyMeasurement
-import me.aquitano.health.api.dto.HeartRate
 import me.aquitano.health.api.dto.ActivitySummary
-import me.aquitano.health.api.dto.Hrv
-import me.aquitano.health.api.dto.RespiratoryRate
+import me.aquitano.health.api.dto.BloodPressure
+import me.aquitano.health.api.dto.ScalarSample
 import me.aquitano.health.api.dto.SleepSummary
 import me.aquitano.health.api.dto.SleepSession
 import me.aquitano.health.api.dto.StepInterval
@@ -22,7 +20,7 @@ class WithingsNormalizerTest {
     private val normalizer = WithingsNormalizer()
 
     @Test
-    fun measuresConvertUnitsAndCreateBodyMeasurementFields() {
+    fun measuresConvertUnitsIntoOneScalarSamplePerMetric() {
         val result = normalizer.normalize(
             fetchResult(
                 "measures",
@@ -40,13 +38,45 @@ class WithingsNormalizerTest {
             )
         )
 
-        val body = assertIs<BodyMeasurement>(result.records.single())
-        assertEquals("withings:measure:123:body", body.providerRecordId)
-        assertEquals(80.136, body.weightKg!!, 0.000001)
-        assertEquals(21.4, body.bodyFatPercent!!, 0.000001)
-        assertEquals(40.2, body.muscleKg!!, 0.000001)
-        assertEquals(50.1, body.bodyWaterPercent!!, 0.000001)
-        assertEquals(9.0, body.visceralFatRating!!, 0.000001)
+        val samples = result.records.filterIsInstance<ScalarSample>().associateBy { it.metricType }
+        assertEquals(5, samples.size)
+        assertEquals("withings:measure:123:weight", samples.getValue("weight").providerRecordId)
+        assertEquals(80.136, samples.getValue("weight").value, 0.000001)
+        assertEquals(21.4, samples.getValue("body_fat").value, 0.000001)
+        assertEquals(40.2, samples.getValue("muscle").value, 0.000001)
+        assertEquals(50.1, samples.getValue("water").value, 0.000001)
+        assertEquals(9.0, samples.getValue("visceral_fat").value, 0.000001)
+    }
+
+    @Test
+    fun segmentalMeasuresCarryTheirSegmentInTheProviderRecordId() {
+        val result = normalizer.normalize(
+            fetchResult(
+                "measures",
+                buildJsonObject {
+                    put("grpid", 321)
+                    put("date", 1775001600)
+                    putJsonArray("measures") {
+                        add(
+                            buildJsonObject {
+                                put("type", 137)
+                                put("value", 32)
+                                put("unit", -1)
+                                put("zone", "left_arm")
+                            }
+                        )
+                    }
+                }
+            )
+        )
+
+        val sample = assertIs<ScalarSample>(result.records.single())
+        assertEquals(
+            "withings:measure:321:segmental_muscle_mass:left_arm",
+            sample.providerRecordId,
+        )
+        assertEquals("left_arm", sample.segment)
+        assertEquals(3.2, sample.value, 0.000001)
     }
 
     @Test
@@ -86,7 +116,7 @@ class WithingsNormalizerTest {
     }
 
     @Test
-    fun measurePulseCreatesHeartRate() {
+    fun measurePulseWithoutBloodPressureCreatesStandaloneHeartRate() {
         val result = normalizer.normalize(
             fetchResult(
                 "measures",
@@ -100,15 +130,43 @@ class WithingsNormalizerTest {
             )
         )
 
-        val heartRate = assertIs<HeartRate>(result.records.single())
-        assertEquals("withings:measure:456:heart-pulse", heartRate.providerRecordId)
+        val heartRate = assertIs<ScalarSample>(result.records.single())
+        assertEquals("withings:measure:456:heart_rate", heartRate.providerRecordId)
         assertEquals("2026-04-01T00:00:00Z", heartRate.measuredAt)
-        assertEquals(62, heartRate.bpm)
+        assertEquals("heart_rate", heartRate.metricType)
+        assertEquals(62.0, heartRate.value, 0.000001)
         assertEquals("general", heartRate.context)
     }
 
     @Test
-    fun unsupportedMeasureTypesArePreservedOnlyInSourcePayload() {
+    fun bloodPressureClaimsTheHeartRateRegardlessOfMeasureOrder() {
+        listOf(true, false).forEach { heartRateFirst ->
+            val result = normalizer.normalize(
+                fetchResult(
+                    "measures",
+                    buildJsonObject {
+                        put("grpid", 654)
+                        put("date", 1775001600)
+                        putJsonArray("measures") {
+                            if (heartRateFirst) addMeasure(type = 11, value = 62, unit = 0)
+                            addMeasure(type = 9, value = 80, unit = 0)
+                            addMeasure(type = 10, value = 120, unit = 0)
+                            if (!heartRateFirst) addMeasure(type = 11, value = 62, unit = 0)
+                        }
+                    }
+                )
+            )
+
+            val bloodPressure = assertIs<BloodPressure>(result.records.single())
+            assertEquals(120, bloodPressure.systolicMmhg)
+            assertEquals(80, bloodPressure.diastolicMmhg)
+            assertEquals(62, bloodPressure.heartRateBpm)
+            assertTrue(result.records.filterIsInstance<ScalarSample>().isEmpty())
+        }
+    }
+
+    @Test
+    fun incompleteBloodPressureIsPreservedOnlyInSourcePayload() {
         val result = normalizer.normalize(
             fetchResult(
                 "measures",
@@ -232,17 +290,15 @@ class WithingsNormalizerTest {
         val sleep = assertIs<SleepSession>(result.records.first())
         assertEquals(1, sleep.stages.size)
         assertEquals("light", sleep.stages[0].stage)
-        val heartRates = result.records.filterIsInstance<HeartRate>()
+        val samples = result.records.filterIsInstance<ScalarSample>()
+        val heartRates = samples.filter { it.metricType == "heart_rate" }
         assertEquals(2, heartRates.size)
         assertEquals("sleep", heartRates.first().context)
-        val respiratoryRate = assertIs<RespiratoryRate>(
-            result.records.filterIsInstance<RespiratoryRate>().single()
-        )
+        val respiratoryRate = samples.single { it.metricType == "respiratory_rate" }
         assertEquals("withings:sleep:rr:1775001600", respiratoryRate.providerRecordId)
-        assertEquals(14, respiratoryRate.breathsPerMinute)
-        val hrv = assertIs<Hrv>(result.records.filterIsInstance<Hrv>().single())
+        assertEquals(14.0, respiratoryRate.value, 0.000001)
+        val hrv = samples.single { it.metricType == "hrv_rmssd" }
         assertEquals("withings:sleep:rmssd:1775001600", hrv.providerRecordId)
-        assertEquals("rmssd", hrv.metricType)
         assertEquals(42.5, hrv.value, 0.000001)
     }
 
@@ -292,7 +348,7 @@ class WithingsNormalizerTest {
         val sessions = result.records.filterIsInstance<SleepSession>()
         assertEquals(1, sessions.size)
         assertEquals("light", sessions.first().stages.first().stage)
-        assertEquals(1, result.records.filterIsInstance<HeartRate>().size)
+        assertEquals(1, result.records.filterIsInstance<ScalarSample>().size)
     }
 
     @Test

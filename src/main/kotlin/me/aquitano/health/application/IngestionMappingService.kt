@@ -3,7 +3,6 @@ package me.aquitano.health.application
 import kotlinx.serialization.json.*
 import me.aquitano.health.api.dto.*
 import me.aquitano.health.domain.*
-import me.aquitano.health.shared.AppJson
 
 /**
  * Validates an incoming ingestion batch and maps each record DTO to its domain
@@ -60,26 +59,12 @@ class IngestionMappingService {
 
         if (issues.isNotEmpty()) throw RequestValidationException(issues)
 
-        val normalizedPayloadJson = AppJson.encodeToString(
-            buildJsonObject {
-                put("provider", provider)
-                put("providerInstanceId", providerInstanceId)
-                batchExternalId?.let { put("batchExternalId", it) }
-                put("ingestedAt", ingestedAt!!.toString())
-                put(
-                    "records",
-                    JsonArray(records.map { it.normalizedRecordJson })
-                )
-            },
-        )
-
         return ValidatedIngestionBatch(
             provider = provider!!,
             providerInstanceId = providerInstanceId!!,
             batchExternalId = batchExternalId,
             ingestedAt = ingestedAt!!,
             sourcePayload = sourcePayload,
-            normalizedPayloadJson = normalizedPayloadJson,
             records = records,
         )
     }
@@ -100,16 +85,10 @@ class IngestionMappingService {
         return when (dto) {
             is StepInterval -> mapStepInterval(field, dto, issues)
             is SleepSession -> mapSleepSession(field, dto, issues)
-            is BodyMeasurement -> mapBodyMeasurement(field, dto, issues)
-            is HeartRate -> mapHeartRate(field, dto, issues)
             is ActivitySummary -> mapActivitySummary(field, dto, issues)
             is SleepSummary -> mapSleepSummary(field, dto, issues)
-            is RespiratoryRate -> mapRespiratoryRate(field, dto, issues)
-            is Hrv -> mapHrv(field, dto, issues)
             is BloodPressure -> mapBloodPressure(field, dto, issues)
-            is Cardiovascular -> mapCardiovascular(field, dto, issues)
-            is ExtendedBodyMeasurement -> mapExtendedBodyMeasurement(field, dto, issues)
-            is ScalarSample -> mapScalarViaRegistry(field, dto, issues)
+            is ScalarSample -> mapScalarSample(field, dto, issues)
         }
     }
 }

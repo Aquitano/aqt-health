@@ -61,7 +61,6 @@ class DatabaseFactoryTest {
         assertContains(viewNames, "canonical_step_daily_summaries")
         assertContains(viewNames, "canonical_sleep_summaries")
         assertContains(viewNames, "canonical_sleep_sessions")
-        assertContains(viewNames, "canonical_sleep_nights")
     }
 
     @Test
@@ -195,7 +194,6 @@ class DatabaseFactoryTest {
                         source_instance_id,
                         batch_external_id,
                         source_payload_json,
-                        normalized_payload_json,
                         status,
                         ingested_at,
                         received_at,
@@ -207,7 +205,6 @@ class DatabaseFactoryTest {
                     VALUES (
                         1,
                         'bad-status',
-                        '{}',
                         '{}',
                         'done',
                         '2026-04-19T10:00:00Z',
@@ -257,7 +254,6 @@ class DatabaseFactoryTest {
                         measured_at,
                         metric_type,
                         value,
-                        unit,
                         context,
                         segment,
                         created_at
@@ -269,7 +265,6 @@ class DatabaseFactoryTest {
                         '2026-04-19T10:00:00Z',
                         'not_a_metric',
                         64,
-                        'bpm',
                         'resting',
                         NULL,
                         '2026-04-19T10:00:00Z'

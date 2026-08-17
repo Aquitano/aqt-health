@@ -62,7 +62,6 @@ class ScalarSampleWriteRepository {
                 this[ScalarSamplesTable.measuredAt] = row.record.measuredAt.toDbTimestamp()
                 this[ScalarSamplesTable.metricType] = row.value.metricType
                 this[ScalarSamplesTable.value] = row.value.value
-                this[ScalarSamplesTable.unit] = row.value.unit
                 this[ScalarSamplesTable.context] = row.value.context
                 this[ScalarSamplesTable.segment] = row.value.segment
                 this[ScalarSamplesTable.createdAt] = now.toDbTimestamp()

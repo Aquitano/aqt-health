@@ -243,7 +243,6 @@ class WeightDayModule(
 
 class SleepDayModule(
     private val sleepRepository: SleepRepository = SleepRepository(),
-    private val sleepNightService: SleepNightService,
 ) : HealthDayModule<HealthDaySleepResponse> {
     override val name = "sleep"
 
@@ -259,8 +258,6 @@ class SleepDayModule(
             sort = "date",
             order = "asc",
         )
-        sleepNightService.materialize(filters, context.computedAt)
-
         val (nights, stagesBySession, sourceMetadata) =
             sleepRepository.listCanonicalSleepNights(filters)
         val sessions = nights
@@ -270,7 +267,7 @@ class SleepDayModule(
             }
             .groupBy { it.date }
             .flatMap { (_, nightsForDate) ->
-                // The canonical_sleep_nights view can return >1 row for a night when providers
+                // The canonical sleep sessions can yield >1 row for a night when providers
                 // tie on rank (e.g. two unranked providers both at rank 10000). Keep a single
                 // source per night so two providers' overlapping stage segments aren't summed
                 // twice; multiple sessions from that one source (a fragmented night) still count.

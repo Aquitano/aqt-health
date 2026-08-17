@@ -148,14 +148,14 @@ class WithingsSyncAdapter(
                 accessToken,
                 from,
                 to,
-                WITHINGS_ACTIVITY_FIELDS_ALL_LISTED,
+                WITHINGS_ACTIVITY_FIELDS,
             )
 
             "measures" -> client.fetchMeasures(
                 accessToken,
                 from,
                 to,
-                WITHINGS_MEASURE_TYPES_ALL_LISTED,
+                WITHINGS_MEASURE_TYPES,
                 1,
             )
 
@@ -163,14 +163,14 @@ class WithingsSyncAdapter(
                 accessToken,
                 from,
                 to,
-                WITHINGS_SLEEP_SUMMARY_FIELDS_ALL_LISTED,
+                WITHINGS_SLEEP_SUMMARY_FIELDS,
             )
 
             "sleep" -> client.fetchSleep(
                 accessToken,
                 from,
                 to,
-                WITHINGS_SLEEP_FIELDS_ALL_LISTED,
+                WITHINGS_SLEEP_FIELDS,
             )
 
             else -> throw WithingsHttpException(

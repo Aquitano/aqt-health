@@ -10,6 +10,8 @@ import kotlinx.serialization.serializer
 import me.aquitano.external.withings.WITHINGS_PROVIDER_CODE
 import me.aquitano.health.api.dto.*
 import me.aquitano.health.domain.BatchStatus
+import me.aquitano.health.domain.BodyMetricTypes
+import me.aquitano.health.domain.ScalarMetricTypes
 import me.aquitano.health.domain.ValidationIssueCodes
 import me.aquitano.health.shared.AppJson
 
@@ -62,15 +64,19 @@ internal fun ingestionBatchExample(): ExampleObject =
                         )
                     ),
                 ),
-                BodyMeasurement(
+                ScalarSample(
                     providerRecordId = "weight-1",
                     measuredAt = ExampleBodyMeasuredAt,
-                    weightKg = 78.4,
+                    metricType = BodyMetricTypes.WEIGHT,
+                    value = 78.4,
+                    unit = "kg",
                 ),
-                HeartRate(
+                ScalarSample(
                     providerRecordId = "hr-1",
                     measuredAt = ExampleHeartRateMeasuredAt,
-                    bpm = 62,
+                    metricType = ScalarMetricTypes.HEART_RATE,
+                    value = 62.0,
+                    unit = "bpm",
                     context = "resting",
                 ),
             ),

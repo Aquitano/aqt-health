@@ -70,20 +70,6 @@ class CanonicalStructuralViewsTest {
         assertEquals(listOf(1, 2), fixture.canonicalIds("canonical_sleep_sessions", "start_at"))
     }
 
-    @Test
-    fun sleepNightsRankWinnerPerDateAndTimezone() {
-        val fixture = Fixture()
-        fixture.insertSleepSession(id = 1, sourceInstanceId = WITHINGS, startAt = "2026-04-18T22:00:00Z", endAt = "2026-04-19T06:00:00Z")
-        fixture.insertSleepSession(id = 2, sourceInstanceId = GOOGLE, startAt = "2026-04-18T22:05:00Z", endAt = "2026-04-19T06:05:00Z")
-        // same (date, timezone): withings (sleep rank 0) wins
-        fixture.insertSleepNight(id = 1, sourceInstanceId = WITHINGS, date = "2026-04-19", timezone = "UTC", sleepSessionId = 1)
-        fixture.insertSleepNight(id = 2, sourceInstanceId = GOOGLE, date = "2026-04-19", timezone = "UTC", sleepSessionId = 2)
-        // same date in another timezone partitions independently, so google survives there
-        fixture.insertSleepNight(id = 3, sourceInstanceId = GOOGLE, date = "2026-04-19", timezone = "Europe/Berlin", sleepSessionId = 2)
-
-        assertEquals(listOf(3, 1), fixture.canonicalIds("canonical_sleep_nights", "timezone"))
-    }
-
     private class Fixture {
         val dbConfig: DatabaseConfig = PostgresTestDatabase.config()
 
@@ -140,15 +126,6 @@ class CanonicalStructuralViewsTest {
                 VALUES ($id, $sourceInstanceId, '$startAt', '$endAt',
                         EXTRACT(EPOCH FROM ('$endAt'::timestamptz - '$startAt'::timestamptz))::bigint,
                         '2026-04-19T10:00:00Z')
-                """.trimIndent()
-            )
-        }
-
-        fun insertSleepNight(id: Int, sourceInstanceId: Int, date: String, timezone: String, sleepSessionId: Int) {
-            execute(
-                """
-                INSERT INTO sleep_nights (id, date, timezone, source_instance_id, sleep_session_id, algorithm_version, computed_at)
-                VALUES ($id, '$date', '$timezone', $sourceInstanceId, $sleepSessionId, 1, '2026-04-19T10:00:00Z')
                 """.trimIndent()
             )
         }

@@ -2,7 +2,6 @@ package me.aquitano.health.application.metric.sleep
 
 import me.aquitano.health.api.dto.SleepNightsResponse
 import me.aquitano.health.api.dto.SleepSessionsResponse
-import me.aquitano.health.application.SleepNightService
 import me.aquitano.health.application.metric.common.QueryParamSpecs
 import me.aquitano.health.application.metric.common.QueryParams
 import me.aquitano.health.application.metric.common.keysetPage
@@ -24,7 +23,6 @@ class SleepQueryService(
     private val database: Database,
     private val sleepRepository: SleepRepository,
     private val canonicalSessionRepository: CanonicalSleepSessionDerivationRepository,
-    private val sleepNightService: SleepNightService,
 ) {
     suspend fun listSleepSessions(params: QueryParams): SleepSessionsResponse =
         suspendDbTransaction(db = database) {
@@ -58,7 +56,6 @@ class SleepQueryService(
         suspendDbTransaction(db = database) {
             params.rejectLatest()
             val filters = params.sleepNightReadFilters(now)
-            sleepNightService.materialize(filters, now)
             val (nights, stagesBySession, sourceMetadata) =
                 sleepRepository.listCanonicalSleepNights(filters)
             val page = nights.keysetPage(

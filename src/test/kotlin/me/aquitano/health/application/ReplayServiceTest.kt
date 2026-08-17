@@ -5,7 +5,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.buildJsonObject
 import me.aquitano.health.api.dto.ActivitySummary
-import me.aquitano.health.api.dto.HeartRate
+import me.aquitano.health.api.dto.ScalarSample
 import me.aquitano.health.api.dto.IngestionBatchRequest
 import me.aquitano.health.domain.ReplayJobStatus
 import me.aquitano.health.api.dto.ReplayJobStatusResponse
@@ -76,14 +76,12 @@ class ReplayServiceTest {
         fixture.ingestMixedBatch()
 
         fixture.execute("DELETE FROM step_daily_summaries")
-        fixture.execute("DELETE FROM sleep_nights")
 
         val job = fixture.runReplay(ReplayRequest(scope = "derived"))
 
         assertEquals(ReplayJobStatus.Completed, job.status)
         assertEquals(0, job.recordsReplayed)
         assertEquals(1, fixture.count("step_daily_summaries"))
-        assertEquals(1, fixture.count("sleep_nights"))
         // canonical views need no rebuild: they reflect the underlying tables directly
         assertEquals(1, fixture.count("canonical_step_daily_summaries"))
         assertEquals(1, fixture.count("canonical_activity_summaries"))
@@ -98,7 +96,7 @@ class ReplayServiceTest {
         val job = fixture.runReplay(
             ReplayRequest(
                 scope = "all",
-                metricTypes = listOf(RecordTypes.HEART_RATE),
+                metricTypes = listOf(RecordTypes.SCALAR),
                 fromDate = "2026-04-19",
                 toDate = "2026-04-19",
                 wipe = true,
@@ -126,7 +124,6 @@ class ReplayServiceTest {
         // The fixture batch contains one record per derived kind; the shared registry mapping
         // must route each of them to a rebuild, so no kind can drift out of the replay path.
         fixture.execute("DELETE FROM step_daily_summaries")
-        fixture.execute("DELETE FROM sleep_nights")
 
         val job = fixture.runReplay(
             ReplayRequest(scope = "derived", fromDate = "2026-04-18", toDate = "2026-04-19")
@@ -134,7 +131,6 @@ class ReplayServiceTest {
 
         assertEquals(ReplayJobStatus.Completed, job.status)
         assertEquals(1, fixture.count("step_daily_summaries"))
-        assertEquals(1, fixture.count("sleep_nights"))
     }
 
     @Test
@@ -261,10 +257,11 @@ class ReplayServiceTest {
                             endAt = "2026-04-19T09:00:00Z",
                             steps = 1200,
                         ),
-                        HeartRate(
+                        ScalarSample(
                             providerRecordId = "hr-1",
                             measuredAt = "2026-04-19T08:30:00Z",
-                            bpm = 64,
+                            metricType = "heart_rate",
+                            value = 64.0,
                             context = "resting",
                         ),
                         SleepSession(

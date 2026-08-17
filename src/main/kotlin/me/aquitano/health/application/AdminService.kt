@@ -16,6 +16,9 @@ import me.aquitano.health.domain.RequestValidationException
 import me.aquitano.health.domain.ValidationIssue
 import me.aquitano.health.domain.ValidationIssueCodes
 import me.aquitano.health.infrastructure.repositories.IngestionRepository
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import me.aquitano.health.shared.AppJson
 import org.jetbrains.exposed.v1.jdbc.Database
 import me.aquitano.health.infrastructure.database.suspendDbTransaction
@@ -139,8 +142,21 @@ class AdminService(
                 } else {
                     null
                 },
+                // Rebuilt from the records rather than stored: the batch-level copy was a
+                // duplicate of the per-record normalized JSON.
                 normalizedPayload = if (includeNormalizedPayload) {
-                    AppJson.parseToJsonElement(batch.normalizedPayloadJson)
+                    buildJsonObject {
+                        put("provider", batch.provider)
+                        put("providerInstanceId", batch.providerInstanceId)
+                        batch.batchExternalId?.let { put("batchExternalId", it) }
+                        put("ingestedAt", batch.ingestedAt)
+                        put(
+                            "records",
+                            JsonArray(
+                                records.map { AppJson.parseToJsonElement(it.normalizedRecordJson) }
+                            )
+                        )
+                    }
                 } else {
                     null
                 },

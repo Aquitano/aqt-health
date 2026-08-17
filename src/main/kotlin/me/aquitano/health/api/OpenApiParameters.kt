@@ -10,7 +10,7 @@ import me.aquitano.health.api.dto.HealthDayModuleName
 import me.aquitano.health.application.metric.common.EnumParamSpec
 import me.aquitano.health.application.metric.common.LimitParamSpec
 import me.aquitano.health.application.metric.common.QueryParamSpecs
-import me.aquitano.health.domain.RecordTypes
+import me.aquitano.health.domain.ScalarMetricTypes
 
 private const val ReadCursorExample =
     "eyJzIjoiMjAyNi0wNC0wMlQwODowNTowMFoiLCJpZCI6MTIzLCJvIjoiYXNjIiwiZiI6Im1lYXN1cmVkQXQifQ"
@@ -281,7 +281,7 @@ private fun Operation.Builder.metricTypePathParameter() {
     parameters {
         path("metricType") {
             description = "Scalar metric type from the metric catalog."
-            schema = stringSchema(example = RecordTypes.HEART_RATE)
+            schema = stringSchema(example = ScalarMetricTypes.HEART_RATE)
         }
     }
 }

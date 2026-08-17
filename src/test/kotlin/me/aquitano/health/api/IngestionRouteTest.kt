@@ -66,8 +66,8 @@ class IngestionRouteTest {
 
         assertEquals(HttpStatusCode.Created, response.status)
         val body = response.jsonBody()
-        assertEquals(5, body["recordsReceived"]!!.jsonPrimitive.int)
-        assertEquals(5, body["ingestionRecordsStored"]!!.jsonPrimitive.int)
+        assertEquals(9, body["recordsReceived"]!!.jsonPrimitive.int)
+        assertEquals(9, body["ingestionRecordsStored"]!!.jsonPrimitive.int)
         assertEquals(
             1,
             body["metricsCreated"]!!.jsonObject["step_samples"]!!.jsonPrimitive.int
@@ -94,7 +94,7 @@ class IngestionRouteTest {
         )
 
         assertEquals(1, countRows(dbPath, "ingestion_batches"))
-        assertEquals(5, countRows(dbPath, "ingestion_records"))
+        assertEquals(9, countRows(dbPath, "ingestion_records"))
         assertEquals(1, countRows(dbPath, "step_samples"))
         assertEquals(1, countRows(dbPath, "step_daily_summaries"))
         assertEquals(1, countRows(dbPath, "canonical_step_samples"))
@@ -376,7 +376,6 @@ class IngestionRouteTest {
                         source_instance_id,
                         batch_external_id,
                         source_payload_json,
-                        normalized_payload_json,
                         status,
                         ingested_at,
                         received_at,
@@ -388,7 +387,6 @@ class IngestionRouteTest {
                     VALUES (
                         1,
                         '$batchExternalId',
-                        '{}',
                         '{}',
                         'failed',
                         '2026-04-19T09:00:00Z',
@@ -484,20 +482,46 @@ class IngestionRouteTest {
               ]
             },
             {
-              "type": "body_measurement",
-              "providerRecordId": "body-1",
+              "type": "scalar",
+              "providerRecordId": "body-1:weight",
               "measuredAt": "2026-04-19T07:00:00Z",
-              "weightKg": 82.4,
-              "bodyFatPercent": 18.2,
-              "muscleKg": 34.7,
-              "waterPercent": 55.1,
-              "visceralFatRating": 8.0
+              "metricType": "weight",
+              "value": 82.4
             },
             {
-              "type": "heart_rate",
+              "type": "scalar",
+              "providerRecordId": "body-1:body_fat",
+              "measuredAt": "2026-04-19T07:00:00Z",
+              "metricType": "body_fat",
+              "value": 18.2
+            },
+            {
+              "type": "scalar",
+              "providerRecordId": "body-1:muscle",
+              "measuredAt": "2026-04-19T07:00:00Z",
+              "metricType": "muscle",
+              "value": 34.7
+            },
+            {
+              "type": "scalar",
+              "providerRecordId": "body-1:water",
+              "measuredAt": "2026-04-19T07:00:00Z",
+              "metricType": "water",
+              "value": 55.1
+            },
+            {
+              "type": "scalar",
+              "providerRecordId": "body-1:visceral_fat",
+              "measuredAt": "2026-04-19T07:00:00Z",
+              "metricType": "visceral_fat",
+              "value": 8.0
+            },
+            {
+              "type": "scalar",
               "providerRecordId": "hr-1",
               "measuredAt": "2026-04-19T08:30:00Z",
-              "bpm": 62
+              "metricType": "heart_rate",
+              "value": 62
             },
             {
               "type": "sleep_summary",

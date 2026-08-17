@@ -830,7 +830,6 @@ class GoogleHealthProviderTest {
                         source_instance_id,
                         batch_external_id,
                         source_payload_json,
-                        normalized_payload_json,
                         status,
                         ingested_at,
                         received_at,
@@ -842,7 +841,6 @@ class GoogleHealthProviderTest {
                     VALUES (
                         1,
                         '$batchExternalId',
-                        '{}',
                         '{}',
                         'failed',
                         '2026-04-19T09:00:00Z',

@@ -95,7 +95,7 @@ class ReadApiRouteTest {
         val batches = authorizedGet("/api/v2/admin/ingestion/batches")
         assertEquals(1, batches.items().size)
         assertEquals(
-            8,
+            12,
             batches.items()[0].jsonObject["recordCount"]!!.jsonPrimitive.int
         )
 
@@ -679,8 +679,8 @@ class ReadApiRouteTest {
         assertEquals(HttpStatusCode.OK, detail.status)
         val body = detail.jsonBody()
         assertEquals(batchId, body["id"]!!.jsonPrimitive.int)
-        assertEquals(8, body["recordCount"]!!.jsonPrimitive.int)
-        assertEquals(8, body["records"]!!.jsonArray.size)
+        assertEquals(12, body["recordCount"]!!.jsonPrimitive.int)
+        assertEquals(12, body["records"]!!.jsonArray.size)
         assertFalse(body.containsKey("sourcePayload"))
         assertFalse(body.containsKey("normalizedPayload"))
         assertFalse(
@@ -876,20 +876,46 @@ class ReadApiRouteTest {
               ]
             },
             {
-              "type": "body_measurement",
-              "providerRecordId": "body-read-1",
+              "type": "scalar",
+              "providerRecordId": "body-read-1:weight",
               "measuredAt": "2026-04-19T07:00:00Z",
-              "weightKg": 82.4,
-              "bodyFatPercent": 18.2,
-              "muscleKg": 34.7,
-              "waterPercent": 55.1,
-              "visceralFatRating": 8.0
+              "metricType": "weight",
+              "value": 82.4
             },
             {
-              "type": "heart_rate",
+              "type": "scalar",
+              "providerRecordId": "body-read-1:body_fat",
+              "measuredAt": "2026-04-19T07:00:00Z",
+              "metricType": "body_fat",
+              "value": 18.2
+            },
+            {
+              "type": "scalar",
+              "providerRecordId": "body-read-1:muscle",
+              "measuredAt": "2026-04-19T07:00:00Z",
+              "metricType": "muscle",
+              "value": 34.7
+            },
+            {
+              "type": "scalar",
+              "providerRecordId": "body-read-1:water",
+              "measuredAt": "2026-04-19T07:00:00Z",
+              "metricType": "water",
+              "value": 55.1
+            },
+            {
+              "type": "scalar",
+              "providerRecordId": "body-read-1:visceral_fat",
+              "measuredAt": "2026-04-19T07:00:00Z",
+              "metricType": "visceral_fat",
+              "value": 8.0
+            },
+            {
+              "type": "scalar",
               "providerRecordId": "hr-read-1",
               "measuredAt": "2026-04-19T08:30:00Z",
-              "bpm": 62
+              "metricType": "heart_rate",
+              "value": 62
             },
             {
               "type": "activity_summary",
@@ -926,17 +952,18 @@ class ReadApiRouteTest {
               "sleepScore": 88
             },
             {
-              "type": "respiratory_rate",
+              "type": "scalar",
               "providerRecordId": "rr-read-1",
               "measuredAt": "2026-04-19T02:30:00Z",
-              "breathsPerMinute": 14,
+              "metricType": "respiratory_rate",
+              "value": 14,
               "context": "sleep"
             },
             {
-              "type": "hrv",
+              "type": "scalar",
               "providerRecordId": "hrv-read-1",
               "measuredAt": "2026-04-19T02:30:00Z",
-              "metricType": "rmssd",
+              "metricType": "hrv_rmssd",
               "value": 42.5,
               "unit": "ms",
               "context": "sleep"
@@ -977,16 +1004,18 @@ class ReadApiRouteTest {
               ]
             },
             {
-              "type": "body_measurement",
+              "type": "scalar",
               "providerRecordId": "body-read-2",
               "measuredAt": "2026-04-19T21:30:00Z",
-              "weightKg": 83.1
+              "metricType": "weight",
+              "value": 83.1
             },
             {
-              "type": "heart_rate",
+              "type": "scalar",
               "providerRecordId": "hr-read-2",
               "measuredAt": "2026-04-19T21:45:00Z",
-              "bpm": 67,
+              "metricType": "heart_rate",
+              "value": 67,
               "context": "resting"
             },
             {
@@ -1023,22 +1052,25 @@ class ReadApiRouteTest {
           },
           "records": [
             {
-              "type": "heart_rate",
+              "type": "scalar",
               "providerRecordId": "hr-boundary-1",
               "measuredAt": "2026-04-19T23:30:00Z",
-              "bpm": 60
+              "metricType": "heart_rate",
+              "value": 60
             },
             {
-              "type": "heart_rate",
+              "type": "scalar",
               "providerRecordId": "hr-boundary-2",
               "measuredAt": "2026-04-20T00:00:00Z",
-              "bpm": 70
+              "metricType": "heart_rate",
+              "value": 70
             },
             {
-              "type": "heart_rate",
+              "type": "scalar",
               "providerRecordId": "hr-boundary-3",
               "measuredAt": "2026-04-20T00:30:00Z",
-              "bpm": 80
+              "metricType": "heart_rate",
+              "value": 80
             }
           ]
         }
@@ -1117,16 +1149,18 @@ class ReadApiRouteTest {
               ]
             },
             {
-              "type": "body_measurement",
+              "type": "scalar",
               "providerRecordId": "hc-body",
               "measuredAt": "2026-04-19T07:00:00Z",
-              "weightKg": 82.0
+              "metricType": "weight",
+              "value": 82.0
             },
             {
-              "type": "heart_rate",
+              "type": "scalar",
               "providerRecordId": "hc-hr",
               "measuredAt": "2026-04-19T02:00:00Z",
-              "bpm": 60,
+              "metricType": "heart_rate",
+              "value": 60,
               "context": "sleep"
             }
           ]
@@ -1175,16 +1209,18 @@ class ReadApiRouteTest {
               ]
             },
             {
-              "type": "body_measurement",
+              "type": "scalar",
               "providerRecordId": "withings-body",
               "measuredAt": "2026-04-19T07:00:00Z",
-              "weightKg": 81.8
+              "metricType": "weight",
+              "value": 81.8
             },
             {
-              "type": "heart_rate",
+              "type": "scalar",
               "providerRecordId": "withings-hr",
               "measuredAt": "2026-04-19T02:00:20Z",
-              "bpm": 58,
+              "metricType": "heart_rate",
+              "value": 58,
               "context": "sleep"
             }
           ]

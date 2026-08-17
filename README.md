@@ -228,10 +228,11 @@ curl -X POST http://localhost:8080/api/v2/ingestion/batches \
         "steps": 1200
       },
       {
-        "type": "heart_rate",
+        "type": "scalar",
         "providerRecordId": "hr-1",
         "measuredAt": "2026-04-19T08:30:00Z",
-        "bpm": 62,
+        "metricType": "heart_rate",
+        "value": 62,
         "context": "resting"
       }
     ]
@@ -242,8 +243,12 @@ Supported record types:
 
 - `step_interval`
 - `sleep_session`
-- `body_measurement`
-- `heart_rate`
+- `sleep_summary`
+- `activity_summary`
+- `blood_pressure`
+- `scalar`
+
+`scalar` carries every point-in-time metric (heart rate, HRV, respiratory rate, body composition, cardiovascular) as `metricType` plus `value`. The metric types and their units come from `ScalarMetricRegistry`; `unit` is optional on the wire and must match the registry when given.
 
 `batchExternalId` is idempotent per source instance. Provider record IDs are also used to skip duplicate metric rows where available.
 
@@ -539,8 +544,10 @@ Metric tables:
 - `step_daily_summaries`
 - `sleep_sessions`
 - `sleep_stages`
-- `body_measurements`
-- `heart_rate_samples`
+- `sleep_summaries`
+- `activity_summaries`
+- `blood_pressure_measurements`
+- `scalar_samples`
 
 Support tables:
 

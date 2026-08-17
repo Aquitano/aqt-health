@@ -25,10 +25,8 @@ import me.aquitano.health.application.metric.scalar.ScalarMetricQueryService
 import me.aquitano.health.application.metric.scalar.ScalarSampleReadRepository
 import me.aquitano.health.application.metric.scalar.ScalarSampleWriteRepository
 import me.aquitano.health.application.metric.sleep.SleepQueryService
-import me.aquitano.health.application.metric.sleep.derived.SleepNightDerivation
 import me.aquitano.health.application.metric.sleep.repository.CanonicalSleepSessionDerivationRepository
 import me.aquitano.health.application.metric.sleep.repository.CanonicalSleepSummaryDerivationRepository
-import me.aquitano.health.application.metric.sleep.repository.SleepNightDerivationRepository
 import me.aquitano.health.application.metric.sleep.repository.SleepRepository
 import me.aquitano.health.application.metric.sleep.repository.SleepWriteRepository
 import me.aquitano.health.application.metric.steps.StepQueryService
@@ -117,10 +115,7 @@ fun ingestionModule() = module {
     // Derived-projection rebuild
     singleOf(::PendingDerivedRebuildRepository)
     singleOf(::ProjectionWipeRepository)
-    singleOf(::SleepNightDerivationRepository)
     singleOf(::StepDailySummaryDerivationRepository)
-    singleOf(::SleepNightDerivation)
-    singleOf(::SleepNightService)
     single { StepSummaryService(get<StepDailySummaryDerivationRepository>()) }
     single { CanonicalStepDerivationService(get<CanonicalStepDerivationRepository>()) }
     single {
@@ -128,7 +123,6 @@ fun ingestionModule() = module {
             derivedRebuildModules(
                 stepSummaryService = get(),
                 canonicalStepService = get(),
-                sleepNightService = get(),
             )
         )
     }
@@ -166,7 +160,7 @@ fun metricsReadModule() = module {
                 StepsDayModule(get()),
                 HeartRateDayModule(get()),
                 WeightDayModule(get()),
-                SleepDayModule(get(), get()),
+                SleepDayModule(get()),
             )
         )
     }
