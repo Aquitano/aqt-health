@@ -45,7 +45,7 @@ class LegacyScalarRecordMigrationTest {
         }
 
         assertEquals(
-            setOf("heart_rate", "hrv_rmssd", "weight", "body_fat", "muscle"),
+            setOf("heart_rate", "hrv_rmssd", "weight", "muscle", "body_fat"),
             samplesByMetricType.keys,
         )
         assertEquals(64.0, samplesByMetricType.getValue("heart_rate").first.value)
@@ -70,21 +70,26 @@ class LegacyScalarRecordMigrationTest {
             samplesByMetricType.getValue("weight").second.providerRecordId,
         )
         assertEquals(
-            "withings:measure:123:body_fat",
+            "withings:measure:123:muscle",
+            samplesByMetricType.getValue("muscle").second.providerRecordId,
+        )
+        // A single-metric record keeps its id, so a Google re-sync still deduplicates.
+        assertEquals(
+            "body-fat:2026-04-19T07:00:00Z:none:abc123",
             samplesByMetricType.getValue("body_fat").second.providerRecordId,
         )
         assertEquals(
             mapOf(
                 "weight" to "withings:measure:123:weight",
-                "body_fat" to "withings:measure:123:body_fat",
                 "muscle" to "withings:measure:123:muscle",
+                "body_fat" to "body-fat:2026-04-19T07:00:00Z:none:abc123",
                 "heart_rate" to "withings:measure:123:heart_rate",
             ),
             sampleProviderRecordIds(config),
         )
         val recordIdByMetricType = samplesByMetricType.mapValues { (_, value) -> value.second.id }
         assertEquals(
-            listOf("heart_rate", "weight", "body_fat", "muscle")
+            listOf("heart_rate", "weight", "muscle", "body_fat")
                 .associateWith { recordIdByMetricType.getValue(it) },
             sampleIngestionRecordIds(config),
         )
@@ -125,7 +130,12 @@ class LegacyScalarRecordMigrationTest {
                     '{"type":"hrv","providerRecordId":"hrv-1","measuredAt":"2026-04-19T02:30:00Z","metricType":"rmssd","value":42.5,"unit":"ms","context":"sleep"}',
                     '2026-04-19T02:30:00Z', NULL, '2026-04-19T10:00:00Z'),
                    (3, 1, 'body_measurement', 'withings:measure:123:body',
-                    '{"type":"body_measurement","providerRecordId":"withings:measure:123:body","measuredAt":"2026-04-19T07:00:00Z","weightKg":82.4,"bodyFatPercent":18.2,"muscleKg":34.7}',
+                    '{"type":"body_measurement","providerRecordId":"withings:measure:123:body","measuredAt":"2026-04-19T07:00:00Z","weightKg":82.4,"muscleKg":34.7}',
+                    '2026-04-19T07:00:00Z', NULL, '2026-04-19T10:00:00Z'),
+                   -- A Google weight/body-fat point is a single-metric body_measurement whose id
+                   -- the normalizer still emits verbatim, so the conversion must not rename it.
+                   (4, 1, 'body_measurement', 'body-fat:2026-04-19T07:00:00Z:none:abc123',
+                    '{"type":"body_measurement","providerRecordId":"body-fat:2026-04-19T07:00:00Z:none:abc123","measuredAt":"2026-04-19T07:00:00Z","bodyFatPercent":18.2}',
                     '2026-04-19T07:00:00Z', NULL, '2026-04-19T10:00:00Z');
 
             -- The seed writes explicit ids, so advance the identity sequence the way a real
@@ -137,8 +147,8 @@ class LegacyScalarRecordMigrationTest {
                                         measured_at, metric_type, value, unit, context, segment, created_at)
             VALUES (1, 1, 'withings:measure:123:heart-pulse', '2026-04-19T08:30:00Z', 'heart_rate', 64, 'bpm', 'resting', NULL, '2026-04-19T10:00:00Z'),
                    (1, 3, 'withings:measure:123:body', '2026-04-19T07:00:00Z', 'weight', 82.4, 'kg', NULL, NULL, '2026-04-19T10:00:00Z'),
-                   (1, 3, 'withings:measure:123:body', '2026-04-19T07:00:00Z', 'body_fat', 18.2, 'percent', NULL, NULL, '2026-04-19T10:00:00Z'),
-                   (1, 3, 'withings:measure:123:body', '2026-04-19T07:00:00Z', 'muscle', 34.7, 'kg', NULL, NULL, '2026-04-19T10:00:00Z');
+                   (1, 3, 'withings:measure:123:body', '2026-04-19T07:00:00Z', 'muscle', 34.7, 'kg', NULL, NULL, '2026-04-19T10:00:00Z'),
+                   (1, 4, 'body-fat:2026-04-19T07:00:00Z:none:abc123', '2026-04-19T07:00:00Z', 'body_fat', 18.2, 'percent', NULL, NULL, '2026-04-19T10:00:00Z');
             """.trimIndent(),
         )
     }
