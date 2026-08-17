@@ -106,6 +106,7 @@ val integrationTestClasses = listOf(
     "**/WithingsProviderTest.class",
     "**/WithingsProviderRouteTest.class",
     "**/DatabaseFactoryTest.class",
+    "**/LegacyScalarRecordMigrationTest.class",
     "**/SupportRepositoryTest.class",
     "**/ScheduledSyncRepositoryTest.class",
 )

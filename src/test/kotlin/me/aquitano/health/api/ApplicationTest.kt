@@ -239,15 +239,9 @@ class ApplicationTest {
         val recordSchemaRefs = setOf(
             "#/components/schemas/step_interval",
             "#/components/schemas/sleep_session",
-            "#/components/schemas/body_measurement",
-            "#/components/schemas/heart_rate",
             "#/components/schemas/activity_summary",
             "#/components/schemas/sleep_summary",
-            "#/components/schemas/respiratory_rate",
-            "#/components/schemas/hrv",
             "#/components/schemas/blood_pressure",
-            "#/components/schemas/cardiovascular",
-            "#/components/schemas/extended_body_measurement",
             "#/components/schemas/scalar",
         )
         recordSchemaRefs.forEach { ref ->

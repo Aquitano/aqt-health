@@ -50,16 +50,13 @@ class ProjectionWipeRepository {
                     (measuredAt greaterEq start) and (measuredAt less end)
                 }
 
-                else -> {
-                    val metricTypes = ScalarMetricRegistry.metricTypesForRecordType(recordType)
-                    if (metricTypes.isNotEmpty()) {
-                        ScalarSamplesTable.deleteWhere {
-                            (measuredAt greaterEq start) and
-                                (measuredAt less end) and
-                                (metricType inList metricTypes)
-                        }
-                    }
+                RecordTypes.SCALAR -> ScalarSamplesTable.deleteWhere {
+                    (measuredAt greaterEq start) and
+                        (measuredAt less end) and
+                        (metricType inList ScalarMetricRegistry.metricTypes)
                 }
+
+                else -> Unit
             }
         }
     }

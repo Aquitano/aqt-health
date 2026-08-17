@@ -43,18 +43,14 @@ data class SleepStageRecord(
     val endAt: Instant,
 )
 
-/**
- * One point-in-time scalar metric record destined for scalar_samples. The wire-level
- * record type is preserved so ingestion_records keeps the original discriminator
- * (heart_rate, body_measurement, scalar, ...) for replay filtering.
- */
+/** One point-in-time scalar metric record destined for scalar_samples. */
 data class ScalarSampleRecord(
     override val providerRecordId: String?,
     override val normalizedRecordJson: JsonObject,
-    override val recordType: String,
     val measuredAt: Instant,
     val values: List<ScalarValue>,
 ) : HealthRecord {
+    override val recordType: String = RecordTypes.SCALAR
     override val recordStartAt: Instant = measuredAt
     override val recordEndAt: Instant? = null
 }

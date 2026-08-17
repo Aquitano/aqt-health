@@ -5,7 +5,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.buildJsonObject
 import me.aquitano.health.api.dto.ActivitySummary
-import me.aquitano.health.api.dto.HeartRate
+import me.aquitano.health.api.dto.ScalarSample
 import me.aquitano.health.api.dto.IngestionBatchRequest
 import me.aquitano.health.domain.ReplayJobStatus
 import me.aquitano.health.api.dto.ReplayJobStatusResponse
@@ -98,7 +98,7 @@ class ReplayServiceTest {
         val job = fixture.runReplay(
             ReplayRequest(
                 scope = "all",
-                metricTypes = listOf(RecordTypes.HEART_RATE),
+                metricTypes = listOf(RecordTypes.SCALAR),
                 fromDate = "2026-04-19",
                 toDate = "2026-04-19",
                 wipe = true,
@@ -261,10 +261,11 @@ class ReplayServiceTest {
                             endAt = "2026-04-19T09:00:00Z",
                             steps = 1200,
                         ),
-                        HeartRate(
+                        ScalarSample(
                             providerRecordId = "hr-1",
                             measuredAt = "2026-04-19T08:30:00Z",
-                            bpm = 64,
+                            metricType = "heart_rate",
+                            value = 64.0,
                             context = "resting",
                         ),
                         SleepSession(

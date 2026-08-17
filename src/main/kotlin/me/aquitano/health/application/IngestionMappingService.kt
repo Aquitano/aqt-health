@@ -100,16 +100,10 @@ class IngestionMappingService {
         return when (dto) {
             is StepInterval -> mapStepInterval(field, dto, issues)
             is SleepSession -> mapSleepSession(field, dto, issues)
-            is BodyMeasurement -> mapBodyMeasurement(field, dto, issues)
-            is HeartRate -> mapHeartRate(field, dto, issues)
             is ActivitySummary -> mapActivitySummary(field, dto, issues)
             is SleepSummary -> mapSleepSummary(field, dto, issues)
-            is RespiratoryRate -> mapRespiratoryRate(field, dto, issues)
-            is Hrv -> mapHrv(field, dto, issues)
             is BloodPressure -> mapBloodPressure(field, dto, issues)
-            is Cardiovascular -> mapCardiovascular(field, dto, issues)
-            is ExtendedBodyMeasurement -> mapExtendedBodyMeasurement(field, dto, issues)
-            is ScalarSample -> mapScalarViaRegistry(field, dto, issues)
+            is ScalarSample -> mapScalarSample(field, dto, issues)
         }
     }
 }

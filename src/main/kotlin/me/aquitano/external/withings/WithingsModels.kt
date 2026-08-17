@@ -19,13 +19,13 @@ val WITHINGS_DEFAULT_DATA_TYPES = listOf(
     "sleep",
 )
 
-val WITHINGS_MEASURE_TYPES_ALL_LISTED = listOf(
-    1, 4, 5, 6, 8, 9, 10, 11, 12, 54, 71, 73, 76, 77, 88, 91, 123, 130, 135,
-    136, 137, 138, 139, 155, 167, 168, 169, 170, 173, 174, 175, 196, 226, 227,
-    229,
+/** Measure types the normalizer maps; anything else would be fetched and silently dropped. */
+val WITHINGS_MEASURE_TYPES = listOf(
+    1, 5, 6, 8, 9, 10, 11, 76, 77, 88, 91, 130, 135,
+    136, 137, 138, 139, 155, 170, 173,
 )
 
-val WITHINGS_ACTIVITY_FIELDS_ALL_LISTED = listOf(
+val WITHINGS_ACTIVITY_FIELDS = listOf(
     "steps",
     "distance",
     "elevation",
@@ -38,21 +38,15 @@ val WITHINGS_ACTIVITY_FIELDS_ALL_LISTED = listOf(
     "hr_average",
     "hr_min",
     "hr_max",
-    "hr_zone_0",
-    "hr_zone_1",
-    "hr_zone_2",
-    "hr_zone_3",
 )
 
-val WITHINGS_SLEEP_FIELDS_ALL_LISTED = listOf(
+val WITHINGS_SLEEP_FIELDS = listOf(
     "hr",
     "rr",
-    "snoring",
-    "sdnn_1",
     "rmssd",
 )
 
-val WITHINGS_SLEEP_SUMMARY_FIELDS_ALL_LISTED = listOf(
+val WITHINGS_SLEEP_SUMMARY_FIELDS = listOf(
     "total_timeinbed",
     "total_sleep_time",
     "asleepduration",
@@ -61,17 +55,16 @@ val WITHINGS_SLEEP_SUMMARY_FIELDS_ALL_LISTED = listOf(
     "deepsleepduration",
     "sleep_efficiency",
     "sleep_latency",
+    "durationtosleep",
     "wakeup_latency",
+    "durationtowakeup",
     "wakeupduration",
     "wakeupcount",
     "waso",
     "nb_rem_episodes",
-    "breathing_disturbances_intensity",
-    "apnea_hypopnea_index",
-    "withings_index",
-    "durationtosleep",
-    "durationtowakeup",
     "out_of_bed_count",
+    "awake_duration",
+    "apnea_hypopnea_index",
     "hr_average",
     "hr_min",
     "hr_max",
@@ -82,23 +75,9 @@ val WITHINGS_SLEEP_SUMMARY_FIELDS_ALL_LISTED = listOf(
     "snoring",
     "snoringepisodecount",
     "sleep_score",
-    "night_events",
     "mvt_score_avg",
-    "mvt_active_duration",
     "rmssd_start_avg",
-    "rmssd_end_avg",
     "chest_movement_rate_wellness_average",
-    "chest_movement_rate_wellness_min",
-    "chest_movement_rate_wellness_max",
-    "breathing_sounds",
-    "breathing_sounds_episode_count",
-    "chest_movement_rate_average",
-    "chest_movement_rate_min",
-    "chest_movement_rate_max",
-    "core_body_temperature_min",
-    "core_body_temperature_max",
-    "core_body_temperature_avg",
-    "core_body_temperature_status",
 )
 
 data class WithingsTokenSet(

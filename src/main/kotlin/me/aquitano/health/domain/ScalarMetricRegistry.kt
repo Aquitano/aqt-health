@@ -37,8 +37,6 @@ data class ScalarMetricDescriptor(
     val valueRange: ScalarValueRange,
     val allowedContexts: Set<String>? = null,
     val supportsSegment: Boolean = false,
-    /** The legacy per-family ingestion record type whose records write this metric. */
-    val recordType: String,
 ) {
     fun valueIsValid(value: Double): Boolean {
         val aboveMin =
@@ -57,7 +55,6 @@ object ScalarMetricRegistry {
                 unit = "bpm",
                 valueRange = ScalarValueRange(25.0, 250.0),
                 allowedContexts = HeartRateContexts.supported,
-                recordType = RecordTypes.HEART_RATE,
             )
         )
         add(
@@ -67,7 +64,6 @@ object ScalarMetricRegistry {
                 unit = "breaths_per_minute",
                 valueRange = ScalarValueRange(5.0, 80.0),
                 allowedContexts = RespiratoryRateContexts.supported,
-                recordType = RecordTypes.RESPIRATORY_RATE,
             )
         )
         add(
@@ -77,7 +73,6 @@ object ScalarMetricRegistry {
                 unit = "ms",
                 valueRange = ScalarValueRange(0.0, 500.0, minInclusive = false),
                 allowedContexts = HrvContexts.supported,
-                recordType = RecordTypes.HRV,
             )
         )
 
@@ -87,7 +82,6 @@ object ScalarMetricRegistry {
                 family = MetricFamilies.BODY_MEASUREMENT,
                 unit = unit,
                 valueRange = range,
-                recordType = RecordTypes.BODY_MEASUREMENT,
             )
         )
         body(BodyMetricTypes.WEIGHT, "kg", ScalarValueRange(0.0, null, minInclusive = false))
@@ -108,7 +102,6 @@ object ScalarMetricRegistry {
                 unit = unit,
                 valueRange = range,
                 supportsSegment = supportsSegment,
-                recordType = RecordTypes.EXTENDED_BODY_MEASUREMENT,
             )
         )
         extendedBody(BodyMetricTypes.FAT_MASS, "kg", ScalarValueRange(0.0, null, minInclusive = false))
@@ -142,7 +135,6 @@ object ScalarMetricRegistry {
                 family = MetricFamilies.CARDIOVASCULAR,
                 unit = unit,
                 valueRange = ScalarValueRange(0.0, null, minInclusive = false),
-                recordType = RecordTypes.CARDIOVASCULAR,
             )
         )
         cardiovascular(CardiovascularMetricTypes.PULSE_WAVE_VELOCITY, "m/s")
@@ -165,35 +157,4 @@ object ScalarMetricRegistry {
         requireNotNull(byType[metricType]) { "Unknown scalar metric type '$metricType'" }
 
     val metricTypes: Set<String> = byType.keys
-
-    val bodyMetricTypes: Set<String> =
-        descriptors
-            .filter { it.recordType == RecordTypes.BODY_MEASUREMENT }
-            .map { it.metricType }
-            .toSet()
-
-    val extendedBodyMetricTypes: Set<String> =
-        descriptors
-            .filter { it.recordType == RecordTypes.EXTENDED_BODY_MEASUREMENT }
-            .map { it.metricType }
-            .toSet()
-
-    val cardiovascularMetricTypes: Set<String> =
-        descriptors
-            .filter { it.recordType == RecordTypes.CARDIOVASCULAR }
-            .map { it.metricType }
-            .toSet()
-
-    /** scalar_samples metric types written by records of the given ingestion record type. */
-    fun metricTypesForRecordType(recordType: String): Set<String> =
-        when (recordType) {
-            RecordTypes.HEART_RATE -> setOf(ScalarMetricTypes.HEART_RATE)
-            RecordTypes.RESPIRATORY_RATE -> setOf(ScalarMetricTypes.RESPIRATORY_RATE)
-            RecordTypes.HRV -> setOf(ScalarMetricTypes.HRV_RMSSD)
-            RecordTypes.BODY_MEASUREMENT -> bodyMetricTypes
-            RecordTypes.EXTENDED_BODY_MEASUREMENT -> extendedBodyMetricTypes
-            RecordTypes.CARDIOVASCULAR -> cardiovascularMetricTypes
-            RecordTypes.SCALAR -> metricTypes
-            else -> emptySet()
-        }
 }

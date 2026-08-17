@@ -3,17 +3,11 @@ package me.aquitano.health.domain
 object RecordTypes {
     const val STEP_INTERVAL = "step_interval"
     const val SLEEP_SESSION = "sleep_session"
-    const val BODY_MEASUREMENT = "body_measurement"
-    const val HEART_RATE = "heart_rate"
     const val ACTIVITY_SUMMARY = "activity_summary"
     const val SLEEP_SUMMARY = "sleep_summary"
-    const val RESPIRATORY_RATE = "respiratory_rate"
-    const val HRV = "hrv"
     const val BLOOD_PRESSURE = "blood_pressure"
-    const val CARDIOVASCULAR = "cardiovascular"
-    const val EXTENDED_BODY_MEASUREMENT = "extended_body_measurement"
 
-    /** Generic scalar record carrying an explicit metric type from the scalar registry. */
+    /** Every point-in-time scalar metric; the metric type comes from the scalar registry. */
     const val SCALAR = "scalar"
 }
 

@@ -50,15 +50,9 @@ object ReplayScopes {
 private val replayableRecordTypes = setOf(
     RecordTypes.STEP_INTERVAL,
     RecordTypes.SLEEP_SESSION,
-    RecordTypes.BODY_MEASUREMENT,
-    RecordTypes.HEART_RATE,
     RecordTypes.ACTIVITY_SUMMARY,
     RecordTypes.SLEEP_SUMMARY,
-    RecordTypes.RESPIRATORY_RATE,
-    RecordTypes.HRV,
     RecordTypes.BLOOD_PRESSURE,
-    RecordTypes.CARDIOVASCULAR,
-    RecordTypes.EXTENDED_BODY_MEASUREMENT,
     RecordTypes.SCALAR,
 )
 
