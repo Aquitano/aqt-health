@@ -2,6 +2,24 @@
 -- legacy per-family types are gone. Convert the stored ingestion records in place so the
 -- append-only log stays replayable, then tighten the record_type CHECK.
 
+-- The standalone heart rate of a Withings measure group now uses the same
+-- withings:measure:$grpid:<metric_type> id as every other measure in the group, so rename
+-- the stored ids before the conversion; otherwise a re-sync would insert a second sample
+-- next to every historical one instead of deduplicating against it.
+UPDATE ingestion_records
+SET provider_record_id     = regexp_replace(provider_record_id, ':heart-pulse$', ':heart_rate'),
+    normalized_record_json = jsonb_set(
+        normalized_record_json,
+        '{providerRecordId}',
+        to_jsonb(regexp_replace(provider_record_id, ':heart-pulse$', ':heart_rate')))
+WHERE record_type = 'heart_rate'
+  AND provider_record_id LIKE 'withings:measure:%:heart-pulse';
+
+UPDATE scalar_samples
+SET provider_record_id = regexp_replace(provider_record_id, ':heart-pulse$', ':heart_rate')
+WHERE metric_type = 'heart_rate'
+  AND provider_record_id LIKE 'withings:measure:%:heart-pulse';
+
 UPDATE ingestion_records
 SET record_type            = 'scalar',
     normalized_record_json = jsonb_strip_nulls(jsonb_build_object(

@@ -52,8 +52,19 @@ class LegacyScalarRecordMigrationTest {
         assertEquals("resting", samplesByMetricType.getValue("heart_rate").first.context)
         assertEquals(42.5, samplesByMetricType.getValue("hrv_rmssd").first.value)
 
-        // The multi-value body_measurement record fanned out, and its scalar samples now
-        // carry the per-metric provider record ids the normalizers emit.
+        // The renamed heart rate id has to land on the record row and inside its normalized JSON.
+        assertEquals(
+            "withings:measure:123:heart_rate",
+            samplesByMetricType.getValue("heart_rate").second.providerRecordId,
+        )
+        assertEquals(
+            "withings:measure:123:heart_rate",
+            samplesByMetricType.getValue("heart_rate").first.providerRecordId,
+        )
+
+        // The multi-value body_measurement record fanned out and the group's standalone heart
+        // rate was renamed, so every scalar sample now carries the per-metric provider record
+        // id the normalizers emit and a re-sync deduplicates against it.
         assertEquals(
             "withings:measure:123:weight",
             samplesByMetricType.getValue("weight").second.providerRecordId,
@@ -67,7 +78,7 @@ class LegacyScalarRecordMigrationTest {
                 "weight" to "withings:measure:123:weight",
                 "body_fat" to "withings:measure:123:body_fat",
                 "muscle" to "withings:measure:123:muscle",
-                "heart_rate" to "hr-1",
+                "heart_rate" to "withings:measure:123:heart_rate",
             ),
             sampleProviderRecordIds(config),
         )
@@ -107,8 +118,8 @@ class LegacyScalarRecordMigrationTest {
 
             INSERT INTO ingestion_records (id, batch_id, record_type, provider_record_id,
                                            normalized_record_json, record_start_at, record_end_at, created_at)
-            VALUES (1, 1, 'heart_rate', 'hr-1',
-                    '{"type":"heart_rate","providerRecordId":"hr-1","measuredAt":"2026-04-19T08:30:00Z","bpm":64,"context":"resting"}',
+            VALUES (1, 1, 'heart_rate', 'withings:measure:123:heart-pulse',
+                    '{"type":"heart_rate","providerRecordId":"withings:measure:123:heart-pulse","measuredAt":"2026-04-19T08:30:00Z","bpm":64,"context":"resting"}',
                     '2026-04-19T08:30:00Z', NULL, '2026-04-19T10:00:00Z'),
                    (2, 1, 'hrv', 'hrv-1',
                     '{"type":"hrv","providerRecordId":"hrv-1","measuredAt":"2026-04-19T02:30:00Z","metricType":"rmssd","value":42.5,"unit":"ms","context":"sleep"}',
@@ -124,7 +135,7 @@ class LegacyScalarRecordMigrationTest {
 
             INSERT INTO scalar_samples (source_instance_id, ingestion_record_id, provider_record_id,
                                         measured_at, metric_type, value, unit, context, segment, created_at)
-            VALUES (1, 1, 'hr-1', '2026-04-19T08:30:00Z', 'heart_rate', 64, 'bpm', 'resting', NULL, '2026-04-19T10:00:00Z'),
+            VALUES (1, 1, 'withings:measure:123:heart-pulse', '2026-04-19T08:30:00Z', 'heart_rate', 64, 'bpm', 'resting', NULL, '2026-04-19T10:00:00Z'),
                    (1, 3, 'withings:measure:123:body', '2026-04-19T07:00:00Z', 'weight', 82.4, 'kg', NULL, NULL, '2026-04-19T10:00:00Z'),
                    (1, 3, 'withings:measure:123:body', '2026-04-19T07:00:00Z', 'body_fat', 18.2, 'percent', NULL, NULL, '2026-04-19T10:00:00Z'),
                    (1, 3, 'withings:measure:123:body', '2026-04-19T07:00:00Z', 'muscle', 34.7, 'kg', NULL, NULL, '2026-04-19T10:00:00Z');
