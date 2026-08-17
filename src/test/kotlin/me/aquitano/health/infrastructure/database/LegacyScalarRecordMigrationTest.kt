@@ -28,6 +28,9 @@ class LegacyScalarRecordMigrationTest {
         FlywayMigrator().migrate(config)
 
         val records = storedRecords(config)
+        // Pinned before the associate below, which would hide an extra record sharing a
+        // metric type: 5 seeded records, of which the 2-metric body measurement fans out.
+        assertEquals(6, records.size, "unexpected record count: ${records.map { it.providerRecordId }}")
         assertTrue(
             records.all { it.recordType == "scalar" },
             "unexpected surviving record types: ${records.map { it.recordType }.toSet()}",
