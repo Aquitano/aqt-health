@@ -120,6 +120,7 @@ class ApplicationTest {
             "/api/v2/sleep/summaries",
             "/api/v2/metrics/{metricType}",
             "/api/v2/metrics/{metricType}/summary",
+            "/api/v2/metrics/{metricType}/daily",
             "/api/v2/blood-pressure",
             "/api/v2/dashboard/summary",
             "/api/v2/admin/ingestion/batches",
@@ -211,13 +212,13 @@ class ApplicationTest {
         assertFalse("canonical" in healthDayParamNames)
 
         val schemas = body["components"]!!.jsonObject["schemas"]!!.jsonObject
-        val providerStatus = schemas["ProviderStatusResponseDto"]!!.jsonObject
+        val providerStatus = schemas["ProviderStatusResponse"]!!.jsonObject
         assertEquals(
             setOf("configure", "connect", "reconnect", "sync"),
             providerStatus["properties"]!!.jsonObject["nextAction"]!!.jsonObject["enum"]!!
                 .jsonArray.map { it.jsonPrimitive.content }.toSet(),
         )
-        val providerAccountStatus = schemas["ProviderAccountStatusResponseDto"]!!.jsonObject
+        val providerAccountStatus = schemas["ProviderAccountStatusResponse"]!!.jsonObject
         assertEquals(
             setOf("not_connected", "connected", "needs_reauth", "disconnected", "configuration_error"),
             providerAccountStatus["properties"]!!.jsonObject["status"]!!.jsonObject["enum"]!!
@@ -235,49 +236,55 @@ class ApplicationTest {
                 .jsonArray.map { it.jsonPrimitive.content }.toSet(),
         )
 
-        listOf(
-            "StepIntervalDto",
-            "SleepSessionDto",
-            "BodyMeasurementDto",
-            "HeartRateDto",
-            "ActivitySummaryDto",
-            "SleepSummaryDto",
-            "RespiratoryRateDto",
-            "HrvDto",
-            "BloodPressureDto",
-            "CardiovascularDto",
-            "ExtendedBodyMeasurementDto",
-            "ScalarSampleDto",
-        ).forEach { schemaName ->
+        val recordSchemaRefs = setOf(
+            "#/components/schemas/step_interval",
+            "#/components/schemas/sleep_session",
+            "#/components/schemas/body_measurement",
+            "#/components/schemas/heart_rate",
+            "#/components/schemas/activity_summary",
+            "#/components/schemas/sleep_summary",
+            "#/components/schemas/respiratory_rate",
+            "#/components/schemas/hrv",
+            "#/components/schemas/blood_pressure",
+            "#/components/schemas/cardiovascular",
+            "#/components/schemas/extended_body_measurement",
+            "#/components/schemas/scalar",
+        )
+        recordSchemaRefs.forEach { ref ->
+            val schemaName = ref.substringAfterLast('/')
             assertNotNull(schemas[schemaName], "Missing OpenAPI component schema $schemaName")
         }
 
         val requestSchema = paths["/api/v2/ingestion/batches"]!!.jsonObject["post"]!!.jsonObject["requestBody"]!!
             .jsonObject["content"]!!.jsonObject["application/json"]!!.jsonObject["schema"]!!.jsonObject
-        val recordRefs = requestSchema["properties"]!!.jsonObject["records"]!!.jsonObject["items"]!!.jsonObject["oneOf"]!!
+        assertEquals(
+            "#/components/schemas/IngestionBatchRequest",
+            requestSchema["\$ref"]!!.jsonPrimitive.content,
+        )
+
+        val batchRequest = schemas["IngestionBatchRequest"]!!.jsonObject
+        assertEquals(
+            "#/components/schemas/IngestionRecord",
+            batchRequest["properties"]!!.jsonObject["records"]!!.jsonObject["items"]!!
+                .jsonObject["\$ref"]!!.jsonPrimitive.content,
+        )
+
+        val recordSchema = schemas["IngestionRecord"]!!.jsonObject
+        val recordRefs = recordSchema["oneOf"]!!
             .jsonArray.map { it.jsonObject["\$ref"]!!.jsonPrimitive.content }
             .toSet()
+        assertEquals(recordSchemaRefs, recordRefs)
+
+        val discriminator = recordSchema["discriminator"]!!.jsonObject
+        assertEquals("type", discriminator["propertyName"]!!.jsonPrimitive.content)
+        val mapping = discriminator["mapping"]!!.jsonObject
         assertEquals(
-            setOf(
-                "#/components/schemas/StepIntervalDto",
-                "#/components/schemas/SleepSessionDto",
-                "#/components/schemas/BodyMeasurementDto",
-                "#/components/schemas/HeartRateDto",
-                "#/components/schemas/ActivitySummaryDto",
-                "#/components/schemas/SleepSummaryDto",
-                "#/components/schemas/RespiratoryRateDto",
-                "#/components/schemas/HrvDto",
-                "#/components/schemas/BloodPressureDto",
-                "#/components/schemas/CardiovascularDto",
-                "#/components/schemas/ExtendedBodyMeasurementDto",
-                "#/components/schemas/ScalarSampleDto",
-            ),
-            recordRefs,
+            recordSchemaRefs,
+            mapping.values.map { it.jsonPrimitive.content }.toSet(),
         )
-        assertTrue(
-            requestSchema.toString().contains("oneOf") || requestSchema.toString().contains("IngestionRecordDto"),
-            "Ingestion request schema should expose polymorphic records",
-        )
+        mapping.forEach { (typeValue, ref) ->
+            assertEquals("#/components/schemas/$typeValue", ref.jsonPrimitive.content)
+        }
     }
 
     @Test

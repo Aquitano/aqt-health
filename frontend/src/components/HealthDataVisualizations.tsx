@@ -10,19 +10,18 @@ import {
 } from "./charts/HealthMetricChart";
 import type {
   ActivitySummariesResponse,
-  BodyMeasurement,
-  BodyMeasurementsResponse,
   HeartRateDailyPoint,
-  HrvSamplesResponse,
-  RespiratoryRateSamplesResponse,
+  ScalarSample,
+  ScalarSamplesResponse,
   SleepNightsResponse,
   SleepSummariesResponse,
   StepDailySummariesResponse,
 } from "@/lib/types";
+import { formatAxisDate, formatChartValue } from "@/lib/format";
 import styles from "./HealthDataVisualizations.module.css";
 
 const bodyMetricConfig: Record<string, { label: string; color: string }> = {
-  weight: { label: "Weight", color: "#45d6a4" },
+  weight: { label: "Weight", color: "var(--hue-weight)" },
   body_fat: { label: "Body fat", color: "#eab265" },
   muscle: { label: "Muscle", color: "#8b9dff" },
   water: { label: "Water", color: "#5ec9e8" },
@@ -33,12 +32,12 @@ const bodyMetricOrder = ["weight", "body_fat", "muscle", "water", "visceral_fat"
 
 type HealthDataVisualizationsProps = {
   activitySummaries?: ActivitySummariesResponse;
-  bodyMeasurements?: BodyMeasurementsResponse;
+  bodyMeasurements?: ScalarSamplesResponse;
   dailySteps?: StepDailySummariesResponse;
   heartRateDaily: HeartRateDailyPoint[];
-  hrvSamples?: HrvSamplesResponse;
+  hrvSamples?: ScalarSamplesResponse;
   sleepNights?: SleepNightsResponse;
-  respiratoryRates?: RespiratoryRateSamplesResponse;
+  respiratoryRates?: ScalarSamplesResponse;
   sleepSummaries?: SleepSummariesResponse;
   fromDate: string;
   toDate: string;
@@ -297,7 +296,7 @@ type NormalizedChart = {
   defaultVisibleMetricKeys: string[];
 };
 
-function buildBodyChart(items: BodyMeasurement[]): NormalizedChart {
+function buildBodyChart(items: ScalarSample[]): NormalizedChart {
   const supported = items.filter((item) => item.metricType in bodyMetricConfig);
   const presentMetricKeys = bodyMetricOrder.filter((metricKey) =>
     supported.some((item) => item.metricType === metricKey),
@@ -320,7 +319,7 @@ function buildBodyChart(items: BodyMeasurement[]): NormalizedChart {
   };
 }
 
-function buildWeightChart(items: BodyMeasurement[]): NormalizedChart {
+function buildWeightChart(items: ScalarSample[]): NormalizedChart {
   const weightItems = items.filter((item) => item.metricType === "weight");
   return {
     series: weightItems.length
@@ -345,7 +344,7 @@ function buildStepsChart(items: StepDailySummariesResponse["items"]): Normalized
       source: sourceLabel(item.source),
     }));
 
-  return detailsToChart(details, [{ key: "steps", label: "Steps", color: "#eab265", unit: "steps" }], ["steps"]);
+  return detailsToChart(details, [{ key: "steps", label: "Steps", color: "var(--hue-steps)", unit: "steps" }], ["steps"]);
 }
 
 function buildActivityChart(items: ActivitySummariesResponse["items"]): NormalizedChart {
@@ -452,7 +451,7 @@ function buildSleepChart(sleepNights?: SleepNightsResponse): NormalizedChart {
       source: sourceLabel(session.source),
     }));
 
-  return detailsToChart(details, [{ key: "sleep", label: "Sleep", color: "#8b9dff", unit: "h" }], ["sleep"]);
+  return detailsToChart(details, [{ key: "sleep", label: "Sleep", color: "var(--hue-sleep)", unit: "h" }], ["sleep"]);
 }
 
 function buildSleepSummaryChart(items: SleepSummariesResponse["items"]): NormalizedChart {
@@ -517,7 +516,7 @@ function buildSleepSummaryChart(items: SleepSummariesResponse["items"]): Normali
   );
 }
 
-function buildRespiratoryRateChart(items: RespiratoryRateSamplesResponse["items"]): NormalizedChart {
+function buildRespiratoryRateChart(items: ScalarSamplesResponse["items"]): NormalizedChart {
   const details = [...items]
     .sort((a, b) => a.measuredAt.localeCompare(b.measuredAt) || a.id - b.id)
     .map((item) => ({
@@ -532,12 +531,12 @@ function buildRespiratoryRateChart(items: RespiratoryRateSamplesResponse["items"
 
   return detailsToChart(
     details,
-    [{ key: "respiratory_rate", label: "Respiratory rate", color: "#5ec9e8", unit: items[0]?.unit }],
+    [{ key: "respiratory_rate", label: "Respiratory rate", color: "var(--hue-resp)", unit: items[0]?.unit }],
     ["respiratory_rate"],
   );
 }
 
-function buildHrvChart(items: HrvSamplesResponse["items"]): NormalizedChart {
+function buildHrvChart(items: ScalarSamplesResponse["items"]): NormalizedChart {
   const presentMetricKeys = Array.from(new Set(items.map((item) => item.metricType))).sort();
   const details = [...items]
     .sort((a, b) => a.measuredAt.localeCompare(b.measuredAt) || a.id - b.id)
@@ -563,11 +562,11 @@ function buildHrvChart(items: HrvSamplesResponse["items"]): NormalizedChart {
   );
 }
 
-function measurementsToData(items: BodyMeasurement[]): HealthChartDatum[] {
+function measurementsToData(items: ScalarSample[]): HealthChartDatum[] {
   return detailsToData(measurementsToDetails(items));
 }
 
-function measurementsToDetails(items: BodyMeasurement[]): ChartPointDetail[] {
+function measurementsToDetails(items: ScalarSample[]): ChartPointDetail[] {
   return [...items]
     .sort((a, b) => a.measuredAt.localeCompare(b.measuredAt) || a.id - b.id)
     .map((item) => ({
@@ -626,28 +625,17 @@ function buildSummaries(details: ChartPointDetail[], visibleMetricKeys: string[]
 
   return [
     { label: "Metric", value: latest?.label ?? metricKey },
-    { label: "Latest", value: latest ? formatValue(latest.value, unit) : "n/a" },
-    { label: "Min", value: values.length ? formatValue(Math.min(...values), unit) : "n/a" },
-    { label: "Max", value: values.length ? formatValue(Math.max(...values), unit) : "n/a" },
-    { label: "Average", value: average !== undefined ? formatValue(average, unit) : "n/a" },
+    { label: "Latest", value: latest ? formatChartValue(latest.value, unit) : "n/a" },
+    { label: "Min", value: values.length ? formatChartValue(Math.min(...values), unit) : "n/a" },
+    { label: "Max", value: values.length ? formatChartValue(Math.max(...values), unit) : "n/a" },
+    { label: "Average", value: average !== undefined ? formatChartValue(average, unit) : "n/a" },
     { label: "Delta", value: delta !== undefined ? formatSignedValue(delta, unit) : "n/a" },
   ];
 }
 
-function formatAxisDate(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(date);
-}
-
-function formatValue(value: number, unit?: string): string {
-  const formatted = new Intl.NumberFormat("en", { maximumFractionDigits: 1 }).format(value);
-  return unit ? `${formatted} ${unit}` : formatted;
-}
-
 function formatSignedValue(value: number, unit?: string): string {
   const sign = value > 0 ? "+" : "";
-  return `${sign}${formatValue(value, unit)}`;
+  return `${sign}${formatChartValue(value, unit)}`;
 }
 
 function sourceLabel(source?: { provider: string; providerInstanceId: string } | null): string | undefined {

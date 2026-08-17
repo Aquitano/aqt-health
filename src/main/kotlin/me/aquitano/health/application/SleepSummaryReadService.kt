@@ -1,25 +1,24 @@
 package me.aquitano.health.application
 
 import me.aquitano.health.api.dto.SleepSummariesResponse
-import me.aquitano.health.application.metric.common.BaseReadService
+import me.aquitano.health.application.metric.common.QueryParamSpecs
 import me.aquitano.health.application.metric.common.QueryParams
-import me.aquitano.health.application.metric.common.SortFields
 import me.aquitano.health.application.metric.common.keysetPage
 import me.aquitano.health.application.metric.common.meta
 import me.aquitano.health.application.metric.common.readFilters
 import me.aquitano.health.application.metric.common.toResponse
 import me.aquitano.health.application.metric.sleep.repository.CanonicalSleepSummaryDerivationRepository
+import me.aquitano.health.infrastructure.database.suspendDbTransaction
 import org.jetbrains.exposed.v1.jdbc.Database
 
 class SleepSummaryReadService(
-    database: Database,
+    private val database: Database,
     private val canonicalRepository: CanonicalSleepSummaryDerivationRepository,
-) : BaseReadService(database) {
+) {
     suspend fun list(params: QueryParams): SleepSummariesResponse =
-        dbQuery {
+        suspendDbTransaction(db = database) {
             val filters = params.readFilters(
-                defaultSort = SortFields.END_AT,
-                allowedSorts = setOf(SortFields.END_AT),
+                sortSpec = QueryParamSpecs.sortByEndAt,
                 latestSupported = true,
             )
             val (rows, sourceMetadata) = canonicalRepository.listCanonicalSleepSummaries(filters)

@@ -10,13 +10,14 @@ val postgresql_jdbc_version: String by project
 val testcontainers_version: String by project
 val kotlinx_coroutines_version: String by project
 val kotlin_logging_version: String by project
+val konsist_version: String by project
 
 plugins {
     kotlin("jvm") version "2.3.0"
     id("io.ktor.plugin") version "3.5.0"
     id("org.jetbrains.kotlin.plugin.serialization") version "2.3.0"
 
-    id("com.github.ben-manes.versions") version "0.54.0"
+    id("com.github.ben-manes.versions") version "0.61.0"
 }
 
 group = "me.aquitano"
@@ -49,8 +50,8 @@ dependencies {
     implementation("io.ktor:ktor-server-core")
     implementation("io.ktor:ktor-server-content-negotiation")
     implementation("io.ktor:ktor-server-metrics-micrometer")
-    implementation("io.micrometer:micrometer-registry-prometheus:1.16.5")
-    implementation("org.xerial.snappy:snappy-java:1.1.10.5")
+    implementation("io.micrometer:micrometer-registry-prometheus:1.17.0")
+    implementation("org.xerial.snappy:snappy-java:1.1.10.8")
     implementation("io.ktor:ktor-server-netty")
     implementation("io.ktor:ktor-server-openapi")
     implementation("io.ktor:ktor-server-routing-openapi")
@@ -78,12 +79,13 @@ dependencies {
     implementation("org.flywaydb:flyway-core:$flyway_version")
     implementation("org.flywaydb:flyway-database-postgresql:$flyway_version")
 
-    implementation("com.google.cloud:google-cloud-health:0.1.0")
+    implementation("com.google.cloud:google-cloud-health:0.4.0")
 
     testImplementation("io.ktor:ktor-server-test-host")
     testImplementation("io.ktor:ktor-client-mock")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit:$kotlin_version")
     testImplementation("org.testcontainers:postgresql:$testcontainers_version")
+    testImplementation("com.lemonappdev:konsist:$konsist_version")
 }
 
 val integrationTestClasses = listOf(
@@ -95,6 +97,9 @@ val integrationTestClasses = listOf(
     "**/ProviderStatusRouteTest.class",
     "**/ReadApiRouteTest.class",
     "**/ReplayServiceTest.class",
+    "**/ProviderSyncJobServiceTest.class",
+    "**/ProviderWorkflowServiceTest.class",
+    "**/IdempotencyKeyRouteTest.class",
     "**/CanonicalScalarSamplesViewTest.class",
     "**/CanonicalStructuralViewsTest.class",
     "**/ScheduledProviderSyncServiceTest.class",

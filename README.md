@@ -96,6 +96,7 @@ Environment variables:
 - `AQT_HEALTH_LOG_FILE_ROLLOVER`: rolling JSON log archive pattern, default `build/logs/aqt-health.%d{yyyy-MM-dd}.%i.jsonl.gz`
 - `OPENOBSERVE_LOG_URL`: optional OpenObserve HTTP ingestion endpoint for direct app log delivery
 - `OPENOBSERVE_AUTHORIZATION`: optional full OpenObserve authorization header value, for example `Basic ...`
+- `OPENOBSERVE_URL`, `OPENOBSERVE_ORG`, `OPENOBSERVE_USER`, `OPENOBSERVE_PASSWORD`: optional OpenObserve Prometheus remote-write target for the metrics pusher; `OPENOBSERVE_ORG` is not needed when the URL already contains the full `/prometheus/api/v1/write` path
 
 If `AQT_HEALTH_BOOTSTRAP_API_KEY` is set, the app hashes it with SHA-256 and stores only `sha256:<hex>` in `api_clients`. If it is blank, startup still succeeds, but protected endpoints require a client row to exist in PostgreSQL.
 
@@ -177,6 +178,24 @@ Set these variables in the frontend runtime:
 
 - `AQT_HEALTH_API_BASE_URL`: backend API URL
 - `AQT_HEALTH_API_KEY`: backend API key used only by the frontend server
+
+In production the frontend refuses to start a request path without `AQT_HEALTH_API_BASE_URL`; there is no silent localhost fallback outside dev and build.
+
+### Frontend Container
+
+`frontend/Dockerfile` builds a standalone Next.js server image (Bun build stage, Node runtime, non-root user). The compose file wires it up as the `frontend` service:
+
+```bash
+AQT_HEALTH_API_KEY=<backend-api-key> docker compose up -d frontend
+```
+
+Compose variables:
+
+- `AQT_HEALTH_FRONTEND_PORT`: host port, default `3000`
+- `AQT_HEALTH_API_BASE_URL`: defaults to `http://app:8080` (container-to-container)
+- `AQT_HEALTH_API_KEY`: backend API key for the frontend proxy, typically the bootstrap key
+
+The container exposes `GET /api/health` as an unauthenticated liveness probe. The frontend has no authentication of its own; deploy it behind an authenticating reverse proxy and do not publish its port directly.
 
 ## Health Check
 
@@ -371,6 +390,8 @@ curl -X POST http://localhost:8080/api/v2/providers/google-health/sync-jobs \
 ```
 
 Poll `/api/v2/providers/google-health/sync-jobs/{jobId}` for progress and the final summary. The backend owns the provider-safe sequential work after the job is accepted, so frontend reloads or browser closes do not stop the sync job.
+
+Sync jobs also survive backend restarts: unfinished jobs are requeued and rerun on startup, which is safe because ingestion dedupes by provider record ID. The job status reports how often this happened in `restartCount`; after three restarts a job is failed instead of resumed to stop crash loops.
 
 Google Health may return overlapping step intervals with different provider record IDs. To avoid inflated future totals, overlapping Google Health step intervals for the same account are skipped as duplicate metrics during ingestion. This guard is forward-looking only; it does not repair or remove historical rows that were ingested before the guard existed.
 

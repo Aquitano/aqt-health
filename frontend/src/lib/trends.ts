@@ -1,8 +1,6 @@
 import type {
   ActivitySummariesResponse,
-  BodyMeasurementsResponse,
-  HrvSamplesResponse,
-  RespiratoryRateSamplesResponse,
+  ScalarSamplesResponse,
   SleepSummariesResponse,
   StepDailySummariesResponse,
 } from "./types";
@@ -113,12 +111,12 @@ function summarize(
 }
 
 export type TrendsInput = {
-  weight?: BodyMeasurementsResponse;
+  weight?: ScalarSamplesResponse;
   steps?: StepDailySummariesResponse;
   sleep?: SleepSummariesResponse;
-  hrv?: HrvSamplesResponse;
+  hrv?: ScalarSamplesResponse;
   activity?: ActivitySummariesResponse;
-  respiratory?: RespiratoryRateSamplesResponse;
+  respiratory?: ScalarSamplesResponse;
 };
 
 export function buildTrendStats(input: TrendsInput): TrendStat[] {
@@ -160,7 +158,7 @@ export function buildTrendStats(input: TrendsInput): TrendStat[] {
 
   stats.push(
     summarize(
-      { key: "sleep_score", label: "Sleep score", unit: "", color: "#a78bfa", goodWhen: "up" },
+      { key: "sleep_score", label: "Sleep score", unit: "", color: "var(--hue-score)", goodWhen: "up" },
       dailyAggregate(
         (input.sleep?.items ?? [])
           .filter((item) => typeof item.sleepScore === "number")

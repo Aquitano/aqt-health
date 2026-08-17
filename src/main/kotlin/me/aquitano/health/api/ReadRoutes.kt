@@ -8,16 +8,36 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.server.routing.openapi.*
 import me.aquitano.health.api.dto.*
+import me.aquitano.health.application.SleepSummaryReadService
+import me.aquitano.health.application.TrendQueryService
+import me.aquitano.health.application.HealthDayQueryService
+import me.aquitano.health.application.metric.activity.ActivityQueryService
+import me.aquitano.health.application.metric.cardiovascular.CardiovascularQueryService
+import me.aquitano.health.application.metric.common.QueryParamSpecs
+import me.aquitano.health.application.metric.dashboard.DashboardQueryService
+import me.aquitano.health.application.metric.scalar.ScalarMetricQueryService
+import me.aquitano.health.application.metric.sleep.SleepQueryService
+import me.aquitano.health.application.metric.steps.StepQueryService
 import me.aquitano.health.domain.NotFoundException
-import me.aquitano.health.domain.RequestValidationException
-import me.aquitano.health.domain.ValidationIssue
-import me.aquitano.health.domain.ValidationIssueCodes
+import me.aquitano.health.infrastructure.time.UtcClock
+import org.koin.ktor.ext.inject
 import kotlin.reflect.typeOf
 
 /** Metric catalog, scalar/structural metric, health-day, and dashboard read routes. */
-internal fun Route.readRoutes(services: ApplicationServices) {
+internal fun Route.readRoutes() {
+    val clock by application.inject<UtcClock>()
+    val scalarMetricQueryService by application.inject<ScalarMetricQueryService>()
+    val healthDayQueryService by application.inject<HealthDayQueryService>()
+    val stepQueryService by application.inject<StepQueryService>()
+    val activityQueryService by application.inject<ActivityQueryService>()
+    val sleepQueryService by application.inject<SleepQueryService>()
+    val sleepSummaryReadService by application.inject<SleepSummaryReadService>()
+    val cardiovascularQueryService by application.inject<CardiovascularQueryService>()
+    val dashboardQueryService by application.inject<DashboardQueryService>()
+    val trendQueryService by application.inject<TrendQueryService>()
+
     get("/api/v2/metrics") {
-        call.respond<MetricTypeCatalogResponse>(services.scalarMetricQueryService.catalog())
+        call.respond<MetricTypeCatalogResponse>(scalarMetricQueryService.catalog())
     }.describe {
         operationId = "getMetricTypeCatalog"
         tag("Read")
@@ -29,7 +49,7 @@ internal fun Route.readRoutes(services: ApplicationServices) {
     }
     get("/api/v2/metrics/{metricType}") {
         call.respond<ScalarSamplesResponse>(
-            services.scalarMetricQueryService.list(
+            scalarMetricQueryService.list(
                 call.metricTypePath(),
                 call.queryParams(),
             )
@@ -46,7 +66,7 @@ internal fun Route.readRoutes(services: ApplicationServices) {
     }
     get("/api/v2/metrics/{metricType}/summary") {
         call.respond<ScalarSummaryResponse>(
-            services.scalarMetricQueryService.summary(
+            scalarMetricQueryService.summary(
                 call.metricTypePath(),
                 call.queryParams(),
             )
@@ -61,12 +81,29 @@ internal fun Route.readRoutes(services: ApplicationServices) {
         scalarSummaryQueryParameters()
         errorResponses(notFound = true)
     }
+    get("/api/v2/metrics/{metricType}/daily") {
+        call.respond<ScalarDailySummariesResponse>(
+            scalarMetricQueryService.summaryDaily(
+                call.metricTypePath(),
+                call.queryParams(),
+            )
+        )
+    }.describe {
+        operationId = "summarizeScalarSamplesDaily"
+        tag("Read")
+        summary = "Summarize scalar samples per calendar day"
+        description =
+            "Returns one count/min/max/avg bucket per calendar day for the metric type within the requested timestamp range, grouped by the `timezone` day boundaries (UTC by default). At least one of `from`/`to` is required to bound the scan. Replaces per-day summary fan-out with a single ranged read. Unknown metric types return 404."
+        requiresBearerAuth()
+        scalarDailySummaryQueryParameters()
+        errorResponses(notFound = true)
+    }
     get("/api/v2/health/day") {
         call.respond<HealthDayResponse>(
             HttpStatusCode.OK,
-            services.healthDayQueryService.getHealthDay(
+            healthDayQueryService.getHealthDay(
                 call.queryParams(),
-                services.clock.now(),
+                clock.now(),
             )
         )
     }.describe {
@@ -90,7 +127,7 @@ internal fun Route.readRoutes(services: ApplicationServices) {
     }
     get("/api/v2/steps") {
         call.respond<StepSamplesResponse>(
-            services.metricsQueryService.listStepSamples(
+            stepQueryService.listStepSamples(
                 call.queryParams()
             )
         )
@@ -99,30 +136,29 @@ internal fun Route.readRoutes(services: ApplicationServices) {
         summary = "List step samples",
         descriptionText = "Returns canonical step samples filtered by timestamp range, source provider, provider instance, source metadata inclusion, item limit, and sort order. Use `latest=true` to return the latest matching sample only.",
         includeLatest = true,
-        sortValues = listOf("startAt"),
-        defaultSort = "startAt",
+        sortSpec = QueryParamSpecs.sortByStartAt,
     )
     get("/api/v2/steps/daily") {
         call.respond<StepDailySummariesResponse>(
             HttpStatusCode.OK,
-            services.metricsQueryService.listStepDailySummaries(
+            stepQueryService.listStepDailySummaries(
                 call.queryParams(),
-                services.clock.now()
+                clock.now()
             )
         )
     }.describeDailyStepReadOperation()
     get("/api/v2/activity/summaries") {
         call.respond<ActivitySummariesResponse>(
             HttpStatusCode.OK,
-            services.metricsQueryService.listActivitySummaries(
+            activityQueryService.listActivitySummaries(
                 call.queryParams(),
-                services.clock.now()
+                clock.now()
             )
         )
     }.describeActivitySummaryReadOperation()
     get("/api/v2/sleep/sessions") {
         call.respond<SleepSessionsResponse>(
-            services.metricsQueryService.listSleepSessions(
+            sleepQueryService.listSleepSessions(
                 call.queryParams()
             )
         )
@@ -131,21 +167,20 @@ internal fun Route.readRoutes(services: ApplicationServices) {
         summary = "List sleep sessions",
         descriptionText = "Returns sleep sessions with nested stages. Use `latest=true` to return the latest matching session only.",
         includeLatest = true,
-        sortValues = listOf("startAt"),
-        defaultSort = "startAt",
+        sortSpec = QueryParamSpecs.sortByStartAt,
     )
     get("/api/v2/sleep/nights") {
         call.respond<SleepNightsResponse>(
             HttpStatusCode.OK,
-            services.metricsQueryService.listSleepNights(
+            sleepQueryService.listSleepNights(
                 call.queryParams(),
-                services.clock.now()
+                clock.now()
             )
         )
     }.describeSleepNightReadOperation()
     get("/api/v2/sleep/summaries") {
         call.respond<SleepSummariesResponse>(
-            services.sleepSummaryReadService.list(
+            sleepSummaryReadService.list(
                 call.queryParams()
             )
         )
@@ -154,28 +189,26 @@ internal fun Route.readRoutes(services: ApplicationServices) {
         summary = "List sleep summaries",
         descriptionText = "Returns aggregate sleep summary records such as sleep score, efficiency, latency, wakeups, WASO, and stage-duration totals. Use `latest=true` to return the latest matching summary only.",
         includeLatest = true,
-        sortValues = listOf("endAt"),
-        defaultSort = "endAt",
+        sortSpec = QueryParamSpecs.sortByEndAt,
     )
     get("/api/v2/blood-pressure") {
         call.respond<BloodPressureMeasurementsResponse>(
-            services.metricsQueryService.listBloodPressure(call.queryParams())
+            cardiovascularQueryService.listBloodPressure(call.queryParams())
         )
     }.describeReadOperation(
         operationId = "listBloodPressureMeasurements",
         summary = "List blood pressure measurements",
         descriptionText = "Returns paired systolic/diastolic blood-pressure measurements filtered by timestamp and source. Use `latest=true` to return the latest matching measurement only.",
         includeLatest = true,
-        sortValues = listOf("measuredAt"),
-        defaultSort = "measuredAt",
+        sortSpec = QueryParamSpecs.sortByMeasuredAt,
     )
 
     get("/api/v2/dashboard/summary") {
         call.respond<DashboardSummaryResponse>(
             HttpStatusCode.OK,
-            services.metricsQueryService.dashboardSummary(
+            dashboardQueryService.dashboardSummary(
                 call.queryParams(),
-                services.clock.now()
+                clock.now()
             )
         )
     }.describe {
@@ -191,9 +224,9 @@ internal fun Route.readRoutes(services: ApplicationServices) {
     get("/api/v2/dashboard/trends") {
         call.respond<DashboardTrendsResponse>(
             HttpStatusCode.OK,
-            services.trendQueryService.dashboardTrends(
+            trendQueryService.dashboardTrends(
                 call.queryParams(),
-                services.clock.now(),
+                clock.now(),
             )
         )
     }.describe {

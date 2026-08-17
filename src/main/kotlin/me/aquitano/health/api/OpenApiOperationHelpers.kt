@@ -7,8 +7,8 @@ import io.ktor.openapi.*
 import io.ktor.server.routing.*
 import io.ktor.server.routing.openapi.*
 import io.ktor.utils.io.*
-import me.aquitano.external.withings.WITHINGS_PROVIDER_CODE
 import me.aquitano.health.api.dto.*
+import me.aquitano.health.application.metric.common.EnumParamSpec
 import kotlin.reflect.typeOf
 
 internal fun Operation.Builder.publicEndpoint() {
@@ -41,42 +41,6 @@ internal inline fun <reified T : Any> Operation.Builder.jsonRequest(
             if (exampleName != null && example != null) {
                 example(exampleName, example)
             }
-        }
-    }
-}
-
-internal fun Operation.Builder.ingestionBatchJsonRequest() {
-    requestBody {
-        description =
-            "Normalized ingestion batch. Fields are nullable at the transport layer where provider adapters may omit them, but validation enforces provider, providerInstanceId, batch identity, and record-specific required fields."
-        required = true
-        content {
-            schema = JsonSchema(
-                type = JsonType.OBJECT,
-                properties = mapOf(
-                    "provider" to ReferenceOr.Value(stringSchema(example = WITHINGS_PROVIDER_CODE)),
-                    "providerInstanceId" to ReferenceOr.Value(
-                        stringSchema(
-                            example = ExampleProviderInstanceId
-                        )
-                    ),
-                    "batchExternalId" to ReferenceOr.Value(stringSchema(example = ExampleBatchExternalId)),
-                    "ingestedAt" to ReferenceOr.Value(
-                        stringSchema(
-                            format = JsonFormatDateTime,
-                            example = ExampleIngestedAt
-                        )
-                    ),
-                    "sourcePayload" to ReferenceOr.Value(JsonSchema(type = JsonType.OBJECT)),
-                    "records" to ReferenceOr.Value(
-                        JsonSchema(
-                            type = JsonType.ARRAY,
-                            items = ReferenceOr.Value(ingestionRecordSchema()),
-                        )
-                    ),
-                ),
-            )
-            example("batch", ingestionBatchExample())
         }
     }
 }
@@ -183,9 +147,8 @@ internal fun Route.describeReadOperation(
     summary: String,
     descriptionText: String,
     includeLatest: Boolean = false,
-    sortValues: List<String>,
-    defaultSort: String,
-    sortExample: String = defaultSort,
+    sortSpec: EnumParamSpec,
+    sortExample: String = sortSpec.default,
 ): Route = describe {
     this.operationId = operationId
     tag("Read")
@@ -194,8 +157,7 @@ internal fun Route.describeReadOperation(
     requiresBearerAuth()
     readQueryParameters(
         includeLatest = includeLatest,
-        sortValues = sortValues,
-        defaultSort = defaultSort,
+        sortSpec = sortSpec,
         sortExample = sortExample,
     )
     errorResponses()

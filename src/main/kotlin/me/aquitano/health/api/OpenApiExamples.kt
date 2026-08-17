@@ -9,6 +9,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.serializer
 import me.aquitano.external.withings.WITHINGS_PROVIDER_CODE
 import me.aquitano.health.api.dto.*
+import me.aquitano.health.domain.BatchStatus
 import me.aquitano.health.domain.ValidationIssueCodes
 import me.aquitano.health.shared.AppJson
 
@@ -43,30 +44,30 @@ internal fun ingestionBatchExample(): ExampleObject =
                 put("job", JsonPrimitive("daily-sync"))
             },
             records = listOf(
-                StepIntervalDto(
+                StepInterval(
                     providerRecordId = "steps-1",
                     startAt = ExampleStepStartAt,
                     endAt = ExampleStepEndAt,
                     steps = 1200,
                 ),
-                SleepSessionDto(
+                SleepSession(
                     providerRecordId = "sleep-1",
                     startAt = ExampleSleepStartAt,
                     endAt = ExampleSleepEndAt,
                     stages = listOf(
-                        SleepStageDto(
+                        SleepStage(
                             stage = "deep",
                             startAt = ExampleSleepStageStartAt,
                             endAt = ExampleSleepStageEndAt,
                         )
                     ),
                 ),
-                BodyMeasurementDto(
+                BodyMeasurement(
                     providerRecordId = "weight-1",
                     measuredAt = ExampleBodyMeasuredAt,
                     weightKg = 78.4,
                 ),
-                HeartRateDto(
+                HeartRate(
                     providerRecordId = "hr-1",
                     measuredAt = ExampleHeartRateMeasuredAt,
                     bpm = 62,
@@ -105,7 +106,7 @@ internal fun ingestionSummaryExample(duplicate: Boolean = false): ExampleObject 
 internal fun providerSyncRequestExample(): ExampleObject =
     jsonExample(
         summary = "Provider sync request",
-        value = ProviderSyncRequestDto(
+        value = ProviderSyncRequest(
             providerInstanceId = ExampleProviderInstanceId,
             from = ExampleFromAt,
             to = ExampleToAt,

@@ -7,16 +7,17 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
-import me.aquitano.health.api.dto.ProviderSyncJobItemResponseDto
-import me.aquitano.health.api.dto.ProviderSyncJobStartResponseDto
-import me.aquitano.health.api.dto.ProviderSyncJobStatusResponseDto
-import me.aquitano.health.api.dto.ProviderSyncRequestDto
-import me.aquitano.health.api.dto.ProviderSyncResponseDto
-import me.aquitano.health.api.dto.SyncJobStatus
+import me.aquitano.health.api.dto.ProviderSyncJobItemResponse
+import me.aquitano.health.api.dto.ProviderSyncJobStartResponse
+import me.aquitano.health.api.dto.ProviderSyncJobStatusResponse
+import me.aquitano.health.api.dto.ProviderSyncRequest
+import me.aquitano.health.api.dto.ProviderSyncResponse
+import me.aquitano.health.domain.SyncJobStatus
 import me.aquitano.health.application.providersync.ProviderSyncItem
 import me.aquitano.health.application.providersync.ProviderSyncProgressSink
+import me.aquitano.health.domain.ConflictException
 import me.aquitano.health.domain.NotFoundException
-import me.aquitano.health.domain.ProviderSyncRequest
+import me.aquitano.health.domain.ProviderSyncRequest as DomainProviderSyncRequest
 import me.aquitano.health.infrastructure.repositories.ProviderSyncJobRecord
 import me.aquitano.health.infrastructure.repositories.ProviderSyncJobRepository
 import me.aquitano.health.shared.AppJson
@@ -34,9 +35,33 @@ class ProviderSyncJobService(
     private val clock: me.aquitano.health.infrastructure.time.UtcClock,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
 ) {
+    /**
+     * Resumes jobs interrupted by a restart. Re-running a job from the start is safe because
+     * ingestion writes dedupe by provider record id; already-synced windows only cost a
+     * provider re-fetch. Jobs restarted [MAX_JOB_RESTARTS] times are failed to stop crash loops.
+     */
     fun start(now: Instant) {
         scope.launch {
-            repository.markInterruptedUnfinishedJobs(now)
+            val requeued = repository.requeueInterruptedJobs(now, MAX_JOB_RESTARTS)
+            requeued.abandoned.forEach { job ->
+                providerSyncJobLogger.warnWithContext(
+                    "provider_sync_job_abandoned",
+                    "provider" to job.providerCode,
+                    "jobId" to job.id,
+                    "restartCount" to job.restartCount,
+                )
+            }
+            requeued.resumed.forEach { job ->
+                providerSyncJobLogger.infoWithContext(
+                    "provider_sync_job_resumed",
+                    "provider" to job.providerCode,
+                    "jobId" to job.id,
+                    "restartCount" to job.restartCount,
+                )
+                scope.launch {
+                    runJob(job.id, job.providerCode, job.toDomainRequest())
+                }
+            }
         }
     }
 
@@ -46,13 +71,27 @@ class ProviderSyncJobService(
 
     suspend fun create(
         providerCode: String,
-        request: ProviderSyncRequestDto,
+        request: ProviderSyncRequest,
         now: Instant,
-    ): ProviderSyncJobStartResponseDto {
+        idempotencyKey: String? = null,
+    ): ProviderSyncJobStartResponse {
         val provider = providerRegistry.getProvider(providerCode)
             ?: throw NotFoundException("Provider '$providerCode' not found")
         val domainRequest = workflowService.toDomainSyncRequest(request, now)
-        val job = repository.create(
+        val requestHash = syncJobRequestHash(request)
+        if (idempotencyKey != null) {
+            repository.findByIdempotencyKey(provider.descriptor.providerCode, idempotencyKey)
+                ?.let { existing ->
+                    existing.requireMatchingIdempotencyRequest(requestHash)
+                    providerSyncJobLogger.infoWithContext(
+                        "provider_sync_job_idempotent_replay",
+                        "provider" to provider.descriptor.providerCode,
+                        "jobId" to existing.id,
+                    )
+                    return existing.toStartDto()
+                }
+        }
+        val result = repository.create(
             id = UUID.randomUUID().toString(),
             providerCode = provider.descriptor.providerCode,
             providerInstanceId = domainRequest.providerInstanceId,
@@ -61,24 +100,33 @@ class ProviderSyncJobService(
             dataTypes = domainRequest.dataTypes,
             pageSize = domainRequest.pageSize,
             now = now,
+            idempotencyKey = idempotencyKey,
+            idempotencyRequestHash = idempotencyKey?.let { requestHash },
         )
-
-        scope.launch {
-            runJob(job.id, provider.descriptor.providerCode, domainRequest)
+        val job = result.record
+        if (idempotencyKey != null) {
+            job.requireMatchingIdempotencyRequest(requestHash)
+        }
+        if (result.created) {
+            scope.launch {
+                runJob(job.id, provider.descriptor.providerCode, domainRequest)
+            }
+        } else {
+            providerSyncJobLogger.infoWithContext(
+                "provider_sync_job_idempotent_replay",
+                "provider" to provider.descriptor.providerCode,
+                "jobId" to job.id,
+            )
         }
 
-        return ProviderSyncJobStartResponseDto(
-            jobId = job.id,
-            status = SyncJobStatus.fromStored(job.status),
-            createdAt = job.createdAt.toString(),
-        )
+        return job.toStartDto()
     }
 
-    suspend fun get(jobId: String): ProviderSyncJobStatusResponseDto =
+    suspend fun get(jobId: String): ProviderSyncJobStatusResponse =
         repository.get(jobId)?.toDto()
             ?: throw NotFoundException("Provider sync job '$jobId' not found")
 
-    suspend fun latest(providerCode: String?): ProviderSyncJobStatusResponseDto? {
+    suspend fun latest(providerCode: String?): ProviderSyncJobStatusResponse? {
         val canonicalProviderCode = providerCode
             ?.let { providerRegistry.getProvider(it)?.descriptor?.providerCode }
             ?: providerCode
@@ -88,7 +136,7 @@ class ProviderSyncJobService(
     private suspend fun runJob(
         jobId: String,
         providerCode: String,
-        request: ProviderSyncRequest,
+        request: DomainProviderSyncRequest,
     ) {
         repository.markRunning(jobId, clock.now())
         providerSyncJobLogger.infoWithContext(
@@ -159,8 +207,23 @@ class ProviderSyncJobService(
         }
     }
 
-    private fun ProviderSyncJobRecord.toDto(): ProviderSyncJobStatusResponseDto =
-        ProviderSyncJobStatusResponseDto(
+    private fun ProviderSyncJobRecord.toStartDto(): ProviderSyncJobStartResponse =
+        ProviderSyncJobStartResponse(
+            jobId = id,
+            status = SyncJobStatus.fromStored(status),
+            createdAt = createdAt.toString(),
+        )
+
+    private fun ProviderSyncJobRecord.requireMatchingIdempotencyRequest(requestHash: String) {
+        if (idempotencyRequestHash == requestHash) return
+        throw ConflictException(
+            "idempotency_key_conflict",
+            "Idempotency-Key was already used for a different provider sync request.",
+        )
+    }
+
+    private fun ProviderSyncJobRecord.toDto(): ProviderSyncJobStatusResponse =
+        ProviderSyncJobStatusResponse(
             jobId = id,
             providerCode = providerCode,
             providerInstanceId = providerInstanceId,
@@ -175,13 +238,14 @@ class ProviderSyncJobService(
             batchesCount = batchesCount,
             emptyCount = emptyCount,
             errorCount = errorCount,
+            restartCount = restartCount,
             errorMessage = errorMessage,
             createdAt = createdAt.toString(),
             startedAt = startedAt?.toString(),
             updatedAt = updatedAt.toString(),
             finishedAt = finishedAt?.toString(),
             summary = summaryJson?.let {
-                runCatching { AppJson.decodeFromString<ProviderSyncResponseDto>(it) }.getOrNull()
+                runCatching { AppJson.decodeFromString<ProviderSyncResponse>(it) }.getOrNull()
             },
         )
 
@@ -189,10 +253,30 @@ class ProviderSyncJobService(
         dataType: String?,
         from: Instant?,
         to: Instant?,
-    ): ProviderSyncJobItemResponseDto? =
+    ): ProviderSyncJobItemResponse? =
         if (dataType == null || from == null || to == null) {
             null
         } else {
-            ProviderSyncJobItemResponseDto(dataType, from.toString(), to.toString())
+            ProviderSyncJobItemResponse(dataType, from.toString(), to.toString())
         }
 }
+
+private const val MAX_JOB_RESTARTS = 3
+
+private fun ProviderSyncJobRecord.toDomainRequest(): DomainProviderSyncRequest =
+    DomainProviderSyncRequest(
+        providerInstanceId = providerInstanceId,
+        from = requestedFrom,
+        to = requestedTo,
+        dataTypes = dataTypes,
+        pageSize = pageSize,
+    )
+
+private fun syncJobRequestHash(request: ProviderSyncRequest): String =
+    idempotencyRequestHash(
+        request.providerInstanceId?.takeIf { it.isNotBlank() },
+        request.from,
+        request.to,
+        request.dataTypes?.distinct()?.idempotencyListPart(),
+        request.pageSize?.toString(),
+    )

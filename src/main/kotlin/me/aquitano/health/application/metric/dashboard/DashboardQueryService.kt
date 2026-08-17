@@ -3,7 +3,6 @@ package me.aquitano.health.application.metric.dashboard
 import me.aquitano.health.api.dto.DashboardStepsSummaryResponse
 import me.aquitano.health.api.dto.DashboardSummaryResponse
 import me.aquitano.health.application.SleepNightService
-import me.aquitano.health.application.metric.common.BaseReadService
 import me.aquitano.health.application.metric.common.Orders
 import me.aquitano.health.application.metric.common.QueryParams
 import me.aquitano.health.application.metric.common.SortFields
@@ -20,17 +19,18 @@ import me.aquitano.health.application.metric.common.repository.SleepNightReadFil
 import me.aquitano.health.application.metric.steps.derived.CANONICAL_STEP_ALGORITHM_VERSION
 import me.aquitano.health.application.metric.steps.repository.CanonicalStepDerivationRepository
 import me.aquitano.health.application.metric.sleep.repository.SleepRepository
+import me.aquitano.health.infrastructure.database.suspendDbTransaction
 import org.jetbrains.exposed.v1.jdbc.Database
 import java.time.Instant
 import java.time.ZoneOffset
 
 class DashboardQueryService(
-    database: Database,
+    private val database: Database,
     private val canonicalStepRepository: CanonicalStepDerivationRepository,
     private val sleepRepository: SleepRepository,
     private val scalarRepository: ScalarSampleReadRepository = ScalarSampleReadRepository(),
     private val sleepNightService: SleepNightService,
-) : BaseReadService(database) {
+) {
     suspend fun dashboardSummary(
         params: QueryParams,
         now: Instant,
@@ -42,7 +42,7 @@ class DashboardQueryService(
         val fromInstant = fromDate.atStartOfDay().toInstant(ZoneOffset.UTC)
         val toInstant = toDate.plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC)
 
-        return dbQuery {
+        return suspendDbTransaction(db = database) {
             val dailyFilters = DailyReadFilters(
                 fromDate = fromDate,
                 toDate = toDate,

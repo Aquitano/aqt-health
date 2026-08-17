@@ -6,14 +6,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import me.aquitano.health.api.dto.IngestionRecordDto
-import me.aquitano.health.api.dto.ReplayJobStatus
+import me.aquitano.health.api.dto.IngestionRecord
+import me.aquitano.health.domain.ReplayJobStatus
 import me.aquitano.health.api.dto.ReplayJobStartResponse
 import me.aquitano.health.api.dto.ReplayJobStatusResponse
 import me.aquitano.health.api.dto.ReplayRequest
 import me.aquitano.health.application.metric.common.MetricWriteService
-import me.aquitano.health.application.metric.common.affectedUtcDates
 import me.aquitano.health.domain.DerivedKind
+import me.aquitano.health.domain.ConflictException
 import me.aquitano.health.domain.NotFoundException
 import me.aquitano.health.domain.RecordTypes
 import me.aquitano.health.domain.RequestValidationException
@@ -73,6 +73,7 @@ class ReplayService(
     private val mappingService: IngestionMappingService,
     private val metricWriteService: MetricWriteService,
     private val derivedRebuildExecutor: DerivedRebuildExecutor,
+    private val derivedRebuildRegistry: DerivedRebuildModuleRegistry,
     private val replayJobRepository: ReplayJobRepository,
     private val projectionWipeRepository: ProjectionWipeRepository,
     private val clock: UtcClock,
@@ -88,9 +89,24 @@ class ReplayService(
         scope.cancel()
     }
 
-    suspend fun create(request: ReplayRequest, now: Instant): ReplayJobStartResponse {
+    suspend fun create(
+        request: ReplayRequest,
+        now: Instant,
+        idempotencyKey: String? = null,
+    ): ReplayJobStartResponse {
         val plan = validate(request)
-        val job = replayJobRepository.create(
+        val requestHash = plan.idempotencyRequestHash()
+        if (idempotencyKey != null) {
+            replayJobRepository.findByIdempotencyKey(idempotencyKey)?.let { existing ->
+                existing.requireMatchingIdempotencyRequest(requestHash)
+                replayLogger.infoWithContext(
+                    "replay_job_idempotent_replay",
+                    "jobId" to existing.id,
+                )
+                return existing.toStartDto()
+            }
+        }
+        val result = replayJobRepository.create(
             id = UUID.randomUUID().toString(),
             scope = plan.scope,
             metricTypes = plan.recordTypes?.toList(),
@@ -98,16 +114,39 @@ class ReplayService(
             toDate = plan.toDate,
             wipe = plan.wipe,
             now = now,
+            idempotencyKey = idempotencyKey,
+            idempotencyRequestHash = idempotencyKey?.let { requestHash },
         )
-
-        scope.launch {
-            runJob(job.id, plan)
+        val job = result.record
+        if (idempotencyKey != null) {
+            job.requireMatchingIdempotencyRequest(requestHash)
+        }
+        if (result.created) {
+            scope.launch {
+                runJob(job.id, plan)
+            }
+        } else {
+            replayLogger.infoWithContext(
+                "replay_job_idempotent_replay",
+                "jobId" to job.id,
+            )
         }
 
-        return ReplayJobStartResponse(
-            jobId = job.id,
-            status = ReplayJobStatus.fromStored(job.status),
-            createdAt = job.createdAt.toString(),
+        return job.toStartDto()
+    }
+
+    private fun ReplayJobRecord.toStartDto(): ReplayJobStartResponse =
+        ReplayJobStartResponse(
+            jobId = id,
+            status = ReplayJobStatus.fromStored(status),
+            createdAt = createdAt.toString(),
+        )
+
+    private fun ReplayJobRecord.requireMatchingIdempotencyRequest(requestHash: String) {
+        if (idempotencyRequestHash == requestHash) return
+        throw ConflictException(
+            "idempotency_key_conflict",
+            "Idempotency-Key was already used for a different replay request.",
         )
     }
 
@@ -226,7 +265,11 @@ class ReplayService(
 
             if (plan.includesDerived) {
                 rows.forEach { row ->
-                    derivedDatesFor(row).forEach { (kind, dates) ->
+                    derivedRebuildRegistry.affectedDatesFor(
+                        row.recordType,
+                        row.recordStartAt,
+                        row.recordEndAt,
+                    ).forEach { (kind, dates) ->
                         affectedBySource
                             .getOrPut(row.sourceInstanceId) { mutableMapOf() }
                             .getOrPut(kind) { linkedSetOf() }
@@ -253,7 +296,7 @@ class ReplayService(
 
     private fun decodeAndMap(row: ReplayRecordRow) =
         runCatching {
-            AppJson.decodeFromString(IngestionRecordDto.serializer(), row.normalizedRecordJson)
+            AppJson.decodeFromString(IngestionRecord.serializer(), row.normalizedRecordJson)
         }.getOrElse { exception ->
             replayLogger.warnWithContext(
                 "replay_record_decode_failed",
@@ -272,22 +315,6 @@ class ReplayService(
                     )
                 }
             }
-        }
-
-    private fun derivedDatesFor(row: ReplayRecordRow): Map<DerivedKind, Set<LocalDate>> =
-        when (row.recordType) {
-            RecordTypes.STEP_INTERVAL -> mapOf(
-                DerivedKind.STEP_SUMMARY to affectedUtcDates(
-                    row.recordStartAt,
-                    row.recordEndAt ?: row.recordStartAt.plusNanos(1),
-                ),
-            )
-
-            RecordTypes.SLEEP_SESSION -> mapOf(
-                DerivedKind.SLEEP_NIGHT to setOf((row.recordEndAt ?: row.recordStartAt).utcDate()),
-            )
-
-            else -> emptyMap()
         }
 
     private fun validate(request: ReplayRequest): ReplayPlan {
@@ -385,6 +412,15 @@ class ReplayService(
             finishedAt = finishedAt?.toString(),
         )
 }
+
+private fun ReplayPlan.idempotencyRequestHash(): String =
+    idempotencyRequestHash(
+        scope,
+        recordTypes?.sorted()?.idempotencyListPart(),
+        fromDate?.toString(),
+        toDate?.toString(),
+        wipe.toString(),
+    )
 
 private data class ReplayPlan(
     val scope: String,

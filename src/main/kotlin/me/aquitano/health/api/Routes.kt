@@ -12,14 +12,22 @@ import io.ktor.server.routing.*
 import io.ktor.server.routing.openapi.*
 import kotlinx.serialization.Serializable
 import me.aquitano.health.api.dto.*
+import me.aquitano.health.application.IngestionService
+import me.aquitano.health.application.ProviderWorkflowService
 import me.aquitano.health.application.metric.common.QueryParams
 import me.aquitano.health.domain.NotFoundException
 import me.aquitano.health.domain.RequestValidationException
 import me.aquitano.health.domain.ValidationIssue
 import me.aquitano.health.domain.ValidationIssueCodes
+import me.aquitano.health.infrastructure.time.UtcClock
+import org.koin.ktor.ext.inject
 import kotlin.reflect.typeOf
 
-fun Application.configureRoutes(services: ApplicationServices) {
+fun Application.configureRoutes() {
+    val clock by inject<UtcClock>()
+    val ingestionService by inject<IngestionService>()
+    val providerWorkflowService by inject<ProviderWorkflowService>()
+
     val openApiInfo = openApiInfo()
     val openApiBaseDoc = openApiBaseDoc()
     val openApiSource = OpenApiDocSource.Routing()
@@ -44,7 +52,7 @@ fun Application.configureRoutes(services: ApplicationServices) {
                 HealthResponse(
                     status = "ok",
                     service = "aqt-health",
-                    time = services.clock.now().toString()
+                    time = clock.now().toString()
                 )
             )
         }.describe {
@@ -74,12 +82,12 @@ fun Application.configureRoutes(services: ApplicationServices) {
             val code = call.providerCode()
             call.respond(
                 HttpStatusCode.OK,
-                services.providerWorkflowService.completeOAuth(
+                providerWorkflowService.completeOAuth(
                     providerCode = code,
                     code = call.request.queryParameters["code"],
                     state = call.request.queryParameters["state"],
                     error = call.request.queryParameters["error"],
-                    now = services.clock.now(),
+                    now = clock.now(),
                 )
             )
         }.describe {
@@ -112,9 +120,9 @@ fun Application.configureRoutes(services: ApplicationServices) {
         }
         authenticate(ApiKeyAuthProviderName) {
             post("/api/v2/ingestion/batches") {
-                val response = services.ingestionService.ingestBatch(
+                val response = ingestionService.ingestBatch(
                     request = call.receive<IngestionBatchRequest>(),
-                    now = services.clock.now(),
+                    now = clock.now(),
                 )
                 val status =
                     if (response.duplicateBatch) HttpStatusCode.OK else HttpStatusCode.Created
@@ -126,7 +134,12 @@ fun Application.configureRoutes(services: ApplicationServices) {
                 description =
                     "Accepts a trusted normalized health data batch, stores the source payload for audit/reprocessing, writes structured metric tables, and treats repeated provider/batch identifiers idempotently. A duplicate batch returns 200 OK with `duplicateBatch=true`; a newly processed batch returns 201 Created."
                 requiresBearerAuth()
-                ingestionBatchJsonRequest()
+                jsonRequest<IngestionBatchRequest>(
+                    descriptionText =
+                        "Normalized ingestion batch. Fields are nullable at the transport layer where provider adapters may omit them, but validation enforces provider, providerInstanceId, batch identity, and record-specific required fields.",
+                    exampleName = "batch",
+                    example = ingestionBatchExample(),
+                )
                 responses {
                     HttpStatusCode.Created {
                         description = "Batch accepted and processed"
@@ -149,9 +162,9 @@ fun Application.configureRoutes(services: ApplicationServices) {
                     commonErrors(conflict = true)
                 }
             }
-            providerRoutes(services)
-            readRoutes(services)
-            adminRoutes(services)
+            providerRoutes()
+            readRoutes()
+            adminRoutes()
         }
     }
 }
@@ -183,6 +196,17 @@ internal fun ApplicationCall.metricTypePath(): String {
     }
     return metricType
 }
+
+internal fun ApplicationCall.requiredPathParam(name: String): String {
+    val value = parameters[name]
+    if (value.isNullOrBlank()) {
+        throw RequestValidationException(listOf(ValidationIssue(field = name)))
+    }
+    return value
+}
+
+internal fun ApplicationCall.idempotencyKey(): String? =
+    request.headers["Idempotency-Key"]?.trim()?.takeIf { it.isNotEmpty() }
 
 internal fun ApplicationCall.providerCode(): String {
     val code = parameters["providerCode"]

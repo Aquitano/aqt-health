@@ -4,40 +4,6 @@
  */
 
 export interface paths {
-    "/metrics": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "text/plain": unknown;
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v2/admin/health": {
         parameters: {
             query?: never;
@@ -58,7 +24,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/admin/ingestion/batches": {
+    "/api/v2/providers/{providerCode}/oauth/callback": {
         parameters: {
             query?: never;
             header?: never;
@@ -66,110 +32,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List ingestion batches
-         * @description Lists ingestion batches by received timestamp and optional status for administrative inspection.
+         * Complete provider OAuth flow
+         * @description Public OAuth redirect target. Exchanges a provider authorization code for stored encrypted tokens, or returns a provider-error response when the provider redirects with `error`.
          */
-        get: operations["listIngestionBatches"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v2/admin/ingestion/batches/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get ingestion batch detail
-         * @description Returns one ingestion batch with stored record-level detail for audit and debugging.
-         */
-        get: operations["getIngestionBatch"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v2/admin/ingestion/failures": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List failed ingestion batches
-         * @description Lists ingestion batches with failure status for administrative inspection.
-         */
-        get: operations["listIngestionFailures"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v2/admin/replay": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Replay projections from the raw event log
-         * @description Starts a background job that rebuilds metric projections and/or derived tables from stored ingestion records for the requested date range. Replay is idempotent; with wipe=true the affected projection rows are deleted and rewritten, without it the job acts as a verification pass whose counters report how many writes would have been missing.
-         */
-        post: operations["startReplay"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v2/admin/replay/latest": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get latest replay job
-         * @description Returns the most recently created replay job.
-         */
-        get: operations["getLatestReplayJob"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v2/admin/replay/{jobId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get replay job progress
-         * @description Returns progress counters (records replayed, metrics written, duplicates skipped, mapping failures) and the current day item of a replay job.
-         */
-        get: operations["getReplayJob"];
+        get: operations["completeProviderOAuth"];
         put?: never;
         post?: never;
         delete?: never;
@@ -325,9 +191,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get scheduled provider sync configuration */
+        /**
+         * Get scheduled provider sync configuration
+         * @description Returns the background sync configuration for one provider account, including cadence, lookback window, selected data types, per-data-type checkpoints, and last success/failure state. Accounts without stored configuration return the disabled defaults.
+         */
         get: operations["getScheduledProviderSync"];
-        /** Update scheduled provider sync configuration */
+        /**
+         * Update scheduled provider sync configuration
+         * @description Upserts the background sync configuration for one provider account. Omitted fields keep their current (or default) values; enabling the schedule sets the next run to now.
+         */
         put: operations["updateScheduledProviderSync"];
         post?: never;
         delete?: never;
@@ -345,7 +217,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Run scheduled provider sync immediately */
+        /**
+         * Run scheduled provider sync immediately
+         * @description Executes the configured scheduled sync for one provider account right away using the stored data types and checkpoints. Returns 409 when scheduled sync is not configured or a run is already in progress.
+         */
         post: operations["runScheduledProviderSyncNow"];
         delete?: never;
         options?: never;
@@ -413,26 +288,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/providers/{providerCode}/oauth/callback": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Complete provider OAuth flow
-         * @description Public OAuth redirect target. Exchanges a provider authorization code for stored encrypted tokens, or returns a provider-error response when the provider redirects with `error`.
-         */
-        get: operations["completeProviderOAuth"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v2/providers/{providerCode}/sync": {
         parameters: {
             query?: never;
@@ -444,7 +299,7 @@ export interface paths {
         put?: never;
         /**
          * Synchronize provider data
-         * @description Fetches data from the selected provider for the requested range/data types, normalizes records, ingests resulting batches, and returns per-data-type batch, empty-result, and error details. Provider sync can return partial errors while still storing successful data types.
+         * @description Fetches data from the selected provider for the requested range/data types, normalizes records, ingests resulting batches, and returns per-data-type batch, empty-result, and error details. Provider sync can return partial errors while still storing successful data types. Repeating a completed request with the same Idempotency-Key returns the stored response without syncing again; failed requests are not stored, so retrying them re-runs the sync.
          */
         post: operations["syncProvider"];
         delete?: never;
@@ -464,7 +319,7 @@ export interface paths {
         put?: never;
         /**
          * Start a background provider sync job
-         * @description Creates a durable manual provider sync job and returns immediately. The backend processes provider-safe chunks sequentially; clients can poll the job endpoint for progress and final summary after page reloads.
+         * @description Creates a durable manual provider sync job and returns immediately. The backend processes provider-safe chunks sequentially; clients can poll the job endpoint for progress and final summary after page reloads. Repeating the request with the same Idempotency-Key returns the already-created job instead of starting a new one.
          */
         post: operations["startProviderSyncJob"];
         delete?: never;
@@ -565,6 +420,26 @@ export interface paths {
          * @description Returns count, minimum, maximum, average, and the latest canonical sample for the metric type within the requested timestamp and source filters. Unknown metric types return 404.
          */
         get: operations["summarizeScalarSamples"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/metrics/{metricType}/daily": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Summarize scalar samples per calendar day
+         * @description Returns one count/min/max/avg bucket per calendar day for the metric type within the requested timestamp range, grouped by the `timezone` day boundaries (UTC by default). At least one of `from`/`to` is required to bound the scan. Replaces per-day summary fan-out with a single ranged read. Unknown metric types return 404.
+         */
+        get: operations["summarizeScalarSamplesDaily"];
         put?: never;
         post?: never;
         delete?: never;
@@ -773,75 +648,168 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/admin/ingestion/batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List ingestion batches
+         * @description Lists ingestion batches by received timestamp and optional status for administrative inspection.
+         */
+        get: operations["listIngestionBatches"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/admin/ingestion/batches/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get ingestion batch detail
+         * @description Returns one ingestion batch with stored record-level detail for audit and debugging.
+         */
+        get: operations["getIngestionBatch"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/admin/ingestion/failures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List failed ingestion batches
+         * @description Lists ingestion batches with failure status for administrative inspection.
+         */
+        get: operations["listIngestionFailures"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/admin/replay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Replay projections from the raw event log
+         * @description Starts a background job that rebuilds metric projections and/or derived tables from stored ingestion records for the requested date range. Replay is idempotent; with wipe=true the affected projection rows are deleted and rewritten, without it the job acts as a verification pass whose counters report how many writes would have been missing. Repeating the request with the same Idempotency-Key returns the already-created job instead of starting a new one.
+         */
+        post: operations["startReplay"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/admin/replay/latest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get latest replay job
+         * @description Returns the most recently created replay job.
+         */
+        get: operations["getLatestReplayJob"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/admin/replay/{jobId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get replay job progress
+         * @description Returns progress counters (records replayed, metrics written, duplicates skipped, mapping failures) and the current day item of a replay job.
+         */
+        get: operations["getReplayJob"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** step_interval */
-        StepIntervalDto: {
-            providerRecordId?: string | null;
-            /** Format: date-time */
-            startAt: string;
-            /** Format: date-time */
-            endAt: string;
-            steps: number;
+        /** HealthResponse */
+        HealthResponse: {
+            status: string;
+            service: string;
+            time: string;
+        };
+        /** ErrorDetail */
+        ErrorDetail: {
+            field: string;
             /**
-             * @description discriminator enum property added by openapi-typescript
+             * @description Machine-readable validation issue code for this field.
              * @enum {string}
              */
-            type: "step_interval";
+            code: "required" | "invalid_format" | "unsupported_value" | "out_of_range" | "invalid_range" | "invalid_state";
+            message: string;
         };
-        /** sleep_session */
-        SleepSessionDto: {
-            providerRecordId?: string | null;
-            /** Format: date-time */
-            startAt: string;
-            /** Format: date-time */
-            endAt: string;
-            stages?: {
-                stage: string;
-                /** Format: date-time */
-                startAt: string;
-                /** Format: date-time */
-                endAt: string;
-            }[];
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "sleep_session";
+        /** ErrorBody */
+        ErrorBody: {
+            /** @description Stable machine-readable error code. Envelope-level values are `validation_failed`, `unauthorized`, `not_found`, and `internal_error`; provider-sync and ingestion endpoints additionally return provider-specific conflict and upstream codes (for example `idempotency_key_conflict`, `scheduled_sync_already_running`, or `withings_needs_reauth`). */
+            code: string;
+            message: string;
+            requestId: string;
+            details?: components["schemas"]["ErrorDetail"][] | null;
         };
-        /** body_measurement */
-        BodyMeasurementDto: {
-            providerRecordId?: string | null;
-            /** Format: date-time */
-            measuredAt: string;
-            weightKg?: number | null;
-            bodyFatPercent?: number | null;
-            muscleKg?: number | null;
-            bodyWaterPercent?: number | null;
-            visceralFatRating?: number | null;
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "body_measurement";
+        /** ErrorResponse */
+        ErrorResponse: {
+            error: components["schemas"]["ErrorBody"];
         };
-        /** heart_rate */
-        HeartRateDto: {
-            providerRecordId?: string | null;
-            /** Format: date-time */
-            measuredAt: string;
-            bpm: number;
-            context?: string | null;
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "heart_rate";
+        /** ProviderOAuthCallbackResponse */
+        ProviderOAuthCallbackResponse: {
+            provider: string;
+            providerInstanceId: string;
+            connected: boolean;
         };
+        /** JsonElement? */
+        "JsonElement?": Record<string, never> | null;
         /** activity_summary */
-        ActivitySummaryDto: {
+        activity_summary: {
             providerRecordId?: string | null;
             /** Format: date */
             date: string;
@@ -862,8 +830,146 @@ export interface components {
              */
             type: "activity_summary";
         };
+        /** blood_pressure */
+        blood_pressure: {
+            providerRecordId?: string | null;
+            /** Format: date-time */
+            measuredAt: string;
+            systolicMmhg: number;
+            diastolicMmhg: number;
+            heartRateBpm?: number | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "blood_pressure";
+        };
+        /** body_measurement */
+        body_measurement: {
+            providerRecordId?: string | null;
+            /** Format: date-time */
+            measuredAt: string;
+            weightKg?: number | null;
+            bodyFatPercent?: number | null;
+            muscleKg?: number | null;
+            bodyWaterPercent?: number | null;
+            visceralFatRating?: number | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "body_measurement";
+        };
+        /** cardiovascular */
+        cardiovascular: {
+            providerRecordId?: string | null;
+            /** Format: date-time */
+            measuredAt: string;
+            metricType: string;
+            value: number;
+            unit: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "cardiovascular";
+        };
+        /** extended_body_measurement */
+        extended_body_measurement: {
+            providerRecordId?: string | null;
+            /** Format: date-time */
+            measuredAt: string;
+            metricType: string;
+            value: number;
+            unit: string;
+            segment?: string | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "extended_body_measurement";
+        };
+        /** heart_rate */
+        heart_rate: {
+            providerRecordId?: string | null;
+            /** Format: date-time */
+            measuredAt: string;
+            bpm: number;
+            context?: string | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "heart_rate";
+        };
+        /** hrv */
+        hrv: {
+            providerRecordId?: string | null;
+            /** Format: date-time */
+            measuredAt: string;
+            metricType: string;
+            value: number;
+            unit: string;
+            context?: string | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "hrv";
+        };
+        /** respiratory_rate */
+        respiratory_rate: {
+            providerRecordId?: string | null;
+            /** Format: date-time */
+            measuredAt: string;
+            breathsPerMinute: number;
+            context?: string | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "respiratory_rate";
+        };
+        /** scalar */
+        scalar: {
+            providerRecordId?: string | null;
+            /** Format: date-time */
+            measuredAt: string;
+            metricType: string;
+            value: number;
+            unit: string;
+            context?: string | null;
+            segment?: string | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "scalar";
+        };
+        /** SleepStage */
+        SleepStage: {
+            stage: string;
+            /** Format: date-time */
+            startAt: string;
+            /** Format: date-time */
+            endAt: string;
+        };
+        /** sleep_session */
+        sleep_session: {
+            providerRecordId?: string | null;
+            /** Format: date-time */
+            startAt: string;
+            /** Format: date-time */
+            endAt: string;
+            stages?: components["schemas"]["SleepStage"][];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "sleep_session";
+        };
         /** sleep_summary */
-        SleepSummaryDto: {
+        sleep_summary: {
             providerRecordId?: string | null;
             /** Format: date-time */
             startAt: string;
@@ -903,227 +1009,31 @@ export interface components {
              */
             type: "sleep_summary";
         };
-        /** respiratory_rate */
-        RespiratoryRateDto: {
+        /** step_interval */
+        step_interval: {
             providerRecordId?: string | null;
             /** Format: date-time */
-            measuredAt: string;
-            breathsPerMinute: number;
-            context?: string | null;
+            startAt: string;
+            /** Format: date-time */
+            endAt: string;
+            steps: number;
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            type: "respiratory_rate";
+            type: "step_interval";
         };
-        /** hrv */
-        HrvDto: {
-            providerRecordId?: string | null;
-            /** Format: date-time */
-            measuredAt: string;
-            metricType: string;
-            value: number;
-            unit: string;
-            context?: string | null;
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "hrv";
-        };
-        /** blood_pressure */
-        BloodPressureDto: {
-            providerRecordId?: string | null;
-            /** Format: date-time */
-            measuredAt: string;
-            systolicMmhg: number;
-            diastolicMmhg: number;
-            heartRateBpm?: number | null;
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "blood_pressure";
-        };
-        /** cardiovascular */
-        CardiovascularDto: {
-            providerRecordId?: string | null;
-            /** Format: date-time */
-            measuredAt: string;
-            metricType: string;
-            value: number;
-            unit: string;
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "cardiovascular";
-        };
-        /** extended_body_measurement */
-        ExtendedBodyMeasurementDto: {
-            providerRecordId?: string | null;
-            /** Format: date-time */
-            measuredAt: string;
-            metricType: string;
-            value: number;
-            unit: string;
-            segment?: string | null;
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "extended_body_measurement";
-        };
-        /** scalar */
-        ScalarSampleDto: {
-            providerRecordId?: string | null;
-            /** Format: date-time */
-            measuredAt: string;
-            metricType: string;
-            value: number;
-            unit: string;
-            context?: string | null;
-            segment?: string | null;
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "scalar";
-        };
-        /** HealthResponse */
-        HealthResponse: {
-            status: string;
-            service: string;
-            time: string;
-        };
-        /** ErrorDetail */
-        ErrorDetail: {
-            field: string;
-            code: string;
-            message: string;
-        };
-        /** ErrorBody */
-        ErrorBody: {
-            code: string;
-            message: string;
-            requestId: string;
-            details?: components["schemas"]["ErrorDetail"][] | null;
-        };
-        /** ErrorResponse */
-        ErrorResponse: {
-            error: components["schemas"]["ErrorBody"];
-        };
-        /** IngestionBatchAdminResponse */
-        IngestionBatchAdminResponse: {
-            id: number;
-            provider: string;
-            providerInstanceId: string;
+        /** IngestionRecord */
+        IngestionRecord: components["schemas"]["activity_summary"] | components["schemas"]["blood_pressure"] | components["schemas"]["body_measurement"] | components["schemas"]["cardiovascular"] | components["schemas"]["extended_body_measurement"] | components["schemas"]["heart_rate"] | components["schemas"]["hrv"] | components["schemas"]["respiratory_rate"] | components["schemas"]["scalar"] | components["schemas"]["sleep_session"] | components["schemas"]["sleep_summary"] | components["schemas"]["step_interval"];
+        /** IngestionBatchRequest */
+        IngestionBatchRequest: {
+            provider?: string | null;
+            providerInstanceId?: string | null;
             batchExternalId?: string | null;
-            /** @enum {string} */
-            status: "received" | "processed" | "failed";
             /** Format: date-time */
-            ingestedAt: string;
-            /** Format: date-time */
-            receivedAt: string;
-            /** Format: date-time */
-            processedAt?: string | null;
-            errorMessage?: string | null;
-            recordCount: number;
-        };
-        /** ReadResponseMeta */
-        ReadResponseMeta: {
-            count: number;
-            limit: number;
-            sort: string;
-            order: string;
-            nextCursor?: string | null;
-        };
-        /** IngestionBatchesResponse */
-        IngestionBatchesResponse: {
-            items: components["schemas"]["IngestionBatchAdminResponse"][];
-            meta: components["schemas"]["ReadResponseMeta"];
-        };
-        /** JsonElement? */
-        "JsonElement?": Record<string, never> | null;
-        /** IngestionRecordAdminResponse */
-        IngestionRecordAdminResponse: {
-            id: number;
-            recordType: string;
-            providerRecordId?: string | null;
-            /** Format: date-time */
-            recordStartAt?: string | null;
-            /** Format: date-time */
-            recordEndAt?: string | null;
-            /** Format: date-time */
-            createdAt: string;
-            normalizedRecord?: components["schemas"]["JsonElement?"];
-        };
-        /** IngestionBatchDetailResponse */
-        IngestionBatchDetailResponse: {
-            id: number;
-            provider: string;
-            providerInstanceId: string;
-            batchExternalId?: string | null;
-            /** @enum {string} */
-            status: "received" | "processed" | "failed";
-            /** Format: date-time */
-            ingestedAt: string;
-            /** Format: date-time */
-            receivedAt: string;
-            /** Format: date-time */
-            processedAt?: string | null;
-            errorMessage?: string | null;
-            recordCount: number;
-            records: components["schemas"]["IngestionRecordAdminResponse"][];
+            ingestedAt?: string | null;
             sourcePayload?: components["schemas"]["JsonElement?"];
-            normalizedPayload?: components["schemas"]["JsonElement?"];
-        };
-        /** ReplayRequest */
-        ReplayRequest: {
-            scope?: string;
-            metricTypes?: string[] | null;
-            /** Format: date */
-            fromDate?: string | null;
-            /** Format: date */
-            toDate?: string | null;
-            wipe?: boolean;
-        };
-        /** ReplayJobStartResponse */
-        ReplayJobStartResponse: {
-            jobId: string;
-            /** @enum {string} */
-            status: "queued" | "running" | "completed" | "failed";
-            /** Format: date-time */
-            createdAt: string;
-        };
-        /** ReplayJobStatusResponse */
-        ReplayJobStatusResponse: {
-            jobId: string;
-            scope: string;
-            metricTypes?: string[] | null;
-            /** Format: date */
-            fromDate?: string | null;
-            /** Format: date */
-            toDate?: string | null;
-            wipe: boolean;
-            /** @enum {string} */
-            status: "queued" | "running" | "completed" | "failed";
-            totalItems: number;
-            completedItems: number;
-            currentItem?: string | null;
-            recordsReplayed: number;
-            metricsWritten: number;
-            duplicatesSkipped: number;
-            mappingFailures: number;
-            errorMessage?: string | null;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            startedAt?: string | null;
-            /** Format: date-time */
-            updatedAt: string;
-            /** Format: date-time */
-            finishedAt?: string | null;
+            records?: components["schemas"]["IngestionRecord"][] | null;
         };
         /** MetricSkippedCountsResponse */
         MetricSkippedCountsResponse: {
@@ -1143,8 +1053,8 @@ export interface components {
             metricsSkipped: components["schemas"]["MetricSkippedCountsResponse"];
             affectedStepSummaryDates: string[];
         };
-        /** ProviderWorkflowEndpointsResponseDto */
-        ProviderWorkflowEndpointsResponseDto: {
+        /** ProviderWorkflowEndpointsResponse */
+        ProviderWorkflowEndpointsResponse: {
             oauthStart?: string | null;
             oauthCallback?: string | null;
             accounts?: string | null;
@@ -1152,8 +1062,8 @@ export interface components {
             reconnect?: string | null;
             sync: string;
         };
-        /** ProviderDescriptorResponseDto */
-        ProviderDescriptorResponseDto: {
+        /** ProviderDescriptorResponse */
+        ProviderDescriptorResponse: {
             providerCode: string;
             displayName: string;
             authType: string;
@@ -1162,15 +1072,15 @@ export interface components {
             defaultDataTypes: string[];
             maxSyncRangeDays: number;
             supportsPageSize: boolean;
-            workflowEndpoints: components["schemas"]["ProviderWorkflowEndpointsResponseDto"];
+            workflowEndpoints: components["schemas"]["ProviderWorkflowEndpointsResponse"];
             aliases?: string[];
         };
-        /** ProviderCatalogResponseDto */
-        ProviderCatalogResponseDto: {
-            providers: components["schemas"]["ProviderDescriptorResponseDto"][];
+        /** ProviderCatalogResponse */
+        ProviderCatalogResponse: {
+            items: components["schemas"]["ProviderDescriptorResponse"][];
         };
-        /** ProviderAccountStatusResponseDto */
-        ProviderAccountStatusResponseDto: {
+        /** ProviderAccountStatusResponse */
+        ProviderAccountStatusResponse: {
             providerInstanceId: string;
             /** @enum {string} */
             status: "not_connected" | "connected" | "needs_reauth" | "disconnected" | "configuration_error";
@@ -1190,8 +1100,8 @@ export interface components {
             lastAuthErrorCode?: string | null;
             lastAuthErrorMessage?: string | null;
         };
-        /** ProviderStatusResponseDto */
-        ProviderStatusResponseDto: {
+        /** ProviderStatusResponse */
+        ProviderStatusResponse: {
             providerCode: string;
             displayName: string;
             configured: boolean;
@@ -1200,19 +1110,19 @@ export interface components {
             canSync: boolean;
             /** @enum {string} */
             nextAction: "configure" | "connect" | "reconnect" | "sync";
-            accounts: components["schemas"]["ProviderAccountStatusResponseDto"][];
+            accounts: components["schemas"]["ProviderAccountStatusResponse"][];
         };
-        /** ProviderStatusCatalogResponseDto */
-        ProviderStatusCatalogResponseDto: {
-            providers: components["schemas"]["ProviderStatusResponseDto"][];
+        /** ProviderStatusCatalogResponse */
+        ProviderStatusCatalogResponse: {
+            items: components["schemas"]["ProviderStatusResponse"][];
         };
-        /** ProviderAccountListResponseDto */
-        ProviderAccountListResponseDto: {
+        /** ProviderAccountListResponse */
+        ProviderAccountListResponse: {
             provider: string;
-            accounts: components["schemas"]["ProviderAccountStatusResponseDto"][];
+            accounts: components["schemas"]["ProviderAccountStatusResponse"][];
         };
-        /** ScheduledSyncCheckpointResponseDto */
-        ScheduledSyncCheckpointResponseDto: {
+        /** ScheduledSyncCheckpointResponse */
+        ScheduledSyncCheckpointResponse: {
             dataType: string;
             /** Format: date-time */
             checkpointAt?: string | null;
@@ -1221,8 +1131,8 @@ export interface components {
             /** Format: date-time */
             lastSuccessfulTo?: string | null;
         };
-        /** ScheduledSyncConfigResponseDto */
-        ScheduledSyncConfigResponseDto: {
+        /** ScheduledSyncConfigResponse */
+        ScheduledSyncConfigResponse: {
             providerCode: string;
             providerInstanceId: string;
             enabled: boolean;
@@ -1241,17 +1151,17 @@ export interface components {
             /** Format: date-time */
             nextRunAt?: string | null;
             lastErrorMessage?: string | null;
-            checkpoints: components["schemas"]["ScheduledSyncCheckpointResponseDto"][];
+            checkpoints: components["schemas"]["ScheduledSyncCheckpointResponse"][];
         };
-        /** ScheduledSyncConfigUpdateRequestDto */
-        ScheduledSyncConfigUpdateRequestDto: {
+        /** ScheduledSyncConfigUpdateRequest */
+        ScheduledSyncConfigUpdateRequest: {
             enabled?: boolean | null;
             dataTypes?: string[] | null;
             cadenceMinutes?: number | null;
             lookbackDays?: number | null;
         };
-        /** ProviderSyncBatchResponseDto */
-        ProviderSyncBatchResponseDto: {
+        /** ProviderSyncBatchResponse */
+        ProviderSyncBatchResponse: {
             dataType: string;
             batchId: number;
             duplicateBatch: boolean;
@@ -1263,21 +1173,21 @@ export interface components {
             duplicateMetricsSkipped: number;
             affectedStepSummaryDates: string[];
         };
-        /** ProviderSyncEmptyDataTypeResponseDto */
-        ProviderSyncEmptyDataTypeResponseDto: {
+        /** ProviderSyncEmptyDataTypeResponse */
+        ProviderSyncEmptyDataTypeResponse: {
             dataType: string;
             pagesFetched: number;
             sourceRecordsReceived: number;
             normalizedRecords: number;
         };
-        /** ProviderSyncErrorResponseDto */
-        ProviderSyncErrorResponseDto: {
+        /** ProviderSyncErrorResponse */
+        ProviderSyncErrorResponse: {
             dataType: string;
             code: string;
             message: string;
         };
-        /** ProviderSyncResponseDto */
-        ProviderSyncResponseDto: {
+        /** ProviderSyncResponse */
+        ProviderSyncResponse: {
             providerCode: string;
             providerInstanceId: string;
             /** Format: date-time */
@@ -1286,12 +1196,12 @@ export interface components {
             requestedTo: string;
             /** @enum {string} */
             status: "processed" | "partial_failed" | "failed";
-            batches: components["schemas"]["ProviderSyncBatchResponseDto"][];
-            emptyDataTypes: components["schemas"]["ProviderSyncEmptyDataTypeResponseDto"][];
-            errors: components["schemas"]["ProviderSyncErrorResponseDto"][];
+            batches: components["schemas"]["ProviderSyncBatchResponse"][];
+            emptyDataTypes: components["schemas"]["ProviderSyncEmptyDataTypeResponse"][];
+            errors: components["schemas"]["ProviderSyncErrorResponse"][];
         };
-        /** ScheduledSyncRunResponseDto */
-        ScheduledSyncRunResponseDto: {
+        /** ScheduledSyncRunResponse */
+        ScheduledSyncRunResponse: {
             providerCode: string;
             providerInstanceId: string;
             /** @enum {string} */
@@ -1301,10 +1211,10 @@ export interface components {
             /** Format: date-time */
             requestedTo?: string | null;
             errors: string[];
-            summaries: components["schemas"]["ProviderSyncResponseDto"][];
+            summaries: components["schemas"]["ProviderSyncResponse"][];
         };
-        /** ProviderDisconnectResponseDto */
-        ProviderDisconnectResponseDto: {
+        /** ProviderDisconnectResponse */
+        ProviderDisconnectResponse: {
             provider: string;
             providerInstanceId: string;
             disconnected: boolean;
@@ -1318,14 +1228,8 @@ export interface components {
             /** Format: date-time */
             expiresAt: string;
         };
-        /** ProviderOAuthCallbackResponse */
-        ProviderOAuthCallbackResponse: {
-            provider: string;
-            providerInstanceId: string;
-            connected: boolean;
-        };
-        /** ProviderSyncRequestDto */
-        ProviderSyncRequestDto: {
+        /** ProviderSyncRequest */
+        ProviderSyncRequest: {
             providerInstanceId?: string | null;
             /** Format: date-time */
             from?: string | null;
@@ -1334,24 +1238,24 @@ export interface components {
             dataTypes?: string[] | null;
             pageSize?: number | null;
         };
-        /** ProviderSyncJobStartResponseDto */
-        ProviderSyncJobStartResponseDto: {
+        /** ProviderSyncJobStartResponse */
+        ProviderSyncJobStartResponse: {
             jobId: string;
             /** @enum {string} */
             status: "queued" | "running" | "processed" | "partial_failed" | "failed";
             /** Format: date-time */
             createdAt: string;
         };
-        /** ProviderSyncJobItemResponseDto */
-        ProviderSyncJobItemResponseDto: {
+        /** ProviderSyncJobItemResponse */
+        ProviderSyncJobItemResponse: {
             dataType: string;
             /** Format: date-time */
             from: string;
             /** Format: date-time */
             to: string;
         };
-        /** ProviderSyncJobStatusResponseDto */
-        ProviderSyncJobStatusResponseDto: {
+        /** ProviderSyncJobStatusResponse */
+        ProviderSyncJobStatusResponse: {
             jobId: string;
             providerCode: string;
             providerInstanceId?: string | null;
@@ -1364,11 +1268,12 @@ export interface components {
             status: "queued" | "running" | "processed" | "partial_failed" | "failed";
             totalItems: number;
             completedItems: number;
-            currentItem?: components["schemas"]["ProviderSyncJobItemResponseDto"] | null;
-            lastCompletedItem?: components["schemas"]["ProviderSyncJobItemResponseDto"] | null;
+            currentItem?: components["schemas"]["ProviderSyncJobItemResponse"] | null;
+            lastCompletedItem?: components["schemas"]["ProviderSyncJobItemResponse"] | null;
             batchesCount: number;
             emptyCount: number;
             errorCount: number;
+            restartCount?: number;
             errorMessage?: string | null;
             /** Format: date-time */
             createdAt: string;
@@ -1378,7 +1283,7 @@ export interface components {
             updatedAt: string;
             /** Format: date-time */
             finishedAt?: string | null;
-            summary?: components["schemas"]["ProviderSyncResponseDto"] | null;
+            summary?: components["schemas"]["ProviderSyncResponse"] | null;
         };
         /** MetricCatalogEntryResponse */
         MetricCatalogEntryResponse: {
@@ -1409,6 +1314,14 @@ export interface components {
             segment?: string | null;
             source?: components["schemas"]["SourceMetadataResponse"] | null;
         };
+        /** ReadResponseMeta */
+        ReadResponseMeta: {
+            count: number;
+            limit: number;
+            sort: string;
+            order: string;
+            nextCursor?: string | null;
+        };
         /** ScalarSamplesResponse */
         ScalarSamplesResponse: {
             items: components["schemas"]["ScalarSampleResponse"][];
@@ -1422,6 +1335,20 @@ export interface components {
             maxValue?: number | null;
             avgValue?: number | null;
             latest?: components["schemas"]["ScalarSampleResponse"] | null;
+        };
+        /** ScalarDailySummaryResponse */
+        ScalarDailySummaryResponse: {
+            /** Format: date */
+            date: string;
+            count: number;
+            minValue?: number | null;
+            maxValue?: number | null;
+            avgValue?: number | null;
+        };
+        /** ScalarDailySummariesResponse */
+        ScalarDailySummariesResponse: {
+            items: components["schemas"]["ScalarDailySummaryResponse"][];
+            meta: components["schemas"]["ReadResponseMeta"];
         };
         /** HealthDayBucketResponse */
         HealthDayBucketResponse: {
@@ -1686,6 +1613,108 @@ export interface components {
             sleep?: components["schemas"]["SleepTrend"] | null;
             weight?: components["schemas"]["WeightTrend"] | null;
         };
+        /** IngestionBatchAdminResponse */
+        IngestionBatchAdminResponse: {
+            id: number;
+            provider: string;
+            providerInstanceId: string;
+            batchExternalId?: string | null;
+            /** @enum {string} */
+            status: "received" | "processed" | "failed";
+            /** Format: date-time */
+            ingestedAt: string;
+            /** Format: date-time */
+            receivedAt: string;
+            /** Format: date-time */
+            processedAt?: string | null;
+            errorMessage?: string | null;
+            recordCount: number;
+        };
+        /** IngestionBatchesResponse */
+        IngestionBatchesResponse: {
+            items: components["schemas"]["IngestionBatchAdminResponse"][];
+            meta: components["schemas"]["ReadResponseMeta"];
+        };
+        /** IngestionRecordAdminResponse */
+        IngestionRecordAdminResponse: {
+            id: number;
+            recordType: string;
+            providerRecordId?: string | null;
+            /** Format: date-time */
+            recordStartAt?: string | null;
+            /** Format: date-time */
+            recordEndAt?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            normalizedRecord?: components["schemas"]["JsonElement?"];
+        };
+        /** IngestionBatchDetailResponse */
+        IngestionBatchDetailResponse: {
+            id: number;
+            provider: string;
+            providerInstanceId: string;
+            batchExternalId?: string | null;
+            /** @enum {string} */
+            status: "received" | "processed" | "failed";
+            /** Format: date-time */
+            ingestedAt: string;
+            /** Format: date-time */
+            receivedAt: string;
+            /** Format: date-time */
+            processedAt?: string | null;
+            errorMessage?: string | null;
+            recordCount: number;
+            records: components["schemas"]["IngestionRecordAdminResponse"][];
+            sourcePayload?: components["schemas"]["JsonElement?"];
+            normalizedPayload?: components["schemas"]["JsonElement?"];
+        };
+        /** ReplayRequest */
+        ReplayRequest: {
+            scope?: string;
+            metricTypes?: string[] | null;
+            /** Format: date */
+            fromDate?: string | null;
+            /** Format: date */
+            toDate?: string | null;
+            wipe?: boolean;
+        };
+        /** ReplayJobStartResponse */
+        ReplayJobStartResponse: {
+            jobId: string;
+            /** @enum {string} */
+            status: "queued" | "running" | "completed" | "failed";
+            /** Format: date-time */
+            createdAt: string;
+        };
+        /** ReplayJobStatusResponse */
+        ReplayJobStatusResponse: {
+            jobId: string;
+            scope: string;
+            metricTypes?: string[] | null;
+            /** Format: date */
+            fromDate?: string | null;
+            /** Format: date */
+            toDate?: string | null;
+            wipe: boolean;
+            /** @enum {string} */
+            status: "queued" | "running" | "completed" | "failed";
+            totalItems: number;
+            completedItems: number;
+            currentItem?: string | null;
+            recordsReplayed: number;
+            metricsWritten: number;
+            duplicatesSkipped: number;
+            mappingFailures: number;
+            errorMessage?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            startedAt?: string | null;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: date-time */
+            finishedAt?: string | null;
+        };
     };
     responses: never;
     parameters: never;
@@ -1731,1521 +1760,17 @@ export interface operations {
                     "application/json": {
                         /** me.aquitano.health.api.ErrorBody */
                         error: {
+                            /** @description Stable machine-readable error code. Envelope-level values are `validation_failed`, `unauthorized`, `not_found`, and `internal_error`; provider-sync and ingestion endpoints additionally return provider-specific conflict and upstream codes (for example `idempotency_key_conflict`, `scheduled_sync_already_running`, or `withings_needs_reauth`). */
                             code: string;
                             message: string;
                             requestId: string;
                             details?: {
                                 field: string;
-                                code: string;
-                                message: string;
-                            }[] | null;
-                        };
-                    };
-                };
-            };
-        };
-    };
-    listIngestionBatches: {
-        parameters: {
-            query?: {
-                /** @description Batch status filter. */
-                status?: "received" | "processed" | "failed";
-                /** @description Inclusive received-at start timestamp. */
-                from?: string;
-                /** @description Exclusive received-at end timestamp. */
-                to?: string;
-                /** @description Maximum number of items. Defaults to 100 and cannot exceed 1000 for admin list endpoints. */
-                limit?: number;
-                /** @description Opaque cursor from `meta.nextCursor` for the next page. Admin batch lists are sorted by receivedAt desc. */
-                cursor?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IngestionBatchesResponse"];
-                };
-            };
-            /** @description Request validation failed */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Missing or invalid API key */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unexpected server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Error response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** me.aquitano.health.api.ErrorBody */
-                        error: {
-                            code: string;
-                            message: string;
-                            requestId: string;
-                            details?: {
-                                field: string;
-                                code: string;
-                                message: string;
-                            }[] | null;
-                        };
-                    };
-                };
-            };
-        };
-    };
-    getIngestionBatch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Ingestion batch id */
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IngestionBatchDetailResponse"];
-                };
-            };
-            /** @description Request validation failed */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Missing or invalid API key */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Resource not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unexpected server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Error response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** me.aquitano.health.api.ErrorBody */
-                        error: {
-                            code: string;
-                            message: string;
-                            requestId: string;
-                            details?: {
-                                field: string;
-                                code: string;
-                                message: string;
-                            }[] | null;
-                        };
-                    };
-                };
-            };
-        };
-    };
-    listIngestionFailures: {
-        parameters: {
-            query?: {
-                /** @description Batch status filter. */
-                status?: "received" | "processed" | "failed";
-                /** @description Inclusive received-at start timestamp. */
-                from?: string;
-                /** @description Exclusive received-at end timestamp. */
-                to?: string;
-                /** @description Maximum number of items. Defaults to 100 and cannot exceed 1000 for admin list endpoints. */
-                limit?: number;
-                /** @description Opaque cursor from `meta.nextCursor` for the next page. Admin batch lists are sorted by receivedAt desc. */
-                cursor?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IngestionBatchesResponse"];
-                };
-            };
-            /** @description Request validation failed */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Missing or invalid API key */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unexpected server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Error response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** me.aquitano.health.api.ErrorBody */
-                        error: {
-                            code: string;
-                            message: string;
-                            requestId: string;
-                            details?: {
-                                field: string;
-                                code: string;
-                                message: string;
-                            }[] | null;
-                        };
-                    };
-                };
-            };
-        };
-    };
-    startReplay: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description Replay request. scope selects the projections stage, the derived rebuild stage, or both; metricTypes limits the replay to specific record types; omitting the date range replays all stored history. */
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ReplayRequest"];
-            };
-        };
-        responses: {
-            /** @description Replay job accepted */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReplayJobStartResponse"];
-                };
-            };
-            /** @description Request validation failed */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Missing or invalid API key */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unexpected server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Error response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** me.aquitano.health.api.ErrorBody */
-                        error: {
-                            code: string;
-                            message: string;
-                            requestId: string;
-                            details?: {
-                                field: string;
-                                code: string;
-                                message: string;
-                            }[] | null;
-                        };
-                    };
-                };
-            };
-        };
-    };
-    getLatestReplayJob: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReplayJobStatusResponse"];
-                };
-            };
-            /** @description Request validation failed */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Missing or invalid API key */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Resource not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unexpected server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Error response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** me.aquitano.health.api.ErrorBody */
-                        error: {
-                            code: string;
-                            message: string;
-                            requestId: string;
-                            details?: {
-                                field: string;
-                                code: string;
-                                message: string;
-                            }[] | null;
-                        };
-                    };
-                };
-            };
-        };
-    };
-    getReplayJob: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Replay job id returned by startReplay */
-                jobId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReplayJobStatusResponse"];
-                };
-            };
-            /** @description Request validation failed */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Missing or invalid API key */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Resource not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unexpected server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Error response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** me.aquitano.health.api.ErrorBody */
-                        error: {
-                            code: string;
-                            message: string;
-                            requestId: string;
-                            details?: {
-                                field: string;
-                                code: string;
-                                message: string;
-                            }[] | null;
-                        };
-                    };
-                };
-            };
-        };
-    };
-    ingestBatch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description Normalized ingestion batch. Fields are nullable at the transport layer where provider adapters may omit them, but validation enforces provider, providerInstanceId, batch identity, and record-specific required fields. */
-        requestBody: {
-            content: {
-                "application/json": {
-                    /** @example withings */
-                    provider?: string;
-                    /** @example withings:123456 */
-                    providerInstanceId?: string;
-                    /** @example withings-2026-04-02T00:00:00Z */
-                    batchExternalId?: string;
-                    /**
-                     * Format: date-time
-                     * @example 2026-04-02T08:15:30Z
-                     */
-                    ingestedAt?: string;
-                    sourcePayload?: Record<string, never>;
-                    records?: (components["schemas"]["StepIntervalDto"] | components["schemas"]["SleepSessionDto"] | components["schemas"]["BodyMeasurementDto"] | components["schemas"]["HeartRateDto"] | components["schemas"]["ActivitySummaryDto"] | components["schemas"]["SleepSummaryDto"] | components["schemas"]["RespiratoryRateDto"] | components["schemas"]["HrvDto"] | components["schemas"]["BloodPressureDto"] | components["schemas"]["CardiovascularDto"] | components["schemas"]["ExtendedBodyMeasurementDto"] | components["schemas"]["ScalarSampleDto"])[];
-                };
-            };
-        };
-        responses: {
-            /** @description Duplicate batch accepted without creating a new batch */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IngestionSummaryResponse"];
-                };
-            };
-            /** @description Batch accepted and processed */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IngestionSummaryResponse"];
-                };
-            };
-            /** @description Request validation failed */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Missing or invalid API key */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Request conflicts with current state */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unexpected server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    listProviders: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderCatalogResponseDto"];
-                };
-            };
-            /** @description Request validation failed */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Missing or invalid API key */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unexpected server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Error response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** me.aquitano.health.api.ErrorBody */
-                        error: {
-                            code: string;
-                            message: string;
-                            requestId: string;
-                            details?: {
-                                field: string;
-                                code: string;
-                                message: string;
-                            }[] | null;
-                        };
-                    };
-                };
-            };
-        };
-    };
-    listProviderStatuses: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderStatusCatalogResponseDto"];
-                };
-            };
-            /** @description Request validation failed */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Missing or invalid API key */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unexpected server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Error response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** me.aquitano.health.api.ErrorBody */
-                        error: {
-                            code: string;
-                            message: string;
-                            requestId: string;
-                            details?: {
-                                field: string;
-                                code: string;
-                                message: string;
-                            }[] | null;
-                        };
-                    };
-                };
-            };
-        };
-    };
-    getProvider: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Provider code. Current examples are `google-health` and `withings`. */
-                providerCode: "google-health" | "withings";
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderDescriptorResponseDto"];
-                };
-            };
-            /** @description Request validation failed */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Missing or invalid API key */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Resource not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unexpected server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Error response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** me.aquitano.health.api.ErrorBody */
-                        error: {
-                            code: string;
-                            message: string;
-                            requestId: string;
-                            details?: {
-                                field: string;
-                                code: string;
-                                message: string;
-                            }[] | null;
-                        };
-                    };
-                };
-            };
-        };
-    };
-    getProviderStatus: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Provider code. Current examples are `google-health` and `withings`. */
-                providerCode: "google-health" | "withings";
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderStatusResponseDto"];
-                };
-            };
-            /** @description Request validation failed */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Missing or invalid API key */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Resource not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unexpected server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Error response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** me.aquitano.health.api.ErrorBody */
-                        error: {
-                            code: string;
-                            message: string;
-                            requestId: string;
-                            details?: {
-                                field: string;
-                                code: string;
-                                message: string;
-                            }[] | null;
-                        };
-                    };
-                };
-            };
-        };
-    };
-    listProviderAccounts: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Provider code. Current examples are `google-health` and `withings`. */
-                providerCode: "google-health" | "withings";
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderAccountListResponseDto"];
-                };
-            };
-            /** @description Request validation failed */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Missing or invalid API key */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Resource not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unexpected server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Error response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** me.aquitano.health.api.ErrorBody */
-                        error: {
-                            code: string;
-                            message: string;
-                            requestId: string;
-                            details?: {
-                                field: string;
-                                code: string;
-                                message: string;
-                            }[] | null;
-                        };
-                    };
-                };
-            };
-        };
-    };
-    getProviderAccount: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Provider code. Current examples are `google-health` and `withings`. */
-                providerCode: "google-health" | "withings";
-                providerInstanceId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderAccountStatusResponseDto"];
-                };
-            };
-            /** @description Request validation failed */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Missing or invalid API key */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Resource not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unexpected server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Error response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** me.aquitano.health.api.ErrorBody */
-                        error: {
-                            code: string;
-                            message: string;
-                            requestId: string;
-                            details?: {
-                                field: string;
-                                code: string;
-                                message: string;
-                            }[] | null;
-                        };
-                    };
-                };
-            };
-        };
-    };
-    getScheduledProviderSync: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Provider code. Current examples are `google-health` and `withings`. */
-                providerCode: "google-health" | "withings";
-                providerInstanceId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ScheduledSyncConfigResponseDto"];
-                };
-            };
-            /** @description Request validation failed */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Missing or invalid API key */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Resource not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unexpected server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Error response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** me.aquitano.health.api.ErrorBody */
-                        error: {
-                            code: string;
-                            message: string;
-                            requestId: string;
-                            details?: {
-                                field: string;
-                                code: string;
-                                message: string;
-                            }[] | null;
-                        };
-                    };
-                };
-            };
-        };
-    };
-    updateScheduledProviderSync: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Provider code. Current examples are `google-health` and `withings`. */
-                providerCode: "google-health" | "withings";
-                providerInstanceId: string;
-            };
-            cookie?: never;
-        };
-        /** @description Scheduled sync configuration fields to update. */
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ScheduledSyncConfigUpdateRequestDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ScheduledSyncConfigResponseDto"];
-                };
-            };
-            /** @description Request validation failed */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Missing or invalid API key */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Resource not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unexpected server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Error response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** me.aquitano.health.api.ErrorBody */
-                        error: {
-                            code: string;
-                            message: string;
-                            requestId: string;
-                            details?: {
-                                field: string;
-                                code: string;
-                                message: string;
-                            }[] | null;
-                        };
-                    };
-                };
-            };
-        };
-    };
-    runScheduledProviderSyncNow: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Provider code. Current examples are `google-health` and `withings`. */
-                providerCode: "google-health" | "withings";
-                providerInstanceId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ScheduledSyncRunResponseDto"];
-                };
-            };
-            /** @description Request validation failed */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Missing or invalid API key */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Resource not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Request conflicts with current state */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unexpected server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Upstream provider request failed */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Error response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** me.aquitano.health.api.ErrorBody */
-                        error: {
-                            code: string;
-                            message: string;
-                            requestId: string;
-                            details?: {
-                                field: string;
-                                code: string;
-                                message: string;
-                            }[] | null;
-                        };
-                    };
-                };
-            };
-        };
-    };
-    disconnectProviderAccount: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Provider code. Current examples are `google-health` and `withings`. */
-                providerCode: "google-health" | "withings";
-                providerInstanceId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderDisconnectResponseDto"];
-                };
-            };
-            /** @description Request validation failed */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Missing or invalid API key */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Resource not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Request conflicts with current state */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unexpected server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Error response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** me.aquitano.health.api.ErrorBody */
-                        error: {
-                            code: string;
-                            message: string;
-                            requestId: string;
-                            details?: {
-                                field: string;
-                                code: string;
-                                message: string;
-                            }[] | null;
-                        };
-                    };
-                };
-            };
-        };
-    };
-    reconnectProviderAccount: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Provider code. Current examples are `google-health` and `withings`. */
-                providerCode: "google-health" | "withings";
-                providerInstanceId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderOAuthStartResponse"];
-                };
-            };
-            /** @description Request validation failed */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Missing or invalid API key */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Resource not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unexpected server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Error response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** me.aquitano.health.api.ErrorBody */
-                        error: {
-                            code: string;
-                            message: string;
-                            requestId: string;
-                            details?: {
-                                field: string;
-                                code: string;
-                                message: string;
-                            }[] | null;
-                        };
-                    };
-                };
-            };
-        };
-    };
-    startProviderOAuth: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Provider code. Current examples are `google-health` and `withings`. */
-                providerCode: "google-health" | "withings";
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderOAuthStartResponse"];
-                };
-            };
-            /** @description Request validation failed */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Missing or invalid API key */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Resource not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unexpected server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Error response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** me.aquitano.health.api.ErrorBody */
-                        error: {
-                            code: string;
-                            message: string;
-                            requestId: string;
-                            details?: {
-                                field: string;
-                                code: string;
+                                /**
+                                 * @description Machine-readable validation issue code for this field.
+                                 * @enum {string}
+                                 */
+                                code: "required" | "invalid_format" | "unsupported_value" | "out_of_range" | "invalid_range" | "invalid_state";
                                 message: string;
                             }[] | null;
                         };
@@ -3326,12 +1851,17 @@ export interface operations {
                     "application/json": {
                         /** me.aquitano.health.api.ErrorBody */
                         error: {
+                            /** @description Stable machine-readable error code. Envelope-level values are `validation_failed`, `unauthorized`, `not_found`, and `internal_error`; provider-sync and ingestion endpoints additionally return provider-specific conflict and upstream codes (for example `idempotency_key_conflict`, `scheduled_sync_already_running`, or `withings_needs_reauth`). */
                             code: string;
                             message: string;
                             requestId: string;
                             details?: {
                                 field: string;
-                                code: string;
+                                /**
+                                 * @description Machine-readable validation issue code for this field.
+                                 * @enum {string}
+                                 */
+                                code: "required" | "invalid_format" | "unsupported_value" | "out_of_range" | "invalid_range" | "invalid_state";
                                 message: string;
                             }[] | null;
                         };
@@ -3340,7 +1870,221 @@ export interface operations {
             };
         };
     };
-    syncProvider: {
+    ingestBatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Normalized ingestion batch. Fields are nullable at the transport layer where provider adapters may omit them, but validation enforces provider, providerInstanceId, batch identity, and record-specific required fields. */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IngestionBatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Duplicate batch accepted without creating a new batch */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestionSummaryResponse"];
+                };
+            };
+            /** @description Batch accepted and processed */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestionSummaryResponse"];
+                };
+            };
+            /** @description Request validation failed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Missing or invalid API key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request conflicts with current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listProviders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderCatalogResponse"];
+                };
+            };
+            /** @description Request validation failed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Missing or invalid API key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** me.aquitano.health.api.ErrorBody */
+                        error: {
+                            /** @description Stable machine-readable error code. Envelope-level values are `validation_failed`, `unauthorized`, `not_found`, and `internal_error`; provider-sync and ingestion endpoints additionally return provider-specific conflict and upstream codes (for example `idempotency_key_conflict`, `scheduled_sync_already_running`, or `withings_needs_reauth`). */
+                            code: string;
+                            message: string;
+                            requestId: string;
+                            details?: {
+                                field: string;
+                                /**
+                                 * @description Machine-readable validation issue code for this field.
+                                 * @enum {string}
+                                 */
+                                code: "required" | "invalid_format" | "unsupported_value" | "out_of_range" | "invalid_range" | "invalid_state";
+                                message: string;
+                            }[] | null;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    listProviderStatuses: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderStatusCatalogResponse"];
+                };
+            };
+            /** @description Request validation failed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Missing or invalid API key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** me.aquitano.health.api.ErrorBody */
+                        error: {
+                            /** @description Stable machine-readable error code. Envelope-level values are `validation_failed`, `unauthorized`, `not_found`, and `internal_error`; provider-sync and ingestion endpoints additionally return provider-specific conflict and upstream codes (for example `idempotency_key_conflict`, `scheduled_sync_already_running`, or `withings_needs_reauth`). */
+                            code: string;
+                            message: string;
+                            requestId: string;
+                            details?: {
+                                field: string;
+                                /**
+                                 * @description Machine-readable validation issue code for this field.
+                                 * @enum {string}
+                                 */
+                                code: "required" | "invalid_format" | "unsupported_value" | "out_of_range" | "invalid_range" | "invalid_state";
+                                message: string;
+                            }[] | null;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    getProvider: {
         parameters: {
             query?: never;
             header?: never;
@@ -3350,10 +2094,433 @@ export interface operations {
             };
             cookie?: never;
         };
-        /** @description Provider sync request. Long historical ranges are accepted for backfill; providers split work into safe internal windows and may enforce page-size constraints advertised by the provider catalog. */
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderDescriptorResponse"];
+                };
+            };
+            /** @description Request validation failed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Missing or invalid API key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** me.aquitano.health.api.ErrorBody */
+                        error: {
+                            /** @description Stable machine-readable error code. Envelope-level values are `validation_failed`, `unauthorized`, `not_found`, and `internal_error`; provider-sync and ingestion endpoints additionally return provider-specific conflict and upstream codes (for example `idempotency_key_conflict`, `scheduled_sync_already_running`, or `withings_needs_reauth`). */
+                            code: string;
+                            message: string;
+                            requestId: string;
+                            details?: {
+                                field: string;
+                                /**
+                                 * @description Machine-readable validation issue code for this field.
+                                 * @enum {string}
+                                 */
+                                code: "required" | "invalid_format" | "unsupported_value" | "out_of_range" | "invalid_range" | "invalid_state";
+                                message: string;
+                            }[] | null;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    getProviderStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Provider code. Current examples are `google-health` and `withings`. */
+                providerCode: "google-health" | "withings";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderStatusResponse"];
+                };
+            };
+            /** @description Request validation failed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Missing or invalid API key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** me.aquitano.health.api.ErrorBody */
+                        error: {
+                            /** @description Stable machine-readable error code. Envelope-level values are `validation_failed`, `unauthorized`, `not_found`, and `internal_error`; provider-sync and ingestion endpoints additionally return provider-specific conflict and upstream codes (for example `idempotency_key_conflict`, `scheduled_sync_already_running`, or `withings_needs_reauth`). */
+                            code: string;
+                            message: string;
+                            requestId: string;
+                            details?: {
+                                field: string;
+                                /**
+                                 * @description Machine-readable validation issue code for this field.
+                                 * @enum {string}
+                                 */
+                                code: "required" | "invalid_format" | "unsupported_value" | "out_of_range" | "invalid_range" | "invalid_state";
+                                message: string;
+                            }[] | null;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    listProviderAccounts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Provider code. Current examples are `google-health` and `withings`. */
+                providerCode: "google-health" | "withings";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderAccountListResponse"];
+                };
+            };
+            /** @description Request validation failed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Missing or invalid API key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** me.aquitano.health.api.ErrorBody */
+                        error: {
+                            /** @description Stable machine-readable error code. Envelope-level values are `validation_failed`, `unauthorized`, `not_found`, and `internal_error`; provider-sync and ingestion endpoints additionally return provider-specific conflict and upstream codes (for example `idempotency_key_conflict`, `scheduled_sync_already_running`, or `withings_needs_reauth`). */
+                            code: string;
+                            message: string;
+                            requestId: string;
+                            details?: {
+                                field: string;
+                                /**
+                                 * @description Machine-readable validation issue code for this field.
+                                 * @enum {string}
+                                 */
+                                code: "required" | "invalid_format" | "unsupported_value" | "out_of_range" | "invalid_range" | "invalid_state";
+                                message: string;
+                            }[] | null;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    getProviderAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Provider code. Current examples are `google-health` and `withings`. */
+                providerCode: "google-health" | "withings";
+                providerInstanceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderAccountStatusResponse"];
+                };
+            };
+            /** @description Request validation failed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Missing or invalid API key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** me.aquitano.health.api.ErrorBody */
+                        error: {
+                            /** @description Stable machine-readable error code. Envelope-level values are `validation_failed`, `unauthorized`, `not_found`, and `internal_error`; provider-sync and ingestion endpoints additionally return provider-specific conflict and upstream codes (for example `idempotency_key_conflict`, `scheduled_sync_already_running`, or `withings_needs_reauth`). */
+                            code: string;
+                            message: string;
+                            requestId: string;
+                            details?: {
+                                field: string;
+                                /**
+                                 * @description Machine-readable validation issue code for this field.
+                                 * @enum {string}
+                                 */
+                                code: "required" | "invalid_format" | "unsupported_value" | "out_of_range" | "invalid_range" | "invalid_state";
+                                message: string;
+                            }[] | null;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    getScheduledProviderSync: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Provider code. Current examples are `google-health` and `withings`. */
+                providerCode: "google-health" | "withings";
+                providerInstanceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduledSyncConfigResponse"];
+                };
+            };
+            /** @description Request validation failed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Missing or invalid API key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** me.aquitano.health.api.ErrorBody */
+                        error: {
+                            /** @description Stable machine-readable error code. Envelope-level values are `validation_failed`, `unauthorized`, `not_found`, and `internal_error`; provider-sync and ingestion endpoints additionally return provider-specific conflict and upstream codes (for example `idempotency_key_conflict`, `scheduled_sync_already_running`, or `withings_needs_reauth`). */
+                            code: string;
+                            message: string;
+                            requestId: string;
+                            details?: {
+                                field: string;
+                                /**
+                                 * @description Machine-readable validation issue code for this field.
+                                 * @enum {string}
+                                 */
+                                code: "required" | "invalid_format" | "unsupported_value" | "out_of_range" | "invalid_range" | "invalid_state";
+                                message: string;
+                            }[] | null;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    updateScheduledProviderSync: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Provider code. Current examples are `google-health` and `withings`. */
+                providerCode: "google-health" | "withings";
+                providerInstanceId: string;
+            };
+            cookie?: never;
+        };
+        /** @description Scheduled sync configuration fields to update. */
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ProviderSyncRequestDto"];
+                "application/json": components["schemas"]["ScheduledSyncConfigUpdateRequest"];
             };
         };
         responses: {
@@ -3362,7 +2529,92 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProviderSyncResponseDto"];
+                    "application/json": components["schemas"]["ScheduledSyncConfigResponse"];
+                };
+            };
+            /** @description Request validation failed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Missing or invalid API key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** me.aquitano.health.api.ErrorBody */
+                        error: {
+                            /** @description Stable machine-readable error code. Envelope-level values are `validation_failed`, `unauthorized`, `not_found`, and `internal_error`; provider-sync and ingestion endpoints additionally return provider-specific conflict and upstream codes (for example `idempotency_key_conflict`, `scheduled_sync_already_running`, or `withings_needs_reauth`). */
+                            code: string;
+                            message: string;
+                            requestId: string;
+                            details?: {
+                                field: string;
+                                /**
+                                 * @description Machine-readable validation issue code for this field.
+                                 * @enum {string}
+                                 */
+                                code: "required" | "invalid_format" | "unsupported_value" | "out_of_range" | "invalid_range" | "invalid_state";
+                                message: string;
+                            }[] | null;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    runScheduledProviderSyncNow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Provider code. Current examples are `google-health` and `withings`. */
+                providerCode: "google-health" | "withings";
+                providerInstanceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduledSyncRunResponse"];
                 };
             };
             /** @description Request validation failed */
@@ -3428,12 +2680,17 @@ export interface operations {
                     "application/json": {
                         /** me.aquitano.health.api.ErrorBody */
                         error: {
+                            /** @description Stable machine-readable error code. Envelope-level values are `validation_failed`, `unauthorized`, `not_found`, and `internal_error`; provider-sync and ingestion endpoints additionally return provider-specific conflict and upstream codes (for example `idempotency_key_conflict`, `scheduled_sync_already_running`, or `withings_needs_reauth`). */
                             code: string;
                             message: string;
                             requestId: string;
                             details?: {
                                 field: string;
-                                code: string;
+                                /**
+                                 * @description Machine-readable validation issue code for this field.
+                                 * @enum {string}
+                                 */
+                                code: "required" | "invalid_format" | "unsupported_value" | "out_of_range" | "invalid_range" | "invalid_state";
                                 message: string;
                             }[] | null;
                         };
@@ -3442,30 +2699,25 @@ export interface operations {
             };
         };
     };
-    startProviderSyncJob: {
+    disconnectProviderAccount: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 /** @description Provider code. Current examples are `google-health` and `withings`. */
                 providerCode: "google-health" | "withings";
+                providerInstanceId: string;
             };
             cookie?: never;
         };
-        /** @description Provider sync request. Long historical ranges are accepted for backfill and processed by the backend job worker. */
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProviderSyncRequestDto"];
-            };
-        };
+        requestBody?: never;
         responses: {
-            /** @description Sync job accepted */
-            202: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProviderSyncJobStartResponseDto"];
+                    "application/json": components["schemas"]["ProviderDisconnectResponse"];
                 };
             };
             /** @description Request validation failed */
@@ -3522,12 +2774,17 @@ export interface operations {
                     "application/json": {
                         /** me.aquitano.health.api.ErrorBody */
                         error: {
+                            /** @description Stable machine-readable error code. Envelope-level values are `validation_failed`, `unauthorized`, `not_found`, and `internal_error`; provider-sync and ingestion endpoints additionally return provider-specific conflict and upstream codes (for example `idempotency_key_conflict`, `scheduled_sync_already_running`, or `withings_needs_reauth`). */
                             code: string;
                             message: string;
                             requestId: string;
                             details?: {
                                 field: string;
-                                code: string;
+                                /**
+                                 * @description Machine-readable validation issue code for this field.
+                                 * @enum {string}
+                                 */
+                                code: "required" | "invalid_format" | "unsupported_value" | "out_of_range" | "invalid_range" | "invalid_state";
                                 message: string;
                             }[] | null;
                         };
@@ -3536,13 +2793,14 @@ export interface operations {
             };
         };
     };
-    getLatestProviderSyncJob: {
+    reconnectProviderAccount: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 /** @description Provider code. Current examples are `google-health` and `withings`. */
                 providerCode: "google-health" | "withings";
+                providerInstanceId: string;
             };
             cookie?: never;
         };
@@ -3553,7 +2811,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProviderSyncJobStatusResponseDto"];
+                    "application/json": components["schemas"]["ProviderOAuthStartResponse"];
                 };
             };
             /** @description Request validation failed */
@@ -3601,12 +2859,397 @@ export interface operations {
                     "application/json": {
                         /** me.aquitano.health.api.ErrorBody */
                         error: {
+                            /** @description Stable machine-readable error code. Envelope-level values are `validation_failed`, `unauthorized`, `not_found`, and `internal_error`; provider-sync and ingestion endpoints additionally return provider-specific conflict and upstream codes (for example `idempotency_key_conflict`, `scheduled_sync_already_running`, or `withings_needs_reauth`). */
                             code: string;
                             message: string;
                             requestId: string;
                             details?: {
                                 field: string;
-                                code: string;
+                                /**
+                                 * @description Machine-readable validation issue code for this field.
+                                 * @enum {string}
+                                 */
+                                code: "required" | "invalid_format" | "unsupported_value" | "out_of_range" | "invalid_range" | "invalid_state";
+                                message: string;
+                            }[] | null;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    startProviderOAuth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Provider code. Current examples are `google-health` and `withings`. */
+                providerCode: "google-health" | "withings";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderOAuthStartResponse"];
+                };
+            };
+            /** @description Request validation failed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Missing or invalid API key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** me.aquitano.health.api.ErrorBody */
+                        error: {
+                            /** @description Stable machine-readable error code. Envelope-level values are `validation_failed`, `unauthorized`, `not_found`, and `internal_error`; provider-sync and ingestion endpoints additionally return provider-specific conflict and upstream codes (for example `idempotency_key_conflict`, `scheduled_sync_already_running`, or `withings_needs_reauth`). */
+                            code: string;
+                            message: string;
+                            requestId: string;
+                            details?: {
+                                field: string;
+                                /**
+                                 * @description Machine-readable validation issue code for this field.
+                                 * @enum {string}
+                                 */
+                                code: "required" | "invalid_format" | "unsupported_value" | "out_of_range" | "invalid_range" | "invalid_state";
+                                message: string;
+                            }[] | null;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    syncProvider: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional client-generated key that makes the request idempotent. Repeating a request with the same key returns the result of the first request instead of performing the work again. */
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                /** @description Provider code. Current examples are `google-health` and `withings`. */
+                providerCode: "google-health" | "withings";
+            };
+            cookie?: never;
+        };
+        /** @description Provider sync request. Long historical ranges are accepted for backfill; providers split work into safe internal windows and may enforce page-size constraints advertised by the provider catalog. */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderSyncRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderSyncResponse"];
+                };
+            };
+            /** @description Request validation failed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Missing or invalid API key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request conflicts with current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Upstream provider request failed */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** me.aquitano.health.api.ErrorBody */
+                        error: {
+                            /** @description Stable machine-readable error code. Envelope-level values are `validation_failed`, `unauthorized`, `not_found`, and `internal_error`; provider-sync and ingestion endpoints additionally return provider-specific conflict and upstream codes (for example `idempotency_key_conflict`, `scheduled_sync_already_running`, or `withings_needs_reauth`). */
+                            code: string;
+                            message: string;
+                            requestId: string;
+                            details?: {
+                                field: string;
+                                /**
+                                 * @description Machine-readable validation issue code for this field.
+                                 * @enum {string}
+                                 */
+                                code: "required" | "invalid_format" | "unsupported_value" | "out_of_range" | "invalid_range" | "invalid_state";
+                                message: string;
+                            }[] | null;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    startProviderSyncJob: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional client-generated key that makes the request idempotent. Repeating a request with the same key returns the result of the first request instead of performing the work again. */
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                /** @description Provider code. Current examples are `google-health` and `withings`. */
+                providerCode: "google-health" | "withings";
+            };
+            cookie?: never;
+        };
+        /** @description Provider sync request. Long historical ranges are accepted for backfill and processed by the backend job worker. */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderSyncRequest"];
+            };
+        };
+        responses: {
+            /** @description Sync job accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderSyncJobStartResponse"];
+                };
+            };
+            /** @description Request validation failed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Missing or invalid API key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request conflicts with current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** me.aquitano.health.api.ErrorBody */
+                        error: {
+                            /** @description Stable machine-readable error code. Envelope-level values are `validation_failed`, `unauthorized`, `not_found`, and `internal_error`; provider-sync and ingestion endpoints additionally return provider-specific conflict and upstream codes (for example `idempotency_key_conflict`, `scheduled_sync_already_running`, or `withings_needs_reauth`). */
+                            code: string;
+                            message: string;
+                            requestId: string;
+                            details?: {
+                                field: string;
+                                /**
+                                 * @description Machine-readable validation issue code for this field.
+                                 * @enum {string}
+                                 */
+                                code: "required" | "invalid_format" | "unsupported_value" | "out_of_range" | "invalid_range" | "invalid_state";
+                                message: string;
+                            }[] | null;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    getLatestProviderSyncJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Provider code. Current examples are `google-health` and `withings`. */
+                providerCode: "google-health" | "withings";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderSyncJobStatusResponse"];
+                };
+            };
+            /** @description Request validation failed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Missing or invalid API key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** me.aquitano.health.api.ErrorBody */
+                        error: {
+                            /** @description Stable machine-readable error code. Envelope-level values are `validation_failed`, `unauthorized`, `not_found`, and `internal_error`; provider-sync and ingestion endpoints additionally return provider-specific conflict and upstream codes (for example `idempotency_key_conflict`, `scheduled_sync_already_running`, or `withings_needs_reauth`). */
+                            code: string;
+                            message: string;
+                            requestId: string;
+                            details?: {
+                                field: string;
+                                /**
+                                 * @description Machine-readable validation issue code for this field.
+                                 * @enum {string}
+                                 */
+                                code: "required" | "invalid_format" | "unsupported_value" | "out_of_range" | "invalid_range" | "invalid_state";
                                 message: string;
                             }[] | null;
                         };
@@ -3634,7 +3277,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProviderSyncJobStatusResponseDto"];
+                    "application/json": components["schemas"]["ProviderSyncJobStatusResponse"];
                 };
             };
             /** @description Request validation failed */
@@ -3682,12 +3325,17 @@ export interface operations {
                     "application/json": {
                         /** me.aquitano.health.api.ErrorBody */
                         error: {
+                            /** @description Stable machine-readable error code. Envelope-level values are `validation_failed`, `unauthorized`, `not_found`, and `internal_error`; provider-sync and ingestion endpoints additionally return provider-specific conflict and upstream codes (for example `idempotency_key_conflict`, `scheduled_sync_already_running`, or `withings_needs_reauth`). */
                             code: string;
                             message: string;
                             requestId: string;
                             details?: {
                                 field: string;
-                                code: string;
+                                /**
+                                 * @description Machine-readable validation issue code for this field.
+                                 * @enum {string}
+                                 */
+                                code: "required" | "invalid_format" | "unsupported_value" | "out_of_range" | "invalid_range" | "invalid_state";
                                 message: string;
                             }[] | null;
                         };
@@ -3749,12 +3397,17 @@ export interface operations {
                     "application/json": {
                         /** me.aquitano.health.api.ErrorBody */
                         error: {
+                            /** @description Stable machine-readable error code. Envelope-level values are `validation_failed`, `unauthorized`, `not_found`, and `internal_error`; provider-sync and ingestion endpoints additionally return provider-specific conflict and upstream codes (for example `idempotency_key_conflict`, `scheduled_sync_already_running`, or `withings_needs_reauth`). */
                             code: string;
                             message: string;
                             requestId: string;
                             details?: {
                                 field: string;
-                                code: string;
+                                /**
+                                 * @description Machine-readable validation issue code for this field.
+                                 * @enum {string}
+                                 */
+                                code: "required" | "invalid_format" | "unsupported_value" | "out_of_range" | "invalid_range" | "invalid_state";
                                 message: string;
                             }[] | null;
                         };
@@ -3851,12 +3504,17 @@ export interface operations {
                     "application/json": {
                         /** me.aquitano.health.api.ErrorBody */
                         error: {
+                            /** @description Stable machine-readable error code. Envelope-level values are `validation_failed`, `unauthorized`, `not_found`, and `internal_error`; provider-sync and ingestion endpoints additionally return provider-specific conflict and upstream codes (for example `idempotency_key_conflict`, `scheduled_sync_already_running`, or `withings_needs_reauth`). */
                             code: string;
                             message: string;
                             requestId: string;
                             details?: {
                                 field: string;
-                                code: string;
+                                /**
+                                 * @description Machine-readable validation issue code for this field.
+                                 * @enum {string}
+                                 */
+                                code: "required" | "invalid_format" | "unsupported_value" | "out_of_range" | "invalid_range" | "invalid_state";
                                 message: string;
                             }[] | null;
                         };
@@ -3941,12 +3599,114 @@ export interface operations {
                     "application/json": {
                         /** me.aquitano.health.api.ErrorBody */
                         error: {
+                            /** @description Stable machine-readable error code. Envelope-level values are `validation_failed`, `unauthorized`, `not_found`, and `internal_error`; provider-sync and ingestion endpoints additionally return provider-specific conflict and upstream codes (for example `idempotency_key_conflict`, `scheduled_sync_already_running`, or `withings_needs_reauth`). */
                             code: string;
                             message: string;
                             requestId: string;
                             details?: {
                                 field: string;
-                                code: string;
+                                /**
+                                 * @description Machine-readable validation issue code for this field.
+                                 * @enum {string}
+                                 */
+                                code: "required" | "invalid_format" | "unsupported_value" | "out_of_range" | "invalid_range" | "invalid_state";
+                                message: string;
+                            }[] | null;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    summarizeScalarSamplesDaily: {
+        parameters: {
+            query?: {
+                /** @description Inclusive start timestamp. */
+                from?: string;
+                /** @description Exclusive end timestamp. */
+                to?: string;
+                /** @description IANA timezone that defines the calendar-day buckets. Defaults to UTC. */
+                timezone?: string;
+                /** @description Source provider filter. */
+                provider?: string;
+                /** @description Source provider account or instance filter. */
+                providerInstanceId?: string;
+                /** @description Accepted for parity with other reads; daily summaries carry no source metadata. */
+                includeSource?: boolean;
+            };
+            header?: never;
+            path: {
+                /** @description Scalar metric type from the metric catalog. */
+                metricType: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScalarDailySummariesResponse"];
+                };
+            };
+            /** @description Request validation failed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Missing or invalid API key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** me.aquitano.health.api.ErrorBody */
+                        error: {
+                            /** @description Stable machine-readable error code. Envelope-level values are `validation_failed`, `unauthorized`, `not_found`, and `internal_error`; provider-sync and ingestion endpoints additionally return provider-specific conflict and upstream codes (for example `idempotency_key_conflict`, `scheduled_sync_already_running`, or `withings_needs_reauth`). */
+                            code: string;
+                            message: string;
+                            requestId: string;
+                            details?: {
+                                field: string;
+                                /**
+                                 * @description Machine-readable validation issue code for this field.
+                                 * @enum {string}
+                                 */
+                                code: "required" | "invalid_format" | "unsupported_value" | "out_of_range" | "invalid_range" | "invalid_state";
                                 message: string;
                             }[] | null;
                         };
@@ -4022,12 +3782,17 @@ export interface operations {
                     "application/json": {
                         /** me.aquitano.health.api.ErrorBody */
                         error: {
+                            /** @description Stable machine-readable error code. Envelope-level values are `validation_failed`, `unauthorized`, `not_found`, and `internal_error`; provider-sync and ingestion endpoints additionally return provider-specific conflict and upstream codes (for example `idempotency_key_conflict`, `scheduled_sync_already_running`, or `withings_needs_reauth`). */
                             code: string;
                             message: string;
                             requestId: string;
                             details?: {
                                 field: string;
-                                code: string;
+                                /**
+                                 * @description Machine-readable validation issue code for this field.
+                                 * @enum {string}
+                                 */
+                                code: "required" | "invalid_format" | "unsupported_value" | "out_of_range" | "invalid_range" | "invalid_state";
                                 message: string;
                             }[] | null;
                         };
@@ -4110,12 +3875,17 @@ export interface operations {
                     "application/json": {
                         /** me.aquitano.health.api.ErrorBody */
                         error: {
+                            /** @description Stable machine-readable error code. Envelope-level values are `validation_failed`, `unauthorized`, `not_found`, and `internal_error`; provider-sync and ingestion endpoints additionally return provider-specific conflict and upstream codes (for example `idempotency_key_conflict`, `scheduled_sync_already_running`, or `withings_needs_reauth`). */
                             code: string;
                             message: string;
                             requestId: string;
                             details?: {
                                 field: string;
-                                code: string;
+                                /**
+                                 * @description Machine-readable validation issue code for this field.
+                                 * @enum {string}
+                                 */
+                                code: "required" | "invalid_format" | "unsupported_value" | "out_of_range" | "invalid_range" | "invalid_state";
                                 message: string;
                             }[] | null;
                         };
@@ -4200,12 +3970,17 @@ export interface operations {
                     "application/json": {
                         /** me.aquitano.health.api.ErrorBody */
                         error: {
+                            /** @description Stable machine-readable error code. Envelope-level values are `validation_failed`, `unauthorized`, `not_found`, and `internal_error`; provider-sync and ingestion endpoints additionally return provider-specific conflict and upstream codes (for example `idempotency_key_conflict`, `scheduled_sync_already_running`, or `withings_needs_reauth`). */
                             code: string;
                             message: string;
                             requestId: string;
                             details?: {
                                 field: string;
-                                code: string;
+                                /**
+                                 * @description Machine-readable validation issue code for this field.
+                                 * @enum {string}
+                                 */
+                                code: "required" | "invalid_format" | "unsupported_value" | "out_of_range" | "invalid_range" | "invalid_state";
                                 message: string;
                             }[] | null;
                         };
@@ -4290,12 +4065,17 @@ export interface operations {
                     "application/json": {
                         /** me.aquitano.health.api.ErrorBody */
                         error: {
+                            /** @description Stable machine-readable error code. Envelope-level values are `validation_failed`, `unauthorized`, `not_found`, and `internal_error`; provider-sync and ingestion endpoints additionally return provider-specific conflict and upstream codes (for example `idempotency_key_conflict`, `scheduled_sync_already_running`, or `withings_needs_reauth`). */
                             code: string;
                             message: string;
                             requestId: string;
                             details?: {
                                 field: string;
-                                code: string;
+                                /**
+                                 * @description Machine-readable validation issue code for this field.
+                                 * @enum {string}
+                                 */
+                                code: "required" | "invalid_format" | "unsupported_value" | "out_of_range" | "invalid_range" | "invalid_state";
                                 message: string;
                             }[] | null;
                         };
@@ -4378,12 +4158,17 @@ export interface operations {
                     "application/json": {
                         /** me.aquitano.health.api.ErrorBody */
                         error: {
+                            /** @description Stable machine-readable error code. Envelope-level values are `validation_failed`, `unauthorized`, `not_found`, and `internal_error`; provider-sync and ingestion endpoints additionally return provider-specific conflict and upstream codes (for example `idempotency_key_conflict`, `scheduled_sync_already_running`, or `withings_needs_reauth`). */
                             code: string;
                             message: string;
                             requestId: string;
                             details?: {
                                 field: string;
-                                code: string;
+                                /**
+                                 * @description Machine-readable validation issue code for this field.
+                                 * @enum {string}
+                                 */
+                                code: "required" | "invalid_format" | "unsupported_value" | "out_of_range" | "invalid_range" | "invalid_state";
                                 message: string;
                             }[] | null;
                         };
@@ -4468,12 +4253,17 @@ export interface operations {
                     "application/json": {
                         /** me.aquitano.health.api.ErrorBody */
                         error: {
+                            /** @description Stable machine-readable error code. Envelope-level values are `validation_failed`, `unauthorized`, `not_found`, and `internal_error`; provider-sync and ingestion endpoints additionally return provider-specific conflict and upstream codes (for example `idempotency_key_conflict`, `scheduled_sync_already_running`, or `withings_needs_reauth`). */
                             code: string;
                             message: string;
                             requestId: string;
                             details?: {
                                 field: string;
-                                code: string;
+                                /**
+                                 * @description Machine-readable validation issue code for this field.
+                                 * @enum {string}
+                                 */
+                                code: "required" | "invalid_format" | "unsupported_value" | "out_of_range" | "invalid_range" | "invalid_state";
                                 message: string;
                             }[] | null;
                         };
@@ -4556,12 +4346,17 @@ export interface operations {
                     "application/json": {
                         /** me.aquitano.health.api.ErrorBody */
                         error: {
+                            /** @description Stable machine-readable error code. Envelope-level values are `validation_failed`, `unauthorized`, `not_found`, and `internal_error`; provider-sync and ingestion endpoints additionally return provider-specific conflict and upstream codes (for example `idempotency_key_conflict`, `scheduled_sync_already_running`, or `withings_needs_reauth`). */
                             code: string;
                             message: string;
                             requestId: string;
                             details?: {
                                 field: string;
-                                code: string;
+                                /**
+                                 * @description Machine-readable validation issue code for this field.
+                                 * @enum {string}
+                                 */
+                                code: "required" | "invalid_format" | "unsupported_value" | "out_of_range" | "invalid_range" | "invalid_state";
                                 message: string;
                             }[] | null;
                         };
@@ -4644,12 +4439,17 @@ export interface operations {
                     "application/json": {
                         /** me.aquitano.health.api.ErrorBody */
                         error: {
+                            /** @description Stable machine-readable error code. Envelope-level values are `validation_failed`, `unauthorized`, `not_found`, and `internal_error`; provider-sync and ingestion endpoints additionally return provider-specific conflict and upstream codes (for example `idempotency_key_conflict`, `scheduled_sync_already_running`, or `withings_needs_reauth`). */
                             code: string;
                             message: string;
                             requestId: string;
                             details?: {
                                 field: string;
-                                code: string;
+                                /**
+                                 * @description Machine-readable validation issue code for this field.
+                                 * @enum {string}
+                                 */
+                                code: "required" | "invalid_format" | "unsupported_value" | "out_of_range" | "invalid_range" | "invalid_state";
                                 message: string;
                             }[] | null;
                         };
@@ -4684,6 +4484,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DashboardSummaryResponse"];
+                };
+            };
+            /** @description Request validation failed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Missing or invalid API key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** me.aquitano.health.api.ErrorBody */
+                        error: {
+                            /** @description Stable machine-readable error code. Envelope-level values are `validation_failed`, `unauthorized`, `not_found`, and `internal_error`; provider-sync and ingestion endpoints additionally return provider-specific conflict and upstream codes (for example `idempotency_key_conflict`, `scheduled_sync_already_running`, or `withings_needs_reauth`). */
+                            code: string;
+                            message: string;
+                            requestId: string;
+                            details?: {
+                                field: string;
+                                /**
+                                 * @description Machine-readable validation issue code for this field.
+                                 * @enum {string}
+                                 */
+                                code: "required" | "invalid_format" | "unsupported_value" | "out_of_range" | "invalid_range" | "invalid_state";
+                                message: string;
+                            }[] | null;
+                        };
+                    };
                 };
             };
         };
@@ -4746,12 +4599,513 @@ export interface operations {
                     "application/json": {
                         /** me.aquitano.health.api.ErrorBody */
                         error: {
+                            /** @description Stable machine-readable error code. Envelope-level values are `validation_failed`, `unauthorized`, `not_found`, and `internal_error`; provider-sync and ingestion endpoints additionally return provider-specific conflict and upstream codes (for example `idempotency_key_conflict`, `scheduled_sync_already_running`, or `withings_needs_reauth`). */
                             code: string;
                             message: string;
                             requestId: string;
                             details?: {
                                 field: string;
-                                code: string;
+                                /**
+                                 * @description Machine-readable validation issue code for this field.
+                                 * @enum {string}
+                                 */
+                                code: "required" | "invalid_format" | "unsupported_value" | "out_of_range" | "invalid_range" | "invalid_state";
+                                message: string;
+                            }[] | null;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    listIngestionBatches: {
+        parameters: {
+            query?: {
+                /** @description Batch status filter. */
+                status?: "received" | "processed" | "failed";
+                /** @description Inclusive received-at start timestamp. */
+                from?: string;
+                /** @description Exclusive received-at end timestamp. */
+                to?: string;
+                /** @description Maximum number of items. Defaults to 100 and cannot exceed 1000 for admin list endpoints. */
+                limit?: number;
+                /** @description Opaque cursor from `meta.nextCursor` for the next page. Admin batch lists are sorted by receivedAt desc. */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestionBatchesResponse"];
+                };
+            };
+            /** @description Request validation failed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Missing or invalid API key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** me.aquitano.health.api.ErrorBody */
+                        error: {
+                            /** @description Stable machine-readable error code. Envelope-level values are `validation_failed`, `unauthorized`, `not_found`, and `internal_error`; provider-sync and ingestion endpoints additionally return provider-specific conflict and upstream codes (for example `idempotency_key_conflict`, `scheduled_sync_already_running`, or `withings_needs_reauth`). */
+                            code: string;
+                            message: string;
+                            requestId: string;
+                            details?: {
+                                field: string;
+                                /**
+                                 * @description Machine-readable validation issue code for this field.
+                                 * @enum {string}
+                                 */
+                                code: "required" | "invalid_format" | "unsupported_value" | "out_of_range" | "invalid_range" | "invalid_state";
+                                message: string;
+                            }[] | null;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    getIngestionBatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Ingestion batch id */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestionBatchDetailResponse"];
+                };
+            };
+            /** @description Request validation failed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Missing or invalid API key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** me.aquitano.health.api.ErrorBody */
+                        error: {
+                            /** @description Stable machine-readable error code. Envelope-level values are `validation_failed`, `unauthorized`, `not_found`, and `internal_error`; provider-sync and ingestion endpoints additionally return provider-specific conflict and upstream codes (for example `idempotency_key_conflict`, `scheduled_sync_already_running`, or `withings_needs_reauth`). */
+                            code: string;
+                            message: string;
+                            requestId: string;
+                            details?: {
+                                field: string;
+                                /**
+                                 * @description Machine-readable validation issue code for this field.
+                                 * @enum {string}
+                                 */
+                                code: "required" | "invalid_format" | "unsupported_value" | "out_of_range" | "invalid_range" | "invalid_state";
+                                message: string;
+                            }[] | null;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    listIngestionFailures: {
+        parameters: {
+            query?: {
+                /** @description Batch status filter. */
+                status?: "received" | "processed" | "failed";
+                /** @description Inclusive received-at start timestamp. */
+                from?: string;
+                /** @description Exclusive received-at end timestamp. */
+                to?: string;
+                /** @description Maximum number of items. Defaults to 100 and cannot exceed 1000 for admin list endpoints. */
+                limit?: number;
+                /** @description Opaque cursor from `meta.nextCursor` for the next page. Admin batch lists are sorted by receivedAt desc. */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestionBatchesResponse"];
+                };
+            };
+            /** @description Request validation failed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Missing or invalid API key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** me.aquitano.health.api.ErrorBody */
+                        error: {
+                            /** @description Stable machine-readable error code. Envelope-level values are `validation_failed`, `unauthorized`, `not_found`, and `internal_error`; provider-sync and ingestion endpoints additionally return provider-specific conflict and upstream codes (for example `idempotency_key_conflict`, `scheduled_sync_already_running`, or `withings_needs_reauth`). */
+                            code: string;
+                            message: string;
+                            requestId: string;
+                            details?: {
+                                field: string;
+                                /**
+                                 * @description Machine-readable validation issue code for this field.
+                                 * @enum {string}
+                                 */
+                                code: "required" | "invalid_format" | "unsupported_value" | "out_of_range" | "invalid_range" | "invalid_state";
+                                message: string;
+                            }[] | null;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    startReplay: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Optional client-generated key that makes the request idempotent. Repeating a request with the same key returns the result of the first request instead of performing the work again. */
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Replay request. scope selects the projections stage, the derived rebuild stage, or both; metricTypes limits the replay to specific record types; omitting the date range replays all stored history. */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplayRequest"];
+            };
+        };
+        responses: {
+            /** @description Replay job accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplayJobStartResponse"];
+                };
+            };
+            /** @description Request validation failed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Missing or invalid API key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** me.aquitano.health.api.ErrorBody */
+                        error: {
+                            /** @description Stable machine-readable error code. Envelope-level values are `validation_failed`, `unauthorized`, `not_found`, and `internal_error`; provider-sync and ingestion endpoints additionally return provider-specific conflict and upstream codes (for example `idempotency_key_conflict`, `scheduled_sync_already_running`, or `withings_needs_reauth`). */
+                            code: string;
+                            message: string;
+                            requestId: string;
+                            details?: {
+                                field: string;
+                                /**
+                                 * @description Machine-readable validation issue code for this field.
+                                 * @enum {string}
+                                 */
+                                code: "required" | "invalid_format" | "unsupported_value" | "out_of_range" | "invalid_range" | "invalid_state";
+                                message: string;
+                            }[] | null;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    getLatestReplayJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplayJobStatusResponse"];
+                };
+            };
+            /** @description Request validation failed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Missing or invalid API key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** me.aquitano.health.api.ErrorBody */
+                        error: {
+                            /** @description Stable machine-readable error code. Envelope-level values are `validation_failed`, `unauthorized`, `not_found`, and `internal_error`; provider-sync and ingestion endpoints additionally return provider-specific conflict and upstream codes (for example `idempotency_key_conflict`, `scheduled_sync_already_running`, or `withings_needs_reauth`). */
+                            code: string;
+                            message: string;
+                            requestId: string;
+                            details?: {
+                                field: string;
+                                /**
+                                 * @description Machine-readable validation issue code for this field.
+                                 * @enum {string}
+                                 */
+                                code: "required" | "invalid_format" | "unsupported_value" | "out_of_range" | "invalid_range" | "invalid_state";
+                                message: string;
+                            }[] | null;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    getReplayJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Replay job id returned by startReplay */
+                jobId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplayJobStatusResponse"];
+                };
+            };
+            /** @description Request validation failed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Missing or invalid API key */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** me.aquitano.health.api.ErrorBody */
+                        error: {
+                            /** @description Stable machine-readable error code. Envelope-level values are `validation_failed`, `unauthorized`, `not_found`, and `internal_error`; provider-sync and ingestion endpoints additionally return provider-specific conflict and upstream codes (for example `idempotency_key_conflict`, `scheduled_sync_already_running`, or `withings_needs_reauth`). */
+                            code: string;
+                            message: string;
+                            requestId: string;
+                            details?: {
+                                field: string;
+                                /**
+                                 * @description Machine-readable validation issue code for this field.
+                                 * @enum {string}
+                                 */
+                                code: "required" | "invalid_format" | "unsupported_value" | "out_of_range" | "invalid_range" | "invalid_state";
                                 message: string;
                             }[] | null;
                         };

@@ -7,12 +7,12 @@ import me.aquitano.health.infrastructure.database.tables.CanonicalSleepSessionsT
 import me.aquitano.health.infrastructure.database.tables.SleepSessionsTable
 import me.aquitano.health.infrastructure.database.tables.SleepStagesTable
 import me.aquitano.health.infrastructure.database.toApiString
-import me.aquitano.health.infrastructure.repositories.common.BaseMetricRepository
+import me.aquitano.health.application.metric.common.repository.BaseMetricReadRepository
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.selectAll
 
 /** Reads through the canonical_sleep_sessions view (winning provider per UTC date keeps all sessions, see V15). */
-class CanonicalSleepSessionDerivationRepository : BaseMetricRepository() {
+class CanonicalSleepSessionDerivationRepository : BaseMetricReadRepository() {
     fun listRawStagesForSessions(sessionIds: Set<Int>): Map<Int, List<SleepStageRow>> {
         if (sessionIds.isEmpty()) return emptyMap()
         return SleepStagesTable.selectAll()
@@ -52,19 +52,7 @@ class CanonicalSleepSessionDerivationRepository : BaseMetricRepository() {
                 SleepSessionsTable.id to filters.sortOrder(),
             )
             .limit(keysetFetchLimit(filters.limit))
-            .map(::toJoinedSleepSessionRow)
+            .map(::toSleepSessionRow)
         return rows to sourceMetadata(rows.map { it.sourceInstanceId }.toSet(), filters.includeSource)
     }
-
-    private fun toJoinedSleepSessionRow(row: ResultRow): SleepSessionRow =
-        toSleepSessionRow(row)
-
-    private fun toSleepSessionRow(row: ResultRow): SleepSessionRow =
-        SleepSessionRow(
-            id = row[SleepSessionsTable.id].value,
-            sourceInstanceId = row[SleepSessionsTable.sourceInstanceId],
-            startAt = row[SleepSessionsTable.startAt].toApiString(),
-            endAt = row[SleepSessionsTable.endAt].toApiString(),
-            durationSeconds = row[SleepSessionsTable.durationSeconds],
-        )
 }

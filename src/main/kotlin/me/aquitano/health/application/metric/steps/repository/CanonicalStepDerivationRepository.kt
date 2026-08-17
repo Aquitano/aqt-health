@@ -11,8 +11,8 @@ import me.aquitano.health.infrastructure.database.tables.CanonicalStepSamplesTab
 import me.aquitano.health.infrastructure.database.tables.StepSamplesTable
 import me.aquitano.health.infrastructure.database.toApiString
 import me.aquitano.health.infrastructure.database.toDbTimestamp
-import me.aquitano.health.infrastructure.repositories.common.BaseMetricRepository
-import me.aquitano.health.infrastructure.repositories.common.TimeFilterMode
+import me.aquitano.health.application.metric.common.repository.BaseMetricReadRepository
+import me.aquitano.health.application.metric.common.repository.TimeFilterMode
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import java.time.Instant
@@ -59,7 +59,7 @@ data class CanonicalDashboardStepsSummary(
     val sourceInstanceIds: Set<Int>,
 )
 
-class CanonicalStepDerivationRepository : BaseMetricRepository() {
+class CanonicalStepDerivationRepository : BaseMetricReadRepository() {
     fun listRawSamplesForDay(dayStart: Instant, dayEnd: Instant): List<StepSampleRow> =
         StepSamplesTable.selectAll()
             .where {
@@ -132,7 +132,7 @@ class CanonicalStepDerivationRepository : BaseMetricRepository() {
                 StepSamplesTable.id to filters.sortOrder(),
             )
             .limit(keysetFetchLimit(filters.limit))
-            .map(::toJoinedStepSampleRow)
+            .map(::toStepSampleRow)
         return rows to sourceMetadata(rows.map { it.sourceInstanceId }.toSet(), filters.includeSource)
     }
 
@@ -249,21 +249,4 @@ class CanonicalStepDerivationRepository : BaseMetricRepository() {
             sourceInstanceIds = emptySet(),
         ) to sourceMetadata(emptySet(), includeSource)
 
-    private fun toJoinedStepSampleRow(row: ResultRow): StepSampleRow =
-        StepSampleRow(
-            id = row[StepSamplesTable.id].value,
-            sourceInstanceId = row[StepSamplesTable.sourceInstanceId],
-            startAt = row[StepSamplesTable.startAt].toApiString(),
-            endAt = row[StepSamplesTable.endAt].toApiString(),
-            steps = row[StepSamplesTable.steps],
-        )
-
-    private fun toStepSampleRow(row: ResultRow): StepSampleRow =
-        StepSampleRow(
-            id = row[StepSamplesTable.id].value,
-            sourceInstanceId = row[StepSamplesTable.sourceInstanceId],
-            startAt = row[StepSamplesTable.startAt].toApiString(),
-            endAt = row[StepSamplesTable.endAt].toApiString(),
-            steps = row[StepSamplesTable.steps],
-        )
 }

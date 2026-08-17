@@ -15,9 +15,7 @@ import java.util.concurrent.ConcurrentHashMap
 private val logger = KotlinLogging.logger {}
 
 class ProviderSyncPipeline(
-    private val accounts: ProviderSyncAccountPort,
-    private val runs: ProviderSyncRunPort,
-    private val ingestion: ProviderSyncIngestionPort,
+    private val store: ProviderSyncStore,
     private val throttleDelay: suspend (Duration) -> Unit = { delay(it.toMillis()) },
     private val clock: UtcClock = UtcClock(),
 ) {
@@ -25,9 +23,9 @@ class ProviderSyncPipeline(
     // run for the same account can't interleave refreshAccessToken/saveRefreshedToken and invalidate
     // each other's rotating refresh token (Google), bricking the account into needs_reauth. Only the
     // short refresh window is guarded, not the whole sync, so the synchronous POST /sync path never
-    // blocks for the length of a backfill. Process-local: the pipeline is a per-provider singleton,
-    // so this covers every in-process sync path. Multi-instance deploys still need a DB-backed claim
-    // (same gap noted on ScheduledSyncRunGuard).
+    // blocks for the length of a backfill. Process-local: the pipeline is a singleton shared by all
+    // providers, so this covers every in-process sync path. Multi-instance deploys still need a
+    // DB-backed claim (same gap noted on ScheduledSyncRunGuard).
     private val accountTokenLocks = ConcurrentHashMap<String, Mutex>()
 
     private fun accountTokenLock(providerCode: String, providerInstanceId: String): Mutex =
@@ -40,16 +38,16 @@ class ProviderSyncPipeline(
         progress: ProviderSyncProgressSink = ProviderSyncProgressSink.None,
     ): ProviderSyncSummary {
         val plan = adapter.validate(request)
-        val account = accounts.selectForSync(
+        val account = store.selectForSync(
             adapter.providerCode,
             plan.providerInstanceId,
         ) ?: throw adapter.accountUnavailable(
             plan.providerInstanceId,
-            accounts.findAnyForStatusHint(adapter.providerCode, plan.providerInstanceId),
+            store.findAnyForStatusHint(adapter.providerCode, plan.providerInstanceId),
         )
 
         var token = freshAccessToken(adapter, account, clock.now())
-        val runId = runs.start(
+        val runId = store.startRun(
             providerCode = adapter.providerCode,
             providerInstanceId = account.providerInstanceId,
             requestedFrom = plan.requestedFrom,
@@ -79,13 +77,13 @@ class ProviderSyncPipeline(
                 providerInstanceId = account.providerInstanceId,
                 item = item,
             )
-            val existingBatch = ingestion.findExistingBatch(
+            val existingBatch = store.findExistingBatch(
                 providerCode = adapter.providerCode,
                 providerInstanceId = account.providerInstanceId,
                 batchExternalId = batchExternalId,
                 now = now,
             )
-            if (existingBatch?.status == "processed") {
+            if (existingBatch?.status == BatchStatus.Processed) {
                 batches += cachedBatchResponse(item.dataType, existingBatch.id)
                 logger.infoWithContext(
                     "provider_sync_cache_hit",
@@ -163,7 +161,7 @@ class ProviderSyncPipeline(
                         now = now,
                     )
                 )
-                val batch = ingestion.ingest(
+                val batch = store.ingest(
                     ProviderIngestionCommand(
                         providerCode = adapter.providerCode,
                         providerInstanceId = account.providerInstanceId,
@@ -223,11 +221,11 @@ class ProviderSyncPipeline(
         }
 
         val status = when {
-            errors.isEmpty() -> "processed"
-            batches.isEmpty() -> "failed"
-            else -> "partial_failed"
+            errors.isEmpty() -> SyncStatus.Processed
+            batches.isEmpty() -> SyncStatus.Failed
+            else -> SyncStatus.PartialFailed
         }
-        runs.finish(
+        store.finishRun(
             runId = runId,
             status = status,
             finishedAt = now,
@@ -237,13 +235,13 @@ class ProviderSyncPipeline(
         val context = mapOf(
             "provider" to adapter.providerCode,
             "syncRunId" to runId,
-            "status" to status,
+            "status" to status.stored,
             "batchCount" to batches.size,
             "errorCount" to errors.size
         )
         when (status) {
-            "processed" -> logger.infoWithContext("provider_sync_completed", context)
-            "partial_failed" -> logger.warnWithContext("provider_sync_completed", context)
+            SyncStatus.Processed -> logger.infoWithContext("provider_sync_completed", context)
+            SyncStatus.PartialFailed -> logger.warnWithContext("provider_sync_completed", context)
             else -> logger.errorWithContext("provider_sync_completed", context)
         }
 
@@ -257,7 +255,7 @@ class ProviderSyncPipeline(
             providerInstanceId = account.providerInstanceId,
             requestedFrom = plan.requestedFrom,
             requestedTo = plan.requestedTo,
-            status = status,
+            status = status.stored,
             batches = batches,
             errors = errors,
             emptyDataTypes = emptyDataTypes,
@@ -296,8 +294,8 @@ class ProviderSyncPipeline(
     ): ProviderAccessToken {
         if (account.expiresAt.isAfter(now.plusSeconds(60))) {
             return ProviderAccessToken(
-                accounts.decryptAccessToken(account),
-                accounts.decryptRefreshToken(account),
+                store.decryptAccessToken(account),
+                store.decryptRefreshToken(account),
             )
         }
         return obtainAccessToken(
@@ -323,19 +321,19 @@ class ProviderSyncPipeline(
         usedRefreshToken: String?,
     ): ProviderAccessToken =
         accountTokenLock(adapter.providerCode, providerInstanceId).withLock {
-            val current = accounts.selectForSync(adapter.providerCode, providerInstanceId)
+            val current = store.selectForSync(adapter.providerCode, providerInstanceId)
                 ?: throw adapter.accountUnavailable(
                     providerInstanceId,
-                    accounts.findAnyForStatusHint(adapter.providerCode, providerInstanceId),
+                    store.findAnyForStatusHint(adapter.providerCode, providerInstanceId),
                 )
-            val currentRefreshToken = accounts.decryptRefreshToken(current)
+            val currentRefreshToken = store.decryptRefreshToken(current)
             val refreshNeeded =
                 if (forceRefresh) currentRefreshToken == usedRefreshToken
                 else !current.expiresAt.isAfter(now.plusSeconds(60))
             if (refreshNeeded) {
                 refreshAccessToken(adapter, current, currentRefreshToken, now)
             } else {
-                ProviderAccessToken(accounts.decryptAccessToken(current), currentRefreshToken)
+                ProviderAccessToken(store.decryptAccessToken(current), currentRefreshToken)
             }
         }
 
@@ -351,7 +349,7 @@ class ProviderSyncPipeline(
             if (exception is CancellationException) throw exception
             val message = exception.message ?: adapter.tokenRefreshFailureMessage
             if (adapter.isInvalidRefreshToken(exception)) {
-                accounts.markNeedsReauth(
+                store.markNeedsReauth(
                     accountId = account.id,
                     code = adapter.needsReauthCode,
                     message = message,
@@ -363,7 +361,7 @@ class ProviderSyncPipeline(
                     cause = exception,
                 )
             }
-            accounts.markTokenRefreshFailed(
+            store.markTokenRefreshFailed(
                 accountId = account.id,
                 code = adapter.errorCode(exception),
                 message = message,
@@ -377,10 +375,9 @@ class ProviderSyncPipeline(
             )
         }
 
-        accounts.saveRefreshedToken(
-            accountId = account.id,
+        store.saveRefreshedToken(
+            account = account,
             tokens = refreshed,
-            previousRefreshToken = refreshToken,
             now = now,
         )
         return ProviderAccessToken(

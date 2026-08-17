@@ -12,12 +12,12 @@ defaults:
 
 jobs:
   frontend:
-    name: lint and test
+    name: lint, typecheck, test, build
     runs-on: ubuntu-latest
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up bun
         uses: oven-sh/setup-bun@v2
@@ -28,5 +28,11 @@ jobs:
       - name: Lint
         run: bun run lint
 
+      - name: Typecheck
+        run: bun run typecheck
+
       - name: Test
         run: bun run test
+
+      - name: Build
+        run: bun run build

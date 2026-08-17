@@ -8,17 +8,22 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.server.routing.openapi.*
 import me.aquitano.health.api.dto.*
+import me.aquitano.health.application.AdminService
+import me.aquitano.health.application.ReplayService
 import me.aquitano.health.domain.NotFoundException
-import me.aquitano.health.domain.RequestValidationException
-import me.aquitano.health.domain.ValidationIssue
-import me.aquitano.health.domain.ValidationIssueCodes
+import me.aquitano.health.infrastructure.time.UtcClock
+import org.koin.ktor.ext.inject
 import kotlin.reflect.typeOf
 
 /** Ingestion batch inspection and replay administration routes. */
-internal fun Route.adminRoutes(services: ApplicationServices) {
+internal fun Route.adminRoutes() {
+    val clock by application.inject<UtcClock>()
+    val adminService by application.inject<AdminService>()
+    val replayService by application.inject<ReplayService>()
+
     get("/api/v2/admin/ingestion/batches") {
         call.respond<IngestionBatchesResponse>(
-            services.adminService.listBatches(
+            adminService.listBatches(
                 call.queryParams()
             )
         )
@@ -35,7 +40,7 @@ internal fun Route.adminRoutes(services: ApplicationServices) {
     get("/api/v2/admin/ingestion/batches/{id}") {
         call.respond<IngestionBatchDetailResponse>(
             HttpStatusCode.OK,
-            services.adminService.getBatchDetail(
+            adminService.getBatchDetail(
                 call.parameters["id"],
                 call.queryParams()
             )
@@ -57,7 +62,7 @@ internal fun Route.adminRoutes(services: ApplicationServices) {
     }
     get("/api/v2/admin/ingestion/failures") {
         call.respond<IngestionBatchesResponse>(
-            services.adminService.listFailures(
+            adminService.listFailures(
                 call.queryParams()
             )
         )
@@ -74,9 +79,10 @@ internal fun Route.adminRoutes(services: ApplicationServices) {
     post("/api/v2/admin/replay") {
         call.respond<ReplayJobStartResponse>(
             HttpStatusCode.Accepted,
-            services.replayService.create(
+            replayService.create(
                 request = call.receive<ReplayRequest>(),
-                now = services.clock.now(),
+                now = clock.now(),
+                idempotencyKey = call.idempotencyKey(),
             )
         )
     }.describe {
@@ -84,8 +90,9 @@ internal fun Route.adminRoutes(services: ApplicationServices) {
         tag("Admin")
         summary = "Replay projections from the raw event log"
         description =
-            "Starts a background job that rebuilds metric projections and/or derived tables from stored ingestion records for the requested date range. Replay is idempotent; with wipe=true the affected projection rows are deleted and rewritten, without it the job acts as a verification pass whose counters report how many writes would have been missing."
+            "Starts a background job that rebuilds metric projections and/or derived tables from stored ingestion records for the requested date range. Replay is idempotent; with wipe=true the affected projection rows are deleted and rewritten, without it the job acts as a verification pass whose counters report how many writes would have been missing. Repeating the request with the same Idempotency-Key returns the already-created job instead of starting a new one."
         requiresBearerAuth()
+        idempotencyKeyHeader()
         jsonRequest<ReplayRequest>(
             "Replay request. scope selects the projections stage, the derived rebuild stage, or both; metricTypes limits the replay to specific record types; omitting the date range replays all stored history.",
         )
@@ -101,7 +108,7 @@ internal fun Route.adminRoutes(services: ApplicationServices) {
         }
     }
     get("/api/v2/admin/replay/latest") {
-        val job = services.replayService.latest()
+        val job = replayService.latest()
             ?: throw NotFoundException("Replay job not found")
         call.respond(HttpStatusCode.OK, job)
     }.describe {
@@ -113,17 +120,8 @@ internal fun Route.adminRoutes(services: ApplicationServices) {
         errorResponses(notFound = true)
     }
     get("/api/v2/admin/replay/{jobId}") {
-        val jobId = call.parameters["jobId"]?.takeIf { it.isNotBlank() }
-            ?: throw RequestValidationException(
-                listOf(
-                    ValidationIssue(
-                        field = "jobId",
-                        code = ValidationIssueCodes.Required,
-                        message = "is required",
-                    )
-                )
-            )
-        call.respond(HttpStatusCode.OK, services.replayService.get(jobId))
+        val jobId = call.requiredPathParam("jobId")
+        call.respond(HttpStatusCode.OK, replayService.get(jobId))
     }.describe {
         operationId = "getReplayJob"
         tag("Admin")

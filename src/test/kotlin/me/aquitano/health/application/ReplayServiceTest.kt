@@ -4,15 +4,16 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.buildJsonObject
-import me.aquitano.health.api.dto.ActivitySummaryDto
-import me.aquitano.health.api.dto.HeartRateDto
+import me.aquitano.health.api.dto.ActivitySummary
+import me.aquitano.health.api.dto.HeartRate
 import me.aquitano.health.api.dto.IngestionBatchRequest
-import me.aquitano.health.api.dto.ReplayJobStatus
+import me.aquitano.health.domain.ReplayJobStatus
 import me.aquitano.health.api.dto.ReplayJobStatusResponse
 import me.aquitano.health.api.dto.ReplayRequest
-import me.aquitano.health.api.dto.SleepSessionDto
-import me.aquitano.health.api.dto.StepIntervalDto
+import me.aquitano.health.api.dto.SleepSession
+import me.aquitano.health.api.dto.StepInterval
 import me.aquitano.health.test.metricWriteService
+import me.aquitano.health.domain.DerivedKind
 import me.aquitano.health.domain.RecordTypes
 import me.aquitano.health.domain.RequestValidationException
 import me.aquitano.health.infrastructure.config.DatabaseConfig
@@ -24,6 +25,7 @@ import me.aquitano.health.infrastructure.repositories.ReplayJobRepository
 import me.aquitano.health.infrastructure.repositories.SupportRepository
 import me.aquitano.health.infrastructure.time.UtcClock
 import me.aquitano.health.test.PostgresTestDatabase
+import me.aquitano.health.test.derivedRebuildRegistry
 import me.aquitano.health.test.realDerivedRebuildExecutor
 import org.jetbrains.exposed.v1.jdbc.Database
 import java.time.Instant
@@ -117,6 +119,86 @@ class ReplayServiceTest {
     }
 
     @Test
+    fun replayOverDateRangeRebuildsEveryDerivedKind() = runBlocking {
+        val fixture = Fixture()
+        fixture.ingestMixedBatch()
+
+        // The fixture batch contains one record per derived kind; the shared registry mapping
+        // must route each of them to a rebuild, so no kind can drift out of the replay path.
+        fixture.execute("DELETE FROM step_daily_summaries")
+        fixture.execute("DELETE FROM sleep_nights")
+
+        val job = fixture.runReplay(
+            ReplayRequest(scope = "derived", fromDate = "2026-04-18", toDate = "2026-04-19")
+        )
+
+        assertEquals(ReplayJobStatus.Completed, job.status)
+        assertEquals(1, fixture.count("step_daily_summaries"))
+        assertEquals(1, fixture.count("sleep_nights"))
+    }
+
+    @Test
+    fun sharedAffectedDatesMappingCoversEveryDerivedKind() {
+        val registry = derivedRebuildRegistry()
+        val coveredKinds = listOf(
+            Triple(
+                RecordTypes.STEP_INTERVAL,
+                Instant.parse("2026-04-19T08:00:00Z"),
+                Instant.parse("2026-04-19T09:00:00Z"),
+            ),
+            Triple(
+                RecordTypes.SLEEP_SESSION,
+                Instant.parse("2026-04-18T22:00:00Z"),
+                Instant.parse("2026-04-19T06:00:00Z"),
+            ),
+        ).flatMap { (recordType, startAt, endAt) ->
+            registry.affectedDatesFor(recordType, startAt, endAt).keys
+        }.toSet()
+
+        assertEquals(
+            DerivedKind.entries.toSet(),
+            coveredKinds,
+            "every DerivedKind must be reachable from a replayable record type; " +
+                "extend this test's record list when adding a kind",
+        )
+    }
+
+    @Test
+    fun repositoryCreateFlagsDuplicateIdempotencyKey() = runBlocking {
+        val repository = ReplayJobRepository(Fixture().database)
+        val key = "replay-repo-flag-key"
+        val id1 = java.util.UUID.randomUUID().toString()
+        val id2 = java.util.UUID.randomUUID().toString()
+
+        val first = repository.create(
+            id = id1,
+            scope = "projections",
+            metricTypes = null,
+            fromDate = null,
+            toDate = null,
+            wipe = false,
+            now = Instant.parse("2026-05-01T10:00:00Z"),
+            idempotencyKey = key,
+            idempotencyRequestHash = "hash-a",
+        )
+        val second = repository.create(
+            id = id2,
+            scope = "projections",
+            metricTypes = null,
+            fromDate = null,
+            toDate = null,
+            wipe = false,
+            now = Instant.parse("2026-05-01T10:00:00Z"),
+            idempotencyKey = key,
+            idempotencyRequestHash = "hash-a",
+        )
+
+        assertTrue(first.created)
+        assertTrue(!second.created)
+        assertEquals(id1, second.record.id)
+    }
+
+    @Test
     fun replayRejectsUnknownScopeAndRecordTypes(): Unit = runBlocking {
         val fixture = Fixture()
         assertFailsWith<RequestValidationException> {
@@ -158,6 +240,7 @@ class ReplayServiceTest {
             mappingService = mappingService,
             metricWriteService = metricWriteService,
             derivedRebuildExecutor = derivedRebuildExecutor,
+            derivedRebuildRegistry = derivedRebuildRegistry(),
             replayJobRepository = ReplayJobRepository(database),
             projectionWipeRepository = ProjectionWipeRepository(),
             clock = clock,
@@ -172,24 +255,24 @@ class ReplayServiceTest {
                     ingestedAt = "2026-04-19T10:00:00Z",
                     sourcePayload = buildJsonObject {},
                     records = listOf(
-                        StepIntervalDto(
+                        StepInterval(
                             providerRecordId = "steps-1",
                             startAt = "2026-04-19T08:00:00Z",
                             endAt = "2026-04-19T09:00:00Z",
                             steps = 1200,
                         ),
-                        HeartRateDto(
+                        HeartRate(
                             providerRecordId = "hr-1",
                             measuredAt = "2026-04-19T08:30:00Z",
                             bpm = 64,
                             context = "resting",
                         ),
-                        SleepSessionDto(
+                        SleepSession(
                             providerRecordId = "sleep-1",
                             startAt = "2026-04-18T22:00:00Z",
                             endAt = "2026-04-19T06:00:00Z",
                         ),
-                        ActivitySummaryDto(
+                        ActivitySummary(
                             providerRecordId = "activity-1",
                             date = "2026-04-19",
                             distanceMeters = 4200.0,

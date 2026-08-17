@@ -20,6 +20,7 @@ import me.aquitano.health.infrastructure.database.DatabaseFactory
 import me.aquitano.health.infrastructure.repositories.IngestionRepository
 import me.aquitano.health.infrastructure.repositories.PendingDerivedRebuildRepository
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
+import me.aquitano.health.infrastructure.repositories.ProviderSyncIdempotencyRepository
 import me.aquitano.health.infrastructure.repositories.SupportRepository
 import me.aquitano.health.infrastructure.security.TokenCipher
 import me.aquitano.health.test.PostgresTestDatabase
@@ -574,14 +575,12 @@ class GoogleHealthProviderTest {
             repository = providerRepository,
             client = client,
             normalizer = GoogleHealthNormalizer(),
-            ingestionService = ingestionService,
             syncPipeline = me.aquitano.health.application.providersync.ProviderSyncPipeline(
-                accounts = me.aquitano.health.application.providersync.ProviderOAuthSyncAccountPort(
-                    providerRepository,
-                    config.tokenEncryptionKey,
+                store = me.aquitano.health.application.providersync.OAuthProviderSyncStore(
+                    repository = providerRepository,
+                    ingestionService = ingestionService,
+                    tokenEncryptionKeys = mapOf(GOOGLE_HEALTH_PROVIDER_CODE to config.tokenEncryptionKey),
                 ),
-                runs = me.aquitano.health.application.providersync.ProviderOAuthSyncRunPort(providerRepository),
-                ingestion = me.aquitano.health.application.providersync.IngestionProviderSyncPort(ingestionService),
                 clock = UtcClock.fixed(now),
             ),
         )
@@ -594,6 +593,7 @@ class GoogleHealthProviderTest {
             providerRegistry = providerRegistry,
             providerOAuthRepository = providerRepository,
             providerStatusService = providerStatusService,
+            syncIdempotencyRepository = ProviderSyncIdempotencyRepository(database),
         )
 
         suspend fun storeAccount(

@@ -211,7 +211,7 @@ internal fun dataPointsServiceSettings(
     val builder = DataPointsServiceSettings.newHttpJsonBuilder()
         .setCredentialsProvider(
             FixedCredentialsProvider.create(
-                GoogleCredentials.create(AccessToken(accessToken, null))
+                GoogleCredentials.create(AccessToken.newBuilder().setTokenValue(accessToken).build())
             )
         )
     apiBaseUrl?.toEndpoint()?.let(builder::setEndpoint)

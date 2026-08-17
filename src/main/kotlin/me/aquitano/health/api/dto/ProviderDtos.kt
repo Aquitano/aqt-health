@@ -3,14 +3,16 @@ package me.aquitano.health.api.dto
 import io.ktor.openapi.*
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import me.aquitano.health.domain.SyncJobStatus
+import me.aquitano.health.domain.SyncStatus
 
 @Serializable
-data class ProviderCatalogResponseDto(
-    val providers: List<ProviderDescriptorResponseDto>,
+data class ProviderCatalogResponse(
+    val items: List<ProviderDescriptorResponse>,
 )
 
 @Serializable
-data class ProviderDescriptorResponseDto(
+data class ProviderDescriptorResponse(
     val providerCode: String,
     val displayName: String,
     val authType: String,
@@ -19,12 +21,12 @@ data class ProviderDescriptorResponseDto(
     val defaultDataTypes: List<String>,
     val maxSyncRangeDays: Int,
     val supportsPageSize: Boolean,
-    val workflowEndpoints: ProviderWorkflowEndpointsResponseDto,
+    val workflowEndpoints: ProviderWorkflowEndpointsResponse,
     val aliases: List<String> = emptyList(),
 )
 
 @Serializable
-data class ProviderWorkflowEndpointsResponseDto(
+data class ProviderWorkflowEndpointsResponse(
     val oauthStart: String? = null,
     val oauthCallback: String? = null,
     val accounts: String? = null,
@@ -34,12 +36,12 @@ data class ProviderWorkflowEndpointsResponseDto(
 )
 
 @Serializable
-data class ProviderStatusCatalogResponseDto(
-    val providers: List<ProviderStatusResponseDto>,
+data class ProviderStatusCatalogResponse(
+    val items: List<ProviderStatusResponse>,
 )
 
 @Serializable
-data class ProviderStatusResponseDto(
+data class ProviderStatusResponse(
     val providerCode: String,
     val displayName: String,
     val configured: Boolean,
@@ -47,11 +49,11 @@ data class ProviderStatusResponseDto(
     val needsAuthentication: Boolean,
     val canSync: Boolean,
     val nextAction: ProviderNextAction,
-    val accounts: List<ProviderAccountStatusResponseDto>,
+    val accounts: List<ProviderAccountStatusResponse>,
 )
 
 @Serializable
-data class ProviderAccountStatusResponseDto(
+data class ProviderAccountStatusResponse(
     val providerInstanceId: String,
     val status: ProviderAccountLifecycleStatus,
     @JsonSchema.Format("date-time")
@@ -71,13 +73,13 @@ data class ProviderAccountStatusResponseDto(
 )
 
 @Serializable
-data class ProviderAccountListResponseDto(
+data class ProviderAccountListResponse(
     val provider: String,
-    val accounts: List<ProviderAccountStatusResponseDto>,
+    val accounts: List<ProviderAccountStatusResponse>,
 )
 
 @Serializable
-data class ProviderDisconnectResponseDto(
+data class ProviderDisconnectResponse(
     val provider: String,
     val providerInstanceId: String,
     val disconnected: Boolean,
@@ -148,7 +150,7 @@ data class ProviderOAuthCallbackResponse(
 )
 
 @Serializable
-data class ProviderSyncRequestDto(
+data class ProviderSyncRequest(
     val providerInstanceId: String? = null,
     @JsonSchema.Format("date-time")
     val from: String? = null,
@@ -160,7 +162,7 @@ data class ProviderSyncRequestDto(
 )
 
 @Serializable
-data class ProviderSyncResponseDto(
+data class ProviderSyncResponse(
     val providerCode: String,
     val providerInstanceId: String,
     @JsonSchema.Format("date-time")
@@ -168,13 +170,13 @@ data class ProviderSyncResponseDto(
     @JsonSchema.Format("date-time")
     val requestedTo: String,
     val status: SyncStatus,
-    val batches: List<ProviderSyncBatchResponseDto>,
-    val emptyDataTypes: List<ProviderSyncEmptyDataTypeResponseDto>,
-    val errors: List<ProviderSyncErrorResponseDto>,
+    val batches: List<ProviderSyncBatchResponse>,
+    val emptyDataTypes: List<ProviderSyncEmptyDataTypeResponse>,
+    val errors: List<ProviderSyncErrorResponse>,
 )
 
 @Serializable
-data class ProviderSyncJobStartResponseDto(
+data class ProviderSyncJobStartResponse(
     val jobId: String,
     val status: SyncJobStatus,
     @JsonSchema.Format("date-time")
@@ -182,7 +184,7 @@ data class ProviderSyncJobStartResponseDto(
 )
 
 @Serializable
-data class ProviderSyncJobStatusResponseDto(
+data class ProviderSyncJobStatusResponse(
     val jobId: String,
     val providerCode: String,
     val providerInstanceId: String? = null,
@@ -194,11 +196,13 @@ data class ProviderSyncJobStatusResponseDto(
     val status: SyncJobStatus,
     val totalItems: Int,
     val completedItems: Int,
-    val currentItem: ProviderSyncJobItemResponseDto? = null,
-    val lastCompletedItem: ProviderSyncJobItemResponseDto? = null,
+    val currentItem: ProviderSyncJobItemResponse? = null,
+    val lastCompletedItem: ProviderSyncJobItemResponse? = null,
     val batchesCount: Int,
     val emptyCount: Int,
     val errorCount: Int,
+    /** How many backend restarts this job survived and was resumed after. */
+    val restartCount: Int = 0,
     val errorMessage: String? = null,
     @JsonSchema.Format("date-time")
     val createdAt: String,
@@ -208,11 +212,11 @@ data class ProviderSyncJobStatusResponseDto(
     val updatedAt: String,
     @JsonSchema.Format("date-time")
     val finishedAt: String? = null,
-    val summary: ProviderSyncResponseDto? = null,
+    val summary: ProviderSyncResponse? = null,
 )
 
 @Serializable
-data class ProviderSyncJobItemResponseDto(
+data class ProviderSyncJobItemResponse(
     val dataType: String,
     @JsonSchema.Format("date-time")
     val from: String,
@@ -221,7 +225,7 @@ data class ProviderSyncJobItemResponseDto(
 )
 
 @Serializable
-data class ProviderSyncBatchResponseDto(
+data class ProviderSyncBatchResponse(
     val dataType: String,
     val batchId: Int,
     val duplicateBatch: Boolean,
@@ -234,14 +238,14 @@ data class ProviderSyncBatchResponseDto(
 )
 
 @Serializable
-data class ProviderSyncErrorResponseDto(
+data class ProviderSyncErrorResponse(
     val dataType: String,
     val code: String,
     val message: String,
 )
 
 @Serializable
-data class ProviderSyncEmptyDataTypeResponseDto(
+data class ProviderSyncEmptyDataTypeResponse(
     val dataType: String,
     val pagesFetched: Int,
     val sourceRecordsReceived: Int,
@@ -249,7 +253,7 @@ data class ProviderSyncEmptyDataTypeResponseDto(
 )
 
 @Serializable
-data class ScheduledSyncConfigUpdateRequestDto(
+data class ScheduledSyncConfigUpdateRequest(
     val enabled: Boolean? = null,
     val dataTypes: List<String>? = null,
     @JsonSchema.Minimum(15.0)
@@ -259,7 +263,7 @@ data class ScheduledSyncConfigUpdateRequestDto(
 )
 
 @Serializable
-data class ScheduledSyncConfigResponseDto(
+data class ScheduledSyncConfigResponse(
     val providerCode: String,
     val providerInstanceId: String,
     val enabled: Boolean,
@@ -278,11 +282,11 @@ data class ScheduledSyncConfigResponseDto(
     @JsonSchema.Format("date-time")
     val nextRunAt: String? = null,
     val lastErrorMessage: String? = null,
-    val checkpoints: List<ScheduledSyncCheckpointResponseDto>,
+    val checkpoints: List<ScheduledSyncCheckpointResponse>,
 )
 
 @Serializable
-data class ScheduledSyncCheckpointResponseDto(
+data class ScheduledSyncCheckpointResponse(
     val dataType: String,
     @JsonSchema.Format("date-time")
     val checkpointAt: String? = null,
@@ -293,7 +297,7 @@ data class ScheduledSyncCheckpointResponseDto(
 )
 
 @Serializable
-data class ScheduledSyncRunResponseDto(
+data class ScheduledSyncRunResponse(
     val providerCode: String,
     val providerInstanceId: String,
     val status: SyncStatus,
@@ -302,5 +306,5 @@ data class ScheduledSyncRunResponseDto(
     @JsonSchema.Format("date-time")
     val requestedTo: String? = null,
     val errors: List<String>,
-    val summaries: List<ProviderSyncResponseDto>,
+    val summaries: List<ProviderSyncResponse>,
 )

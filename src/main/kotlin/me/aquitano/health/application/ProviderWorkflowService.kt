@@ -1,16 +1,25 @@
 package me.aquitano.health.application
 
 import me.aquitano.health.api.dto.*
+import me.aquitano.health.api.dto.ProviderSyncRequest
 import me.aquitano.health.application.providersync.ProviderSyncProgressSink
 import me.aquitano.health.domain.*
+import me.aquitano.health.domain.ProviderSyncRequest as DomainProviderSyncRequest
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthStateConsumeResult
+import me.aquitano.health.infrastructure.repositories.ProviderSyncIdempotencyRepository
+import me.aquitano.health.shared.AppJson
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
 import me.aquitano.health.infrastructure.logging.*
 import java.security.SecureRandom
 import java.time.Duration
 import java.time.Instant
 import java.util.*
+import java.util.concurrent.ConcurrentHashMap
 
 private val logger = KotlinLogging.logger {}
 
@@ -18,8 +27,16 @@ class ProviderWorkflowService(
     private val providerRegistry: HealthProviderRegistry,
     private val providerOAuthRepository: ProviderOAuthRepository,
     private val providerStatusService: ProviderStatusService,
+    private val syncIdempotencyRepository: ProviderSyncIdempotencyRepository,
 ) {
     private val random = SecureRandom()
+
+    // Serializes lookup -> provider.sync -> store per Idempotency-Key so concurrent duplicates
+    // execute the provider once and the loser replays the stored response. Process-local
+    // (single-instance deployment); entries are never evicted, matching
+    // ProviderSyncPipeline.accountTokenLocks — safe removal needs reference counting, and at
+    // single-user volumes (ADR 0001) the map stays trivially small.
+    private val syncIdempotencyLocks = ConcurrentHashMap<String, Mutex>()
 
     suspend fun startOAuth(
         providerCode: String,
@@ -138,37 +155,66 @@ class ProviderWorkflowService(
 
     suspend fun sync(
         providerCode: String,
-        request: ProviderSyncRequestDto,
-        now: Instant
-    ): ProviderSyncResponseDto =
-        providerRegistry.getProvider(providerCode)
-            ?.sync(toDomainSyncRequest(request, now), now)
-            ?.toDto()
+        request: ProviderSyncRequest,
+        now: Instant,
+        idempotencyKey: String? = null,
+    ): ProviderSyncResponse {
+        val provider = providerRegistry.getProvider(providerCode)
             ?: throw NotFoundException("Provider '$providerCode' not found")
+        val canonicalCode = provider.descriptor.providerCode
+        val domainRequest = toDomainSyncRequest(request, now)
+        if (idempotencyKey == null) {
+            return provider.sync(domainRequest, now).toDto()
+        }
+        val requestHash = syncRequestHash(request)
+        return syncIdempotencyLocks.computeIfAbsent("$canonicalCode:$idempotencyKey") { Mutex() }.withLock {
+            syncIdempotencyRepository.findResponse(canonicalCode, idempotencyKey)
+                ?.let { stored ->
+                    if (stored.requestHash != requestHash) {
+                        throw ConflictException(
+                            "idempotency_key_conflict",
+                            "Idempotency-Key was already used for a different provider sync request.",
+                        )
+                    }
+                    runCatching { AppJson.decodeFromString<ProviderSyncResponse>(stored.responseJson) }
+                        .getOrNull()
+                }
+                ?.let { return@withLock it }
+            val response = provider.sync(domainRequest, now).toDto()
+            syncIdempotencyRepository.storeResponse(
+                providerCode = canonicalCode,
+                idempotencyKey = idempotencyKey,
+                requestHash = requestHash,
+                responseJson = AppJson.encodeToString(response),
+                now = now,
+            )
+            response
+        }
+    }
 
     suspend fun sync(
         providerCode: String,
-        request: ProviderSyncRequest,
+        request: DomainProviderSyncRequest,
         now: Instant,
         progress: ProviderSyncProgressSink,
-    ): ProviderSyncResponseDto =
+    ): ProviderSyncResponse =
         providerRegistry.getProvider(providerCode)
             ?.sync(request, now, progress)
             ?.toDto()
             ?: throw NotFoundException("Provider '$providerCode' not found")
 
     fun toDomainSyncRequest(
-        request: ProviderSyncRequestDto,
+        request: ProviderSyncRequest,
         now: Instant,
-    ): ProviderSyncRequest = request.toDomain(now)
+    ): DomainProviderSyncRequest = request.toDomain(now)
 
     suspend fun listAccounts(
         providerCode: String,
         now: Instant,
-    ): ProviderAccountListResponseDto {
+    ): ProviderAccountListResponse {
         val provider = providerRegistry.getProvider(providerCode)
             ?: throw NotFoundException("Provider '$providerCode' not found")
-        return ProviderAccountListResponseDto(
+        return ProviderAccountListResponse(
             provider = provider.descriptor.providerCode,
             accounts = providerStatusService.listAccountStatuses(providerCode, now),
         )
@@ -178,14 +224,14 @@ class ProviderWorkflowService(
         providerCode: String,
         providerInstanceId: String,
         now: Instant,
-    ): ProviderAccountStatusResponseDto =
+    ): ProviderAccountStatusResponse =
         providerStatusService.getAccountStatus(providerCode, providerInstanceId, now)
 
     suspend fun disconnect(
         providerCode: String,
         providerInstanceId: String,
         now: Instant,
-    ): ProviderDisconnectResponseDto {
+    ): ProviderDisconnectResponse {
         val provider = providerRegistry.getProvider(providerCode)
             ?: throw NotFoundException("Provider '$providerCode' not found")
         val normalizedCode = providerRegistry.normalize(providerCode)
@@ -198,7 +244,7 @@ class ProviderWorkflowService(
             providerInstanceId = providerInstanceId,
             now = now,
         )
-        return ProviderDisconnectResponseDto(
+        return ProviderDisconnectResponse(
             provider = provider.descriptor.providerCode,
             providerInstanceId = providerInstanceId,
             disconnected = true,
@@ -221,7 +267,7 @@ class ProviderWorkflowService(
         return startOAuth(providerCode, now)
     }
 
-    private fun ProviderSyncRequestDto.toDomain(now: Instant): ProviderSyncRequest {
+    private fun ProviderSyncRequest.toDomain(now: Instant): DomainProviderSyncRequest {
         val issues = mutableListOf<ValidationIssue>()
         val parsedFrom = from?.let { parseInstant("from", it, issues) }
         val parsedTo = to?.let { parseInstant("to", it, issues) }
@@ -283,7 +329,7 @@ class ProviderWorkflowService(
         }
 
         if (issues.isNotEmpty()) throw RequestValidationException(issues)
-        return ProviderSyncRequest(
+        return DomainProviderSyncRequest(
             providerInstanceId = providerInstanceId?.takeIf { it.isNotBlank() },
             from = resolvedFrom,
             to = resolvedTo,
@@ -314,8 +360,8 @@ class ProviderWorkflowService(
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
     }
 
-    private fun ProviderSyncSummary.toDto(): ProviderSyncResponseDto =
-        ProviderSyncResponseDto(
+    private fun ProviderSyncSummary.toDto(): ProviderSyncResponse =
+        ProviderSyncResponse(
             providerCode = providerCode,
             providerInstanceId = providerInstanceId,
             requestedFrom = requestedFrom.toString(),
@@ -326,8 +372,8 @@ class ProviderWorkflowService(
             errors = errors.map { it.toDto() },
         )
 
-    private fun ProviderSyncBatch.toDto(): ProviderSyncBatchResponseDto =
-        ProviderSyncBatchResponseDto(
+    private fun ProviderSyncBatch.toDto(): ProviderSyncBatchResponse =
+        ProviderSyncBatchResponse(
             dataType = dataType,
             batchId = batchId,
             duplicateBatch = duplicateBatch,
@@ -338,18 +384,27 @@ class ProviderWorkflowService(
             affectedStepSummaryDates = affectedStepSummaryDates,
         )
 
-    private fun ProviderSyncError.toDto(): ProviderSyncErrorResponseDto =
-        ProviderSyncErrorResponseDto(
+    private fun ProviderSyncError.toDto(): ProviderSyncErrorResponse =
+        ProviderSyncErrorResponse(
             dataType = dataType,
             code = code,
             message = message,
         )
 
-    private fun ProviderSyncEmptyDataType.toDto(): ProviderSyncEmptyDataTypeResponseDto =
-        ProviderSyncEmptyDataTypeResponseDto(
+    private fun ProviderSyncEmptyDataType.toDto(): ProviderSyncEmptyDataTypeResponse =
+        ProviderSyncEmptyDataTypeResponse(
             dataType = dataType,
             pagesFetched = pagesFetched,
             sourceRecordsReceived = sourceRecordsReceived,
             normalizedRecords = normalizedRecords,
         )
 }
+
+private fun syncRequestHash(request: ProviderSyncRequest): String =
+    idempotencyRequestHash(
+        request.providerInstanceId?.takeIf { it.isNotBlank() },
+        request.from,
+        request.to,
+        request.dataTypes?.distinct()?.idempotencyListPart(),
+        request.pageSize?.toString(),
+    )
