@@ -2,6 +2,7 @@ package me.aquitano.health.application
 
 import me.aquitano.health.domain.HealthProvider
 import me.aquitano.health.domain.HealthProviderDescriptor
+import me.aquitano.health.shared.normalizeProviderCode
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
@@ -36,8 +37,5 @@ class HealthProviderRegistry(
     fun listProviderDescriptors(): List<HealthProviderDescriptor> =
         sortedProviders.map { it.descriptor }
 
-    fun normalize(code: String): String =
-        code.trim()
-            .lowercase(Locale.US)
-            .replace('-', '_')
+    fun normalize(code: String): String = normalizeProviderCode(code)
 }

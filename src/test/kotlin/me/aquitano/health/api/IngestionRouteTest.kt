@@ -301,6 +301,57 @@ class IngestionRouteTest {
                     "SELECT steps FROM step_daily_summaries WHERE date = '2026-04-20'"
                 )
             )
+
+            // The sample is stored under both dates, but reads must return it once.
+            assertEquals(2, countRows(dbPath, "canonical_step_samples"))
+            val samples = client.get(
+                "/api/v2/steps?from=2026-04-19T00:00:00Z&to=2026-04-21T00:00:00Z"
+            ) { authorized() }
+            assertEquals(HttpStatusCode.OK, samples.status)
+            assertEquals(1, samples.jsonBody()["items"]!!.jsonArray.size)
+        }
+
+    @Test
+    fun idLessSamplesAtTheSameInstantAreDistinctPerContext() =
+        testApplication {
+            val dbPath = configureTestApplication()
+
+            val response = client.post("/api/v2/ingestion/batches") {
+                authorized()
+                contentType(ContentType.Application.Json)
+                setBody(
+                    """
+                    {
+                      "provider": "health_connect",
+                      "providerInstanceId": "pixel-1",
+                      "batchExternalId": "context-natural-key",
+                      "ingestedAt": "2026-04-19T12:00:00Z",
+                      "sourcePayload": {},
+                      "records": [
+                        {
+                          "type": "scalar",
+                          "measuredAt": "2026-04-19T02:00:00Z",
+                          "metricType": "heart_rate",
+                          "value": 58,
+                          "context": "sleep"
+                        },
+                        {
+                          "type": "scalar",
+                          "measuredAt": "2026-04-19T02:00:00Z",
+                          "metricType": "heart_rate",
+                          "value": 72
+                        }
+                      ]
+                    }
+                    """.trimIndent()
+                )
+            }
+
+            assertEquals(HttpStatusCode.Created, response.status)
+            assertEquals(
+                2,
+                singleInt(dbPath, "SELECT COUNT(*) FROM scalar_samples WHERE metric_type = 'heart_rate'")
+            )
         }
 
     private fun ApplicationTestBuilder.configureTestApplication(): DatabaseConfig {

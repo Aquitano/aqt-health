@@ -8,10 +8,10 @@ import me.aquitano.health.application.metric.common.repository.DailyReadFilters
 import me.aquitano.health.application.metric.common.repository.ReadFilters
 import me.aquitano.health.application.metric.common.repository.SourceMetadata
 import me.aquitano.health.shared.utcDate
-import me.aquitano.health.application.metric.steps.repository.StepRepository
+import me.aquitano.health.application.metric.steps.repository.CanonicalStepDerivationRepository
 import me.aquitano.health.application.metric.scalar.ScalarSampleReadRepository
 import me.aquitano.health.application.metric.scalar.ScalarSampleRow
-import me.aquitano.health.application.metric.sleep.repository.SleepRepository
+import me.aquitano.health.application.metric.sleep.repository.CanonicalSleepSessionDerivationRepository
 import org.jetbrains.exposed.v1.jdbc.Database
 import me.aquitano.health.infrastructure.database.suspendDbTransaction
 import java.time.Instant
@@ -19,10 +19,12 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 import kotlin.math.roundToInt
 
+/** Dashboard trend aggregates. Every read goes through the canonical layer so the numbers agree
+ * with the day and dashboard endpoints when more than one provider is connected. */
 class TrendQueryService(
     private val database: Database,
-    private val stepRepository: StepRepository,
-    private val sleepRepository: SleepRepository,
+    private val stepRepository: CanonicalStepDerivationRepository,
+    private val sleepRepository: CanonicalSleepSessionDerivationRepository,
     private val scalarRepository: ScalarSampleReadRepository = ScalarSampleReadRepository(),
 ) {
 
@@ -57,14 +59,14 @@ class TrendQueryService(
         previousTo: LocalDate,
         periodDays: Int,
     ): StepsTrend? {
-        val current = stepRepository.sumStepDailySummaries(
+        val current = stepRepository.sumCanonicalStepDailySummaries(
             dailyReadFilters(currentFrom, currentTo)
         )
-        val previous = stepRepository.sumStepDailySummaries(
+        val previous = stepRepository.sumCanonicalStepDailySummaries(
             dailyReadFilters(previousFrom, previousTo)
         )
-        if (current.sampleCount == 0 && previous.sampleCount == 0) return null
-        val dailyAverage = if (current.sampleCount > 0) current.steps / current.sampleCount else 0
+        if (current.dayCount == 0 && previous.dayCount == 0) return null
+        val dailyAverage = if (current.dayCount > 0) current.steps / current.dayCount else 0
         return StepsTrend(
             currentTotal = current.steps,
             previousTotal = previous.steps,
@@ -82,12 +84,12 @@ class TrendQueryService(
         val currentSummary = scalarRepository.summarize(
             readFilters(currentFrom, currentTo),
             setOf(ScalarMetricTypes.HEART_RATE),
-            canonical = false,
+            canonical = true,
         )
         val previousSummary = scalarRepository.summarize(
             readFilters(previousFrom, previousTo),
             setOf(ScalarMetricTypes.HEART_RATE),
-            canonical = false,
+            canonical = true,
         )
         if (currentSummary.count == 0 && previousSummary.count == 0) return null
         val currentAvg = currentSummary.avgValue ?: 0.0
@@ -105,10 +107,10 @@ class TrendQueryService(
         previousFrom: LocalDate,
         previousTo: LocalDate,
     ): SleepTrend? {
-        val currentAvg = sleepRepository.avgSleepDuration(
+        val currentAvg = sleepRepository.avgCanonicalSleepDuration(
             readFilters(currentFrom, currentTo)
         )
-        val previousAvg = sleepRepository.avgSleepDuration(
+        val previousAvg = sleepRepository.avgCanonicalSleepDuration(
             readFilters(previousFrom, previousTo)
         )
         if (currentAvg == null && previousAvg == null) return null
@@ -122,14 +124,17 @@ class TrendQueryService(
     }
 
     private fun weightTrend(toDate: LocalDate): WeightTrend? {
-        val current = scalarRepository.latestBefore(
-            before = toDate.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant(),
-            metricType = BodyMetricTypes.WEIGHT,
+        val metricTypes = setOf(BodyMetricTypes.WEIGHT)
+        val (current, _) = scalarRepository.latestBefore(
+            latestBeforeFilters(toDate.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant()),
+            metricTypes,
+            canonical = true,
         )
         if (current == null) return null
-        val previous = scalarRepository.latestBefore(
-            before = current.measuredAt,
-            metricType = BodyMetricTypes.WEIGHT,
+        val (previous, _) = scalarRepository.latestBefore(
+            latestBeforeFilters(current.measuredAt),
+            metricTypes,
+            canonical = true,
         )
         val delta = if (previous != null) roundToOneDecimal(current.value - previous.value) else null
         val percentChange = if (previous != null && previous.value != 0.0) {
@@ -160,6 +165,18 @@ class TrendQueryService(
             limit = Int.MAX_VALUE,
             sort = "date",
             order = "asc",
+        )
+
+    private fun latestBeforeFilters(before: Instant): ReadFilters =
+        ReadFilters(
+            from = before,
+            to = null,
+            provider = null,
+            providerInstanceId = null,
+            includeSource = false,
+            limit = 1,
+            sort = "measuredAt",
+            order = "desc",
         )
 
     private fun readFilters(fromDate: LocalDate, toDate: LocalDate): ReadFilters =

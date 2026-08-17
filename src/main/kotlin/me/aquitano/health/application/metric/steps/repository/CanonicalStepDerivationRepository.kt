@@ -125,7 +125,7 @@ class CanonicalStepDerivationRepository : BaseMetricReadRepository() {
             .selectAll()
             .where(
                 where and (CanonicalStepSamplesTable.algorithmVersion eq algorithmVersion) and
-                    (keyset ?: Op.TRUE)
+                    firstDateForSample(algorithmVersion) and (keyset ?: Op.TRUE)
             )
             .orderBy(
                 CanonicalStepSamplesTable.startAt to filters.sortOrder(),
@@ -134,6 +134,44 @@ class CanonicalStepDerivationRepository : BaseMetricReadRepository() {
             .limit(keysetFetchLimit(filters.limit))
             .map(::toStepSampleRow)
         return rows to sourceMetadata(rows.map { it.sourceInstanceId }.toSet(), filters.includeSource)
+    }
+
+    /**
+     * canonical_step_samples holds one row per (date, step_sample_id), so a sample crossing UTC
+     * midnight is stored under both dates. Reads keep only its earliest date, otherwise the same
+     * underlying sample is returned twice.
+     */
+    private fun firstDateForSample(algorithmVersion: Int): Op<Boolean> {
+        val earlier = CanonicalStepSamplesTable.alias("canonical_step_samples_earlier")
+        return notExists(
+            earlier
+                .select(earlier[CanonicalStepSamplesTable.id])
+                .where {
+                    (earlier[CanonicalStepSamplesTable.stepSampleId] eq CanonicalStepSamplesTable.stepSampleId) and
+                        (earlier[CanonicalStepSamplesTable.algorithmVersion] eq algorithmVersion) and
+                        (earlier[CanonicalStepSamplesTable.date] less CanonicalStepSamplesTable.date)
+                }
+        )
+    }
+
+    /** Canonical step totals for a date range; `dayCount` is the number of days with data. */
+    fun sumCanonicalStepDailySummaries(filters: DailyReadFilters): DashboardStepsSummaryRow {
+        val where = dateConditions(
+            filters = filters,
+            sourceInstanceIdColumn = CanonicalStepDailySummariesTable.sourceInstanceId,
+            dateColumn = CanonicalStepDailySummariesTable.date,
+        ).whereOrNull() ?: return DashboardStepsSummaryRow(steps = 0, dayCount = 0)
+
+        val stepsExpression = CanonicalStepDailySummariesTable.steps.sum()
+        val dayCountExpression = CanonicalStepDailySummariesTable.date.count()
+        val row = CanonicalStepDailySummariesTable
+            .select(stepsExpression, dayCountExpression)
+            .where(where)
+            .single()
+        return DashboardStepsSummaryRow(
+            steps = row[stepsExpression] ?: 0,
+            dayCount = row[dayCountExpression].toInt(),
+        )
     }
 
     fun listCanonicalStepDailySummaries(

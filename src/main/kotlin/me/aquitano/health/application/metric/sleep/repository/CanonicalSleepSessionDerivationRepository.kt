@@ -8,7 +8,9 @@ import me.aquitano.health.infrastructure.database.tables.SleepSessionsTable
 import me.aquitano.health.infrastructure.database.tables.SleepStagesTable
 import me.aquitano.health.infrastructure.database.toApiString
 import me.aquitano.health.application.metric.common.repository.BaseMetricReadRepository
+import me.aquitano.health.application.metric.common.repository.TimeFilterMode
 import org.jetbrains.exposed.v1.core.*
+import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 
 /** Reads through the canonical_sleep_sessions view (winning provider per UTC date keeps all sessions, see V15). */
@@ -54,5 +56,23 @@ class CanonicalSleepSessionDerivationRepository : BaseMetricReadRepository() {
             .limit(keysetFetchLimit(filters.limit))
             .map(::toSleepSessionRow)
         return rows to sourceMetadata(rows.map { it.sourceInstanceId }.toSet(), filters.includeSource)
+    }
+
+    fun avgCanonicalSleepDuration(filters: ReadFilters): Long? {
+        val where = timestampConditions(
+            filters = filters,
+            sourceInstanceIdColumn = CanonicalSleepSessionsTable.sourceInstanceId,
+            fromColumn = CanonicalSleepSessionsTable.startAt,
+            toColumn = CanonicalSleepSessionsTable.endAt,
+            mode = TimeFilterMode.OVERLAPS_WINDOW_INCLUSIVE_FROM,
+        ).whereOrNull() ?: return null
+
+        val avgExpression = SleepSessionsTable.durationSeconds.avg()
+        return CanonicalSleepSessionsTable
+            .innerJoin(SleepSessionsTable, { sleepSessionId }, { SleepSessionsTable.id })
+            .select(avgExpression)
+            .where(where)
+            .singleOrNull()
+            ?.let { it[avgExpression]?.toLong() }
     }
 }
