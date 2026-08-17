@@ -253,7 +253,7 @@ The database preserves raw provider rows for auditability, but read endpoints re
 
 Provider filters are applied before canonicalization, so `provider=withings` only reconciles matching Withings source instances.
 
-Default source priorities are code-based in `CanonicalMetricsPolicy`:
+Default source priorities are code-based in `MetricCatalogBootstrap.providerRanks`:
 
 - Steps and activity: Google Health or Health Connect first, then Withings.
 - Body measurements: Withings first, then Google Health or Health Connect.
