@@ -1,6 +1,7 @@
 package me.aquitano.health.application.metric.scalar
 
 import me.aquitano.health.application.metric.common.keysetFetchLimit
+import me.aquitano.health.application.metric.common.repository.LocalDayOf
 import me.aquitano.health.application.metric.common.repository.ReadFilters
 import me.aquitano.health.application.metric.common.repository.SourceMetadata
 import me.aquitano.health.infrastructure.database.tables.CanonicalScalarSamplesView
@@ -9,11 +10,8 @@ import me.aquitano.health.infrastructure.database.tables.ScalarSamplesTable
 import me.aquitano.health.infrastructure.database.toDbTimestamp
 import me.aquitano.health.application.metric.common.repository.BaseMetricReadRepository
 import me.aquitano.health.application.metric.common.repository.TimeFilterMode
-import org.jetbrains.exposed.v1.core.Expression
-import org.jetbrains.exposed.v1.core.Function
 import org.jetbrains.exposed.v1.core.JoinType
 import org.jetbrains.exposed.v1.core.Op
-import org.jetbrains.exposed.v1.core.QueryBuilder
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
@@ -24,13 +22,9 @@ import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.core.max
 import org.jetbrains.exposed.v1.core.min
-import org.jetbrains.exposed.v1.core.stringLiteral
-import org.jetbrains.exposed.v1.javatime.JavaLocalDateColumnType
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import java.time.Instant
-import java.time.LocalDate
-import java.time.OffsetDateTime
 import java.time.ZoneId
 
 /**
@@ -257,27 +251,5 @@ class ScalarSampleReadRepository : BaseMetricReadRepository() {
                 context = row[CanonicalScalarSamplesView.context],
                 segment = row[CanonicalScalarSamplesView.segment],
             )
-    }
-}
-
-/**
- * Truncates a `timestamptz` to the calendar day of [zoneId]. Postgres `date_trunc` runs in the
- * session timezone, so the explicit `AT TIME ZONE` conversion is what keeps a sample on either side
- * of local midnight in the correct day rather than silently misbucketing on the session's zone.
- *
- * The zone is inlined as a literal (not a bound parameter) so the identical expression renders in
- * both SELECT and GROUP BY; a parameter would emit two distinct placeholders that Postgres refuses
- * to treat as the same grouping key. [zoneId] is a validated IANA identifier from `ZoneId.of`.
- */
-private class LocalDayOf(
-    private val timestamp: Expression<OffsetDateTime>,
-    private val zoneId: String,
-) : Function<LocalDate>(JavaLocalDateColumnType()) {
-    override fun toQueryBuilder(queryBuilder: QueryBuilder) = queryBuilder {
-        append("CAST(date_trunc('day', ")
-        append(timestamp)
-        append(" AT TIME ZONE ")
-        append(stringLiteral(zoneId))
-        append(") AS DATE)")
     }
 }

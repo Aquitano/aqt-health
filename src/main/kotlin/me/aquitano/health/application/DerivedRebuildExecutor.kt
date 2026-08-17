@@ -67,7 +67,6 @@ class DerivedRebuildModuleRegistry(val modules: List<DerivedRebuildModule>) {
 fun derivedRebuildModules(
     stepSummaryService: StepSummaryService,
     canonicalStepService: CanonicalStepDerivationService,
-    sleepNightService: SleepNightService,
 ): List<DerivedRebuildModule> =
     listOf(
         DerivedRebuildModule(
@@ -84,20 +83,7 @@ fun derivedRebuildModules(
                 stepSummaryService.recompute(sourceInstanceId, dates, computedAt)
                 canonicalStepService.recompute(dates, computedAt)
             },
-        ),
-        DerivedRebuildModule(
-            kind = DerivedKind.SLEEP_NIGHT,
-            affectedDates = { recordType, startAt, endAt ->
-                if (recordType == RecordTypes.SLEEP_SESSION) {
-                    setOf((endAt ?: startAt).utcDate())
-                } else {
-                    emptySet()
-                }
-            },
-            action = { sourceInstanceId, dates, computedAt ->
-                sleepNightService.recomputeUtc(sourceInstanceId, dates, computedAt)
-            },
-        ),
+        )
     )
 
 internal fun affectedUtcDates(

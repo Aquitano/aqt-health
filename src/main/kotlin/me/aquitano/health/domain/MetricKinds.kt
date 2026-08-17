@@ -20,5 +20,4 @@ object StructuralMetricKinds {
  */
 enum class DerivedKind {
     STEP_SUMMARY,
-    SLEEP_NIGHT,
 }

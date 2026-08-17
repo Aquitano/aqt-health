@@ -76,14 +76,12 @@ class ReplayServiceTest {
         fixture.ingestMixedBatch()
 
         fixture.execute("DELETE FROM step_daily_summaries")
-        fixture.execute("DELETE FROM sleep_nights")
 
         val job = fixture.runReplay(ReplayRequest(scope = "derived"))
 
         assertEquals(ReplayJobStatus.Completed, job.status)
         assertEquals(0, job.recordsReplayed)
         assertEquals(1, fixture.count("step_daily_summaries"))
-        assertEquals(1, fixture.count("sleep_nights"))
         // canonical views need no rebuild: they reflect the underlying tables directly
         assertEquals(1, fixture.count("canonical_step_daily_summaries"))
         assertEquals(1, fixture.count("canonical_activity_summaries"))
@@ -126,7 +124,6 @@ class ReplayServiceTest {
         // The fixture batch contains one record per derived kind; the shared registry mapping
         // must route each of them to a rebuild, so no kind can drift out of the replay path.
         fixture.execute("DELETE FROM step_daily_summaries")
-        fixture.execute("DELETE FROM sleep_nights")
 
         val job = fixture.runReplay(
             ReplayRequest(scope = "derived", fromDate = "2026-04-18", toDate = "2026-04-19")
@@ -134,7 +131,6 @@ class ReplayServiceTest {
 
         assertEquals(ReplayJobStatus.Completed, job.status)
         assertEquals(1, fixture.count("step_daily_summaries"))
-        assertEquals(1, fixture.count("sleep_nights"))
     }
 
     @Test

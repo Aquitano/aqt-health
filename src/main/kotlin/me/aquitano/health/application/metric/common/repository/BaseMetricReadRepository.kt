@@ -243,17 +243,17 @@ abstract class BaseMetricReadRepository {
         return keyset(order, sortColumn, LiteralOp(sortColumn.columnType, sortValue), idExpression, cursor.lastId)
     }
 
-    /** Keyset predicate for cursor pagination over a date sort column. */
+    /** Keyset predicate for cursor pagination over a date sort column or expression. */
     protected fun dateKeyset(
         cursor: Cursor?,
         order: String,
-        sortColumn: Column<LocalDate>,
+        sortExpression: ExpressionWithColumnType<LocalDate>,
         idExpression: Expression<*>,
     ): Op<Boolean>? {
         if (cursor == null) return null
         val sortValue = runCatching { LocalDate.parse(cursor.sortValue) }
             .getOrElse { throw invalidCursor() }
-        return keyset(order, sortColumn, LiteralOp(sortColumn.columnType, sortValue), idExpression, cursor.lastId)
+        return keyset(order, sortExpression, LiteralOp(sortExpression.columnType, sortValue), idExpression, cursor.lastId)
     }
 
     private fun keyset(

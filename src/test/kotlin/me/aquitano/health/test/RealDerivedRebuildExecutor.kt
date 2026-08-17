@@ -2,11 +2,9 @@ package me.aquitano.health.test
 
 import me.aquitano.health.application.DerivedRebuildExecutor
 import me.aquitano.health.application.DerivedRebuildModuleRegistry
-import me.aquitano.health.application.SleepNightService
 import me.aquitano.health.application.StepSummaryService
 import me.aquitano.health.application.TransactionalDerivedRebuildExecutor
 import me.aquitano.health.application.derivedRebuildModules
-import me.aquitano.health.application.metric.sleep.repository.SleepNightDerivationRepository
 import me.aquitano.health.application.metric.steps.derived.CanonicalStepDerivationService
 import me.aquitano.health.application.metric.steps.repository.CanonicalStepDerivationRepository
 import me.aquitano.health.application.metric.steps.repository.StepDailySummaryDerivationRepository
@@ -18,7 +16,6 @@ fun derivedRebuildRegistry(): DerivedRebuildModuleRegistry =
         derivedRebuildModules(
             stepSummaryService = StepSummaryService(StepDailySummaryDerivationRepository()),
             canonicalStepService = CanonicalStepDerivationService(CanonicalStepDerivationRepository()),
-            sleepNightService = SleepNightService(SleepNightDerivationRepository()),
         )
     )
 

@@ -2,7 +2,6 @@ package me.aquitano.health.application.metric.dashboard
 
 import me.aquitano.health.api.dto.DashboardStepsSummaryResponse
 import me.aquitano.health.api.dto.DashboardSummaryResponse
-import me.aquitano.health.application.SleepNightService
 import me.aquitano.health.application.metric.common.Orders
 import me.aquitano.health.application.metric.common.QueryParams
 import me.aquitano.health.application.metric.common.SortFields
@@ -29,7 +28,6 @@ class DashboardQueryService(
     private val canonicalStepRepository: CanonicalStepDerivationRepository,
     private val sleepRepository: SleepRepository,
     private val scalarRepository: ScalarSampleReadRepository = ScalarSampleReadRepository(),
-    private val sleepNightService: SleepNightService,
 ) {
     suspend fun dashboardSummary(
         params: QueryParams,
@@ -65,7 +63,6 @@ class DashboardQueryService(
                 order = Orders.ASC,
             )
 
-            sleepNightService.materialize(sleepNightFilters, now)
             DashboardSummaryResponse(
                 fromDate = fromDate.toString(),
                 toDate = toDate.toString(),

@@ -61,7 +61,6 @@ class DatabaseFactoryTest {
         assertContains(viewNames, "canonical_step_daily_summaries")
         assertContains(viewNames, "canonical_sleep_summaries")
         assertContains(viewNames, "canonical_sleep_sessions")
-        assertContains(viewNames, "canonical_sleep_nights")
     }
 
     @Test
