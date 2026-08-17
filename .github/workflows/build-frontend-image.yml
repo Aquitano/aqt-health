@@ -12,6 +12,11 @@ on:
       - .github/workflows/build-frontend-image.yml
   workflow_dispatch:
 
+# Serialize runs so an older build cannot overwrite `latest` after a newer one.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   packages: write
