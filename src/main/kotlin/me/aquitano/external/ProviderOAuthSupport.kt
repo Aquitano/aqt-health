@@ -20,6 +20,9 @@ fun ProviderOAuthConfig.oauthConfigurationIssues(prefix: String): List<Validatio
         if (clientSecret.isBlank()) add(ValidationIssue("$prefix.clientSecret"))
         if (redirectUri.isBlank()) add(ValidationIssue("$prefix.redirectUri"))
         if (tokenEncryptionKey.isBlank()) add(ValidationIssue("$prefix.tokenEncryptionKey"))
+        if (apiBaseUrl.isBlank()) add(ValidationIssue("$prefix.apiBaseUrl"))
+        if (oauthTokenUrl.isBlank()) add(ValidationIssue("$prefix.oauthTokenUrl"))
+        if (oauthAuthUrl.isBlank()) add(ValidationIssue("$prefix.oauthAuthUrl"))
     }
 
 fun requireProviderConfigured(notConfiguredCode: String, issues: List<ValidationIssue>) {

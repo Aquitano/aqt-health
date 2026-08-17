@@ -182,14 +182,18 @@ export function ProviderSyncPanel({ catalog, statuses, scheduledSyncConfigs }: P
     setAccountActionError(null);
 
     startOAuthTransition(async () => {
-      const body = await proxyFetch<ProviderOAuthStartResponse>(
-        `/providers/${encodeURIComponent(selectedProvider.descriptor.providerCode)}/oauth/start`,
-        { method: "POST" },
-      );
-      if (body.ok) {
-        window.location.assign(body.data.authorizationUrl);
-      } else {
-        setOAuthError(body.message);
+      try {
+        const body = await proxyFetch<ProviderOAuthStartResponse>(
+          `/providers/${encodeURIComponent(selectedProvider.descriptor.providerCode)}/oauth/start`,
+          { method: "POST" },
+        );
+        if (body.ok) {
+          window.location.assign(body.data.authorizationUrl);
+        } else {
+          setOAuthError(body.message);
+        }
+      } catch (error) {
+        setOAuthError(error instanceof Error ? error.message : "OAuth start failed. Try again.");
       }
     });
   }

@@ -16,6 +16,7 @@ data class SyncWindow(
 
 /** Splits [from]..[to] into consecutive windows of at most [windowSize], clamping the last one. */
 fun syncWindows(from: Instant, to: Instant, windowSize: Duration): List<SyncWindow> {
+    require(!windowSize.isZero && !windowSize.isNegative) { "windowSize must be positive" }
     val windows = mutableListOf<SyncWindow>()
     var windowFrom = from
     while (windowFrom.isBefore(to)) {

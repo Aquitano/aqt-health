@@ -13,7 +13,8 @@ type PageProps = {
 export default async function IngestionsPage({ searchParams }: PageProps) {
   const params = (await searchParams) ?? {};
   const limit = first(params.limit) ?? "25";
-  const data = await getIngestionsPageData({ limit, status: params.status });
+  const status = first(params.status);
+  const data = await getIngestionsPageData({ limit, status });
 
   return (
     <>

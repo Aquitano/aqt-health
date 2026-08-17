@@ -112,10 +112,7 @@ class WithingsProvider(
         requireProviderConfigured("withings_not_configured", configurationIssues())
 
     private fun configurationIssues(): List<ValidationIssue> =
-        buildList {
-            addAll(config.oauthConfigurationIssues("withings"))
-            if (config.apiBaseUrl.isBlank()) add(ValidationIssue("withings.apiBaseUrl"))
-        }
+        config.oauthConfigurationIssues("withings")
 
     private fun providerInstanceId(providerUserId: String): String =
         "withings-$providerUserId"

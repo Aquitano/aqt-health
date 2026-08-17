@@ -40,22 +40,29 @@ class StepDailySummaryDerivation(
         }
     }
 
-    /** Allocates a sample's steps to the day proportionally to its overlap with the day window. */
-    private fun allocatedStepsForDay(
-        sample: StepDailySummaryRawSample,
-        dayStart: Instant,
-        dayEnd: Instant,
-    ): Int {
-        val totalSeconds = Duration.between(sample.startAt, sample.endAt).seconds
-        if (totalSeconds <= 0) return 0
+}
 
-        val overlapStart = maxOf(sample.startAt, dayStart)
-        val overlapEnd = minOf(sample.endAt, dayEnd)
-        val overlapSeconds = Duration.between(overlapStart, overlapEnd).seconds
-        if (overlapSeconds <= 0) return 0
+/**
+ * Allocates a sample's steps to the day proportionally to its overlap with the day window.
+ * Rounds cumulative allocations at the overlap boundaries and subtracts them, so the
+ * per-day allocations of a sample spanning multiple days always sum to sample.steps.
+ */
+internal fun allocatedStepsForDay(
+    sample: StepDailySummaryRawSample,
+    dayStart: Instant,
+    dayEnd: Instant,
+): Int {
+    val totalSeconds = Duration.between(sample.startAt, sample.endAt).seconds
+    if (totalSeconds <= 0) return 0
 
-        return (sample.steps.toDouble() * overlapSeconds / totalSeconds).roundToInt()
-    }
+    val overlapStart = maxOf(sample.startAt, dayStart)
+    val overlapEnd = minOf(sample.endAt, dayEnd)
+    if (!overlapStart.isBefore(overlapEnd)) return 0
+
+    fun cumulativeSteps(at: Instant): Int =
+        (sample.steps.toDouble() * Duration.between(sample.startAt, at).seconds / totalSeconds).roundToInt()
+
+    return cumulativeSteps(overlapEnd) - cumulativeSteps(overlapStart)
 }
 
 data class StepDailySummaryRawSample(
