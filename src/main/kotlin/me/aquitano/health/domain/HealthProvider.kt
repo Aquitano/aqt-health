@@ -43,14 +43,9 @@ interface HealthProvider {
      */
     suspend fun sync(
         request: ProviderSyncRequest,
-        now: Instant
-    ): ProviderSyncSummary
-
-    suspend fun sync(
-        request: ProviderSyncRequest,
         now: Instant,
-        progress: ProviderSyncProgressSink,
-    ): ProviderSyncSummary = sync(request, now)
+        progress: ProviderSyncProgressSink = ProviderSyncProgressSink.None,
+    ): ProviderSyncSummary
 }
 
 data class HealthProviderDescriptor(

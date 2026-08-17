@@ -26,15 +26,7 @@ class SleepRepository : BaseMetricReadRepository() {
                 SleepSessionsTable.id to filters.sortOrder(),
             )
             .limit(filters.limit)
-            .map {
-                SleepSessionRow(
-                    id = it[SleepSessionsTable.id].value,
-                    sourceInstanceId = it[SleepSessionsTable.sourceInstanceId],
-                    startAt = it[SleepSessionsTable.startAt].toApiString(),
-                    endAt = it[SleepSessionsTable.endAt].toApiString(),
-                    durationSeconds = it[SleepSessionsTable.durationSeconds],
-                )
-            }
+            .map(::toSleepSessionRow)
         val stagesBySession = sleepStagesBySession(sessions.map { it.id })
         val metadata = sourceMetadata(
             sessions.map { it.sourceInstanceId }.toSet(),
@@ -88,13 +80,7 @@ class SleepRepository : BaseMetricReadRepository() {
             )
             .limit(filters.limit)
             .map {
-                val session = SleepSessionRow(
-                    id = it[SleepSessionsTable.id].value,
-                    sourceInstanceId = it[SleepSessionsTable.sourceInstanceId],
-                    startAt = it[SleepSessionsTable.startAt].toApiString(),
-                    endAt = it[SleepSessionsTable.endAt].toApiString(),
-                    durationSeconds = it[SleepSessionsTable.durationSeconds],
-                )
+                val session = toSleepSessionRow(it)
                 SleepNightRow(
                     id = it[SleepNightsTable.id].value,
                     date = it[SleepNightsTable.date].toString(),
@@ -138,13 +124,7 @@ class SleepRepository : BaseMetricReadRepository() {
             )
             .limit(keysetFetchLimit(filters.limit))
             .map {
-                val session = SleepSessionRow(
-                    id = it[SleepSessionsTable.id].value,
-                    sourceInstanceId = it[SleepSessionsTable.sourceInstanceId],
-                    startAt = it[SleepSessionsTable.startAt].toApiString(),
-                    endAt = it[SleepSessionsTable.endAt].toApiString(),
-                    durationSeconds = it[SleepSessionsTable.durationSeconds],
-                )
+                val session = toSleepSessionRow(it)
                 SleepNightRow(
                     id = it[CanonicalSleepNightsTable.id],
                     date = it[CanonicalSleepNightsTable.date].toString(),
@@ -174,15 +154,7 @@ class SleepRepository : BaseMetricReadRepository() {
                 SleepSessionsTable.id to SortOrder.DESC,
             )
             .limit(1)
-            .map {
-                SleepSessionRow(
-                    id = it[SleepSessionsTable.id].value,
-                    sourceInstanceId = it[SleepSessionsTable.sourceInstanceId],
-                    startAt = it[SleepSessionsTable.startAt].toApiString(),
-                    endAt = it[SleepSessionsTable.endAt].toApiString(),
-                    durationSeconds = it[SleepSessionsTable.durationSeconds],
-                )
-            }
+            .map(::toSleepSessionRow)
             .singleOrNull()
         val stagesBySession = sleepStagesBySession(listOfNotNull(session?.id))
         val metadata = sourceMetadata(

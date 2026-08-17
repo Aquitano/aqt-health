@@ -7,15 +7,16 @@ import type {
   IngestionsPageData,
   ProviderSyncPageData,
   TrendsPageData,
-  ScheduledSyncConfig,
   HealthStatusData,
   HeartRateDailyPoint,
 } from "./types";
 import { aqtHealthClient, toProviderCode } from "./aqtHealthClient";
+import { toPositiveInteger } from "./format";
 import {
   addUtcDays,
   dateOnlyToUtcInstant,
   dayAfterDateOnlyToUtcInstant,
+  first,
 } from "./dates";
 
 export async function getHealthStatus(): Promise<HealthStatusData> {
@@ -30,8 +31,7 @@ export async function getHealthStatus(): Promise<HealthStatusData> {
  * section in its own Suspense boundary and stream results independently. The
  * requests still run concurrently, exactly as the previous single `Promise.all`
  * did, but no section blocks first paint on the slowest fetch (the per-day
- * heart-rate fan-out in particular). Catalog and `latest*` extras are kept for
- * response parity even where the current view does not render them.
+ * heart-rate fan-out in particular).
  */
 export function getHealthDataPageSources(
   fromDate: string,
@@ -118,7 +118,6 @@ export function getHealthDataPageSources(
       order: "desc",
       limit: 5000,
     }),
-    latestCardiovascular: client.getLatestCardiovascular({ includeSource: true }),
     extendedBodyMeasurements: client.listExtendedBodyMeasurements({
       from: measurementsFrom,
       to: measurementsTo,
@@ -127,8 +126,6 @@ export function getHealthDataPageSources(
       order: "desc",
       limit: 5000,
     }),
-    latestExtendedBodyMeasurement: client.getLatestExtendedBodyMeasurement({ includeSource: true }),
-    metricCatalog: client.getMetricCatalog(),
   };
 }
 
@@ -204,7 +201,7 @@ export async function getProviderSyncPageData(): Promise<ProviderSyncPageData> {
               client.getScheduledSyncConfig(
                 providerCode,
                 account.providerInstanceId,
-              ) as Promise<ApiResult<ScheduledSyncConfig>>,
+              ),
             );
           }),
         )
@@ -220,12 +217,12 @@ export async function getProviderSyncPageData(): Promise<ProviderSyncPageData> {
 }
 
 export async function getIngestionsPageData(options: {
-  limit: string;
-  status?: string;
+  limit?: string | string[];
+  status?: string | string[];
 }): Promise<IngestionsPageData> {
   const client = aqtHealthClient;
-  const limit = toPositiveInteger(options.limit) ?? 25;
-  const status = ingestionStatus(options.status);
+  const limit = toPositiveInteger(first(options.limit) ?? "") ?? 25;
+  const status = ingestionStatus(first(options.status));
 
   const [health, batches, failures] = await Promise.all([
     client.getHealth(),
@@ -252,7 +249,7 @@ export async function getIngestionBatchDetail(
   return aqtHealthClient.getIngestionBatch(parsed);
 }
 
-export async function getHealthDay(paramsValue: {
+async function getHealthDay(paramsValue: {
   date: string;
   timezone: string;
   modules: HealthDayModuleName[];
@@ -301,10 +298,4 @@ async function fetchHeartRateDaily(
 function ingestionStatus(value?: string): "processed" | "failed" | undefined {
   if (value === "processed" || value === "failed") return value;
   return undefined;
-}
-
-function toPositiveInteger(value: string): number | undefined {
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed <= 0) return undefined;
-  return parsed;
 }

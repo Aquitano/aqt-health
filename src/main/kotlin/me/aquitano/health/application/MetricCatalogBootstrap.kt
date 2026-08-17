@@ -42,7 +42,7 @@ class MetricCatalogBootstrap(private val database: Database) {
     }
 
     companion object {
-        /** Mirrors CanonicalMetricsPolicy.default(); list order is the rank order (0 wins). */
+        /** Single source of truth for provider ranks; list order is the rank order (0 wins). */
         val providerRanks: Map<String, List<String>> = mapOf(
             MetricFamilies.STEPS to listOf("google_health", "health_connect", "withings"),
             MetricFamilies.ACTIVITY to listOf("google_health", "health_connect", "withings"),

@@ -1,7 +1,8 @@
 package me.aquitano.health.application.metric.steps.derived
 
-import me.aquitano.health.application.CanonicalMetricsPolicy
+import me.aquitano.health.application.MetricCatalogBootstrap
 import me.aquitano.health.application.metric.steps.repository.CanonicalStepBucketContributionOutput
+import me.aquitano.health.domain.MetricFamilies
 import me.aquitano.health.application.metric.steps.repository.CanonicalStepDerivationRepository
 import me.aquitano.health.application.metric.steps.repository.CanonicalStepOutput
 import me.aquitano.health.application.metric.steps.repository.CanonicalStepSampleOutput
@@ -16,9 +17,10 @@ import me.aquitano.health.application.metric.common.canonicalIntervalRows
 
 const val CANONICAL_STEP_ALGORITHM_VERSION = 1
 
+private const val UNKNOWN_PROVIDER_RANK = 10_000
+
 class CanonicalStepDerivationService(
     private val repository: CanonicalStepDerivationRepository,
-    private val policy: CanonicalMetricsPolicy = CanonicalMetricsPolicy.default(),
 ) {
     suspend fun recompute(dates: Set<LocalDate>, computedAt: Instant) {
         dates.forEach { date ->
@@ -45,14 +47,12 @@ class CanonicalStepDerivationService(
                     )!!.asIntervalCandidate()
                 }
             )
-            val selectedPreparedSamples = canonicalSamples
-
             repository.persistCanonicalOutput(
                 CanonicalStepOutput(
                     date = date,
                     algorithmVersion = CANONICAL_STEP_ALGORITHM_VERSION,
                     computedAt = computedAt,
-                    samples = selectedPreparedSamples.map {
+                    samples = canonicalSamples.map {
                         CanonicalStepSampleOutput(
                             sampleId = it.candidate.row.id,
                             sourceInstanceId = it.candidate.row.sourceInstanceId,
@@ -61,7 +61,7 @@ class CanonicalStepDerivationService(
                             steps = it.candidate.row.steps,
                         )
                     },
-                    bucketContributions = selectedPreparedSamples.flatMap {
+                    bucketContributions = canonicalSamples.flatMap {
                         bucketContributions(date, dayStart, dayEnd, it, computedAt)
                     },
                 )
@@ -114,6 +114,21 @@ class CanonicalStepDerivationService(
         }
     }
 
+    // Ranks providers for canonical step selection from the same list MetricCatalogBootstrap
+    // seeds into provider_ranks, so the in-memory and database rankings cannot drift.
+    private fun stepProviderRank(provider: String?): Int {
+        val normalized = provider
+            ?.trim()
+            ?.lowercase()
+            ?.replace('-', '_')
+            ?.takeIf { it.isNotBlank() }
+            ?: return UNKNOWN_PROVIDER_RANK
+        val index = MetricCatalogBootstrap.providerRanks
+            .getValue(MetricFamilies.STEPS)
+            .indexOf(normalized)
+        return if (index >= 0) index else UNKNOWN_PROVIDER_RANK
+    }
+
     private fun preparedCanonicalSample(
         row: StepSampleRow,
         metadata: Map<Int, me.aquitano.health.application.metric.common.repository.SourceMetadata>
@@ -129,7 +144,7 @@ class CanonicalStepDerivationService(
                 endAt = endAt,
             ),
             durationSeconds = duration,
-            providerRank = policy.rank(me.aquitano.health.application.CanonicalMetricFamily.STEPS, metadata[row.sourceInstanceId]?.provider),
+            providerRank = stepProviderRank(metadata[row.sourceInstanceId]?.provider),
             stepsPerSecond = row.steps.toDouble() / duration.coerceAtLeast(1).toDouble(),
         )
     }

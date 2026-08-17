@@ -70,7 +70,6 @@ class GeneratedGoogleHealthClient(
 
             pages.add(
                 GoogleHealthPage(
-                    dataType = dataType,
                     pageIndex = pageIndex,
                     payload = buildJsonObject {
                         put("dataPoints", JsonArray(pageDataPoints))
@@ -120,16 +119,6 @@ class GeneratedGoogleHealthClient(
         when (exception.statusCode.code) {
             StatusCode.Code.UNAUTHENTICATED -> GoogleHealthUnauthorizedException(
                 "Google Health access token is unauthorized"
-            )
-
-            StatusCode.Code.RESOURCE_EXHAUSTED,
-            StatusCode.Code.UNAVAILABLE,
-            StatusCode.Code.DEADLINE_EXCEEDED,
-            StatusCode.Code.INTERNAL,
-            StatusCode.Code.UNKNOWN,
-                -> GoogleHealthHttpException(
-                "google_health_upstream_failed",
-                "Google Health $dataType request failed with ${exception.statusCode.code}"
             )
 
             else -> GoogleHealthHttpException(

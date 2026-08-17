@@ -109,7 +109,7 @@ class IngestionMappingService {
             is BloodPressure -> mapBloodPressure(field, dto, issues)
             is Cardiovascular -> mapCardiovascular(field, dto, issues)
             is ExtendedBodyMeasurement -> mapExtendedBodyMeasurement(field, dto, issues)
-            is ScalarSample -> mapScalar(field, dto, issues)
+            is ScalarSample -> mapScalarViaRegistry(field, dto, issues)
         }
     }
 }

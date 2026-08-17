@@ -1,5 +1,10 @@
 package me.aquitano.external.withings
 
+import me.aquitano.health.application.providersync.NormalizedProviderBatch
+import me.aquitano.health.shared.doubleOrNull
+import me.aquitano.health.shared.longOrNull
+import me.aquitano.health.shared.primitiveOrNull
+import me.aquitano.health.shared.stringOrNull
 import kotlinx.serialization.json.*
 import me.aquitano.health.api.dto.*
 import java.time.Duration
@@ -11,7 +16,7 @@ import kotlin.math.pow
 class WithingsNormalizer {
     private val sleepSessionGap = Duration.ofHours(2)
 
-    fun normalize(fetchResult: WithingsFetchResult): WithingsNormalizedBatch {
+    fun normalize(fetchResult: WithingsFetchResult): NormalizedProviderBatch {
         val records = when (fetchResult.dataType) {
             "activity" -> normalizeActivity(fetchResult.records)
             "measures" -> normalizeMeasures(fetchResult.records)
@@ -36,13 +41,13 @@ class WithingsNormalizer {
             )
             put("records", JsonArray(fetchResult.records))
         }
-        return WithingsNormalizedBatch(sourcePayload, records)
+        return NormalizedProviderBatch(sourcePayload, records)
     }
 
     private fun normalizeActivity(records: List<JsonObject>): List<IngestionRecord> =
         buildList {
             records.forEach { record ->
-                val date = record.string("date")
+                val date = record.stringOrNull("date")
                     ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
                     ?: return@forEach
                 val steps = record.int("steps")
@@ -70,12 +75,12 @@ class WithingsNormalizer {
     private fun normalizeMeasures(records: List<JsonObject>): List<IngestionRecord> =
         buildList {
             records.forEach { group ->
-                val measuredAt = group.long("date") ?: group.long("created")
+                val measuredAt = group.longOrNull("date") ?: group.longOrNull("created")
                 ?: return@forEach
                 val measuredAtString =
                     Instant.ofEpochSecond(measuredAt).toString()
                 val grpid =
-                    group.string("grpid") ?: group.long("grpid")?.toString()
+                    group.stringOrNull("grpid") ?: group.longOrNull("grpid")?.toString()
                     ?: "at-$measuredAt"
                 val measures = group["measures"] as? JsonArray ?: return@forEach
                 var weightKg: Double? = null
@@ -96,7 +101,7 @@ class WithingsNormalizer {
 
                 measures.mapNotNull { it as? JsonObject }.forEach { measure ->
                     val type = measure.int("type") ?: return@forEach
-                    val value = measure.double("value") ?: return@forEach
+                    val value = measure.doubleOrNull("value") ?: return@forEach
                     val unit = measure.int("unit") ?: 0
                     val realValue = value * 10.0.pow(unit)
                     when (type) {
@@ -276,7 +281,7 @@ class WithingsNormalizer {
         unit: String,
         value: Double,
     ) {
-        val segmentCode = measure.string("zone") ?: return
+        val segmentCode = measure.stringOrNull("zone") ?: return
         val segment = mapSegment(segmentCode) ?: return
         target.add(
             ExtendedBodyMeasurement(
@@ -302,8 +307,8 @@ class WithingsNormalizer {
     private fun normalizeSleepSummary(records: List<JsonObject>): List<IngestionRecord> =
         buildList {
             records.forEach { record ->
-                val start = record.long("startdate") ?: return@forEach
-                val end = record.long("enddate") ?: return@forEach
+                val start = record.longOrNull("startdate") ?: return@forEach
+                val end = record.longOrNull("enddate") ?: return@forEach
                 if (start >= end) return@forEach
                 add(
                     SleepSession(
@@ -345,23 +350,23 @@ class WithingsNormalizer {
                     remEpisodesCount = data.nonNegativeInt("nb_rem_episodes"),
                     outOfBedCount = data.nonNegativeInt("out_of_bed_count"),
                     awakeDurationSeconds = data.nonNegativeLong("awake_duration"),
-                    overnightHrvRmssd = data.double("rmssd_start_avg"),
-                    respiratoryRhythm = data.double("chest_movement_rate_wellness_average"),
+                    overnightHrvRmssd = data.doubleOrNull("rmssd_start_avg"),
+                    respiratoryRhythm = data.doubleOrNull("chest_movement_rate_wellness_average"),
                     breathingQuality = data.int("breathing_quality_assessment")
                         ?.takeIf { it in 0..100 },
                     snoringDurationSeconds = data.nonNegativeLong("snoring"),
-                    apneaHypopneaIndex = data.double("apnea_hypopnea_index")
+                    apneaHypopneaIndex = data.doubleOrNull("apnea_hypopnea_index")
                         ?.takeIf { it >= 0.0 },
-                    movementScore = data.double("mvt_score_avg"),
+                    movementScore = data.doubleOrNull("mvt_score_avg"),
                     snoringEpisodeCount = data.nonNegativeInt("snoringepisodecount"),
                     hrAverageBpm = data.validHeartRate("hr_average"),
                     hrMinBpm = data.validHeartRate("hr_min"),
                     hrMaxBpm = data.validHeartRate("hr_max"),
-                    rrAverage = data.double("rr_average")
+                    rrAverage = data.doubleOrNull("rr_average")
                         ?.takeIf { it in 5.0..40.0 },
-                    rrMin = data.double("rr_min")
+                    rrMin = data.doubleOrNull("rr_min")
                         ?.takeIf { it in 5.0..40.0 },
-                    rrMax = data.double("rr_max")
+                    rrMax = data.doubleOrNull("rr_max")
                         ?.takeIf { it in 5.0..40.0 },
                 )
                 if (summary.hasAnyMetric()) add(summary)
@@ -591,20 +596,11 @@ class WithingsNormalizer {
             rrMin != null ||
             rrMax != null
 
-    private fun JsonObject.string(key: String): String? =
-        this[key]?.primitiveOrNull()?.contentOrNull
-
     private fun JsonObject.int(key: String): Int? {
         val primitive = this[key]?.primitiveOrNull() ?: return null
         primitive.intOrNull?.let { return it }
         return primitive.contentOrNull?.toIntOrNull()
     }
-
-    private fun JsonObject.long(key: String): Long? =
-        this[key]?.primitiveOrNull()?.longOrNull
-
-    private fun JsonObject.double(key: String): Double? =
-        this[key]?.primitiveOrNull()?.doubleOrNull
 
     private fun JsonObject.instant(key: String): Instant? {
         val primitive = this[key]?.primitiveOrNull() ?: return null
@@ -630,7 +626,7 @@ class WithingsNormalizer {
         int("rr") ?: (this["data"] as? JsonObject)?.int("rr")
 
     private fun JsonObject.sleepRmssd(): Double? =
-        double("rmssd") ?: (this["data"] as? JsonObject)?.double("rmssd")
+        doubleOrNull("rmssd") ?: (this["data"] as? JsonObject)?.doubleOrNull("rmssd")
 
     private fun JsonObject.sleepInstant(key: String): Instant? =
         instant(key) ?: (this["data"] as? JsonObject)?.instant(key)
@@ -639,14 +635,11 @@ class WithingsNormalizer {
         int(key)?.takeIf { it >= 0 }
 
     private fun JsonObject.nonNegativeLong(key: String): Long? =
-        long(key)?.takeIf { it >= 0 }
+        longOrNull(key)?.takeIf { it >= 0 }
 
     private fun JsonObject.nonNegativeDouble(key: String): Double? =
-        double(key)?.takeIf { it >= 0.0 }
+        doubleOrNull(key)?.takeIf { it >= 0.0 }
 
     private fun JsonObject.validHeartRate(key: String): Int? =
         int(key)?.takeIf { it in 25..250 }
-
-    private fun JsonElement.primitiveOrNull(): JsonPrimitive? =
-        this as? JsonPrimitive
 }

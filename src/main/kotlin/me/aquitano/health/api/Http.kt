@@ -5,20 +5,13 @@ import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
 import io.ktor.server.plugins.contentnegotiation.*
 import io.ktor.server.plugins.cors.routing.*
-import kotlinx.serialization.json.Json
 import me.aquitano.health.infrastructure.config.CorsConfig
+import me.aquitano.health.shared.AppJson
 import java.net.URI
 
 fun Application.configureHttp(corsConfig: CorsConfig) {
     install(ContentNegotiation) {
-        json(
-            Json {
-                ignoreUnknownKeys = false
-                explicitNulls = false
-                isLenient = false
-                encodeDefaults = true
-            },
-        )
+        json(AppJson)
     }
     install(CORS) {
         allowMethod(HttpMethod.Get)

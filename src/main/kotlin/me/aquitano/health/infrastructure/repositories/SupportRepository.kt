@@ -57,28 +57,15 @@ class SupportRepository(
         apiKeyHash: String,
         now: Instant
     ): ApiClientRef? =
-        dbQuery {
+        suspendDbTransaction(db = database) {
             val client = ApiClientDao
                 .find { (ApiClientsTable.apiKeyHash eq apiKeyHash) and (ApiClientsTable.enabled eq true) }
                 .firstOrNull()
-                ?: return@dbQuery null
+                ?: return@suspendDbTransaction null
             if (shouldUpdateLastUsedAt(client.lastUsedAt, now)) {
                 client.lastUsedAt = now.toDbTimestamp()
             }
             ApiClientRef(id = client.id.value, name = client.name)
-        }
-
-    suspend fun resolveOrCreateSourceInstance(
-        provider: String,
-        providerInstanceId: String,
-        now: Instant
-    ): SourceInstanceRef =
-        dbQuery {
-            resolveOrCreateSourceInstanceInTransaction(
-                provider,
-                providerInstanceId,
-                now
-            )
         }
 
     fun resolveOrCreateSourceInstanceInTransaction(
@@ -118,10 +105,6 @@ class SupportRepository(
         )
     }
 
-    private suspend fun <T> dbQuery(block: () -> T): T =
-        suspendDbTransaction(db = database) {
-            block()
-        }
 
     private fun shouldUpdateLastUsedAt(
         current: OffsetDateTime?,

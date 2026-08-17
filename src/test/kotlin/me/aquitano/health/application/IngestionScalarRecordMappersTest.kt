@@ -32,7 +32,7 @@ class IngestionScalarRecordMappersTest {
         segment: String? = null,
     ): ScalarSampleRecord? {
         val issues = mutableListOf<ValidationIssue>()
-        return mapScalar(
+        return mapScalarViaRegistry(
             "records[0]",
             ScalarSample(
                 measuredAt = measuredAt,

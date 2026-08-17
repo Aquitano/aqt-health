@@ -175,19 +175,13 @@ internal fun mapExtendedBodyMeasurement(
     unknownMetricTypeMessage = "unsupported extended body metric type",
 )
 
-internal fun mapScalar(
-    field: String,
-    dto: ScalarSample,
-    issues: MutableList<ValidationIssue>
-): ScalarSampleRecord? = mapScalarViaRegistry(field, dto, issues)
-
 /**
  * Registry-driven validation shared by the generic scalar record and the legacy
  * per-family adapters. A legacy [recordType] only accepts metric types its family owns;
  * the stored record keeps the caller's record type and normalized JSON so legacy wire
  * shapes are preserved.
  */
-private fun mapScalarViaRegistry(
+internal fun mapScalarViaRegistry(
     field: String,
     dto: ScalarSample,
     issues: MutableList<ValidationIssue>,

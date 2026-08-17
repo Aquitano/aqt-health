@@ -4,7 +4,6 @@ import me.aquitano.health.domain.RequestValidationException
 import me.aquitano.health.domain.ValidationIssue
 import me.aquitano.health.domain.ValidationIssueCodes
 import me.aquitano.health.shared.Cursor
-import me.aquitano.health.shared.utcDate
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -57,23 +56,7 @@ class QueryParams(
         }
     }
 
-    fun dateOrToday(name: String, now: Instant): LocalDate? {
-        val value = optional(name) ?: return null
-        if (value == "today") return now.utcDate()
-        return runCatching { LocalDate.parse(value) }.getOrElse {
-            throw RequestValidationException(
-                listOf(
-                    ValidationIssue(
-                        field = name,
-                        code = ValidationIssueCodes.InvalidFormat,
-                        message = "must be an ISO-8601 date or today",
-                    )
-                )
-            )
-        }
-    }
-
-    fun dateOrToday(name: String, now: Instant, timezone: ZoneId): LocalDate? {
+    fun dateOrToday(name: String, now: Instant, timezone: ZoneId = ZoneOffset.UTC): LocalDate? {
         val value = optional(name) ?: return null
         if (value == "today") return now.atZone(timezone).toLocalDate()
         return runCatching { LocalDate.parse(value) }.getOrElse {
@@ -215,7 +198,7 @@ class QueryParams(
         }
     }
 
-    fun validateLatestOverrides() {
+    fun rejectLatestOverrides(message: String = "cannot be combined with latest=true") {
         val invalidFields = listOf("limit", "sort", "order", "cursor")
             .filter { optional(it) != null }
         if (invalidFields.isNotEmpty()) {
@@ -224,23 +207,7 @@ class QueryParams(
                     ValidationIssue(
                         field = it,
                         code = ValidationIssueCodes.InvalidState,
-                        message = "cannot be combined with latest=true",
-                    )
-                }
-            )
-        }
-    }
-
-    fun rejectLatestEndpointOverrides() {
-        val invalidFields = listOf("limit", "sort", "order", "cursor")
-            .filter { optional(it) != null }
-        if (invalidFields.isNotEmpty()) {
-            throw RequestValidationException(
-                invalidFields.map {
-                    ValidationIssue(
-                        field = it,
-                        code = ValidationIssueCodes.InvalidState,
-                        message = "is not supported for latest endpoints",
+                        message = message,
                     )
                 }
             )

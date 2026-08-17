@@ -38,7 +38,6 @@ export type ProviderAccountStatus = ApiSchema<"ProviderAccountStatusResponse">;
 export type ScheduledSyncConfigUpdateRequest = ApiSchema<"ScheduledSyncConfigUpdateRequest">;
 export type ScheduledSyncConfig = ApiSchema<"ScheduledSyncConfigResponse">;
 export type ScheduledSyncRunResponse = ApiSchema<"ScheduledSyncRunResponse">;
-export type MetricCatalogResponse = ApiSchema<"MetricTypeCatalogResponse">;
 export type DashboardTrendsResponse = ApiSchema<"DashboardTrendsResponse">;
 
 export type BloodPressureMeasurement = ApiSchema<"BloodPressureMeasurementResponse">;
@@ -78,10 +77,7 @@ export type HealthDataPageData = HealthStatusData & {
   bloodPressure: ApiResult<BloodPressureMeasurementsResponse>;
   latestBloodPressure: ApiResult<BloodPressureMeasurementsResponse>;
   cardiovascular: ApiResult<ScalarSamplesResponse>;
-  latestCardiovascular: ApiResult<ScalarSamplesResponse>;
   extendedBodyMeasurements: ApiResult<ScalarSamplesResponse>;
-  latestExtendedBodyMeasurement: ApiResult<ScalarSamplesResponse>;
-  metricCatalog: ApiResult<MetricCatalogResponse>;
 };
 
 /**

@@ -128,10 +128,7 @@ class DashboardQueryService(
     private fun lastSleepSession(
         filters: SleepNightReadFilters,
     ) = sleepRepository.listCanonicalSleepNights(
-        filters.copy(
-            limit = filters.limit,
-            order = Orders.DESC,
-        )
+        filters.copy(order = Orders.DESC)
     )
         .let { (sleepNights, sleepStagesBySession, sleepSourceMetadata) ->
             val sleep = sleepNights.firstOrNull()?.session

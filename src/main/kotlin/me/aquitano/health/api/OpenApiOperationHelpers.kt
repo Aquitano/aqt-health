@@ -163,41 +163,44 @@ internal fun Route.describeReadOperation(
     errorResponses()
 }
 
-internal fun Route.describeDailyStepReadOperation(): Route = describe {
-    operationId = "listDailyStepSummaries"
+private fun Route.describeDailyReadOperation(
+    id: String,
+    operationSummary: String,
+    operationDescription: String,
+    latestDescription: String,
+): Route = describe {
+    operationId = id
     tag("Read")
-    summary = "List daily step summaries"
-    description =
-        "Returns daily UTC step totals. Use `date` for one day, or `fromDate` and `toDate` for an inclusive date range."
+    summary = operationSummary
+    description = operationDescription
     requiresBearerAuth()
     dailyStepQueryParameters()
     parameters {
         query("latest") {
-            description =
-                "Return the latest matching daily step summary when true. Defaults to false. Cannot be combined with limit, sort, order, or cursor."
+            description = latestDescription
             schema = booleanSchema(default = false, example = true)
         }
     }
     errorResponses()
 }
 
-internal fun Route.describeActivitySummaryReadOperation(): Route = describe {
-    operationId = "listActivitySummaries"
-    tag("Read")
-    summary = "List activity summaries"
-    description =
-        "Returns daily activity summary metrics such as distance, calories, elevation, activity minutes, and daily heart-rate summary values."
-    requiresBearerAuth()
-    dailyStepQueryParameters()
-    parameters {
-        query("latest") {
-            description =
-                "Return the latest matching activity summary when true. Defaults to false. Cannot be combined with limit, sort, order, or cursor."
-            schema = booleanSchema(default = false, example = true)
-        }
-    }
-    errorResponses()
-}
+internal fun Route.describeDailyStepReadOperation(): Route = describeDailyReadOperation(
+    id = "listDailyStepSummaries",
+    operationSummary = "List daily step summaries",
+    operationDescription =
+        "Returns daily UTC step totals. Use `date` for one day, or `fromDate` and `toDate` for an inclusive date range.",
+    latestDescription =
+        "Return the latest matching daily step summary when true. Defaults to false. Cannot be combined with limit, sort, order, or cursor.",
+)
+
+internal fun Route.describeActivitySummaryReadOperation(): Route = describeDailyReadOperation(
+    id = "listActivitySummaries",
+    operationSummary = "List activity summaries",
+    operationDescription =
+        "Returns daily activity summary metrics such as distance, calories, elevation, activity minutes, and daily heart-rate summary values.",
+    latestDescription =
+        "Return the latest matching activity summary when true. Defaults to false. Cannot be combined with limit, sort, order, or cursor.",
+)
 internal fun Route.describeSleepNightReadOperation(): Route = describe {
     operationId = "listSleepNights"
     tag("Read")

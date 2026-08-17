@@ -68,7 +68,7 @@ export function addUtcDays(date: string, days: number): string {
   return toDateInputValue(next);
 }
 
-function first(value?: string | string[]): string | undefined {
+export function first(value?: string | string[]): string | undefined {
   if (Array.isArray(value)) return value[0];
   return value;
 }

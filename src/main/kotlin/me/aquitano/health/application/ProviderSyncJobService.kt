@@ -78,7 +78,7 @@ class ProviderSyncJobService(
         val provider = providerRegistry.getProvider(providerCode)
             ?: throw NotFoundException("Provider '$providerCode' not found")
         val domainRequest = workflowService.toDomainSyncRequest(request, now)
-        val requestHash = syncJobRequestHash(request)
+        val requestHash = syncRequestHash(request)
         if (idempotencyKey != null) {
             repository.findByIdempotencyKey(provider.descriptor.providerCode, idempotencyKey)
                 ?.let { existing ->
@@ -272,11 +272,3 @@ private fun ProviderSyncJobRecord.toDomainRequest(): DomainProviderSyncRequest =
         pageSize = pageSize,
     )
 
-private fun syncJobRequestHash(request: ProviderSyncRequest): String =
-    idempotencyRequestHash(
-        request.providerInstanceId?.takeIf { it.isNotBlank() },
-        request.from,
-        request.to,
-        request.dataTypes?.distinct()?.idempotencyListPart(),
-        request.pageSize?.toString(),
-    )

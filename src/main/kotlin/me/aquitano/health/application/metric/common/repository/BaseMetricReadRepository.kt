@@ -103,7 +103,7 @@ abstract class BaseMetricReadRepository {
     ): MetricConditionResult {
         val sourceIds = filters.sourceInstanceIds()
 
-        if (sourceIds != null && sourceIds.isEmpty()) {
+        if (sourceIds.hasNoMatchingSources()) {
             return MetricConditionResult.Empty
         }
 

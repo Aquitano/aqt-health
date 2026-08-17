@@ -1,12 +1,5 @@
 package me.aquitano.health.application.metric.steps.derived
 
-import me.aquitano.health.application.metric.common.DerivationJob
-import me.aquitano.health.application.metric.common.MetricDerivationCalculator
-import me.aquitano.health.application.metric.common.MetricDerivationInput
-import me.aquitano.health.application.metric.common.MetricDerivedBuilder
-import me.aquitano.health.application.metric.common.MetricDerivedOutput
-import me.aquitano.health.application.metric.common.MetricDerivedOutputWriter
-import me.aquitano.health.application.metric.common.MetricInputLoader
 import me.aquitano.health.application.metric.steps.repository.StepDailySummaryDerivationRepository
 import java.time.Duration
 import java.time.Instant
@@ -26,61 +19,51 @@ class StepDailySummaryDerivation(
         computedAt: Instant,
     ) {
         dates.forEach { date ->
-            builder(sourceInstanceId).processJob(
-                DerivationJob.forDate(date, ZoneOffset.UTC, STEP_DAILY_SUMMARY_ALGORITHM_VERSION),
-                computedAt,
+            val dayStart = date.atStartOfDay(ZoneOffset.UTC).toInstant()
+            val dayEnd = date.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant()
+            val samples = repository.listStepSamplesOverlapping(
+                sourceInstanceId = sourceInstanceId,
+                dayStart = dayStart,
+                dayEnd = dayEnd,
+            )
+            repository.upsertStepDailySummary(
+                StepDailySummaryOutput(
+                    sourceInstanceId = sourceInstanceId,
+                    date = date,
+                    timezone = ZoneOffset.UTC,
+                    algorithmVersion = STEP_DAILY_SUMMARY_ALGORITHM_VERSION,
+                    computedAt = computedAt,
+                    steps = samples.sumOf { allocatedStepsForDay(it, dayStart, dayEnd) },
+                    sampleCount = samples.size,
+                )
             )
         }
     }
 
-    private fun builder(
-        sourceInstanceId: Int,
-    ): MetricDerivedBuilder<StepDailySummaryInput, StepDailySummaryOutput> =
-        MetricDerivedBuilder(
-            inputLoader = StepDailySummaryInputLoader(
-                sourceInstanceId = sourceInstanceId,
-                repository = repository,
-            ),
-            calculator = StepDailySummaryCalculator(),
-            outputWriter = StepDailySummaryOutputWriter(repository),
-        )
 }
 
-private class StepDailySummaryInputLoader(
-    private val sourceInstanceId: Int,
-    private val repository: StepDailySummaryDerivationRepository,
-) : MetricInputLoader<StepDailySummaryInput> {
-    override suspend fun loadInput(
-        range: ClosedRange<Instant>,
-        timezone: ZoneId,
-        computedAt: Instant,
-    ): StepDailySummaryInput {
-        val date = LocalDate.ofInstant(range.start, timezone)
-        return StepDailySummaryInput(
-            sourceInstanceId = sourceInstanceId,
-            date = date,
-            timezone = timezone,
-            computedAt = computedAt,
-            dayStart = range.start,
-            dayEnd = range.endInclusive,
-            samples = repository.listStepSamplesOverlapping(
-                sourceInstanceId = sourceInstanceId,
-                dayStart = range.start,
-                dayEnd = range.endInclusive,
-            ),
-        )
-    }
-}
+/**
+ * Allocates a sample's steps to the day proportionally to its overlap with the day window.
+ * Rounds cumulative allocations at the overlap boundaries and subtracts them, so the
+ * per-day allocations of a sample spanning multiple days always sum to sample.steps.
+ */
+internal fun allocatedStepsForDay(
+    sample: StepDailySummaryRawSample,
+    dayStart: Instant,
+    dayEnd: Instant,
+): Int {
+    val totalSeconds = Duration.between(sample.startAt, sample.endAt).seconds
+    if (totalSeconds <= 0) return 0
 
-data class StepDailySummaryInput(
-    val sourceInstanceId: Int,
-    override val date: LocalDate,
-    override val timezone: ZoneId,
-    val computedAt: Instant,
-    val dayStart: Instant,
-    val dayEnd: Instant,
-    val samples: List<StepDailySummaryRawSample>,
-) : MetricDerivationInput
+    val overlapStart = maxOf(sample.startAt, dayStart)
+    val overlapEnd = minOf(sample.endAt, dayEnd)
+    if (!overlapStart.isBefore(overlapEnd)) return 0
+
+    fun cumulativeSteps(at: Instant): Int =
+        (sample.steps.toDouble() * Duration.between(sample.startAt, at).seconds / totalSeconds).roundToInt()
+
+    return cumulativeSteps(overlapEnd) - cumulativeSteps(overlapStart)
+}
 
 data class StepDailySummaryRawSample(
     val startAt: Instant,
@@ -88,51 +71,12 @@ data class StepDailySummaryRawSample(
     val steps: Int,
 )
 
-private class StepDailySummaryCalculator :
-    MetricDerivationCalculator<StepDailySummaryInput, StepDailySummaryOutput> {
-    override fun derive(input: StepDailySummaryInput): StepDailySummaryOutput =
-        StepDailySummaryOutput(
-            sourceInstanceId = input.sourceInstanceId,
-            date = input.date,
-            timezone = input.timezone,
-            algorithmVersion = STEP_DAILY_SUMMARY_ALGORITHM_VERSION,
-            computedAt = input.computedAt,
-            steps = input.samples.sumOf {
-                allocatedStepsForDay(it, input.dayStart, input.dayEnd)
-            },
-            sampleCount = input.samples.size,
-        )
-
-    private fun allocatedStepsForDay(
-        sample: StepDailySummaryRawSample,
-        dayStart: Instant,
-        dayEnd: Instant,
-    ): Int {
-        val totalSeconds = Duration.between(sample.startAt, sample.endAt).seconds
-        if (totalSeconds <= 0) return 0
-
-        val overlapStart = maxOf(sample.startAt, dayStart)
-        val overlapEnd = minOf(sample.endAt, dayEnd)
-        val overlapSeconds = Duration.between(overlapStart, overlapEnd).seconds
-        if (overlapSeconds <= 0) return 0
-
-        return (sample.steps.toDouble() * overlapSeconds / totalSeconds).roundToInt()
-    }
-}
-
 data class StepDailySummaryOutput(
     val sourceInstanceId: Int,
-    override val date: LocalDate,
-    override val timezone: ZoneId,
-    override val algorithmVersion: Int,
+    val date: LocalDate,
+    val timezone: ZoneId,
+    val algorithmVersion: Int,
     val computedAt: Instant,
     val steps: Int,
     val sampleCount: Int,
-) : MetricDerivedOutput
-
-private class StepDailySummaryOutputWriter(
-    private val repository: StepDailySummaryDerivationRepository,
-) : MetricDerivedOutputWriter<StepDailySummaryOutput> {
-    override suspend fun persistOutput(output: StepDailySummaryOutput): Int =
-        repository.upsertStepDailySummary(output)
-}
+)

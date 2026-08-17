@@ -122,25 +122,19 @@ internal fun Operation.Builder.scalarDailySummaryQueryParameters() {
 }
 
 internal fun Operation.Builder.dailyStepQueryParameters() {
-    dailyReadQueryParameters()
-    dateRangeQueryParameters("UTC date")
-}
-
-private fun Operation.Builder.dailyReadQueryParameters(includeListControls: Boolean = true) {
     providerFilterParameters()
-    if (includeListControls) {
-        sortParameter(
-            spec = QueryParamSpecs.sortByDate,
-            description = "Sort field. Daily endpoints support date.",
-        )
-        orderParameter("Sort direction. Defaults to ${QueryParamSpecs.order.default}. Use desc for newest-first reads.")
-        limitParameter(
-            spec = QueryParamSpecs.readLimit,
-            description = defaultLimitDescription(QueryParamSpecs.readLimit),
-            example = 100,
-        )
-        cursorParameter(CursorDescription, example = DateCursorExample)
-    }
+    sortParameter(
+        spec = QueryParamSpecs.sortByDate,
+        description = "Sort field. Daily endpoints support date.",
+    )
+    orderParameter("Sort direction. Defaults to ${QueryParamSpecs.order.default}. Use desc for newest-first reads.")
+    limitParameter(
+        spec = QueryParamSpecs.readLimit,
+        description = defaultLimitDescription(QueryParamSpecs.readLimit),
+        example = 100,
+    )
+    cursorParameter(CursorDescription, example = DateCursorExample)
+    dateRangeQueryParameters("UTC date")
 }
 
 internal fun Operation.Builder.sleepNightQueryParameters() {

@@ -1,12 +1,15 @@
 package me.aquitano.external.withings
 
+import java.time.Duration
+import me.aquitano.health.application.providersync.syncWindows
+import me.aquitano.health.shared.stringOrNull
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.request.*
 import io.ktor.client.request.forms.*
 import io.ktor.http.*
 import kotlinx.serialization.json.*
-import me.aquitano.health.infrastructure.config.WithingsConfig
+import me.aquitano.health.infrastructure.config.ProviderOAuthConfig
 import me.aquitano.health.shared.AppJson
 import me.aquitano.health.shared.formParameters
 import java.time.Instant
@@ -58,7 +61,7 @@ internal const val MAX_WITHINGS_PAGES = 500
 
 class KtorWithingsClient(
     private val httpClient: HttpClient,
-    private val config: WithingsConfig,
+    private val config: ProviderOAuthConfig,
 ) : WithingsClient {
     override suspend fun exchangeCode(
         code: String,
@@ -221,7 +224,7 @@ class KtorWithingsClient(
         to: Instant,
         dataFields: List<String>,
     ): WithingsFetchResult {
-        val results = sleepWindows(from, to).map { window ->
+        val results = syncWindows(from, to, Duration.ofDays(1)).map { window ->
             fetchPaged(
                 accessToken = accessToken,
                 dataType = "sleep",
@@ -229,8 +232,8 @@ class KtorWithingsClient(
                 action = "get",
                 recordsKey = "series",
                 baseParameters = buildList {
-                    add("startdate" to window.first.epochSecond.toString())
-                    add("enddate" to window.second.epochSecond.toString())
+                    add("startdate" to window.from.epochSecond.toString())
+                    add("enddate" to window.to.epochSecond.toString())
                     add("data_fields" to dataFields.joinToString(","))
                 },
             )
@@ -482,21 +485,6 @@ class KtorWithingsClient(
         from.atZone(ZoneOffset.UTC).toLocalDate() to to.minusNanos(1)
             .atZone(ZoneOffset.UTC).toLocalDate()
 
-    private fun sleepWindows(
-        from: Instant,
-        to: Instant
-    ): List<Pair<Instant, Instant>> {
-        val windows = mutableListOf<Pair<Instant, Instant>>()
-        var windowFrom = from
-        while (windowFrom.isBefore(to)) {
-            val windowTo =
-                listOf(windowFrom.plusSeconds(24 * 60 * 60), to).minOrNull()!!
-            windows.add(windowFrom to windowTo)
-            windowFrom = windowTo
-        }
-        return windows
-    }
-
     private fun measureEndpoint(): String =
         "${config.apiBaseUrl.trimEnd('/')}/v2/measure"
 
@@ -505,9 +493,6 @@ class KtorWithingsClient(
 
     private fun sleepEndpoint(): String =
         "${config.apiBaseUrl.trimEnd('/')}/v2/sleep"
-
-    private fun JsonObject.stringOrNull(key: String): String? =
-        this[key]?.jsonPrimitive?.contentOrNull
 
     private fun sign(parameters: Map<String, String>): String {
         val payload = parameters.toSortedMap().values.joinToString(",")

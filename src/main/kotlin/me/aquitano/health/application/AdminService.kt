@@ -44,7 +44,7 @@ class AdminService(
         val order = "desc"
         val cursor = params.cursor(sort, order)
         val limit = params.limit(QueryParamSpecs.adminLimit)
-        return dbQuery {
+        return suspendDbTransaction(db = database) {
             val page = ingestionRepository
                 .listBatches(status, from, to, keysetFetchLimit(limit), cursor)
                 .keysetPage(
@@ -104,7 +104,7 @@ class AdminService(
             params.boolean("includeSourcePayload", default = false)
         val includeNormalizedPayload =
             params.boolean("includeNormalizedPayload", default = false)
-        return dbQuery {
+        return suspendDbTransaction(db = database) {
             val batch = ingestionRepository.findBatchDetail(batchId)
                 ?: throw NotFoundException("Ingestion batch not found")
             val records = ingestionRepository.listRecordsForBatch(batchId)
@@ -148,10 +148,6 @@ class AdminService(
         }
     }
 
-    private suspend fun <T> dbQuery(block: () -> T): T =
-        suspendDbTransaction(db = database) {
-            block()
-        }
 }
 
 fun QueryParams.asMap(): Map<String, String?> {

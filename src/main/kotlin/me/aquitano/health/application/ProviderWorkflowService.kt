@@ -269,8 +269,8 @@ class ProviderWorkflowService(
 
     private fun ProviderSyncRequest.toDomain(now: Instant): DomainProviderSyncRequest {
         val issues = mutableListOf<ValidationIssue>()
-        val parsedFrom = from?.let { parseInstant("from", it, issues) }
-        val parsedTo = to?.let { parseInstant("to", it, issues) }
+        val parsedFrom = from?.let { parseInstant(it, "from", issues) }
+        val parsedTo = to?.let { parseInstant(it, "to", issues) }
 
         val resolvedFrom: Instant
         val resolvedTo: Instant
@@ -338,73 +338,10 @@ class ProviderWorkflowService(
         )
     }
 
-    private fun parseInstant(
-        field: String,
-        value: String,
-        issues: MutableList<ValidationIssue>
-    ): Instant? =
-        runCatching { Instant.parse(value) }.getOrElse {
-            issues.add(
-                ValidationIssue(
-                    field = field,
-                    code = ValidationIssueCodes.InvalidFormat,
-                    message = "must be an ISO-8601 instant",
-                )
-            )
-            null
-        }
-
     private fun randomState(): String {
         val bytes = ByteArray(32)
         random.nextBytes(bytes)
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
     }
 
-    private fun ProviderSyncSummary.toDto(): ProviderSyncResponse =
-        ProviderSyncResponse(
-            providerCode = providerCode,
-            providerInstanceId = providerInstanceId,
-            requestedFrom = requestedFrom.toString(),
-            requestedTo = requestedTo.toString(),
-            status = SyncStatus.fromStored(status),
-            batches = batches.map { it.toDto() },
-            emptyDataTypes = emptyDataTypes.map { it.toDto() },
-            errors = errors.map { it.toDto() },
-        )
-
-    private fun ProviderSyncBatch.toDto(): ProviderSyncBatchResponse =
-        ProviderSyncBatchResponse(
-            dataType = dataType,
-            batchId = batchId,
-            duplicateBatch = duplicateBatch,
-            recordsReceived = recordsReceived,
-            ingestionRecordsStored = ingestionRecordsStored,
-            metricsCreated = metricsCreated.counts,
-            duplicateMetricsSkipped = duplicateMetricsSkipped,
-            affectedStepSummaryDates = affectedStepSummaryDates,
-        )
-
-    private fun ProviderSyncError.toDto(): ProviderSyncErrorResponse =
-        ProviderSyncErrorResponse(
-            dataType = dataType,
-            code = code,
-            message = message,
-        )
-
-    private fun ProviderSyncEmptyDataType.toDto(): ProviderSyncEmptyDataTypeResponse =
-        ProviderSyncEmptyDataTypeResponse(
-            dataType = dataType,
-            pagesFetched = pagesFetched,
-            sourceRecordsReceived = sourceRecordsReceived,
-            normalizedRecords = normalizedRecords,
-        )
 }
-
-private fun syncRequestHash(request: ProviderSyncRequest): String =
-    idempotencyRequestHash(
-        request.providerInstanceId?.takeIf { it.isNotBlank() },
-        request.from,
-        request.to,
-        request.dataTypes?.distinct()?.idempotencyListPart(),
-        request.pageSize?.toString(),
-    )

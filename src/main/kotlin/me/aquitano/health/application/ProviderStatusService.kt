@@ -75,7 +75,6 @@ class ProviderStatusService(
             !configured -> ProviderNextAction.Configure
             !canSync && needsReauth -> ProviderNextAction.Reconnect
             !connected -> ProviderNextAction.Connect
-            !canSync -> ProviderNextAction.Reconnect
             else -> ProviderNextAction.Sync
         }
 
@@ -90,12 +89,6 @@ class ProviderStatusService(
             accounts = accountStatuses,
         )
     }
-
-    suspend fun accountStatusDto(
-        account: ProviderOAuthAccount,
-        now: Instant,
-        configured: Boolean,
-    ): ProviderAccountStatusResponse = account.toStatusDto(now, configured)
 
     private suspend fun ProviderOAuthAccount.toStatusDto(
         now: Instant,

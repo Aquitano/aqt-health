@@ -20,16 +20,7 @@ val GOOGLE_HEALTH_DEFAULT_DATA_TYPES = listOf(
     "body-fat",
 )
 
-data class GoogleHealthTokenSet(
-    val accessToken: String,
-    val refreshToken: String?,
-    val tokenType: String,
-    val expiresAt: Instant,
-    val scope: String,
-)
-
 data class GoogleHealthPage(
-    val dataType: String,
     val pageIndex: Int,
     val payload: JsonObject,
 )
@@ -38,11 +29,6 @@ data class GoogleHealthFetchResult(
     val dataType: String,
     val pages: List<GoogleHealthPage>,
     val dataPoints: List<JsonObject>,
-)
-
-data class GoogleHealthNormalizedBatch(
-    val sourcePayload: JsonObject,
-    val records: List<IngestionRecord>,
 )
 
 class GoogleHealthUnauthorizedException(message: String) :

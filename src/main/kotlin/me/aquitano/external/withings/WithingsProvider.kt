@@ -1,12 +1,14 @@
 package me.aquitano.external.withings
 
 import io.ktor.http.URLBuilder
+import me.aquitano.external.oauthConfigurationIssues
+import me.aquitano.external.persistOAuthConnection
+import me.aquitano.external.requireProviderConfigured
 import me.aquitano.health.application.providersync.ProviderSyncAdapter
 import me.aquitano.health.application.providersync.ProviderSyncPipeline
 import me.aquitano.health.domain.*
-import me.aquitano.health.infrastructure.config.WithingsConfig
+import me.aquitano.health.infrastructure.config.ProviderOAuthConfig
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
-import me.aquitano.health.infrastructure.security.TokenCipher
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.aquitano.health.infrastructure.logging.*
 import java.time.Instant
@@ -14,7 +16,7 @@ import java.time.Instant
 private val logger = KotlinLogging.logger {}
 
 class WithingsProvider(
-    private val config: WithingsConfig,
+    private val config: ProviderOAuthConfig,
     private val repository: ProviderOAuthRepository,
     private val client: WithingsClient,
     normalizer: WithingsNormalizer,
@@ -87,36 +89,18 @@ class WithingsProvider(
                 statusCode = 502,
             )
         val providerInstanceId = providerInstanceId(providerUserId)
-        val cipher = TokenCipher(config.tokenEncryptionKey)
-        repository.upsertAccount(
+        return persistOAuthConnection(
+            repository = repository,
+            config = config,
             providerCode = WITHINGS_PROVIDER_CODE,
             providerUserId = providerUserId,
             providerInstanceId = providerInstanceId,
-            accessTokenCiphertext = cipher.encrypt(tokens.accessToken),
-            refreshTokenCiphertext = cipher.encrypt(tokens.refreshToken),
-            tokenType = tokens.tokenType,
-            expiresAt = tokens.expiresAt,
-            scope = tokens.scope,
+            tokens = tokens.toRefreshedTokenSet(),
+            refreshToken = tokens.refreshToken,
+            scopeDelimiter = ",",
             now = now,
         )
-        logger.infoWithContext(
-            "provider_oauth_connected",
-            "provider" to WITHINGS_PROVIDER_CODE,
-            "providerInstanceId" to providerInstanceId,
-            "expiresAt" to tokens.expiresAt,
-            "scopeCount" to tokens.scope.split(",").count { it.isNotBlank() },
-        )
-        return ProviderConnection(
-            providerCode = WITHINGS_PROVIDER_CODE,
-            providerInstanceId = providerInstanceId,
-            connected = true,
-        )
     }
-
-    override suspend fun sync(
-        request: ProviderSyncRequest,
-        now: Instant
-    ): ProviderSyncSummary = syncPipeline.sync(syncAdapter, request, now)
 
     override suspend fun sync(
         request: ProviderSyncRequest,
@@ -124,25 +108,11 @@ class WithingsProvider(
         progress: me.aquitano.health.application.providersync.ProviderSyncProgressSink,
     ): ProviderSyncSummary = syncPipeline.sync(syncAdapter, request, now, progress)
 
-    private fun requireConfigured() {
-        val issues = configurationIssues()
-        if (issues.isNotEmpty()) {
-            throw ServerConfigurationException(
-                code = "withings_not_configured",
-                publicMessage = "Provider is not configured",
-                details = issues,
-            )
-        }
-    }
+    private fun requireConfigured() =
+        requireProviderConfigured("withings_not_configured", configurationIssues())
 
     private fun configurationIssues(): List<ValidationIssue> =
-        buildList {
-            if (config.clientId.isBlank()) add(ValidationIssue("withings.clientId"))
-            if (config.clientSecret.isBlank()) add(ValidationIssue("withings.clientSecret"))
-            if (config.redirectUri.isBlank()) add(ValidationIssue("withings.redirectUri"))
-            if (config.tokenEncryptionKey.isBlank()) add(ValidationIssue("withings.tokenEncryptionKey"))
-            if (config.apiBaseUrl.isBlank()) add(ValidationIssue("withings.apiBaseUrl"))
-        }
+        config.oauthConfigurationIssues("withings")
 
     private fun providerInstanceId(providerUserId: String): String =
         "withings-$providerUserId"

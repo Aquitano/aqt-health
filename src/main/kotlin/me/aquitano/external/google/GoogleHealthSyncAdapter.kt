@@ -1,16 +1,15 @@
 package me.aquitano.external.google
 
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
+import me.aquitano.health.application.providersync.PROVIDER_REQUEST_INTERVAL
+import me.aquitano.health.application.providersync.PROVIDER_SAFE_WINDOW
 import me.aquitano.health.application.providersync.ProviderFetchedBatch
-import me.aquitano.health.application.providersync.ProviderSourcePayloadContext
 import me.aquitano.health.application.providersync.ProviderSyncAdapter
 import me.aquitano.health.application.providersync.ProviderSyncItem
 import me.aquitano.health.application.providersync.ProviderSyncPlan
 import me.aquitano.health.application.providersync.RefreshedTokenSet
 import me.aquitano.health.application.providersync.SyncAccount
+import me.aquitano.health.application.providersync.SyncWindow
+import me.aquitano.health.application.providersync.syncWindows
 import me.aquitano.health.domain.ConflictException
 import me.aquitano.health.domain.ProviderSyncRequest
 import me.aquitano.health.domain.RequestValidationException
@@ -91,16 +90,7 @@ class GoogleHealthSyncAdapter(
         refreshToken: String,
         account: SyncAccount,
         now: Instant,
-    ): RefreshedTokenSet {
-        val tokens = client.refreshToken(refreshToken, now)
-        return RefreshedTokenSet(
-            accessToken = tokens.accessToken,
-            refreshToken = tokens.refreshToken,
-            tokenType = tokens.tokenType,
-            expiresAt = tokens.expiresAt,
-            scope = tokens.scope,
-        )
-    }
+    ): RefreshedTokenSet = client.refreshToken(refreshToken, now)
 
     override suspend fun fetch(
         accessToken: String,
@@ -125,16 +115,6 @@ class GoogleHealthSyncAdapter(
         )
     }
 
-    override fun sourcePayload(context: ProviderSourcePayloadContext): JsonObject =
-        buildJsonObject {
-            put("provider", GOOGLE_HEALTH_PROVIDER_CODE)
-            put("providerInstanceId", context.providerInstanceId)
-            put("requestedFrom", context.item.from.toString())
-            put("requestedTo", context.item.to.toString())
-            put("dataType", context.item.dataType)
-            put("pages", context.fetched.sourcePayload["pages"] ?: JsonArray(emptyList()))
-        }
-
     override fun batchExternalId(
         providerInstanceId: String,
         item: ProviderSyncItem,
@@ -157,28 +137,21 @@ class GoogleHealthSyncAdapter(
     private fun pageSizeFor(dataType: String, pageSize: Int): Int =
         if (dataType == "sleep") pageSize.coerceAtMost(25) else pageSize.coerceAtMost(10000)
 
+    // Heart-rate windows are one day, anchored to UTC midnight, so overlapping re-syncs (the
+    // scheduled lookback) produce identical batch external ids for elapsed days and dedupe
+    // against already-processed batches instead of re-fetching and re-ingesting hundreds of
+    // thousands of samples on every run. Only the current, still-open day window keeps a
+    // moving `to` and is re-ingested until the day completes.
     private fun syncWindows(
         dataType: String,
         from: Instant,
         to: Instant,
-    ): List<SyncWindow> {
-        val windowSize =
-            if (dataType == "heart-rate") Duration.ofDays(1) else PROVIDER_SAFE_WINDOW
-        val windows = mutableListOf<SyncWindow>()
-        // Heart-rate windows are anchored to UTC midnight so overlapping re-syncs (the
-        // scheduled lookback) produce identical batch external ids for elapsed days and
-        // dedupe against already-processed batches instead of re-fetching and re-ingesting
-        // hundreds of thousands of samples on every run. Only the current, still-open day
-        // window keeps a moving `to` and is re-ingested until the day completes.
-        var windowFrom =
-            if (dataType == "heart-rate") from.truncatedTo(ChronoUnit.DAYS) else from
-        while (windowFrom.isBefore(to)) {
-            val windowTo = listOf(windowFrom.plus(windowSize), to).minOrNull()!!
-            windows += SyncWindow(windowFrom, windowTo)
-            windowFrom = windowTo
+    ): List<SyncWindow> =
+        if (dataType == "heart-rate") {
+            syncWindows(from.truncatedTo(ChronoUnit.DAYS), to, Duration.ofDays(1))
+        } else {
+            syncWindows(from, to, PROVIDER_SAFE_WINDOW)
         }
-        return windows
-    }
 
     private fun batchExternalId(
         providerInstanceId: String,
@@ -186,12 +159,4 @@ class GoogleHealthSyncAdapter(
         from: Instant,
         to: Instant,
     ): String = "google-health:$providerInstanceId:$dataType:$from:$to"
-
-    private data class SyncWindow(
-        val from: Instant,
-        val to: Instant,
-    )
 }
-
-private val PROVIDER_SAFE_WINDOW: Duration = Duration.ofDays(31)
-private val PROVIDER_REQUEST_INTERVAL: Duration = Duration.ofMillis(500)

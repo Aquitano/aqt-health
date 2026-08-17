@@ -1,12 +1,19 @@
 package me.aquitano.health.application.providersync
 
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import me.aquitano.health.domain.ProviderSyncRequest
 import java.time.Duration
 import java.time.Instant
 
 interface ProviderSyncAdapter {
     val providerCode: String
+
+    /** Keys copied from the fetched batch's payload into the stored source payload. */
+    val passthroughPayloadKeys: List<String>
+        get() = listOf("pages")
     val defaultSyncFailureMessage: String
     val tokenRefreshFailureCode: String
     val tokenRefreshFailureMessage: String
@@ -38,7 +45,16 @@ interface ProviderSyncAdapter {
     ): ProviderFetchedBatch
 
     fun sourcePayload(context: ProviderSourcePayloadContext): JsonObject =
-        context.fetched.sourcePayload
+        buildJsonObject {
+            put("provider", providerCode)
+            put("providerInstanceId", context.providerInstanceId)
+            put("requestedFrom", context.item.from.toString())
+            put("requestedTo", context.item.to.toString())
+            put("dataType", context.item.dataType)
+            passthroughPayloadKeys.forEach { key ->
+                put(key, context.fetched.sourcePayload[key] ?: JsonArray(emptyList()))
+            }
+        }
 
     fun batchExternalId(
         providerInstanceId: String,
