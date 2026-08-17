@@ -373,22 +373,6 @@ class ReplayService(
         )
     }
 
-    private fun parseDate(
-        value: String,
-        field: String,
-        issues: MutableList<ValidationIssue>,
-    ): LocalDate? =
-        runCatching { LocalDate.parse(value) }.getOrElse {
-            issues.add(
-                ValidationIssue(
-                    field = field,
-                    code = ValidationIssueCodes.InvalidFormat,
-                    message = "must be an ISO-8601 date",
-                )
-            )
-            null
-        }
-
     private fun ReplayJobRecord.toDto(): ReplayJobStatusResponse =
         ReplayJobStatusResponse(
             jobId = id,

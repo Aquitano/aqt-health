@@ -2,6 +2,7 @@ package me.aquitano.health.application
 
 import me.aquitano.health.api.dto.*
 import me.aquitano.health.application.metric.common.QueryParams
+import me.aquitano.health.application.metric.common.toResponse
 import me.aquitano.health.domain.BodyMetricTypes
 import me.aquitano.health.domain.RequestValidationException
 import me.aquitano.health.domain.ValidationIssue
@@ -13,9 +14,6 @@ import me.aquitano.health.application.metric.scalar.ScalarSampleReadRepository
 import me.aquitano.health.application.metric.scalar.ScalarSampleRow
 import me.aquitano.health.application.metric.scalar.toScalarResponse
 import me.aquitano.health.application.metric.sleep.repository.SleepRepository
-import me.aquitano.health.application.metric.sleep.repository.SleepSessionRow
-import me.aquitano.health.application.metric.sleep.repository.SleepStageRow
-import me.aquitano.health.application.metric.common.repository.SourceMetadata
 import me.aquitano.health.domain.ScalarMetricTypes
 import me.aquitano.health.application.metric.common.repository.ReadFilters
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -47,21 +45,10 @@ class HealthDayModuleRegistry(
 ) {
     private val byName = modules.associateBy { it.name }
 
-    fun resolve(names: List<String>): List<HealthDayModule<*>> {
-        val unsupported = names.filterNot { it in byName.keys }
-        if (unsupported.isNotEmpty()) {
-            throw RequestValidationException(
-                unsupported.map {
-                    ValidationIssue(
-                        field = "modules",
-                        code = ValidationIssueCodes.UnsupportedValue,
-                        message = "unsupported module $it",
-                    )
-                }
-            )
-        }
-        return names.map { byName.getValue(it) }
-    }
+    // Callers pass wire names already validated against HealthDayModuleName, and the
+    // registry is constructed with exactly those modules.
+    fun resolve(names: List<String>): List<HealthDayModule<*>> =
+        names.map { byName.getValue(it) }
 }
 
 class HealthDayQueryService(
@@ -351,45 +338,3 @@ private fun buckets(context: HealthDayQueryContext): List<Pair<Instant, Instant>
     return result
 }
 
-private fun overlapSeconds(
-    start: Instant,
-    end: Instant,
-    windowStart: Instant,
-    windowEnd: Instant,
-): Long {
-    val clippedStart = maxOf(start, windowStart)
-    val clippedEnd = minOf(end, windowEnd)
-    return if (clippedStart.isBefore(clippedEnd)) {
-        Duration.between(clippedStart, clippedEnd).seconds
-    } else {
-        0
-    }
-}
-
-private fun SleepSessionRow.toResponse(
-    stagesBySession: Map<Int, List<SleepStageRow>>,
-    sourceMetadata: Map<Int, SourceMetadata>
-): SleepSessionResponse =
-    SleepSessionResponse(
-        id = id,
-        startAt = startAt,
-        endAt = endAt,
-        durationSeconds = durationSeconds,
-        stages = stagesBySession[id].orEmpty().map {
-            SleepStageResponse(
-                stage = it.stage,
-                startAt = it.startAt,
-                endAt = it.endAt,
-                durationSeconds = it.durationSeconds,
-            )
-        },
-        source = sourceMetadata[sourceInstanceId].toResponse(),
-    )
-
-private fun SourceMetadata?.toResponse(): SourceMetadataResponse? =
-    this?.let {
-        SourceMetadataResponse(
-            provider = it.provider,
-            providerInstanceId = it.providerInstanceId
-        )
-    }

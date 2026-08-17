@@ -5,8 +5,8 @@ import me.aquitano.health.infrastructure.database.toDbTimestamp
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertIgnore
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import me.aquitano.health.infrastructure.database.suspendDbTransaction
@@ -52,29 +52,8 @@ class ReplayJobRepository(private val database: Database) {
         idempotencyRequestHash: String? = null,
     ): ReplayJobCreateResult =
         suspendDbTransaction(db = database) {
-            if (idempotencyKey == null) {
-                ReplayJobsTable.insert {
-                    it[this.id] = id
-                    it[this.idempotencyKey] = null
-                    it[this.idempotencyRequestHash] = null
-                    it[this.scope] = scope
-                    it[this.metricTypes] = metricTypes?.joinToString(",")
-                    it[this.fromDate] = fromDate
-                    it[this.toDate] = toDate
-                    it[this.wipe] = wipe
-                    it[status] = "queued"
-                    it[totalItems] = 0
-                    it[completedItems] = 0
-                    it[recordsReplayed] = 0
-                    it[metricsWritten] = 0
-                    it[duplicatesSkipped] = 0
-                    it[mappingFailures] = 0
-                    it[createdAt] = now.toDbTimestamp()
-                    it[updatedAt] = now.toDbTimestamp()
-                }
-                return@suspendDbTransaction ReplayJobCreateResult(getByIdInTransaction(id)!!, created = true)
-            }
-
+            // insertIgnore behaves like a plain insert when no unique-key conflict exists,
+            // which is always the case for the non-idempotent path (fresh id, null key).
             val inserted = ReplayJobsTable.insertIgnore {
                 it[this.id] = id
                 it[this.idempotencyKey] = idempotencyKey
@@ -94,7 +73,8 @@ class ReplayJobRepository(private val database: Database) {
                 it[createdAt] = now.toDbTimestamp()
                 it[updatedAt] = now.toDbTimestamp()
             }.insertedCount > 0
-            val record = getByIdInTransaction(id) ?: findByIdempotencyKeyInTransaction(idempotencyKey)!!
+            val record = getByIdInTransaction(id)
+                ?: findByIdempotencyKeyInTransaction(idempotencyKey!!)!!
             ReplayJobCreateResult(record, created = inserted)
         }
 
@@ -172,14 +152,12 @@ class ReplayJobRepository(private val database: Database) {
 
     suspend fun markInterruptedUnfinishedJobs(now: Instant) {
         suspendDbTransaction(db = database) {
-            listOf("queued", "running").forEach { interruptedStatus ->
-                ReplayJobsTable.update({ ReplayJobsTable.status eq interruptedStatus }) {
-                    it[status] = "failed"
-                    it[errorMessage] =
-                        "Backend stopped before the replay job finished. Replay is idempotent; start a new job to continue."
-                    it[updatedAt] = now.toDbTimestamp()
-                    it[finishedAt] = now.toDbTimestamp()
-                }
+            ReplayJobsTable.update({ ReplayJobsTable.status inList listOf("queued", "running") }) {
+                it[status] = "failed"
+                it[errorMessage] =
+                    "Backend stopped before the replay job finished. Replay is idempotent; start a new job to continue."
+                it[updatedAt] = now.toDbTimestamp()
+                it[finishedAt] = now.toDbTimestamp()
             }
         }
     }

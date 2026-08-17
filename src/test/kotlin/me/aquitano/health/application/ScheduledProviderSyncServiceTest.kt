@@ -1,5 +1,6 @@
 package me.aquitano.health.application
 
+import me.aquitano.health.application.providersync.ProviderSyncProgressSink
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -156,6 +157,7 @@ class ScheduledProviderSyncServiceTest {
         override suspend fun sync(
             request: ProviderSyncRequest,
             now: Instant,
+            progress: ProviderSyncProgressSink,
         ): ProviderSyncSummary = throw failure
     }
 
@@ -188,6 +190,7 @@ class ScheduledProviderSyncServiceTest {
         override suspend fun sync(
             request: ProviderSyncRequest,
             now: Instant,
+            progress: ProviderSyncProgressSink,
         ): ProviderSyncSummary {
             syncCalls.incrementAndGet()
             started.complete(Unit)

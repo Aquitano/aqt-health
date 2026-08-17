@@ -1,12 +1,14 @@
 package me.aquitano.external.google
 
 import io.ktor.http.*
+import me.aquitano.external.oauthConfigurationIssues
+import me.aquitano.external.persistOAuthConnection
+import me.aquitano.external.requireProviderConfigured
 import me.aquitano.health.application.providersync.ProviderSyncAdapter
 import me.aquitano.health.application.providersync.ProviderSyncPipeline
 import me.aquitano.health.domain.*
-import me.aquitano.health.infrastructure.config.GoogleHealthConfig
+import me.aquitano.health.infrastructure.config.ProviderOAuthConfig
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
-import me.aquitano.health.infrastructure.security.TokenCipher
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.aquitano.health.infrastructure.logging.*
 import java.time.Instant
@@ -14,7 +16,7 @@ import java.time.Instant
 private val logger = KotlinLogging.logger {}
 
 class GoogleHealthProvider(
-    private val config: GoogleHealthConfig,
+    private val config: ProviderOAuthConfig,
     private val repository: ProviderOAuthRepository,
     private val client: GoogleHealthClient,
     normalizer: GoogleHealthNormalizer,
@@ -65,11 +67,21 @@ class GoogleHealthProvider(
         now: Instant
     ): ProviderConnection {
         requireConfigured()
-        val tokens = providerCall(
-            fallbackCode = "google_health_token_exchange_failed",
-            fallbackMessage = "Google OAuth token exchange failed",
-        ) {
+        val tokens = try {
             client.exchangeCode(code, now)
+        } catch (exception: GoogleHealthHttpException) {
+            logger.warnWithContext(
+                "provider_token_exchange_failed",
+                "provider" to GOOGLE_HEALTH_PROVIDER_CODE,
+                "errorCode" to exception.code,
+                throwable = exception,
+            )
+            throw UpstreamProviderException(
+                code = exception.code,
+                message = exception.message ?: "Google OAuth token exchange failed",
+                statusCode = 502,
+                cause = exception,
+            )
         }
         val refreshToken = tokens.refreshToken
             ?: throw UpstreamProviderException(
@@ -77,36 +89,18 @@ class GoogleHealthProvider(
                 message = "Google OAuth response did not include a refresh token; start OAuth again with prompt=consent",
                 statusCode = 502,
             )
-        val cipher = TokenCipher(config.tokenEncryptionKey)
-        repository.upsertAccount(
+        return persistOAuthConnection(
+            repository = repository,
+            config = config,
             providerCode = GOOGLE_HEALTH_PROVIDER_CODE,
             providerUserId = defaultProviderInstanceId,
             providerInstanceId = defaultProviderInstanceId,
-            accessTokenCiphertext = cipher.encrypt(tokens.accessToken),
-            refreshTokenCiphertext = cipher.encrypt(refreshToken),
-            tokenType = tokens.tokenType,
-            expiresAt = tokens.expiresAt,
-            scope = tokens.scope,
+            tokens = tokens,
+            refreshToken = refreshToken,
+            scopeDelimiter = " ",
             now = now,
         )
-        logger.infoWithContext(
-            "provider_oauth_connected",
-            "provider" to GOOGLE_HEALTH_PROVIDER_CODE,
-            "providerInstanceId" to defaultProviderInstanceId,
-            "expiresAt" to tokens.expiresAt,
-            "scopeCount" to tokens.scope.split(" ").count { it.isNotBlank() },
-        )
-        return ProviderConnection(
-            providerCode = GOOGLE_HEALTH_PROVIDER_CODE,
-            providerInstanceId = defaultProviderInstanceId,
-            connected = true,
-        )
     }
-
-    override suspend fun sync(
-        request: ProviderSyncRequest,
-        now: Instant,
-    ): ProviderSyncSummary = syncPipeline.sync(syncAdapter, request, now)
 
     override suspend fun sync(
         request: ProviderSyncRequest,
@@ -114,58 +108,9 @@ class GoogleHealthProvider(
         progress: me.aquitano.health.application.providersync.ProviderSyncProgressSink,
     ): ProviderSyncSummary = syncPipeline.sync(syncAdapter, request, now, progress)
 
-    private fun requireConfigured() {
-        val issues = configurationIssues()
-        if (issues.isNotEmpty()) {
-            throw ServerConfigurationException(
-                code = "google_health_not_configured",
-                publicMessage = "Provider is not configured",
-                details = issues,
-            )
-        }
-    }
+    private fun requireConfigured() =
+        requireProviderConfigured("google_health_not_configured", configurationIssues())
 
     private fun configurationIssues(): List<ValidationIssue> =
-        buildList {
-            if (config.clientId.isBlank()) add(ValidationIssue("googleHealth.clientId"))
-            if (config.clientSecret.isBlank()) add(ValidationIssue("googleHealth.clientSecret"))
-            if (config.redirectUri.isBlank()) add(ValidationIssue("googleHealth.redirectUri"))
-            if (config.tokenEncryptionKey.isBlank()) add(ValidationIssue("googleHealth.tokenEncryptionKey"))
-        }
-
-    private suspend fun <T> providerCall(
-        fallbackCode: String,
-        fallbackMessage: String,
-        block: suspend () -> T,
-    ): T =
-        try {
-            block()
-        } catch (throwable: GoogleHealthHttpException) {
-            logger.warnWithContext(
-                "provider_token_exchange_failed",
-                "provider" to GOOGLE_HEALTH_PROVIDER_CODE,
-                "errorCode" to throwable.code,
-                throwable = throwable,
-            )
-            throw UpstreamProviderException(
-                code = throwable.code,
-                message = throwable.message ?: fallbackMessage,
-                statusCode = 502,
-                cause = throwable,
-            )
-        } catch (throwable: GoogleHealthUnauthorizedException) {
-            logger.warnWithContext(
-                "provider_token_exchange_failed",
-                "provider" to GOOGLE_HEALTH_PROVIDER_CODE,
-                "errorCode" to fallbackCode,
-                throwable = throwable,
-            )
-            throw UpstreamProviderException(
-                code = fallbackCode,
-                message = throwable.message ?: fallbackMessage,
-                statusCode = 502,
-                cause = throwable,
-            )
-        }
-
+        config.oauthConfigurationIssues("googleHealth")
 }

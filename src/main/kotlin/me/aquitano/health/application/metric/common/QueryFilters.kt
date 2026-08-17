@@ -13,20 +13,10 @@ internal fun QueryParams.readFilters(
     sortSpec: EnumParamSpec,
     latestSupported: Boolean,
 ): ReadFilters {
+    if (!latestSupported) rejectLatest()
     val latest = boolean(QueryParamSpecs.latest)
-    if (latest && !latestSupported) {
-        throw RequestValidationException(
-            listOf(
-                ValidationIssue(
-                    field = "latest",
-                    code = ValidationIssueCodes.UnsupportedValue,
-                    message = "latest is not supported for this endpoint",
-                )
-            )
-        )
-    }
     if (latest) {
-        validateLatestOverrides()
+        rejectLatestOverrides()
     }
     val from = instant("from")
     val to = instant("to")
@@ -80,7 +70,7 @@ internal fun QueryParams.dailyReadFilters(now: Instant): DailyReadFilters {
 }
 
 internal fun QueryParams.dailyLatestReadFilters(now: Instant): DailyReadFilters {
-    rejectLatestEndpointOverrides()
+    rejectLatestOverrides(message = "is not supported for latest endpoints")
     val (fromDate, toDate) = dailyDateRange(now)
     return DailyReadFilters(
         fromDate = fromDate,

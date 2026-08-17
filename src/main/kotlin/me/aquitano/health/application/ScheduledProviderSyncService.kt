@@ -287,37 +287,6 @@ class ScheduledProviderSyncService(
         return value
     }
 
-    private fun ProviderSyncSummary.toDto(): ProviderSyncResponse =
-        ProviderSyncResponse(
-            providerCode = providerCode,
-            providerInstanceId = providerInstanceId,
-            requestedFrom = requestedFrom.toString(),
-            requestedTo = requestedTo.toString(),
-            status = SyncStatus.fromStored(status),
-            batches = batches.map { it.toDto() },
-            emptyDataTypes = emptyDataTypes.map { it.toDto() },
-            errors = errors.map { ProviderSyncErrorResponse(it.dataType, it.code, it.message) },
-        )
-
-    private fun ProviderSyncBatch.toDto(): ProviderSyncBatchResponse =
-        ProviderSyncBatchResponse(
-            dataType = dataType,
-            batchId = batchId,
-            duplicateBatch = duplicateBatch,
-            recordsReceived = recordsReceived,
-            ingestionRecordsStored = ingestionRecordsStored,
-            metricsCreated = metricsCreated.counts,
-            duplicateMetricsSkipped = duplicateMetricsSkipped,
-            affectedStepSummaryDates = affectedStepSummaryDates,
-        )
-
-    private fun ProviderSyncEmptyDataType.toDto(): ProviderSyncEmptyDataTypeResponse =
-        ProviderSyncEmptyDataTypeResponse(
-            dataType = dataType,
-            pagesFetched = pagesFetched,
-            sourceRecordsReceived = sourceRecordsReceived,
-            normalizedRecords = normalizedRecords,
-        )
 }
 
 object ScheduledSyncPolicy {

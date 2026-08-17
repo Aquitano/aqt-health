@@ -181,26 +181,23 @@ internal fun ApplicationCall.queryParams(): QueryParams =
         request.queryParameters.entries()
             .associate { it.key to it.value.firstOrNull() })
 
-internal fun ApplicationCall.metricTypePath(): String {
-    val metricType = parameters["metricType"]
-    if (metricType.isNullOrBlank()) {
-        throw RequestValidationException(
-            listOf(
-                ValidationIssue(
-                    field = "metricType",
-                    code = ValidationIssueCodes.InvalidFormat,
-                    message = "must not be blank",
-                )
-            )
-        )
-    }
-    return metricType
-}
+internal fun ApplicationCall.metricTypePath(): String =
+    requiredPathParam(
+        "metricType",
+        code = ValidationIssueCodes.InvalidFormat,
+        message = "must not be blank",
+    )
 
-internal fun ApplicationCall.requiredPathParam(name: String): String {
+internal fun ApplicationCall.requiredPathParam(
+    name: String,
+    code: String = ValidationIssueCodes.Required,
+    message: String = "is required",
+): String {
     val value = parameters[name]
     if (value.isNullOrBlank()) {
-        throw RequestValidationException(listOf(ValidationIssue(field = name)))
+        throw RequestValidationException(
+            listOf(ValidationIssue(field = name, code = code, message = message))
+        )
     }
     return value
 }
@@ -208,18 +205,9 @@ internal fun ApplicationCall.requiredPathParam(name: String): String {
 internal fun ApplicationCall.idempotencyKey(): String? =
     request.headers["Idempotency-Key"]?.trim()?.takeIf { it.isNotEmpty() }
 
-internal fun ApplicationCall.providerCode(): String {
-    val code = parameters["providerCode"]
-    if (code.isNullOrBlank()) {
-        throw RequestValidationException(
-            listOf(
-                ValidationIssue(
-                    field = "providerCode",
-                    code = ValidationIssueCodes.InvalidFormat,
-                    message = "must not be blank",
-                )
-            )
-        )
-    }
-    return code
-}
+internal fun ApplicationCall.providerCode(): String =
+    requiredPathParam(
+        "providerCode",
+        code = ValidationIssueCodes.InvalidFormat,
+        message = "must not be blank",
+    )

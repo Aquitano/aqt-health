@@ -149,65 +149,36 @@ internal fun validationErrorExample(): ExampleObject =
         ),
     )
 
-internal fun unauthorizedErrorExample(): ExampleObject =
+private fun errorExample(summary: String, code: String, message: String): ExampleObject =
     jsonExample(
-        summary = "Unauthorized",
+        summary = summary,
         value = ErrorResponse(
             ErrorBody(
-                code = "unauthorized",
-                message = "Missing or invalid API key",
+                code = code,
+                message = message,
                 requestId = ExampleRequestId,
             )
         ),
     )
+
+internal fun unauthorizedErrorExample(): ExampleObject =
+    errorExample("Unauthorized", "unauthorized", "Missing or invalid API key")
 
 internal fun notFoundErrorExample(): ExampleObject =
-    jsonExample(
-        summary = "Not found",
-        value = ErrorResponse(
-            ErrorBody(
-                code = "not_found",
-                message = "Provider '$WITHINGS_PROVIDER_CODE' not found",
-                requestId = ExampleRequestId,
-            )
-        ),
-    )
+    errorExample("Not found", "not_found", "Provider '$WITHINGS_PROVIDER_CODE' not found")
 
 internal fun conflictErrorExample(): ExampleObject =
-    jsonExample(
-        summary = "Conflict",
-        value = ErrorResponse(
-            ErrorBody(
-                code = "ingestion_batch_in_progress",
-                message = "Batch '$ExampleBatchExternalId' already exists with status 'accepted'",
-                requestId = ExampleRequestId,
-            )
-        ),
+    errorExample(
+        "Conflict",
+        "ingestion_batch_in_progress",
+        "Batch '$ExampleBatchExternalId' already exists with status 'accepted'",
     )
 
 internal fun upstreamErrorExample(): ExampleObject =
-    jsonExample(
-        summary = "Upstream provider failure",
-        value = ErrorResponse(
-            ErrorBody(
-                code = "upstream_unavailable",
-                message = "Provider request failed",
-                requestId = ExampleRequestId,
-            )
-        ),
-    )
+    errorExample("Upstream provider failure", "upstream_unavailable", "Provider request failed")
 
 internal fun internalErrorExample(): ExampleObject =
-    jsonExample(
-        summary = "Internal server error",
-        value = ErrorResponse(
-            ErrorBody(
-                code = "internal_error",
-                message = "Unexpected server error",
-                requestId = ExampleRequestId,
-            )
-        ),
-    )
+    errorExample("Internal server error", "internal_error", "Unexpected server error")
 
 private inline fun <reified T> jsonExample(
     summary: String,

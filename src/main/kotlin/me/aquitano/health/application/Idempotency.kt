@@ -1,6 +1,16 @@
 package me.aquitano.health.application
 
+import me.aquitano.health.api.dto.ProviderSyncRequest
 import java.security.MessageDigest
+
+internal fun syncRequestHash(request: ProviderSyncRequest): String =
+    idempotencyRequestHash(
+        request.providerInstanceId?.takeIf { it.isNotBlank() },
+        request.from,
+        request.to,
+        request.dataTypes?.distinct()?.idempotencyListPart(),
+        request.pageSize?.toString(),
+    )
 
 internal fun idempotencyRequestHash(vararg parts: String?): String {
     val digest = MessageDigest.getInstance("SHA-256")

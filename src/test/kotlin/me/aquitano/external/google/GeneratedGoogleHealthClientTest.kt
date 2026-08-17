@@ -1,5 +1,6 @@
 package me.aquitano.external.google
 
+import me.aquitano.health.application.providersync.RefreshedTokenSet
 import com.google.api.gax.rpc.ApiException
 import com.google.api.gax.rpc.StatusCode
 import com.google.devicesandservices.health.v4.DataPoint
@@ -165,8 +166,8 @@ class GeneratedGoogleHealthClientTest {
     }
 
     private class FakeOAuthClient : GoogleHealthClient {
-        override suspend fun exchangeCode(code: String, now: Instant): GoogleHealthTokenSet = error("not used")
-        override suspend fun refreshToken(refreshToken: String, now: Instant): GoogleHealthTokenSet = error("not used")
+        override suspend fun exchangeCode(code: String, now: Instant): RefreshedTokenSet = error("not used")
+        override suspend fun refreshToken(refreshToken: String, now: Instant): RefreshedTokenSet = error("not used")
         override suspend fun fetchDataPoints(
             accessToken: String,
             dataType: String,

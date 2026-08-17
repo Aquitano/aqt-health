@@ -12,20 +12,4 @@ class ApiKeyHasher {
             )
         }
     }
-
-    fun matches(apiKey: String, expectedHash: String): Boolean =
-        constantTimeEquals(hash(apiKey), expectedHash)
-
-    private fun constantTimeEquals(left: String, right: String): Boolean {
-        val leftBytes = left.toByteArray(Charsets.UTF_8)
-        val rightBytes = right.toByteArray(Charsets.UTF_8)
-        var result = leftBytes.size xor rightBytes.size
-        val max = maxOf(leftBytes.size, rightBytes.size)
-        for (index in 0 until max) {
-            val leftByte = leftBytes.getOrNull(index) ?: 0
-            val rightByte = rightBytes.getOrNull(index) ?: 0
-            result = result or (leftByte.toInt() xor rightByte.toInt())
-        }
-        return result == 0
-    }
 }

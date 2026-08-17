@@ -1,5 +1,6 @@
 package me.aquitano.external.google
 
+import me.aquitano.health.application.providersync.RefreshedTokenSet
 import me.aquitano.health.infrastructure.time.UtcClock
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.*
@@ -15,7 +16,7 @@ import me.aquitano.health.domain.ProviderSyncRequest
 import me.aquitano.health.domain.ServerConfigurationException
 import me.aquitano.health.domain.UpstreamProviderException
 import me.aquitano.health.infrastructure.config.DatabaseConfig
-import me.aquitano.health.infrastructure.config.GoogleHealthConfig
+import me.aquitano.health.infrastructure.config.ProviderOAuthConfig
 import me.aquitano.health.infrastructure.database.DatabaseFactory
 import me.aquitano.health.infrastructure.repositories.IngestionRepository
 import me.aquitano.health.infrastructure.repositories.PendingDerivedRebuildRepository
@@ -550,7 +551,7 @@ class GoogleHealthProviderTest {
             dbPath
         )
         val now: Instant = Instant.parse("2026-04-20T10:00:00Z")
-        val config = GoogleHealthConfig(
+        val config = ProviderOAuthConfig(
             clientId = "client-id",
             clientSecret = clientSecret,
             redirectUri = "http://localhost:8080/api/v2/providers/google-health/oauth/callback",
@@ -628,12 +629,12 @@ class GoogleHealthProviderTest {
         var nextRefreshFailure: RuntimeException? = null
         var nextFetchFailure: RuntimeException? = null
 
-        override suspend fun exchangeCode(code: String, now: Instant): GoogleHealthTokenSet {
+        override suspend fun exchangeCode(code: String, now: Instant): RefreshedTokenSet {
             nextExchangeFailure?.let {
                 nextExchangeFailure = null
                 throw it
             }
-            return GoogleHealthTokenSet(
+            return RefreshedTokenSet(
                 accessToken = "access-from-code",
                 refreshToken = "refresh-from-code",
                 tokenType = "Bearer",
@@ -642,13 +643,13 @@ class GoogleHealthProviderTest {
             )
         }
 
-        override suspend fun refreshToken(refreshToken: String, now: Instant): GoogleHealthTokenSet {
+        override suspend fun refreshToken(refreshToken: String, now: Instant): RefreshedTokenSet {
             refreshCalls += 1
             nextRefreshFailure?.let {
                 nextRefreshFailure = null
                 throw it
             }
-            return GoogleHealthTokenSet(
+            return RefreshedTokenSet(
                 accessToken = refreshedAccessToken,
                 refreshToken = refreshToken,
                 tokenType = "Bearer",
@@ -705,7 +706,7 @@ class GoogleHealthProviderTest {
         }
         return GoogleHealthFetchResult(
             dataType = dataType,
-            pages = listOf(GoogleHealthPage(dataType, 0, payload)),
+            pages = listOf(GoogleHealthPage(0, payload)),
             dataPoints = listOf(point),
         )
     }

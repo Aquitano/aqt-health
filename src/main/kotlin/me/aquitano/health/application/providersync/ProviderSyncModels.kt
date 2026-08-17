@@ -66,7 +66,12 @@ data class ProviderSourcePayloadContext(
     val providerInstanceId: String,
     val item: ProviderSyncItem,
     val fetched: ProviderFetchedBatch,
-    val now: Instant,
+)
+
+/** Normalizer hand-off: raw source payload plus the records mapped from it. */
+data class NormalizedProviderBatch(
+    val sourcePayload: JsonObject,
+    val records: List<IngestionRecord>,
 )
 
 data class ExistingProviderBatch(

@@ -55,8 +55,6 @@ object CardiovascularMetricTypes {
     const val PULSE_WAVE_VELOCITY = "pulse_wave_velocity"
     const val VASCULAR_AGE = "vascular_age"
     const val STANDING_HEART_RATE = "standing_heart_rate"
-
-    val supported = setOf(PULSE_WAVE_VELOCITY, VASCULAR_AGE, STANDING_HEART_RATE)
 }
 
 object HeartRateContexts {
@@ -67,12 +65,6 @@ object HeartRateContexts {
 object RespiratoryRateContexts {
     val supported =
         setOf("sleep", "resting", "general", "unknown")
-}
-
-object HrvMetricTypes {
-    const val RMSSD = "rmssd"
-
-    val supported = setOf(RMSSD)
 }
 
 object HrvContexts {

@@ -8,7 +8,6 @@ import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertIgnore
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import me.aquitano.health.infrastructure.database.suspendDbTransaction
@@ -66,30 +65,8 @@ class ProviderSyncJobRepository(private val database: Database) {
         idempotencyRequestHash: String? = null,
     ): ProviderSyncJobCreateResult =
         suspendDbTransaction(db = database) {
-            if (idempotencyKey == null) {
-                ProviderSyncJobsTable.insert {
-                    it[this.id] = id
-                    it[this.providerCode] = providerCode
-                    it[this.idempotencyKey] = null
-                    it[this.idempotencyRequestHash] = null
-                    it[this.providerInstanceId] = providerInstanceId
-                    it[this.requestedFrom] = requestedFrom.toDbTimestamp()
-                    it[this.requestedTo] = requestedTo.toDbTimestamp()
-                    it[this.dataTypes] = dataTypes?.let(::encodeDataTypes)
-                    it[this.pageSize] = pageSize
-                    it[status] = "queued"
-                    it[totalItems] = 0
-                    it[completedItems] = 0
-                    it[batchesCount] = 0
-                    it[emptyCount] = 0
-                    it[errorCount] = 0
-                    it[restartCount] = 0
-                    it[createdAt] = now.toDbTimestamp()
-                    it[updatedAt] = now.toDbTimestamp()
-                }
-                return@suspendDbTransaction ProviderSyncJobCreateResult(getByIdInTransaction(id)!!, created = true)
-            }
-
+            // insertIgnore behaves like a plain insert when no unique-key conflict exists,
+            // which is always the case for the non-idempotent path (fresh id, null key).
             val inserted = ProviderSyncJobsTable.insertIgnore {
                 it[this.id] = id
                 it[this.providerCode] = providerCode
@@ -106,10 +83,12 @@ class ProviderSyncJobRepository(private val database: Database) {
                 it[batchesCount] = 0
                 it[emptyCount] = 0
                 it[errorCount] = 0
+                it[restartCount] = 0
                 it[createdAt] = now.toDbTimestamp()
                 it[updatedAt] = now.toDbTimestamp()
             }.insertedCount > 0
-            val record = getByIdInTransaction(id) ?: findByIdempotencyKeyInTransaction(providerCode, idempotencyKey)!!
+            val record = getByIdInTransaction(id)
+                ?: findByIdempotencyKeyInTransaction(providerCode, idempotencyKey!!)!!
             ProviderSyncJobCreateResult(record, created = inserted)
         }
 

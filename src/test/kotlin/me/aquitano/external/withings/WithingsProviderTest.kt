@@ -16,7 +16,7 @@ import me.aquitano.health.domain.ProviderSyncRequest
 import me.aquitano.health.domain.RequestValidationException
 import me.aquitano.health.domain.UpstreamProviderException
 import me.aquitano.health.infrastructure.config.DatabaseConfig
-import me.aquitano.health.infrastructure.config.WithingsConfig
+import me.aquitano.health.infrastructure.config.ProviderOAuthConfig
 import me.aquitano.health.infrastructure.database.DatabaseFactory
 import me.aquitano.health.infrastructure.repositories.IngestionRepository
 import me.aquitano.health.infrastructure.repositories.PendingDerivedRebuildRepository
@@ -421,7 +421,7 @@ class WithingsProviderTest {
         val dbPath: DatabaseConfig = PostgresTestDatabase.config(),
         val now: Instant = Instant.parse("2026-04-20T10:00:00Z"),
     ) {
-        val config = WithingsConfig(
+        val config = ProviderOAuthConfig(
             clientId = "client-id",
             clientSecret = "client-secret",
             redirectUri = "http://localhost:8080/api/v2/providers/withings/oauth/callback",

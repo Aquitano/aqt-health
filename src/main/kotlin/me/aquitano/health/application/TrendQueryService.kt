@@ -29,7 +29,7 @@ class TrendQueryService(
     suspend fun dashboardTrends(
         params: QueryParams,
         now: Instant,
-    ): DashboardTrendsResponse = dbQuery {
+    ): DashboardTrendsResponse = suspendDbTransaction(db = database) {
         val periodDays = params.optional("periodDays")?.toIntOrNull()?.coerceIn(1, 90) ?: 7
         val toDate = params.date("toDate") ?: now.utcDate()
         val fromDate = toDate.minusDays(periodDays.toLong() - 1)
@@ -201,6 +201,4 @@ class TrendQueryService(
             },
         )
 
-    private suspend fun <T> dbQuery(block: suspend () -> T): T =
-        suspendDbTransaction(db = database) { block() }
 }

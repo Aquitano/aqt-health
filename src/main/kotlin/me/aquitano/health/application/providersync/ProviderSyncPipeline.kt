@@ -158,7 +158,6 @@ class ProviderSyncPipeline(
                         providerInstanceId = account.providerInstanceId,
                         item = item,
                         fetched = fetched,
-                        now = now,
                     )
                 )
                 val batch = store.ingest(

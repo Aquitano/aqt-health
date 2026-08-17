@@ -1,5 +1,6 @@
 package me.aquitano.external.withings
 
+import me.aquitano.health.application.providersync.RefreshedTokenSet
 import kotlinx.serialization.json.JsonObject
 import java.time.Instant
 
@@ -19,12 +20,6 @@ val WITHINGS_DEFAULT_DATA_TYPES = listOf(
 )
 
 val WITHINGS_MEASURE_TYPES_ALL_LISTED = listOf(
-    1, 4, 5, 6, 8, 9, 10, 11, 12, 54, 71, 73, 76, 77, 88, 91, 123, 130, 135,
-    136, 137, 138, 139, 155, 167, 168, 169, 170, 173, 174, 175, 196, 226, 227,
-    229,
-)
-
-val WITHINGS_MEASURE_TYPES_NORMALIZED = listOf(
     1, 4, 5, 6, 8, 9, 10, 11, 12, 54, 71, 73, 76, 77, 88, 91, 123, 130, 135,
     136, 137, 138, 139, 155, 167, 168, 169, 170, 173, 174, 175, 196, 226, 227,
     229,
@@ -113,7 +108,16 @@ data class WithingsTokenSet(
     val tokenType: String,
     val expiresAt: Instant,
     val scope: String,
-)
+) {
+    fun toRefreshedTokenSet(): RefreshedTokenSet =
+        RefreshedTokenSet(
+            accessToken = accessToken,
+            refreshToken = refreshToken,
+            tokenType = tokenType,
+            expiresAt = expiresAt,
+            scope = scope,
+        )
+}
 
 data class WithingsPage(
     val endpoint: String,
@@ -126,11 +130,6 @@ data class WithingsFetchResult(
     val dataType: String,
     val pages: List<WithingsPage>,
     val records: List<JsonObject>,
-)
-
-data class WithingsNormalizedBatch(
-    val sourcePayload: JsonObject,
-    val records: List<me.aquitano.health.api.dto.IngestionRecord>,
 )
 
 class WithingsHttpException(

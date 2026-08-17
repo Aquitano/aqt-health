@@ -5,19 +5,21 @@ import io.ktor.client.call.*
 import io.ktor.client.request.forms.*
 import io.ktor.http.*
 import kotlinx.serialization.json.*
-import me.aquitano.health.infrastructure.config.GoogleHealthConfig
+import me.aquitano.health.application.providersync.RefreshedTokenSet
+import me.aquitano.health.infrastructure.config.ProviderOAuthConfig
 import me.aquitano.health.shared.AppJson
 import me.aquitano.health.shared.formParameters
+import me.aquitano.health.shared.stringOrNull
 import java.time.Instant
 
 internal const val MAX_GOOGLE_HEALTH_PAGES = 500
 
 interface GoogleHealthOAuthClient {
-    suspend fun exchangeCode(code: String, now: Instant): GoogleHealthTokenSet
+    suspend fun exchangeCode(code: String, now: Instant): RefreshedTokenSet
     suspend fun refreshToken(
         refreshToken: String,
         now: Instant
-    ): GoogleHealthTokenSet
+    ): RefreshedTokenSet
 }
 
 interface GoogleHealthClient : GoogleHealthOAuthClient {
@@ -32,12 +34,12 @@ interface GoogleHealthClient : GoogleHealthOAuthClient {
 
 class KtorGoogleHealthOAuthClient(
     private val httpClient: HttpClient,
-    private val config: GoogleHealthConfig,
+    private val config: ProviderOAuthConfig,
 ) : GoogleHealthOAuthClient {
     override suspend fun exchangeCode(
         code: String,
         now: Instant
-    ): GoogleHealthTokenSet {
+    ): RefreshedTokenSet {
         val response = httpClient.submitForm(
             url = config.oauthTokenUrl,
             formParameters = formParameters(
@@ -59,7 +61,7 @@ class KtorGoogleHealthOAuthClient(
     override suspend fun refreshToken(
         refreshToken: String,
         now: Instant
-    ): GoogleHealthTokenSet {
+    ): RefreshedTokenSet {
         val response = httpClient.submitForm(
             url = config.oauthTokenUrl,
             formParameters = formParameters(
@@ -82,7 +84,7 @@ class KtorGoogleHealthOAuthClient(
         text: String,
         now: Instant,
         existingRefreshToken: String?,
-    ): GoogleHealthTokenSet {
+    ): RefreshedTokenSet {
         if (!status.isSuccess()) {
             val code = if (existingRefreshToken == null) {
                 "google_health_token_exchange_failed"
@@ -110,7 +112,7 @@ class KtorGoogleHealthOAuthClient(
         val expiresIn = body["expires_in"]?.jsonPrimitive?.longOrNull ?: 3600L
         val scope =
             body.stringOrNull("scope") ?: GOOGLE_HEALTH_SCOPES.joinToString(" ")
-        return GoogleHealthTokenSet(
+        return RefreshedTokenSet(
             accessToken = accessToken,
             refreshToken = refreshToken,
             tokenType = tokenType,
@@ -118,7 +120,4 @@ class KtorGoogleHealthOAuthClient(
             scope = scope,
         )
     }
-
-    private fun JsonObject.stringOrNull(key: String): String? =
-        this[key]?.jsonPrimitive?.contentOrNull
 }

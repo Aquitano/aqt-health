@@ -15,7 +15,7 @@ import io.ktor.http.content.OutgoingContent
 import io.ktor.http.parseQueryString
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.runBlocking
-import me.aquitano.health.infrastructure.config.WithingsConfig
+import me.aquitano.health.infrastructure.config.ProviderOAuthConfig
 import me.aquitano.health.shared.AppJson
 import java.time.Instant
 import kotlin.test.Test
@@ -362,8 +362,8 @@ class WithingsOAuthClientTest {
             else -> content.toString()
         }
 
-    private fun config(): WithingsConfig =
-        WithingsConfig(
+    private fun config(): ProviderOAuthConfig =
+        ProviderOAuthConfig(
             clientId = "client-id",
             clientSecret = "client-secret",
             redirectUri = "http://localhost:8080/api/v2/providers/withings/oauth/callback",

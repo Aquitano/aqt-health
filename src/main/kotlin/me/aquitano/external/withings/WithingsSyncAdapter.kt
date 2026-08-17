@@ -1,16 +1,14 @@
 package me.aquitano.external.withings
 
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
+import me.aquitano.health.application.providersync.PROVIDER_REQUEST_INTERVAL
+import me.aquitano.health.application.providersync.PROVIDER_SAFE_WINDOW
 import me.aquitano.health.application.providersync.ProviderFetchedBatch
-import me.aquitano.health.application.providersync.ProviderSourcePayloadContext
 import me.aquitano.health.application.providersync.ProviderSyncAdapter
 import me.aquitano.health.application.providersync.ProviderSyncItem
 import me.aquitano.health.application.providersync.ProviderSyncPlan
 import me.aquitano.health.application.providersync.RefreshedTokenSet
 import me.aquitano.health.application.providersync.SyncAccount
+import me.aquitano.health.application.providersync.syncWindows
 import me.aquitano.health.domain.ConflictException
 import me.aquitano.health.domain.ProviderSyncRequest
 import me.aquitano.health.domain.RequestValidationException
@@ -33,6 +31,7 @@ class WithingsSyncAdapter(
     override val needsReauthMessage: String = "Withings needs reconnect before syncing"
     override val recordEmptyDataTypes: Boolean = true
     override val providerRequestInterval: Duration = PROVIDER_REQUEST_INTERVAL
+    override val passthroughPayloadKeys: List<String> = listOf("pages", "records")
 
     override fun validate(request: ProviderSyncRequest): ProviderSyncPlan {
         val issues = mutableListOf<ValidationIssue>()
@@ -54,7 +53,7 @@ class WithingsSyncAdapter(
             requestedFrom = request.from,
             requestedTo = request.to,
             items = dataTypes.distinct().flatMap { dataType ->
-                syncWindows(request.from, request.to).map { window ->
+                syncWindows(request.from, request.to, PROVIDER_SAFE_WINDOW).map { window ->
                     ProviderSyncItem(
                         dataType = dataType,
                         from = window.from,
@@ -86,16 +85,7 @@ class WithingsSyncAdapter(
         refreshToken: String,
         account: SyncAccount,
         now: Instant,
-    ): RefreshedTokenSet {
-        val tokens = client.refreshToken(refreshToken, now)
-        return RefreshedTokenSet(
-            accessToken = tokens.accessToken,
-            refreshToken = tokens.refreshToken,
-            tokenType = tokens.tokenType,
-            expiresAt = tokens.expiresAt,
-            scope = tokens.scope,
-        )
-    }
+    ): RefreshedTokenSet = client.refreshToken(refreshToken, now).toRefreshedTokenSet()
 
     override suspend fun fetch(
         accessToken: String,
@@ -113,17 +103,6 @@ class WithingsSyncAdapter(
             records = normalized.records,
         )
     }
-
-    override fun sourcePayload(context: ProviderSourcePayloadContext): JsonObject =
-        buildJsonObject {
-            put("provider", WITHINGS_PROVIDER_CODE)
-            put("providerInstanceId", context.providerInstanceId)
-            put("requestedFrom", context.item.from.toString())
-            put("requestedTo", context.item.to.toString())
-            put("dataType", context.item.dataType)
-            put("pages", context.fetched.sourcePayload["pages"] ?: JsonArray(emptyList()))
-            put("records", context.fetched.sourcePayload["records"] ?: JsonArray(emptyList()))
-        }
 
     override fun batchExternalId(
         providerInstanceId: String,
@@ -206,26 +185,4 @@ class WithingsSyncAdapter(
         from: Instant,
         to: Instant,
     ): String = "withings:$providerInstanceId:$dataType:$from:$to"
-
-    private fun syncWindows(
-        from: Instant,
-        to: Instant,
-    ): List<SyncWindow> {
-        val windows = mutableListOf<SyncWindow>()
-        var windowFrom = from
-        while (windowFrom.isBefore(to)) {
-            val windowTo = listOf(windowFrom.plus(PROVIDER_SAFE_WINDOW), to).minOrNull()!!
-            windows += SyncWindow(windowFrom, windowTo)
-            windowFrom = windowTo
-        }
-        return windows
-    }
-
-    private data class SyncWindow(
-        val from: Instant,
-        val to: Instant,
-    )
 }
-
-private val PROVIDER_SAFE_WINDOW: Duration = Duration.ofDays(31)
-private val PROVIDER_REQUEST_INTERVAL: Duration = Duration.ofMillis(500)
