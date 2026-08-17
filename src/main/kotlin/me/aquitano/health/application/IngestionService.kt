@@ -126,7 +126,6 @@ class IngestionService(
                     sourceInstanceId = sourceInstance.id,
                     batchExternalId = validated.batchExternalId,
                     sourcePayloadJson = AppJson.encodeToString(validated.sourcePayload),
-                    normalizedPayloadJson = validated.normalizedPayloadJson,
                     ingestedAt = validated.ingestedAt,
                     receivedAt = now,
                 )

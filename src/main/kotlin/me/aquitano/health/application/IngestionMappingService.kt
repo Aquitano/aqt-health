@@ -3,7 +3,6 @@ package me.aquitano.health.application
 import kotlinx.serialization.json.*
 import me.aquitano.health.api.dto.*
 import me.aquitano.health.domain.*
-import me.aquitano.health.shared.AppJson
 
 /**
  * Validates an incoming ingestion batch and maps each record DTO to its domain
@@ -60,26 +59,12 @@ class IngestionMappingService {
 
         if (issues.isNotEmpty()) throw RequestValidationException(issues)
 
-        val normalizedPayloadJson = AppJson.encodeToString(
-            buildJsonObject {
-                put("provider", provider)
-                put("providerInstanceId", providerInstanceId)
-                batchExternalId?.let { put("batchExternalId", it) }
-                put("ingestedAt", ingestedAt!!.toString())
-                put(
-                    "records",
-                    JsonArray(records.map { it.normalizedRecordJson })
-                )
-            },
-        )
-
         return ValidatedIngestionBatch(
             provider = provider!!,
             providerInstanceId = providerInstanceId!!,
             batchExternalId = batchExternalId,
             ingestedAt = ingestedAt!!,
             sourcePayload = sourcePayload,
-            normalizedPayloadJson = normalizedPayloadJson,
             records = records,
         )
     }

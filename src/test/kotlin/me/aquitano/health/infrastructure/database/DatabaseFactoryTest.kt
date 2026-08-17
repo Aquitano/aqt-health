@@ -194,7 +194,6 @@ class DatabaseFactoryTest {
                         source_instance_id,
                         batch_external_id,
                         source_payload_json,
-                        normalized_payload_json,
                         status,
                         ingested_at,
                         received_at,
@@ -206,7 +205,6 @@ class DatabaseFactoryTest {
                     VALUES (
                         1,
                         'bad-status',
-                        '{}',
                         '{}',
                         'done',
                         '2026-04-19T10:00:00Z',

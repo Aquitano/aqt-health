@@ -57,7 +57,6 @@ data class AdminBatchDetailRow(
     val processedAt: String?,
     val errorMessage: String?,
     val sourcePayloadJson: String,
-    val normalizedPayloadJson: String,
 )
 
 data class AdminIngestionRecordRow(
@@ -99,7 +98,6 @@ class IngestionRepository {
         sourceInstanceId: Int,
         batchExternalId: String?,
         sourcePayloadJson: String,
-        normalizedPayloadJson: String,
         ingestedAt: Instant,
         receivedAt: Instant,
     ): Int =
@@ -107,7 +105,6 @@ class IngestionRepository {
             it[this.sourceInstanceId] = sourceInstanceId
             it[this.batchExternalId] = batchExternalId
             it[this.sourcePayloadJson] = sourcePayloadJson
-            it[this.normalizedPayloadJson] = normalizedPayloadJson
             it[status] = "received"
             it[this.ingestedAt] = ingestedAt.toDbTimestamp()
             it[this.receivedAt] = receivedAt.toDbTimestamp()
@@ -260,7 +257,6 @@ class IngestionRepository {
                     processedAt = it[IngestionBatchesTable.processedAt]?.toApiString(),
                     errorMessage = it[IngestionBatchesTable.errorMessage],
                     sourcePayloadJson = it[IngestionBatchesTable.sourcePayloadJson],
-                    normalizedPayloadJson = it[IngestionBatchesTable.normalizedPayloadJson],
                 )
             }
             .singleOrNull()
