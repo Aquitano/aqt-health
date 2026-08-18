@@ -13,6 +13,7 @@ import me.aquitano.health.infrastructure.repositories.ACCOUNT_STATUS_DISCONNECTE
 import me.aquitano.health.infrastructure.repositories.ACCOUNT_STATUS_NEEDS_REAUTH
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthAccount
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
+import me.aquitano.health.shared.normalizeProviderCode
 import java.time.Instant
 
 class ProviderStatusService(
@@ -39,7 +40,7 @@ class ProviderStatusService(
     ): List<ProviderAccountStatusResponse> {
         val provider = providerRegistry.getProvider(providerCode)
             ?: throw NotFoundException("Provider '$providerCode' not found")
-        val normalizedCode = providerRegistry.normalize(providerCode)
+        val normalizedCode = normalizeProviderCode(providerCode)
         return providerOAuthRepository.accountsByProvider(normalizedCode)
             .map { it.toStatusDto(now, configured = provider.isConfigured()) }
     }
@@ -51,7 +52,7 @@ class ProviderStatusService(
     ): ProviderAccountStatusResponse {
         val provider = providerRegistry.getProvider(providerCode)
             ?: throw NotFoundException("Provider '$providerCode' not found")
-        val normalizedCode = providerRegistry.normalize(providerCode)
+        val normalizedCode = normalizeProviderCode(providerCode)
         val account = providerOAuthRepository.accountByProviderInstanceForStatus(
             providerCode = normalizedCode,
             providerInstanceId = providerInstanceId,

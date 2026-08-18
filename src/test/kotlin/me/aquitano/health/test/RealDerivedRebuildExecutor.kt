@@ -2,10 +2,10 @@ package me.aquitano.health.test
 
 import me.aquitano.health.application.DerivedRebuildExecutor
 import me.aquitano.health.application.DerivedRebuildModuleRegistry
-import me.aquitano.health.application.StepSummaryService
 import me.aquitano.health.application.TransactionalDerivedRebuildExecutor
 import me.aquitano.health.application.derivedRebuildModules
 import me.aquitano.health.application.metric.steps.derived.CanonicalStepDerivationService
+import me.aquitano.health.application.metric.steps.derived.StepDailySummaryDerivation
 import me.aquitano.health.application.metric.steps.repository.CanonicalStepDerivationRepository
 import me.aquitano.health.application.metric.steps.repository.StepDailySummaryDerivationRepository
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -14,7 +14,7 @@ import org.jetbrains.exposed.v1.jdbc.Database
 fun derivedRebuildRegistry(): DerivedRebuildModuleRegistry =
     DerivedRebuildModuleRegistry(
         derivedRebuildModules(
-            stepSummaryService = StepSummaryService(StepDailySummaryDerivationRepository()),
+            stepSummaryService = StepDailySummaryDerivation(StepDailySummaryDerivationRepository()),
             canonicalStepService = CanonicalStepDerivationService(CanonicalStepDerivationRepository()),
         )
     )

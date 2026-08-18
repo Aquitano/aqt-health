@@ -9,6 +9,7 @@ import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthStateConsumeResult
 import me.aquitano.health.infrastructure.repositories.ProviderSyncIdempotencyRepository
 import me.aquitano.health.shared.AppJson
+import me.aquitano.health.shared.normalizeProviderCode
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -162,7 +163,7 @@ class ProviderWorkflowService(
         val provider = providerRegistry.getProvider(providerCode)
             ?: throw NotFoundException("Provider '$providerCode' not found")
         val canonicalCode = provider.descriptor.providerCode
-        val domainRequest = toDomainSyncRequest(request, now)
+        val domainRequest = request.toDomain(now)
         if (idempotencyKey == null) {
             return provider.sync(domainRequest, now).toDto()
         }
@@ -203,11 +204,6 @@ class ProviderWorkflowService(
             ?.toDto()
             ?: throw NotFoundException("Provider '$providerCode' not found")
 
-    fun toDomainSyncRequest(
-        request: ProviderSyncRequest,
-        now: Instant,
-    ): DomainProviderSyncRequest = request.toDomain(now)
-
     suspend fun listAccounts(
         providerCode: String,
         now: Instant,
@@ -234,7 +230,7 @@ class ProviderWorkflowService(
     ): ProviderDisconnectResponse {
         val provider = providerRegistry.getProvider(providerCode)
             ?: throw NotFoundException("Provider '$providerCode' not found")
-        val normalizedCode = providerRegistry.normalize(providerCode)
+        val normalizedCode = normalizeProviderCode(providerCode)
         providerOAuthRepository.accountByProviderInstanceForStatus(
             providerCode = normalizedCode,
             providerInstanceId = providerInstanceId,
@@ -259,83 +255,12 @@ class ProviderWorkflowService(
     ): ProviderOAuthStartResponse {
         providerRegistry.getProvider(providerCode)
             ?: throw NotFoundException("Provider '$providerCode' not found")
-        val normalizedCode = providerRegistry.normalize(providerCode)
+        val normalizedCode = normalizeProviderCode(providerCode)
         providerOAuthRepository.accountByProviderInstanceForStatus(
             providerCode = normalizedCode,
             providerInstanceId = providerInstanceId,
         ) ?: throw NotFoundException("Provider account '$providerInstanceId' not found")
         return startOAuth(providerCode, now)
-    }
-
-    private fun ProviderSyncRequest.toDomain(now: Instant): DomainProviderSyncRequest {
-        val issues = mutableListOf<ValidationIssue>()
-        val parsedFrom = from?.let { parseInstant(it, "from", issues) }
-        val parsedTo = to?.let { parseInstant(it, "to", issues) }
-
-        val resolvedFrom: Instant
-        val resolvedTo: Instant
-        if (parsedFrom == null && parsedTo == null && issues.isEmpty()) {
-            resolvedTo = now
-            resolvedFrom = now.minus(Duration.ofDays(7))
-        } else {
-            resolvedFrom = parsedFrom ?: run {
-                issues.add(
-                    ValidationIssue(
-                        field = "from",
-                        code = ValidationIssueCodes.Required,
-                        message = "is required when to is provided",
-                    )
-                )
-                now
-            }
-            resolvedTo = parsedTo ?: run {
-                issues.add(
-                    ValidationIssue(
-                        field = "to",
-                        code = ValidationIssueCodes.Required,
-                        message = "is required when from is provided",
-                    )
-                )
-                now
-            }
-        }
-
-        if (!resolvedFrom.isBefore(resolvedTo)) {
-            issues.add(
-                ValidationIssue(
-                    field = "from",
-                    code = ValidationIssueCodes.InvalidRange,
-                    message = "must be before to",
-                )
-            )
-        }
-        if (pageSize != null && pageSize <= 0) {
-            issues.add(
-                ValidationIssue(
-                    field = "pageSize",
-                    code = ValidationIssueCodes.OutOfRange,
-                    message = "must be greater than 0",
-                )
-            )
-        }
-        if (providerInstanceId != null && providerInstanceId.isNotBlank() && providerInstanceId.trim() != providerInstanceId) {
-            issues.add(
-                ValidationIssue(
-                    field = "providerInstanceId",
-                    code = ValidationIssueCodes.InvalidFormat,
-                    message = "must not have leading or trailing whitespace",
-                )
-            )
-        }
-
-        if (issues.isNotEmpty()) throw RequestValidationException(issues)
-        return DomainProviderSyncRequest(
-            providerInstanceId = providerInstanceId?.takeIf { it.isNotBlank() },
-            from = resolvedFrom,
-            to = resolvedTo,
-            dataTypes = dataTypes?.distinct(),
-            pageSize = pageSize,
-        )
     }
 
     private fun randomState(): String {
@@ -344,4 +269,75 @@ class ProviderWorkflowService(
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
     }
 
+}
+
+internal fun ProviderSyncRequest.toDomain(now: Instant): DomainProviderSyncRequest {
+    val issues = mutableListOf<ValidationIssue>()
+    val parsedFrom = from?.let { parseInstant(it, "from", issues) }
+    val parsedTo = to?.let { parseInstant(it, "to", issues) }
+
+    val resolvedFrom: Instant
+    val resolvedTo: Instant
+    if (parsedFrom == null && parsedTo == null && issues.isEmpty()) {
+        resolvedTo = now
+        resolvedFrom = now.minus(Duration.ofDays(7))
+    } else {
+        resolvedFrom = parsedFrom ?: run {
+            issues.add(
+                ValidationIssue(
+                    field = "from",
+                    code = ValidationIssueCodes.Required,
+                    message = "is required when to is provided",
+                )
+            )
+            now
+        }
+        resolvedTo = parsedTo ?: run {
+            issues.add(
+                ValidationIssue(
+                    field = "to",
+                    code = ValidationIssueCodes.Required,
+                    message = "is required when from is provided",
+                )
+            )
+            now
+        }
+    }
+
+    if (!resolvedFrom.isBefore(resolvedTo)) {
+        issues.add(
+            ValidationIssue(
+                field = "from",
+                code = ValidationIssueCodes.InvalidRange,
+                message = "must be before to",
+            )
+        )
+    }
+    if (pageSize != null && pageSize <= 0) {
+        issues.add(
+            ValidationIssue(
+                field = "pageSize",
+                code = ValidationIssueCodes.OutOfRange,
+                message = "must be greater than 0",
+            )
+        )
+    }
+    if (providerInstanceId != null && providerInstanceId.isNotBlank() && providerInstanceId.trim() != providerInstanceId) {
+        issues.add(
+            ValidationIssue(
+                field = "providerInstanceId",
+                code = ValidationIssueCodes.InvalidFormat,
+                message = "must not have leading or trailing whitespace",
+            )
+        )
+    }
+
+    if (issues.isNotEmpty()) throw RequestValidationException(issues)
+    return DomainProviderSyncRequest(
+        providerInstanceId = providerInstanceId?.takeIf { it.isNotBlank() },
+        from = resolvedFrom,
+        to = resolvedTo,
+        dataTypes = dataTypes?.distinct(),
+        pageSize = pageSize,
+    )
 }

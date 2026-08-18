@@ -45,8 +45,8 @@ class ScalarSampleWriteRepository {
         writes: List<ScalarSampleWrite>,
         now: Instant,
     ): List<String> {
-        val rows = writes.flatMap { write ->
-            write.record.values.map { value -> SampleRow(write.ingestionRecordId, write.record, value) }
+        val rows = writes.map { write ->
+            SampleRow(write.ingestionRecordId, write.record, write.record.value)
         }
         val seenKeys = existingKeys(sourceInstanceId, rows)
         val toInsert = rows.filter { row -> seenKeys.add(row.uniqueKey()) }

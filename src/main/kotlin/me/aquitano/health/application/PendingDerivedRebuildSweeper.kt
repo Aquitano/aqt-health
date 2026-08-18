@@ -2,17 +2,10 @@ package me.aquitano.health.application
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import me.aquitano.health.infrastructure.logging.*
 import me.aquitano.health.infrastructure.repositories.PendingDerivedRebuildRepository
 import me.aquitano.health.infrastructure.time.UtcClock
+import me.aquitano.health.shared.PollingWorker
 import java.time.Duration
 import java.time.Instant
 import kotlin.math.min
@@ -38,32 +31,19 @@ class PendingDerivedRebuildSweeper(
     private val repository: PendingDerivedRebuildRepository,
     private val derivedRebuildExecutor: DerivedRebuildExecutor,
     private val clock: UtcClock,
-    private val pollInterval: Duration = Duration.ofMinutes(1),
+    pollInterval: Duration = Duration.ofMinutes(1),
 ) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private var job: Job? = null
-
-    fun start() {
-        if (job != null) return
-        job = scope.launch {
-            while (isActive) {
-                try {
-                    sweep(clock.now())
-                } catch (exception: CancellationException) {
-                    throw exception
-                } catch (exception: Exception) {
-                    sweeperLogger.error(exception) { "pending_derived_rebuild_sweep_failed" }
-                }
-                delay(pollInterval.toMillis())
-            }
-        }
+    private val worker = PollingWorker(
+        logger = sweeperLogger,
+        failureEvent = "pending_derived_rebuild_sweep_failed",
+        interval = pollInterval,
+    ) {
+        sweep(clock.now())
     }
 
-    fun stop() {
-        job?.cancel()
-        job = null
-        scope.cancel()
-    }
+    fun start() = worker.start()
+
+    fun stop() = worker.stop()
 
     /** Returns the number of queued rows successfully rebuilt in this pass. */
     suspend fun sweep(now: Instant, limit: Int = DEFAULT_SWEEP_LIMIT): Int {

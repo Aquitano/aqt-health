@@ -34,25 +34,6 @@ class CardiovascularRepository : BaseMetricReadRepository() {
         return rows to sourceMetadata(rows.map { it.sourceInstanceId }.toSet(), filters.includeSource)
     }
 
-    fun latestBloodPressure(filters: ReadFilters): Pair<BloodPressureMeasurementRow?, Map<Int, SourceMetadata>> {
-        val where = timestampConditions(
-            filters = filters,
-            sourceInstanceIdColumn = BloodPressureMeasurementsTable.sourceInstanceId,
-            fromColumn = BloodPressureMeasurementsTable.measuredAt,
-        ).whereOrNull() ?: return emptyLatestResult()
-
-        val row = BloodPressureMeasurementsTable.selectAll()
-            .where(where)
-            .orderBy(
-                BloodPressureMeasurementsTable.measuredAt to SortOrder.DESC,
-                BloodPressureMeasurementsTable.id to SortOrder.DESC,
-            )
-            .limit(1)
-            .map(::toBloodPressureMeasurementRow)
-            .singleOrNull()
-        return row to sourceMetadata(listOfNotNull(row?.sourceInstanceId).toSet(), filters.includeSource)
-    }
-
     private fun toBloodPressureMeasurementRow(row: ResultRow): BloodPressureMeasurementRow =
         BloodPressureMeasurementRow(
             id = row[BloodPressureMeasurementsTable.id].value,

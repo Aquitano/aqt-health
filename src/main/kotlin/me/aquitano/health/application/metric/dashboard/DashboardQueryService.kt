@@ -5,9 +5,9 @@ import me.aquitano.health.api.dto.DashboardSummaryResponse
 import me.aquitano.health.application.metric.common.Orders
 import me.aquitano.health.application.metric.common.QueryParams
 import me.aquitano.health.application.metric.common.SortFields
+import me.aquitano.health.application.metric.common.singleSource
 import me.aquitano.health.application.metric.common.toResponse
 import me.aquitano.health.application.metric.common.validateDateRange
-import me.aquitano.health.application.metric.common.repository.SourceMetadata
 import me.aquitano.health.application.metric.scalar.ScalarSampleReadRepository
 import me.aquitano.health.application.metric.scalar.toScalarResponse
 import me.aquitano.health.domain.BodyMetricTypes
@@ -27,7 +27,7 @@ class DashboardQueryService(
     private val database: Database,
     private val canonicalStepRepository: CanonicalStepDerivationRepository,
     private val sleepRepository: SleepRepository,
-    private val scalarRepository: ScalarSampleReadRepository = ScalarSampleReadRepository(),
+    private val scalarRepository: ScalarSampleReadRepository,
 ) {
     suspend fun dashboardSummary(
         params: QueryParams,
@@ -96,7 +96,7 @@ class DashboardQueryService(
         return DashboardStepsSummaryResponse(
             steps = summary.steps,
             sampleCount = summary.sampleCount,
-            source = summary.sourceInstanceIds.singleSource(sourceMetadata),
+            source = summary.sourceInstanceIds.singleSource(sourceMetadata) { it },
         )
     }
 
@@ -131,8 +131,4 @@ class DashboardQueryService(
             val sleep = sleepNights.firstOrNull()?.session
             sleep?.toResponse(sleepStagesBySession, sleepSourceMetadata)
         }
-
-    private fun Set<Int>.singleSource(
-        sourceMetadata: Map<Int, SourceMetadata>,
-    ) = if (size == 1) sourceMetadata[first()].toResponse() else null
 }

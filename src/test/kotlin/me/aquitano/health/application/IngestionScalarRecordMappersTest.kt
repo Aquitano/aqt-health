@@ -55,7 +55,7 @@ class IngestionScalarRecordMappersTest {
         inRange.forEach { (metricType, value, context) ->
             val record = map(metricType, value, context = context)
             assertNotNull(record, "$metricType $value should be accepted")
-            assertEquals(metricType, record.values.single().metricType)
+            assertEquals(metricType, record.value.metricType)
         }
 
         val outOfRange = listOf(
@@ -87,8 +87,8 @@ class IngestionScalarRecordMappersTest {
 
     @Test
     fun contextDefaultsToUnknownOnlyWhereTheMetricSupportsIt() {
-        assertEquals("unknown", assertNotNull(map("respiratory_rate", 14.0)).values.single().context)
-        assertNull(assertNotNull(map("weight", 80.0)).values.single().context)
+        assertEquals("unknown", assertNotNull(map("respiratory_rate", 14.0)).value.context)
+        assertNull(assertNotNull(map("weight", 80.0)).value.context)
 
         val issues = mutableListOf<ValidationIssue>()
         assertNull(map("weight", 80.0, context = "resting", issues = issues))
@@ -99,7 +99,7 @@ class IngestionScalarRecordMappersTest {
     fun segmentsAreRejectedForMetricsThatDoNotSupportThem() {
         assertEquals(
             "left_arm",
-            assertNotNull(map("segmental_muscle_mass", 3.2, segment = "left_arm")).values.single().segment,
+            assertNotNull(map("segmental_muscle_mass", 3.2, segment = "left_arm")).value.segment,
         )
 
         val unsupportedMetric = mutableListOf<ValidationIssue>()

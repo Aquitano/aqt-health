@@ -6,11 +6,10 @@ import me.aquitano.health.domain.BodyMetricTypes
 import me.aquitano.health.domain.ScalarMetricTypes
 import me.aquitano.health.application.metric.common.repository.DailyReadFilters
 import me.aquitano.health.application.metric.common.repository.ReadFilters
-import me.aquitano.health.application.metric.common.repository.SourceMetadata
 import me.aquitano.health.shared.utcDate
 import me.aquitano.health.application.metric.steps.repository.CanonicalStepDerivationRepository
 import me.aquitano.health.application.metric.scalar.ScalarSampleReadRepository
-import me.aquitano.health.application.metric.scalar.ScalarSampleRow
+import me.aquitano.health.application.metric.scalar.toScalarResponse
 import me.aquitano.health.application.metric.sleep.repository.CanonicalSleepSessionDerivationRepository
 import org.jetbrains.exposed.v1.jdbc.Database
 import me.aquitano.health.infrastructure.database.suspendDbTransaction
@@ -25,7 +24,7 @@ class TrendQueryService(
     private val database: Database,
     private val stepRepository: CanonicalStepDerivationRepository,
     private val sleepRepository: CanonicalSleepSessionDerivationRepository,
-    private val scalarRepository: ScalarSampleReadRepository = ScalarSampleReadRepository(),
+    private val scalarRepository: ScalarSampleReadRepository,
 ) {
 
     suspend fun dashboardTrends(
@@ -144,8 +143,8 @@ class TrendQueryService(
         val sourceMetadata = scalarRepository.sourceMetadataFor(
             setOf(current.sourceInstanceId)
         )
-        val currentResponse = current.toResponse(sourceMetadata)
-        val previousResponse = previous?.toResponse(sourceMetadata)
+        val currentResponse = current.toScalarResponse(sourceMetadata)
+        val previousResponse = previous?.toScalarResponse(sourceMetadata)
 
         return WeightTrend(
             latest = currentResponse,
@@ -198,24 +197,4 @@ class TrendQueryService(
 
     private fun roundToOneDecimal(value: Double): Double =
         (value * 10.0).roundToInt() / 10.0
-
-    private fun ScalarSampleRow.toResponse(
-        sourceMetadata: Map<Int, SourceMetadata>
-    ): ScalarSampleResponse =
-        ScalarSampleResponse(
-            id = id,
-            measuredAt = measuredAt.toString(),
-            metricType = metricType,
-            value = value,
-            unit = unit,
-            context = context,
-            segment = segment,
-            source = sourceMetadata[sourceInstanceId]?.let {
-                SourceMetadataResponse(
-                    provider = it.provider,
-                    providerInstanceId = it.providerInstanceId,
-                )
-            },
-        )
-
 }

@@ -75,7 +75,7 @@ class MetricWriteService(
             // pre-check; that rare case is counted as created here because a multi-row statement
             // can't distinguish inserted from conflict-ignored rows without an extra round trip.
             created += MetricCreatedCounts(insertedTypes.groupingBy { it }.eachCount())
-            duplicateSkipped += scalarWrites.sumOf { it.record.values.size } - insertedTypes.size
+            duplicateSkipped += scalarWrites.size - insertedTypes.size
         }
 
         return MetricWriteResult(
@@ -268,7 +268,7 @@ class MetricWriteService(
             .eachCount()
         return MetricWriteResult(
             created = MetricCreatedCounts(counts),
-            duplicateSkipped = record.values.size - insertedTypes.size,
+            duplicateSkipped = if (insertedTypes.isEmpty()) 1 else 0,
         )
     }
 }

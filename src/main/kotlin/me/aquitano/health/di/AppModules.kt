@@ -31,6 +31,7 @@ import me.aquitano.health.application.metric.sleep.repository.SleepRepository
 import me.aquitano.health.application.metric.sleep.repository.SleepWriteRepository
 import me.aquitano.health.application.metric.steps.StepQueryService
 import me.aquitano.health.application.metric.steps.derived.CanonicalStepDerivationService
+import me.aquitano.health.application.metric.steps.derived.StepDailySummaryDerivation
 import me.aquitano.health.application.metric.steps.repository.CanonicalStepDerivationRepository
 import me.aquitano.health.application.metric.steps.repository.StepDailySummaryDerivationRepository
 import me.aquitano.health.application.metric.steps.repository.StepWriteRepository
@@ -115,7 +116,7 @@ fun ingestionModule() = module {
     singleOf(::PendingDerivedRebuildRepository)
     singleOf(::ProjectionWipeRepository)
     singleOf(::StepDailySummaryDerivationRepository)
-    single { StepSummaryService(get<StepDailySummaryDerivationRepository>()) }
+    single { StepDailySummaryDerivation(get<StepDailySummaryDerivationRepository>()) }
     single { CanonicalStepDerivationService(get<CanonicalStepDerivationRepository>()) }
     single {
         DerivedRebuildModuleRegistry(

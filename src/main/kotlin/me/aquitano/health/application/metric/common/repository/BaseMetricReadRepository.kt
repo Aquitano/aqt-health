@@ -91,9 +91,6 @@ abstract class BaseMetricReadRepository {
     protected fun <T, S> emptyTripleReadResult(): Triple<List<T>, Map<Int, List<S>>, Map<Int, SourceMetadata>> =
         Triple(emptyList(), emptyMap(), emptyMap())
 
-    protected fun <T, S> emptyTripleLatestResult(): Triple<T?, Map<Int, List<S>>, Map<Int, SourceMetadata>> =
-        Triple(null, emptyMap(), emptyMap())
-
     protected fun timestampConditions(
         filters: ReadFilters,
         sourceInstanceIdColumn: Column<Int>,
@@ -173,34 +170,6 @@ abstract class BaseMetricReadRepository {
         val conditions = mutableListOf<Op<Boolean>>()
         filters.fromDate?.let { conditions.add(dateColumn greaterEq it) }
         filters.toDate?.let { conditions.add(dateColumn lessEq it) }
-        sourceIds?.let { conditions.add(sourceInstanceIdColumn inList it) }
-
-        return MetricConditionResult.Conditions(combineConditions(conditions))
-    }
-
-    protected fun zonedDateTimeConditions(
-        filters: SleepNightReadFilters,
-        sourceInstanceIdColumn: Column<Int>,
-        timestampColumn: Column<OffsetDateTime>,
-    ): MetricConditionResult {
-        val sourceIds = filters.sourceInstanceIds()
-
-        if (sourceIds.hasNoMatchingSources()) {
-            return MetricConditionResult.Empty
-        }
-
-        val conditions = mutableListOf<Op<Boolean>>()
-        filters.fromDate?.let {
-            conditions.add(timestampColumn greaterEq it.atStartOfDay(filters.timezone).toInstant().toDbTimestamp())
-        }
-        filters.toDate?.let {
-            conditions.add(
-                timestampColumn less it.plusDays(1)
-                    .atStartOfDay(filters.timezone)
-                    .toInstant()
-                    .toDbTimestamp()
-            )
-        }
         sourceIds?.let { conditions.add(sourceInstanceIdColumn inList it) }
 
         return MetricConditionResult.Conditions(combineConditions(conditions))

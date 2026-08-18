@@ -1,6 +1,7 @@
 package me.aquitano.health.application
 
 import me.aquitano.health.application.metric.steps.derived.CanonicalStepDerivationService
+import me.aquitano.health.application.metric.steps.derived.StepDailySummaryDerivation
 import me.aquitano.health.domain.DerivedKind
 import me.aquitano.health.domain.RecordTypes
 import me.aquitano.health.shared.utcDate
@@ -65,7 +66,7 @@ class DerivedRebuildModuleRegistry(val modules: List<DerivedRebuildModule>) {
 
 /** The canonical post-ingestion rebuild wiring; order is the execution order. */
 fun derivedRebuildModules(
-    stepSummaryService: StepSummaryService,
+    stepSummaryService: StepDailySummaryDerivation,
     canonicalStepService: CanonicalStepDerivationService,
 ): List<DerivedRebuildModule> =
     listOf(
