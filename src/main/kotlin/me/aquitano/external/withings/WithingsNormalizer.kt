@@ -88,20 +88,23 @@ class WithingsNormalizer {
                     ?: "at-$measuredAt"
                 val measures = group["measures"] as? JsonArray ?: return@forEach
 
-                val samples = mutableListOf<ScalarSample>()
+                // Keyed by provider record id: a group that repeats a measure type (or a
+                // segmental type for the same zone) would otherwise emit two records sharing an
+                // id, and ingestion rejects a whole batch that contains a duplicate id. Last
+                // value wins, which is how the per-field accumulators used to resolve repeats.
+                val samples = linkedMapOf<String, ScalarSample>()
                 var systolicMmhg: Int? = null
                 var diastolicMmhg: Int? = null
                 var heartRateBpm: Int? = null
 
                 fun scalar(metricType: String, value: Double, segment: String? = null) {
-                    samples.add(
-                        ScalarSample(
-                            providerRecordId = providerId(grpid, metricType, segment),
-                            measuredAt = measuredAtString,
-                            metricType = metricType,
-                            value = value,
-                            segment = segment,
-                        )
+                    val providerRecordId = providerId(grpid, metricType, segment)
+                    samples[providerRecordId] = ScalarSample(
+                        providerRecordId = providerRecordId,
+                        measuredAt = measuredAtString,
+                        metricType = metricType,
+                        value = value,
+                        segment = segment,
                     )
                 }
 
@@ -170,19 +173,18 @@ class WithingsNormalizer {
                     )
                 } else {
                     heartRateBpm?.let {
-                        samples.add(
-                            ScalarSample(
-                                providerRecordId = providerId(grpid, ScalarMetricTypes.HEART_RATE),
-                                measuredAt = measuredAtString,
-                                metricType = ScalarMetricTypes.HEART_RATE,
-                                value = it.toDouble(),
-                                context = "general",
-                            )
+                        val providerRecordId = providerId(grpid, ScalarMetricTypes.HEART_RATE)
+                        samples[providerRecordId] = ScalarSample(
+                            providerRecordId = providerRecordId,
+                            measuredAt = measuredAtString,
+                            metricType = ScalarMetricTypes.HEART_RATE,
+                            value = it.toDouble(),
+                            context = "general",
                         )
                     }
                 }
 
-                addAll(samples)
+                addAll(samples.values)
             }
         }
 
@@ -227,6 +229,8 @@ class WithingsNormalizer {
                     sleepScore = sleepScore,
                     remEpisodesCount = data.nonNegativeInt("nb_rem_episodes"),
                     outOfBedCount = data.nonNegativeInt("out_of_bed_count"),
+                    // Not part of the documented getsummary data_fields, so it is never
+                    // requested; mapped only for a payload that carries it anyway.
                     awakeDurationSeconds = data.nonNegativeLong("awake_duration"),
                     overnightHrvRmssd = data.doubleOrNull("rmssd_start_avg"),
                     respiratoryRhythm = data.doubleOrNull("chest_movement_rate_wellness_average"),

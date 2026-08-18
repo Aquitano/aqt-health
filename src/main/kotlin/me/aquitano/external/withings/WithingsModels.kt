@@ -63,7 +63,6 @@ val WITHINGS_SLEEP_SUMMARY_FIELDS = listOf(
     "waso",
     "nb_rem_episodes",
     "out_of_bed_count",
-    "awake_duration",
     "apnea_hypopnea_index",
     "hr_average",
     "hr_min",
