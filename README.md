@@ -183,7 +183,7 @@ In production the frontend refuses to start a request path without `AQT_HEALTH_A
 
 ### Frontend Container
 
-`frontend/Dockerfile` builds a standalone Next.js server image (Bun build stage, Node runtime, non-root user). The compose file wires it up as the `frontend` service:
+`frontend/Dockerfile` builds a standalone Next.js server image (Node build and runtime, Bun as the installer, non-root user). The compose file wires it up as the `frontend` service:
 
 ```bash
 AQT_HEALTH_API_KEY=<backend-api-key> docker compose up -d frontend
@@ -196,6 +196,27 @@ Compose variables:
 - `AQT_HEALTH_API_KEY`: backend API key for the frontend proxy, typically the bootstrap key
 
 The container exposes `GET /api/health` as an unauthenticated liveness probe. The frontend has no authentication of its own; deploy it behind an authenticating reverse proxy and do not publish its port directly.
+
+## Deployment
+
+`docker-compose.yml` builds both services from source and is the local setup. Servers use `docker-compose.deploy.yml`, which runs the images CI publishes to GHCR on every push to `main`: `ghcr.io/aquitano/aqt-health-api` and `ghcr.io/aquitano/aqt-health-frontend`. Both packages are public, so the host needs no registry login.
+
+Copy `docker-compose.deploy.yml` and a filled-in `.env` into a directory outside any checkout, then:
+
+```bash
+docker compose -f docker-compose.deploy.yml up -d
+docker compose -f docker-compose.deploy.yml ps
+```
+
+How it differs from the local compose file:
+
+- `image:` instead of `build:`, tagged by `AQT_HEALTH_API_TAG` and `AQT_HEALTH_FRONTEND_TAG` (both default to `latest`). Pin them to `sha-<short-commit>`, the other tag CI pushes, so an update is a tag edit plus `up -d` and a rollback is editing it back.
+- `AQT_HEALTH_ENV` defaults to `production`, so [production validation](#production-validation) applies at startup, and `AQT_HEALTH_LOG_FORMAT` defaults to `json`.
+- Published ports bind to `127.0.0.1`, so nothing is reachable from off the host. Put a reverse proxy or Tailscale in front. PostgreSQL publishes no host port at all.
+- `AQT_HEALTH_DB_PASSWORD` has no default; compose refuses to start without it.
+- Host ports come from `AQT_HEALTH_API_PORT` and `AQT_HEALTH_FRONTEND_PORT`; the containers always listen on 8080 and 3000, so changing a host port cannot desync the mapping.
+
+Both images carry their own `HEALTHCHECK`, so the deploy file does not repeat them.
 
 ## Health Check
 
