@@ -261,6 +261,47 @@ class IngestionRouteTest {
             )
         }
 
+    /**
+     * Google reports the same walk under several record ids, so its step intervals are deduplicated
+     * by overlap. Overlap is half-open: an interval starting exactly where another ends is a
+     * separate walk, a contained interval is the same one reported again.
+     */
+    @Test
+    fun googleStepIntervalsAreSkippedOnlyWhenTheyActuallyOverlap() =
+        testApplication {
+            val dbConfig = configureTestApplication()
+
+            val posted = listOf(
+                Triple("steps-base", "2026-04-19T08:00:00Z" to "2026-04-19T09:00:00Z", 1200),
+                Triple("steps-touching", "2026-04-19T09:00:00Z" to "2026-04-19T10:00:00Z", 300),
+                Triple("steps-contained", "2026-04-19T08:30:00Z" to "2026-04-19T08:45:00Z", 400),
+            ).map { (recordId, range, steps) ->
+                client.post("/api/v2/ingestion/batches") {
+                    authorized()
+                    contentType(ContentType.Application.Json)
+                    setBody(
+                        stepPayload(
+                            provider = "google_health",
+                            batchExternalId = recordId,
+                            providerRecordId = recordId,
+                            startAt = range.first,
+                            endAt = range.second,
+                            steps = steps,
+                        )
+                    )
+                }
+            }
+
+            posted.forEach { assertEquals(HttpStatusCode.Created, it.status) }
+            assertEquals(
+                listOf("steps-base", "steps-touching"),
+                stringColumn(
+                    dbConfig,
+                    "SELECT provider_record_id FROM step_samples ORDER BY start_at"
+                ),
+            )
+        }
+
     @Test
     fun crossMidnightStepIntervalsAreSplitAcrossDailySummaries() =
         testApplication {
@@ -387,6 +428,15 @@ class IngestionRouteTest {
                 statement.executeQuery(sql).use { resultSet ->
                     resultSet.next()
                     resultSet.getInt(1)
+                }
+            }
+        }
+
+    private fun stringColumn(dbPath: DatabaseConfig, sql: String): List<String> =
+        PostgresTestDatabase.connection(dbPath).use { connection ->
+            connection.createStatement().use { statement ->
+                statement.executeQuery(sql).use { resultSet ->
+                    buildList { while (resultSet.next()) add(resultSet.getString(1)) }
                 }
             }
         }
