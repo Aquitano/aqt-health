@@ -19,32 +19,37 @@ import me.aquitano.health.domain.NotFoundException
 import me.aquitano.health.domain.RequestValidationException
 import me.aquitano.health.domain.ValidationIssue
 import me.aquitano.health.domain.ValidationIssueCodes
+import me.aquitano.health.infrastructure.config.AppConfig
 import me.aquitano.health.infrastructure.time.UtcClock
 import org.koin.ktor.ext.inject
 import kotlin.reflect.typeOf
 
-fun Application.configureRoutes() {
+fun Application.configureRoutes(appConfig: AppConfig) {
     val clock by inject<UtcClock>()
     val ingestionService by inject<IngestionService>()
     val providerWorkflowService by inject<ProviderWorkflowService>()
 
-    val openApiInfo = openApiInfo()
-    val openApiBaseDoc = openApiBaseDoc()
-    val openApiSource = OpenApiDocSource.Routing()
-
     routing {
-        get("/openapi") {
-            val doc = openApiSource.read(application, openApiBaseDoc)
-            call.respondText(
-                stripInferredAuthorizationParameters(doc.content),
-                doc.contentType
-            )
-        }.hide()
-        swaggerUI(path = "swagger") {
-            info = openApiInfo
-            components = openApiBaseDoc.components
-            source = openApiSource
-            remotePath = "../openapi"
+        // Dev-only contract browsing. Production consumers read the spec exported at build time by
+        // the generateOpenApi Gradle task, so the runtime endpoints stay off the public surface.
+        if (!appConfig.environment.isProduction) {
+            val openApiInfo = openApiInfo()
+            val openApiBaseDoc = openApiBaseDoc()
+            val openApiSource = OpenApiDocSource.Routing()
+
+            get("/openapi") {
+                val doc = openApiSource.read(application, openApiBaseDoc)
+                call.respondText(
+                    stripInferredAuthorizationParameters(doc.content),
+                    doc.contentType
+                )
+            }.hide()
+            swaggerUI(path = "swagger") {
+                info = openApiInfo
+                components = openApiBaseDoc.components
+                source = openApiSource
+                remotePath = "../openapi"
+            }
         }
 
         get("/api/v2/admin/health") {

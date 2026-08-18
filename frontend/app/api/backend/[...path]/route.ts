@@ -90,11 +90,40 @@ const routes: ProxyRoute[] = [
   },
 ];
 
+// Mutating proxy calls are CORS simple requests, so a foreign page could trigger them from the
+// user's browser. A cross-site Origin is rejected; same-origin and non-browser callers (curl,
+// which sends no Origin) still pass. Only the host is compared: a TLS-terminating reverse proxy
+// forwards an https Origin while the app itself is reached over http.
+function isCrossSiteRequest(request: Request): boolean {
+  const origin = request.headers.get("origin");
+  if (!origin) return false;
+
+  const originHost = hostOf(origin);
+  const requestHost =
+    request.headers.get("x-forwarded-host") ??
+    request.headers.get("host") ??
+    hostOf(request.url);
+
+  return originHost === undefined || originHost !== requestHost;
+}
+
+function hostOf(url: string): string | undefined {
+  try {
+    return new URL(url).host;
+  } catch {
+    return undefined;
+  }
+}
+
 async function dispatch(
   method: ProxyRoute["method"],
   request: Request,
   context: RouteContext,
 ): Promise<NextResponse> {
+  if (method !== "GET" && isCrossSiteRequest(request)) {
+    return proxyError(403, "Cross-site requests are not allowed.");
+  }
+
   const { path } = await context.params;
   const joinedPath = path.join("/");
 

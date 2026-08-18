@@ -11,6 +11,7 @@ import java.time.OffsetDateTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 
 class SupportRepositoryTest {
     @Test
@@ -19,7 +20,7 @@ class SupportRepositoryTest {
         val repository = SupportRepository(database)
         val hasher = ApiKeyHasher()
         val apiKeyHash = hasher.hash("test-key")
-        repository.createBootstrapApiClientIfMissing(
+        repository.upsertBootstrapApiClient(
             name = "test-client",
             apiKeyHash = apiKeyHash,
             now = Instant.parse("2026-05-15T09:00:00Z"),
@@ -43,6 +44,33 @@ class SupportRepositoryTest {
             now = Instant.parse("2026-05-15T10:01:01Z"),
         )
         assertEquals("2026-05-15T10:01:01Z", lastUsedAt(database))
+    }
+
+    @Test
+    fun bootstrapClientHashIsRewrittenWhenTheConfiguredKeyRotates() = runBlocking {
+        val database = DatabaseFactory().initialize(tempDatabaseConfig())
+        val repository = SupportRepository(database)
+        val hasher = ApiKeyHasher()
+        val now = Instant.parse("2026-05-15T09:00:00Z")
+
+        assertEquals(
+            BootstrapApiClientOutcome.CREATED,
+            repository.upsertBootstrapApiClient("test-client", hasher.hash("old-key"), now),
+        )
+        assertEquals(
+            BootstrapApiClientOutcome.UNCHANGED,
+            repository.upsertBootstrapApiClient("test-client", hasher.hash("old-key"), now),
+        )
+        assertEquals(
+            BootstrapApiClientOutcome.ROTATED,
+            repository.upsertBootstrapApiClient("test-client", hasher.hash("new-key"), now),
+        )
+
+        assertNull(repository.findEnabledApiClientByHash(hasher.hash("old-key"), now))
+        assertEquals(
+            "test-client",
+            repository.findEnabledApiClientByHash(hasher.hash("new-key"), now)?.name,
+        )
     }
 
     private fun tempDatabaseConfig(): DatabaseConfig = PostgresTestDatabase.config()

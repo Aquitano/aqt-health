@@ -134,6 +134,34 @@ describe("backend proxy route", () => {
     expect(mocks.startProviderOAuth).not.toHaveBeenCalled();
   });
 
+  it("rejects mutating requests from a foreign origin", async () => {
+    const response = await POST(
+      new Request("http://frontend.test/api/backend/providers/withings/oauth/start", {
+        method: "POST",
+        headers: { host: "frontend.test", origin: "http://evil.test" },
+      }),
+      context("providers", "withings", "oauth", "start"),
+    );
+
+    expect(response.status).toBe(403);
+    expect(mocks.startProviderOAuth).not.toHaveBeenCalled();
+  });
+
+  it("allows mutating requests from its own origin", async () => {
+    mocks.startProviderOAuth.mockResolvedValue({ ok: true, data: { authorizationUrl: "https://p" } });
+
+    const response = await POST(
+      new Request("http://frontend.test/api/backend/providers/withings/oauth/start", {
+        method: "POST",
+        headers: { host: "frontend.test", origin: "https://frontend.test" },
+      }),
+      context("providers", "withings", "oauth", "start"),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.startProviderOAuth).toHaveBeenCalledWith("withings");
+  });
+
   it("rejects paths outside the allowlist", async () => {
     const response = await GET(
       new Request("http://frontend.test/api/backend/admin/ingestion/batches"),
