@@ -1,0 +1,17 @@
+# Keep the backend build context small: only Gradle sources are needed.
+.git
+.github
+.gradle
+.kotlin
+.idea
+.vscode
+.claude
+build
+frontend
+docs
+graphify-out
+data
+*.md
+.env
+.env.*
+!.env.example

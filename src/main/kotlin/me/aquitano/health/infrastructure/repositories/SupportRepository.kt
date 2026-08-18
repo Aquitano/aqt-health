@@ -27,30 +27,48 @@ data class ApiClientRef(
     val name: String,
 )
 
+enum class BootstrapApiClientOutcome {
+    CREATED,
+    ROTATED,
+    UNCHANGED,
+}
+
 private const val API_CLIENT_LAST_USED_UPDATE_INTERVAL_SECONDS = 60L
 
 class SupportRepository(
     private val database: Database,
 ) {
-    fun createBootstrapApiClientIfMissing(
+    /**
+     * Reconciles the bootstrap client with the configured API key: creates it when missing and
+     * rewrites the stored hash when the configured key changed, so key rotation takes effect on
+     * the next boot instead of leaving the old key valid.
+     */
+    fun upsertBootstrapApiClient(
         name: String,
         apiKeyHash: String,
         now: Instant
-    ): Boolean =
+    ): BootstrapApiClientOutcome =
         transaction(database) {
             val existing =
                 ApiClientDao.find { ApiClientsTable.name eq name }.firstOrNull()
-            if (existing != null) {
-                false
-            } else {
-                ApiClientDao.new {
-                    this.name = name
-                    this.apiKeyHash = apiKeyHash
-                    enabled = true
-                    createdAt = now.toDbTimestamp()
-                    lastUsedAt = null
+            when {
+                existing == null -> {
+                    ApiClientDao.new {
+                        this.name = name
+                        this.apiKeyHash = apiKeyHash
+                        enabled = true
+                        createdAt = now.toDbTimestamp()
+                        lastUsedAt = null
+                    }
+                    BootstrapApiClientOutcome.CREATED
                 }
-                true
+
+                existing.apiKeyHash != apiKeyHash -> {
+                    existing.apiKeyHash = apiKeyHash
+                    BootstrapApiClientOutcome.ROTATED
+                }
+
+                else -> BootstrapApiClientOutcome.UNCHANGED
             }
         }
 

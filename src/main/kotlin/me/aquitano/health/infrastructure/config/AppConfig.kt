@@ -121,7 +121,7 @@ fun ApplicationConfig.toAppConfig(): AppConfig =
 fun AppConfig.validateForStartup() {
     val issues = buildList {
         if (environment.isProduction) {
-            requireValue("aqtHealth.auth.bootstrapApiKey", auth.bootstrapApiKey)
+            requireTokenKey("aqtHealth.auth.bootstrapApiKey", auth.bootstrapApiKey)
             requireValue("aqtHealth.auth.bootstrapClientName", auth.bootstrapClientName)
             if (auth.bootstrapClientName.trim() == "local-admin") {
                 add(ConfigValidationIssue("aqtHealth.auth.bootstrapClientName", "must not use the local default"))

@@ -104,11 +104,12 @@ fun Application.module() {
     val apiKeyHasher by inject<ApiKeyHasher>()
 
     configureHttp(corsConfig = appConfig.cors)
-    configureMetrics(appConfig = appConfig, sharedHttpClient = httpClient)
+    // Authentication first: the metrics scrape route is registered inside an authenticate block.
     configureAuthentication(
         supportRepository = supportRepository,
         apiKeyHasher = apiKeyHasher,
         clock = clock,
     )
-    configureRoutes()
+    configureMetrics(appConfig = appConfig, sharedHttpClient = httpClient)
+    configureRoutes(appConfig = appConfig)
 }

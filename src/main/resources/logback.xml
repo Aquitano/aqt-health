@@ -44,6 +44,12 @@
         </encoder>
     </appender>
 
+    <!-- File logging is opt-in: containers run as a non-root user with no writable working
+         directory, so the root logger points at the no-op appender unless AQT_HEALTH_LOG_APPENDER
+         selects openobserve-json-file. Logback skips unreferenced appenders, so the file below is
+         never opened while file logging is off. -->
+    <appender name="no-file" class="ch.qos.logback.core.helpers.NOPAppender"/>
+
     <appender name="openobserve-json-file" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <file>${AQT_HEALTH_LOG_FILE:-build/logs/aqt-health.jsonl}</file>
         <append>true</append>
@@ -143,7 +149,7 @@
 
     <root level="INFO">
         <appender-ref ref="${AQT_HEALTH_LOG_FORMAT:-text}"/>
-        <appender-ref ref="openobserve-json-file"/>
+        <appender-ref ref="${AQT_HEALTH_LOG_APPENDER:-no-file}"/>
         <appender-ref ref="openobserve-async"/>
     </root>
 

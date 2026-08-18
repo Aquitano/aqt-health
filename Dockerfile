@@ -30,7 +30,8 @@ WORKDIR /app
 
 COPY --from=builder /app/build/libs/*-all.jar app.jar
 
-# The JSONL appender is always wired up; give it a directory appuser can write to.
+# File logging is off unless AQT_HEALTH_LOG_APPENDER selects it; keep a directory
+# appuser can write to so turning it on needs no image change.
 RUN mkdir logs && chown appuser:appgroup logs
 
 USER appuser

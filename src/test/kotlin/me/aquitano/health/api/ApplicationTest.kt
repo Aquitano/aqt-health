@@ -32,13 +32,16 @@ class ApplicationTest {
     }
 
     @Test
-    fun metricsEndpointReturnsRegistryScrape() = testApplication {
+    fun metricsEndpointRequiresApiKeyAndReturnsRegistryScrape() = testApplication {
         configureTestApplication()
-        val response = client.get("/metrics")
 
+        assertEquals(HttpStatusCode.Unauthorized, client.get("/metrics").status)
+
+        val response = client.get("/metrics") {
+            header(HttpHeaders.Authorization, "Bearer test-key")
+        }
         assertEquals(HttpStatusCode.OK, response.status)
-        val bodyText = response.bodyAsText()
-        assertTrue(bodyText.isNotBlank())
+        assertTrue(response.bodyAsText().isNotBlank())
     }
 
     @Test

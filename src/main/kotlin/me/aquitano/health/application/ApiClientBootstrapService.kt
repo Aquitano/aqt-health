@@ -1,6 +1,7 @@
 package me.aquitano.health.application
 
 import me.aquitano.health.infrastructure.config.AuthConfig
+import me.aquitano.health.infrastructure.repositories.BootstrapApiClientOutcome
 import me.aquitano.health.infrastructure.repositories.SupportRepository
 import me.aquitano.health.infrastructure.security.ApiKeyHasher
 import me.aquitano.health.infrastructure.time.UtcClock
@@ -25,13 +26,17 @@ class ApiClientBootstrapService(
             return
         }
 
-        val created = supportRepository.createBootstrapApiClientIfMissing(
+        val outcome = supportRepository.upsertBootstrapApiClient(
             name = authConfig.bootstrapClientName,
             apiKeyHash = apiKeyHasher.hash(bootstrapApiKey),
             now = clock.now(),
         )
         logger.infoWithContext(
-            if (created) "api_client_bootstrap_created" else "api_client_bootstrap_skipped",
+            when (outcome) {
+                BootstrapApiClientOutcome.CREATED -> "api_client_bootstrap_created"
+                BootstrapApiClientOutcome.ROTATED -> "api_client_bootstrap_rotated"
+                BootstrapApiClientOutcome.UNCHANGED -> "api_client_bootstrap_skipped"
+            },
             "clientName" to authConfig.bootstrapClientName,
         )
     }

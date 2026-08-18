@@ -12,6 +12,7 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.server.application.*
+import io.ktor.server.auth.*
 import io.ktor.server.metrics.micrometer.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
@@ -52,9 +53,12 @@ fun Application.configureMetrics(appConfig: AppConfig, sharedHttpClient: HttpCli
 
     routing {
         // Prometheus scrape endpoint; infrastructure-only, kept out of the OpenAPI contract.
-        get("/metrics") {
-            call.respondText(registry.scrape())
-        }.hide()
+        // API-key protected: the scrape exposes request paths and traffic volumes.
+        authenticate(ApiKeyAuthProviderName) {
+            get("/metrics") {
+                call.respondText(registry.scrape())
+            }.hide()
+        }
     }
 
     val url = appConfig.openObserve.url
