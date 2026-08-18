@@ -30,11 +30,16 @@ WORKDIR /app
 
 COPY --from=builder /app/build/libs/*-all.jar app.jar
 
+# The JSONL appender is always wired up; give it a directory appuser can write to.
+RUN mkdir logs && chown appuser:appgroup logs
+
 USER appuser
 
 EXPOSE 8080
 
-ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0"
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0" \
+    AQT_HEALTH_LOG_FILE="/app/logs/aqt-health.jsonl" \
+    AQT_HEALTH_LOG_FILE_ROLLOVER="/app/logs/aqt-health.%d{yyyy-MM-dd}.%i.jsonl.gz"
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
   CMD curl -fsS http://localhost:8080/api/v2/admin/health || exit 1

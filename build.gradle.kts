@@ -136,6 +136,16 @@ fun requirePostgresIntegrationDatabase() {
     }
 }
 
+// The Ktor plugin defaults shadowJar to DuplicatesStrategy.EXCLUDE, which drops
+// duplicate service files before the merge transformer sees them; Flyway then
+// registers only half its plugins and NPEs on the first connection.
+tasks.shadowJar {
+    filesMatching("META-INF/services/**") {
+        duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    }
+    mergeServiceFiles()
+}
+
 tasks.test {
     description = "Runs fast unit tests that do not require PostgreSQL."
     exclude(integrationTestClasses)
