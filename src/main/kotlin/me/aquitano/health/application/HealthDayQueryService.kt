@@ -2,6 +2,7 @@ package me.aquitano.health.application
 
 import me.aquitano.health.api.dto.*
 import me.aquitano.health.application.metric.common.QueryParams
+import me.aquitano.health.application.metric.common.singleSource
 import me.aquitano.health.application.metric.common.toResponse
 import me.aquitano.health.domain.BodyMetricTypes
 import me.aquitano.health.domain.RequestValidationException
@@ -130,7 +131,7 @@ class HealthDayQueryService(
 }
 
 class StepsDayModule(
-    private val canonicalRepository: CanonicalStepDerivationRepository = CanonicalStepDerivationRepository(),
+    private val canonicalRepository: CanonicalStepDerivationRepository,
 ) : HealthDayModule<HealthDayStepsResponse> {
     override val name = "steps"
 
@@ -166,13 +167,13 @@ class StepsDayModule(
                     count = counts[index],
                 )
             },
-            source = rows.singleSource(context.includeSource, sourceMetadata) { it.sourceInstanceId },
+            source = rows.singleSource(sourceMetadata) { it.sourceInstanceId },
         )
     }
 }
 
 class HeartRateDayModule(
-    private val scalarRepository: ScalarSampleReadRepository = ScalarSampleReadRepository(),
+    private val scalarRepository: ScalarSampleReadRepository,
 ) : HealthDayModule<HealthDayHeartRateResponse> {
     override val name = "heartRate"
 
@@ -218,7 +219,7 @@ class HeartRateDayModule(
 }
 
 class WeightDayModule(
-    private val scalarRepository: ScalarSampleReadRepository = ScalarSampleReadRepository(),
+    private val scalarRepository: ScalarSampleReadRepository,
 ) : HealthDayModule<HealthDayWeightResponse> {
     override val name = "weight"
 
@@ -242,7 +243,7 @@ class WeightDayModule(
 }
 
 class SleepDayModule(
-    private val sleepRepository: SleepRepository = SleepRepository(),
+    private val sleepRepository: SleepRepository,
 ) : HealthDayModule<HealthDaySleepResponse> {
     override val name = "sleep"
 

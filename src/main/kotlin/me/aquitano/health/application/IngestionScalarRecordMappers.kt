@@ -96,13 +96,11 @@ internal fun mapScalarSample(
             providerRecordId = dto.providerRecordId,
             normalizedRecordJson = dto.toNormalizedJsonObject(),
             measuredAt = measuredAt,
-            values = listOf(
-                ScalarValue(
-                    metricType = descriptor.metricType,
-                    value = dto.value,
-                    context = context,
-                    segment = dto.segment,
-                )
+            value = ScalarValue(
+                metricType = descriptor.metricType,
+                value = dto.value,
+                context = context,
+                segment = dto.segment,
             ),
         )
     } else {

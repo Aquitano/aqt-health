@@ -77,7 +77,7 @@ class ProviderSyncJobService(
     ): ProviderSyncJobStartResponse {
         val provider = providerRegistry.getProvider(providerCode)
             ?: throw NotFoundException("Provider '$providerCode' not found")
-        val domainRequest = workflowService.toDomainSyncRequest(request, now)
+        val domainRequest = request.toDomain(now)
         val requestHash = syncRequestHash(request)
         if (idempotencyKey != null) {
             repository.findByIdempotencyKey(provider.providerCode, idempotencyKey)
@@ -227,7 +227,7 @@ class ProviderSyncJobService(
      * and provider_sync_runs; API responses keep returning the hyphenated wire code.
      */
     private fun wireProviderCode(providerCode: String): String =
-        providerRegistry.getProviderDescriptor(providerCode)?.providerCode ?: providerCode
+        providerRegistry.getProvider(providerCode)?.descriptor?.providerCode ?: providerCode
 
     private fun ProviderSyncJobRecord.toDto(): ProviderSyncJobStatusResponse =
         ProviderSyncJobStatusResponse(

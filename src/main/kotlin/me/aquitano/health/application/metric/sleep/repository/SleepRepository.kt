@@ -6,60 +6,11 @@ import me.aquitano.health.infrastructure.database.tables.*
 import me.aquitano.health.infrastructure.database.toApiString
 import me.aquitano.health.application.metric.common.repository.BaseMetricReadRepository
 import me.aquitano.health.application.metric.common.repository.LocalDayOf
-import me.aquitano.health.application.metric.common.repository.TimeFilterMode
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.jdbc.*
-import java.time.Instant
 
 class SleepRepository : BaseMetricReadRepository() {
-    fun listSleepSessions(filters: ReadFilters): Triple<List<SleepSessionRow>, Map<Int, List<SleepStageRow>>, Map<Int, SourceMetadata>> {
-        val where = timestampConditions(
-            filters = filters,
-            sourceInstanceIdColumn = SleepSessionsTable.sourceInstanceId,
-            fromColumn = SleepSessionsTable.startAt,
-        ).whereOrNull() ?: return emptyTripleReadResult()
-
-        val sessions = SleepSessionsTable.selectAll()
-            .where(where)
-            .orderBy(
-                SleepSessionsTable.startAt to filters.sortOrder(),
-                SleepSessionsTable.id to filters.sortOrder(),
-            )
-            .limit(filters.limit)
-            .map(::toSleepSessionRow)
-        val stagesBySession = sleepStagesBySession(sessions.map { it.id })
-        val metadata = sourceMetadata(
-            sessions.map { it.sourceInstanceId }.toSet(),
-            filters.includeSource
-        )
-        return Triple(sessions, stagesBySession, metadata)
-    }
-
-    fun listSleepSessionsOverlappingWindow(filters: ReadFilters): Triple<List<SleepSessionRow>, Map<Int, List<SleepStageRow>>, Map<Int, SourceMetadata>> {
-        val where = timestampConditions(
-            filters = filters,
-            sourceInstanceIdColumn = SleepSessionsTable.sourceInstanceId,
-            fromColumn = SleepSessionsTable.startAt,
-            toColumn = SleepSessionsTable.endAt,
-            mode = TimeFilterMode.OVERLAPS_WINDOW,
-        ).whereOrNull() ?: return emptyTripleReadResult()
-
-        val sessions = SleepSessionsTable.selectAll()
-            .where(where)
-            .orderBy(
-                SleepSessionsTable.startAt to SortOrder.ASC,
-                SleepSessionsTable.id to SortOrder.ASC,
-            )
-            .map(::toSleepSessionRow)
-        val stagesBySession = sleepStagesBySession(sessions.map { it.id })
-        val metadata = sourceMetadata(
-            sessions.map { it.sourceInstanceId }.toSet(),
-            filters.includeSource
-        )
-        return Triple(sessions, stagesBySession, metadata)
-    }
-
     /**
      * Sleep nights are not stored: a night is the canonical sleep session labelled with the
      * local date it ended on, so the label is computed in the requested timezone at read time
@@ -107,67 +58,6 @@ class SleepRepository : BaseMetricReadRepository() {
         return Triple(nights, stagesBySession, metadata)
     }
 
-    fun latestSleepSession(filters: ReadFilters): Triple<SleepSessionRow?, Map<Int, List<SleepStageRow>>, Map<Int, SourceMetadata>> {
-        val where = timestampConditions(
-            filters = filters,
-            sourceInstanceIdColumn = SleepSessionsTable.sourceInstanceId,
-            fromColumn = SleepSessionsTable.startAt,
-        ).whereOrNull() ?: return emptyTripleLatestResult()
-
-        val session = SleepSessionsTable.selectAll()
-            .where(where)
-            .orderBy(
-                SleepSessionsTable.startAt to SortOrder.DESC,
-                SleepSessionsTable.id to SortOrder.DESC,
-            )
-            .limit(1)
-            .map(::toSleepSessionRow)
-            .singleOrNull()
-        val stagesBySession = sleepStagesBySession(listOfNotNull(session?.id))
-        val metadata = sourceMetadata(
-            listOfNotNull(session?.sourceInstanceId).toSet(),
-            filters.includeSource
-        )
-        return Triple(session, stagesBySession, metadata)
-    }
-
-    fun listSleepSummaries(filters: ReadFilters): Pair<List<SleepSummaryRow>, Map<Int, SourceMetadata>> {
-        val where = timestampConditions(
-            filters = filters,
-            sourceInstanceIdColumn = SleepSummariesTable.sourceInstanceId,
-            fromColumn = SleepSummariesTable.startAt,
-        ).whereOrNull() ?: return emptyReadResult()
-
-        val rows = SleepSummariesTable.selectAll()
-            .where(where)
-            .orderBy(
-                SleepSummariesTable.endAt to filters.sortOrder(),
-                SleepSummariesTable.id to filters.sortOrder(),
-            )
-            .limit(filters.limit)
-            .map(::toSleepSummaryRow)
-        return rows to sourceMetadata(rows.map { it.sourceInstanceId }.toSet(), filters.includeSource)
-    }
-
-    fun latestSleepSummary(filters: ReadFilters): Pair<SleepSummaryRow?, Map<Int, SourceMetadata>> {
-        val where = timestampConditions(
-            filters = filters,
-            sourceInstanceIdColumn = SleepSummariesTable.sourceInstanceId,
-            fromColumn = SleepSummariesTable.startAt,
-        ).whereOrNull() ?: return emptyLatestResult()
-
-        val row = SleepSummariesTable.selectAll()
-            .where(where)
-            .orderBy(
-                SleepSummariesTable.endAt to SortOrder.DESC,
-                SleepSummariesTable.id to SortOrder.DESC,
-            )
-            .limit(1)
-            .map(::toSleepSummaryRow)
-            .singleOrNull()
-        return row to sourceMetadata(listOfNotNull(row?.sourceInstanceId).toSet(), filters.includeSource)
-    }
-
     private fun toSleepStageRow(row: ResultRow): SleepStageRow =
         SleepStageRow(
             stage = row[SleepStagesTable.stage],
@@ -176,7 +66,7 @@ class SleepRepository : BaseMetricReadRepository() {
             durationSeconds = row[SleepStagesTable.durationSeconds],
         )
 
-    fun sleepStagesBySession(sessionIds: List<Int>): Map<Int, List<SleepStageRow>> {
+    private fun sleepStagesBySession(sessionIds: List<Int>): Map<Int, List<SleepStageRow>> {
         if (sessionIds.isEmpty()) return emptyMap()
         return SleepStagesTable.selectAll()
             .where { SleepStagesTable.sleepSessionId inList sessionIds }

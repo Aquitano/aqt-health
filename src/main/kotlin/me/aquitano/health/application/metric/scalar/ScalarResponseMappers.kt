@@ -1,16 +1,8 @@
 package me.aquitano.health.application.metric.scalar
 
 import me.aquitano.health.api.dto.ScalarSampleResponse
-import me.aquitano.health.api.dto.SourceMetadataResponse
 import me.aquitano.health.application.metric.common.repository.SourceMetadata
-
-private fun Map<Int, SourceMetadata>.responseFor(sourceInstanceId: Int): SourceMetadataResponse? =
-    this[sourceInstanceId]?.let {
-        SourceMetadataResponse(
-            provider = it.provider,
-            providerInstanceId = it.providerInstanceId,
-        )
-    }
+import me.aquitano.health.application.metric.common.toResponse
 
 internal fun ScalarSampleRow.toScalarResponse(
     sourceMetadata: Map<Int, SourceMetadata>,
@@ -23,5 +15,5 @@ internal fun ScalarSampleRow.toScalarResponse(
         unit = unit,
         context = context,
         segment = segment,
-        source = sourceMetadata.responseFor(sourceInstanceId),
+        source = sourceMetadata[sourceInstanceId].toResponse(),
     )

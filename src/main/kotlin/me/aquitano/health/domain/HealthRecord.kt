@@ -48,7 +48,7 @@ data class ScalarSampleRecord(
     override val providerRecordId: String?,
     override val normalizedRecordJson: JsonObject,
     val measuredAt: Instant,
-    val values: List<ScalarValue>,
+    val value: ScalarValue,
 ) : HealthRecord {
     override val recordType: String = RecordTypes.SCALAR
     override val recordStartAt: Instant = measuredAt

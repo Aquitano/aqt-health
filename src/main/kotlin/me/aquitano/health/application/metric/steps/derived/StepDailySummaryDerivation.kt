@@ -4,11 +4,8 @@ import me.aquitano.health.application.metric.steps.repository.StepDailySummaryDe
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneId
 import java.time.ZoneOffset
 import kotlin.math.roundToInt
-
-private const val STEP_DAILY_SUMMARY_ALGORITHM_VERSION = 1
 
 class StepDailySummaryDerivation(
     private val repository: StepDailySummaryDerivationRepository,
@@ -30,8 +27,6 @@ class StepDailySummaryDerivation(
                 StepDailySummaryOutput(
                     sourceInstanceId = sourceInstanceId,
                     date = date,
-                    timezone = ZoneOffset.UTC,
-                    algorithmVersion = STEP_DAILY_SUMMARY_ALGORITHM_VERSION,
                     computedAt = computedAt,
                     steps = samples.sumOf { allocatedStepsForDay(it, dayStart, dayEnd) },
                     sampleCount = samples.size,
@@ -39,7 +34,6 @@ class StepDailySummaryDerivation(
             )
         }
     }
-
 }
 
 /**
@@ -74,8 +68,6 @@ data class StepDailySummaryRawSample(
 data class StepDailySummaryOutput(
     val sourceInstanceId: Int,
     val date: LocalDate,
-    val timezone: ZoneId,
-    val algorithmVersion: Int,
     val computedAt: Instant,
     val steps: Int,
     val sampleCount: Int,

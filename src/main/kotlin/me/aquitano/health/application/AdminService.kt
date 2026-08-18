@@ -27,8 +27,19 @@ class AdminService(
     private val database: Database,
     private val ingestionRepository: IngestionRepository,
 ) {
-    suspend fun listBatches(params: QueryParams): IngestionBatchesResponse {
-        val status = params.optional("status")
+    suspend fun listBatches(params: QueryParams): IngestionBatchesResponse =
+        listBatches(params, statusOverride = null)
+
+    suspend fun listFailures(params: QueryParams): IngestionBatchesResponse =
+        listBatches(params, statusOverride = "failed")
+
+    /** [statusOverride] pins the status filter for the failures endpoint; the rest of the
+     * filters, paging, and sorting are identical either way. */
+    private suspend fun listBatches(
+        params: QueryParams,
+        statusOverride: String?,
+    ): IngestionBatchesResponse {
+        val status = statusOverride ?: params.optional("status")
         if (status != null && BatchStatus.entries.none { it.stored == status }) {
             throw RequestValidationException(
                 listOf(
@@ -83,9 +94,6 @@ class AdminService(
             )
         }
     }
-
-    suspend fun listFailures(params: QueryParams): IngestionBatchesResponse =
-        listBatches(QueryParams(params.asMap() + ("status" to "failed")))
 
     suspend fun getBatchDetail(
         batchIdValue: String?,
@@ -164,9 +172,4 @@ class AdminService(
         }
     }
 
-}
-
-fun QueryParams.asMap(): Map<String, String?> {
-    val names = listOf("status", "from", "to", "limit", "cursor")
-    return names.associateWith { optional(it) }
 }

@@ -21,6 +21,19 @@ internal fun SourceMetadata?.toResponse(): SourceMetadataResponse? =
         )
     }
 
+/**
+ * Source attribution for an aggregate: reported only when every contributing row came from the
+ * same source instance, so a merged multi-provider result is left unattributed.
+ */
+internal fun <T> Iterable<T>.singleSource(
+    sourceMetadata: Map<Int, SourceMetadata>,
+    sourceInstanceId: (T) -> Int,
+): SourceMetadataResponse? {
+    val ids = mapTo(linkedSetOf(), sourceInstanceId)
+    if (ids.size != 1) return null
+    return sourceMetadata[ids.single()].toResponse()
+}
+
 internal fun ActivitySummaryRow.toResponse(
     sourceMetadata: Map<Int, SourceMetadata>,
 ): ActivitySummaryResponse =
