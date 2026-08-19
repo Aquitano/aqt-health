@@ -419,6 +419,30 @@ class WithingsProviderTest {
         )
     }
 
+    @Test
+    fun sleepIsFetchedWithALookbehindSoNightsArriveWhole() = runBlocking {
+        val fixture = Fixture()
+        fixture.seedAccount()
+        val request = ProviderSyncRequest(
+            from = Instant.parse("2026-04-01T00:00:00Z"),
+            to = Instant.parse("2026-04-02T00:00:00Z"),
+            dataTypes = listOf("sleep"),
+        )
+
+        fixture.provider.sync(request, fixture.now)
+
+        assertEquals(
+            listOf(
+                WithingsFetchRequest(
+                    "sleep",
+                    Instant.parse("2026-03-31T00:00:00Z"),
+                    Instant.parse("2026-04-02T00:00:00Z"),
+                ),
+            ),
+            fixture.client.fetchRequests,
+        )
+    }
+
     private class Fixture(
         val dbPath: DatabaseConfig = PostgresTestDatabase.config(),
         val now: Instant = Instant.parse("2026-04-20T10:00:00Z"),
