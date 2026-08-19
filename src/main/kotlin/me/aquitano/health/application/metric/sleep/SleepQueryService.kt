@@ -36,7 +36,7 @@ class SleepQueryService(
                 limit = filters.limit,
                 sort = filters.sort,
                 order = filters.order,
-                sortValue = { it.startAt },
+                sortValue = { it.startAt.toString() },
                 id = { it.id.toLong() },
             )
             val stagesBySession =

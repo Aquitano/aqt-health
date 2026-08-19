@@ -30,7 +30,7 @@ class CardiovascularQueryService(
                 limit = filters.limit,
                 sort = filters.sort,
                 order = filters.order,
-                sortValue = { it.measuredAt },
+                sortValue = { it.measuredAt.toString() },
                 id = { it.id.toLong() },
             )
             BloodPressureMeasurementsResponse(

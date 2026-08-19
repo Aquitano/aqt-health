@@ -3,7 +3,6 @@ package me.aquitano.health.application.metric.cardiovascular.repository
 import me.aquitano.health.application.metric.common.keysetFetchLimit
 import me.aquitano.health.application.metric.common.repository.*
 import me.aquitano.health.infrastructure.database.tables.*
-import me.aquitano.health.infrastructure.database.toApiString
 import me.aquitano.health.application.metric.common.repository.BaseMetricReadRepository
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.core.eq
@@ -38,7 +37,7 @@ class CardiovascularRepository : BaseMetricReadRepository() {
         BloodPressureMeasurementRow(
             id = row[BloodPressureMeasurementsTable.id].value,
             sourceInstanceId = row[BloodPressureMeasurementsTable.sourceInstanceId],
-            measuredAt = row[BloodPressureMeasurementsTable.measuredAt].toApiString(),
+            measuredAt = row[BloodPressureMeasurementsTable.measuredAt].toInstant(),
             systolicMmhg = row[BloodPressureMeasurementsTable.systolicMmhg],
             diastolicMmhg = row[BloodPressureMeasurementsTable.diastolicMmhg],
             heartRateBpm = row[BloodPressureMeasurementsTable.heartRateBpm],

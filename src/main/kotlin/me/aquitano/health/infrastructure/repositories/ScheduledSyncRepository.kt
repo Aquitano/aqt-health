@@ -43,17 +43,7 @@ class ScheduledSyncRepository(private val database: Database) {
         providerCode: String,
         providerInstanceId: String,
     ): ScheduledSyncConfigRecord? =
-        suspendDbTransaction(db = database) {
-            ProviderScheduledSyncConfigsTable
-                .selectAll()
-                .where {
-                    (ProviderScheduledSyncConfigsTable.providerCode eq providerCode) and
-                            (ProviderScheduledSyncConfigsTable.providerInstanceId eq providerInstanceId)
-                }
-                .limit(1)
-                .map { it.toConfig() }
-                .singleOrNull()
-        }
+        suspendDbTransaction(db = database) { configBy(providerCode, providerInstanceId) }
 
     suspend fun upsertConfig(
         providerCode: String,
@@ -66,51 +56,42 @@ class ScheduledSyncRepository(private val database: Database) {
         now: Instant,
     ): ScheduledSyncConfigRecord =
         suspendDbTransaction(db = database) {
-            val encodedDataTypes = encodeDataTypes(dataTypes)
             val nowTimestamp = now.toDbTimestamp()
-            val existing = ProviderScheduledSyncConfigsTable
-                .selectAll()
-                .where {
-                    (ProviderScheduledSyncConfigsTable.providerCode eq providerCode) and
-                            (ProviderScheduledSyncConfigsTable.providerInstanceId eq providerInstanceId)
-                }
-                .limit(1)
-                .singleOrNull()
-
-            val id = if (existing == null) {
-                ProviderScheduledSyncConfigsTable.insertAndGetId {
-                    it[this.providerCode] = providerCode
-                    it[this.providerInstanceId] = providerInstanceId
-                    it[this.enabled] = enabled
-                    it[this.dataTypes] = encodedDataTypes
-                    it[this.cadenceMinutes] = cadenceMinutes
-                    it[this.lookbackDays] = lookbackDays
-                    it[lastSuccessfulFrom] = null
-                    it[lastSuccessfulTo] = null
-                    it[lastSuccessAt] = null
-                    it[lastAttemptedAt] = null
-                    it[failureCount] = 0
-                    it[this.nextRunAt] = nextRunAt?.toDbTimestamp()
-                    it[lastErrorMessage] = null
-                    it[createdAt] = nowTimestamp
-                    it[updatedAt] = nowTimestamp
-                }.value
-            } else {
-                val existingId = existing[ProviderScheduledSyncConfigsTable.id].value
-                ProviderScheduledSyncConfigsTable.update({
-                    ProviderScheduledSyncConfigsTable.id eq existing[ProviderScheduledSyncConfigsTable.id]
-                }) {
-                    it[this.enabled] = enabled
-                    it[this.dataTypes] = encodedDataTypes
-                    it[this.cadenceMinutes] = cadenceMinutes
-                    it[this.lookbackDays] = lookbackDays
-                    it[this.nextRunAt] = nextRunAt?.toDbTimestamp()
-                    it[updatedAt] = nowTimestamp
-                }
-                existingId
+            // Run history (last success/attempt, failure count, last error) belongs to the
+            // scheduler, not to a config edit, so an update leaves those columns alone.
+            ProviderScheduledSyncConfigsTable.upsert(
+                ProviderScheduledSyncConfigsTable.providerCode,
+                ProviderScheduledSyncConfigsTable.providerInstanceId,
+                onUpdateExclude = listOf(
+                    ProviderScheduledSyncConfigsTable.lastSuccessfulFrom,
+                    ProviderScheduledSyncConfigsTable.lastSuccessfulTo,
+                    ProviderScheduledSyncConfigsTable.lastSuccessAt,
+                    ProviderScheduledSyncConfigsTable.lastAttemptedAt,
+                    ProviderScheduledSyncConfigsTable.failureCount,
+                    ProviderScheduledSyncConfigsTable.lastErrorMessage,
+                    ProviderScheduledSyncConfigsTable.createdAt,
+                ),
+            ) {
+                it[this.providerCode] = providerCode
+                it[this.providerInstanceId] = providerInstanceId
+                it[this.enabled] = enabled
+                it[this.dataTypes] = encodeDataTypes(dataTypes)
+                it[this.cadenceMinutes] = cadenceMinutes
+                it[this.lookbackDays] = lookbackDays
+                it[lastSuccessfulFrom] = null
+                it[lastSuccessfulTo] = null
+                it[lastSuccessAt] = null
+                it[lastAttemptedAt] = null
+                it[failureCount] = 0
+                it[this.nextRunAt] = nextRunAt?.toDbTimestamp()
+                it[lastErrorMessage] = null
+                it[createdAt] = nowTimestamp
+                it[updatedAt] = nowTimestamp
             }
-            syncCheckpointRows(id, dataTypes, now)
-            configById(id) ?: error("Scheduled sync config was not persisted")
+            val config = configBy(providerCode, providerInstanceId)
+                ?: error("Scheduled sync config was not persisted")
+            syncCheckpointRows(config.id, dataTypes, now)
+            config
         }
 
     suspend fun dueConfigs(
@@ -155,34 +136,19 @@ class ScheduledSyncRepository(private val database: Database) {
         now: Instant,
     ) {
         suspendDbTransaction(db = database) {
-            val existing = ProviderScheduledSyncCheckpointsTable
-                .selectAll()
-                .where {
-                    (ProviderScheduledSyncCheckpointsTable.configId eq configId) and
-                            (ProviderScheduledSyncCheckpointsTable.dataType eq dataType)
-                }
-                .limit(1)
-                .singleOrNull()
             val nowTimestamp = now.toDbTimestamp()
-            if (existing == null) {
-                ProviderScheduledSyncCheckpointsTable.insert {
-                    it[this.configId] = configId
-                    it[this.dataType] = dataType
-                    it[checkpointAt] = to.toDbTimestamp()
-                    it[lastSuccessfulFrom] = from.toDbTimestamp()
-                    it[lastSuccessfulTo] = to.toDbTimestamp()
-                    it[createdAt] = nowTimestamp
-                    it[updatedAt] = nowTimestamp
-                }
-            } else {
-                ProviderScheduledSyncCheckpointsTable.update({
-                    ProviderScheduledSyncCheckpointsTable.id eq existing[ProviderScheduledSyncCheckpointsTable.id]
-                }) {
-                    it[checkpointAt] = to.toDbTimestamp()
-                    it[lastSuccessfulFrom] = from.toDbTimestamp()
-                    it[lastSuccessfulTo] = to.toDbTimestamp()
-                    it[updatedAt] = nowTimestamp
-                }
+            ProviderScheduledSyncCheckpointsTable.upsert(
+                ProviderScheduledSyncCheckpointsTable.configId,
+                ProviderScheduledSyncCheckpointsTable.dataType,
+                onUpdateExclude = listOf(ProviderScheduledSyncCheckpointsTable.createdAt),
+            ) {
+                it[this.configId] = configId
+                it[this.dataType] = dataType
+                it[checkpointAt] = to.toDbTimestamp()
+                it[lastSuccessfulFrom] = from.toDbTimestamp()
+                it[lastSuccessfulTo] = to.toDbTimestamp()
+                it[createdAt] = nowTimestamp
+                it[updatedAt] = nowTimestamp
             }
         }
     }
@@ -229,34 +195,35 @@ class ScheduledSyncRepository(private val database: Database) {
         dataTypes: List<String>,
         now: Instant,
     ) {
-        val existing = ProviderScheduledSyncCheckpointsTable
-            .selectAll()
-            .where { ProviderScheduledSyncCheckpointsTable.configId eq configId }
-            .associateBy { it[ProviderScheduledSyncCheckpointsTable.dataType] }
         val nowTimestamp = now.toDbTimestamp()
         ProviderScheduledSyncCheckpointsTable.deleteWhere {
             (ProviderScheduledSyncCheckpointsTable.configId eq configId) and
                     (ProviderScheduledSyncCheckpointsTable.dataType notInList dataTypes)
         }
+        // Newly selected data types start without a checkpoint; existing ones keep theirs.
         dataTypes.forEach { dataType ->
-            if (!existing.containsKey(dataType)) {
-                ProviderScheduledSyncCheckpointsTable.insert {
-                    it[this.configId] = configId
-                    it[this.dataType] = dataType
-                    it[checkpointAt] = null
-                    it[lastSuccessfulFrom] = null
-                    it[lastSuccessfulTo] = null
-                    it[createdAt] = nowTimestamp
-                    it[updatedAt] = nowTimestamp
-                }
+            ProviderScheduledSyncCheckpointsTable.insertIgnore {
+                it[this.configId] = configId
+                it[this.dataType] = dataType
+                it[checkpointAt] = null
+                it[lastSuccessfulFrom] = null
+                it[lastSuccessfulTo] = null
+                it[createdAt] = nowTimestamp
+                it[updatedAt] = nowTimestamp
             }
         }
     }
 
-    private fun configById(id: Int): ScheduledSyncConfigRecord? =
+    private fun configBy(
+        providerCode: String,
+        providerInstanceId: String,
+    ): ScheduledSyncConfigRecord? =
         ProviderScheduledSyncConfigsTable
             .selectAll()
-            .where { ProviderScheduledSyncConfigsTable.id eq id }
+            .where {
+                (ProviderScheduledSyncConfigsTable.providerCode eq providerCode) and
+                        (ProviderScheduledSyncConfigsTable.providerInstanceId eq providerInstanceId)
+            }
             .limit(1)
             .map { it.toConfig() }
             .singleOrNull()
@@ -293,9 +260,3 @@ class ScheduledSyncRepository(private val database: Database) {
             updatedAt = this[ProviderScheduledSyncCheckpointsTable.updatedAt].toInstant(),
         )
 }
-
-private fun encodeDataTypes(dataTypes: List<String>): String =
-    dataTypes.joinToString(",")
-
-private fun decodeDataTypes(value: String): List<String> =
-    value.split(",").map { it.trim() }.filter { it.isNotBlank() }

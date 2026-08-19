@@ -6,6 +6,7 @@ import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.core.plus
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insertIgnore
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -59,7 +60,7 @@ class ReplayJobRepository(private val database: Database) {
                 it[this.idempotencyKey] = idempotencyKey
                 it[this.idempotencyRequestHash] = idempotencyRequestHash
                 it[this.scope] = scope
-                it[this.metricTypes] = metricTypes?.joinToString(",")
+                it[this.metricTypes] = metricTypes?.let(::encodeDataTypes)
                 it[this.fromDate] = fromDate
                 it[this.toDate] = toDate
                 it[this.wipe] = wipe
@@ -126,13 +127,14 @@ class ReplayJobRepository(private val database: Database) {
         now: Instant,
     ) {
         suspendDbTransaction(db = database) {
-            val existing = getByIdInTransaction(id) ?: return@suspendDbTransaction
+            // Counters accumulate in SQL so concurrent item completions can't overwrite
+            // each other's increment.
             ReplayJobsTable.update({ ReplayJobsTable.id eq id }) {
-                it[completedItems] = existing.completedItems + 1
-                it[this.recordsReplayed] = existing.recordsReplayed + recordsReplayed
-                it[this.metricsWritten] = existing.metricsWritten + metricsWritten
-                it[this.duplicatesSkipped] = existing.duplicatesSkipped + duplicatesSkipped
-                it[this.mappingFailures] = existing.mappingFailures + mappingFailures
+                it[completedItems] = completedItems + 1
+                it[this.recordsReplayed] = this.recordsReplayed + recordsReplayed
+                it[this.metricsWritten] = this.metricsWritten + metricsWritten
+                it[this.duplicatesSkipped] = this.duplicatesSkipped + duplicatesSkipped
+                it[this.mappingFailures] = this.mappingFailures + mappingFailures
                 it[updatedAt] = now.toDbTimestamp()
             }
         }
@@ -183,9 +185,7 @@ class ReplayJobRepository(private val database: Database) {
             id = this[ReplayJobsTable.id],
             idempotencyRequestHash = this[ReplayJobsTable.idempotencyRequestHash],
             scope = this[ReplayJobsTable.scope],
-            metricTypes = this[ReplayJobsTable.metricTypes]
-                ?.split(",")
-                ?.filter { it.isNotBlank() },
+            metricTypes = this[ReplayJobsTable.metricTypes]?.let(::decodeDataTypes),
             fromDate = this[ReplayJobsTable.fromDate],
             toDate = this[ReplayJobsTable.toDate],
             wipe = this[ReplayJobsTable.wipe],

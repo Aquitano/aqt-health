@@ -33,15 +33,15 @@ class StepQueryService(
                 limit = filters.limit,
                 sort = filters.sort,
                 order = filters.order,
-                sortValue = { it.startAt },
+                sortValue = { it.startAt.toString() },
                 id = { it.id.toLong() },
             )
             StepSamplesResponse(
                 items = page.items.map {
                     StepSampleResponse(
                         id = it.id,
-                        startAt = it.startAt,
-                        endAt = it.endAt,
+                        startAt = it.startAt.toString(),
+                        endAt = it.endAt.toString(),
                         steps = it.steps,
                         source = sourceMetadata[it.sourceInstanceId].toResponse(),
                     )

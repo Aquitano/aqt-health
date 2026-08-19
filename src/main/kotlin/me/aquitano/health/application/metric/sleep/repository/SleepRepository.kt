@@ -3,7 +3,6 @@ package me.aquitano.health.application.metric.sleep.repository
 import me.aquitano.health.application.metric.common.keysetFetchLimit
 import me.aquitano.health.application.metric.common.repository.*
 import me.aquitano.health.infrastructure.database.tables.*
-import me.aquitano.health.infrastructure.database.toApiString
 import me.aquitano.health.application.metric.common.repository.BaseMetricReadRepository
 import me.aquitano.health.application.metric.common.repository.LocalDayOf
 import org.jetbrains.exposed.v1.core.*
@@ -61,8 +60,8 @@ class SleepRepository : BaseMetricReadRepository() {
     private fun toSleepStageRow(row: ResultRow): SleepStageRow =
         SleepStageRow(
             stage = row[SleepStagesTable.stage],
-            startAt = row[SleepStagesTable.startAt].toApiString(),
-            endAt = row[SleepStagesTable.endAt].toApiString(),
+            startAt = row[SleepStagesTable.startAt].toInstant(),
+            endAt = row[SleepStagesTable.endAt].toInstant(),
             durationSeconds = row[SleepStagesTable.durationSeconds],
         )
 

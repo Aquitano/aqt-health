@@ -149,7 +149,7 @@ class StepsDayModule(
         val byStart = buckets.mapIndexed { index, bucket -> bucket.first to index }.toMap()
         canonicalRepository.listBucketContributions(filters, CANONICAL_STEP_ALGORITHM_VERSION)
             .forEach { contribution ->
-                val index = byStart[Instant.parse(contribution.bucketStartAt)]
+                val index = byStart[contribution.bucketStartAt]
                 if (index != null) {
                     values[index] += contribution.value
                     counts[index] += 1
@@ -263,8 +263,8 @@ class SleepDayModule(
             sleepRepository.listCanonicalSleepNights(filters)
         val sessions = nights
             .filter { night ->
-                Instant.parse(night.session.startAt).isBefore(context.to) &&
-                    Instant.parse(night.session.endAt).isAfter(context.from)
+                night.session.startAt.isBefore(context.to) &&
+                    night.session.endAt.isAfter(context.from)
             }
             .groupBy { it.date }
             .flatMap { (_, nightsForDate) ->
@@ -276,28 +276,17 @@ class SleepDayModule(
                 nightsForDate.filter { it.session.sourceInstanceId == winningSource }
             }
             .map { it.session }
-        val timeline = sessions.flatMap { session ->
+        val segments = sessions.flatMap { session ->
             stagesBySession[session.id].orEmpty().mapNotNull { stage ->
-                val start = maxOf(Instant.parse(stage.startAt), context.from)
-                val end = minOf(Instant.parse(stage.endAt), context.to)
-                if (!start.isBefore(end)) {
-                    null
-                } else {
-                    HealthDaySleepStageSegmentResponse(
-                        stage = stage.stage,
-                        startAt = start.toString(),
-                        endAt = end.toString(),
-                    )
-                }
+                val start = maxOf(stage.startAt, context.from)
+                val end = minOf(stage.endAt, context.to)
+                if (start.isBefore(end)) SleepStageSegment(stage.stage, start, end) else null
             }
         }.sortedBy { it.startAt }
-        val stageTotals = timeline
+        val stageTotals = segments
             .groupingBy { it.stage }
             .fold(0L) { total, segment ->
-                total + Duration.between(
-                    Instant.parse(segment.startAt),
-                    Instant.parse(segment.endAt)
-                ).seconds
+                total + Duration.between(segment.startAt, segment.endAt).seconds
             }
             .map { (stage, duration) ->
                 HealthDaySleepStageTotalResponse(stage, duration)
@@ -308,10 +297,23 @@ class SleepDayModule(
             totalDurationSeconds = stageTotals.sumOf { it.durationSeconds },
             sessions = sessions.map { it.toResponse(stagesBySession, sourceMetadata) },
             stageTotals = stageTotals,
-            timeline = timeline,
+            timeline = segments.map {
+                HealthDaySleepStageSegmentResponse(
+                    stage = it.stage,
+                    startAt = it.startAt.toString(),
+                    endAt = it.endAt.toString(),
+                )
+            },
         )
     }
 }
+
+/** A sleep stage clipped to the requested day, before it is formatted for the response. */
+private data class SleepStageSegment(
+    val stage: String,
+    val startAt: Instant,
+    val endAt: Instant,
+)
 
 private fun HealthDayQueryContext.filters(): ReadFilters =
     ReadFilters(

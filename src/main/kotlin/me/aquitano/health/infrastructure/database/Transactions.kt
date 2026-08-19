@@ -36,3 +36,18 @@ suspend fun <T> suspendDbTransaction(
     withContext(DatabaseDispatchers.forDatabase(db)) {
         suspendTransaction(db = db, statement = statement)
     }
+
+/**
+ * Runs [block] inside a savepoint so a failure rolls back only the writes it made. Postgres
+ * aborts the whole transaction on a SQL error (25P02), so without this the caller cannot record
+ * the failure in the same transaction. The exception is rethrown either way.
+ */
+inline fun <T> JdbcTransaction.withSavepoint(name: String, block: () -> T): T {
+    val savepoint = connection.setSavepoint(name)
+    return try {
+        block().also { connection.releaseSavepoint(savepoint) }
+    } catch (exception: Throwable) {
+        connection.rollback(savepoint)
+        throw exception
+    }
+}

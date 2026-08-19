@@ -394,7 +394,7 @@ class ReplayService(
 private fun ReplayPlan.idempotencyRequestHash(): String =
     idempotencyRequestHash(
         scope,
-        recordTypes?.sorted()?.idempotencyListPart(),
+        recordTypes?.idempotencyListPart(),
         fromDate?.toString(),
         toDate?.toString(),
         wipe.toString(),

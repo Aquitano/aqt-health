@@ -7,6 +7,7 @@ import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.core.plus
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insertIgnore
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -169,9 +170,10 @@ class ProviderSyncJobRepository(private val database: Database) {
         now: Instant,
     ) {
         suspendDbTransaction(db = database) {
-            val existing = getByIdInTransaction(id) ?: return@suspendDbTransaction
+            // The counter increments in SQL so concurrent item completions can't overwrite
+            // each other's increment.
             ProviderSyncJobsTable.update({ ProviderSyncJobsTable.id eq id }) {
-                it[completedItems] = existing.completedItems + 1
+                it[completedItems] = completedItems + 1
                 it[lastCompletedDataType] = dataType
                 it[lastCompletedFrom] = from.toDbTimestamp()
                 it[lastCompletedTo] = to.toDbTimestamp()
@@ -302,9 +304,3 @@ class ProviderSyncJobRepository(private val database: Database) {
         )
 
 }
-
-private fun encodeDataTypes(dataTypes: List<String>): String =
-    dataTypes.joinToString(",")
-
-private fun decodeDataTypes(value: String): List<String> =
-    value.split(",").filter { it.isNotBlank() }
