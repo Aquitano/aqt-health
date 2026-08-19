@@ -160,6 +160,7 @@ class ProviderSyncPipeline(
                         fetched = fetched,
                     )
                 )
+                val records = fetched.records.collapseDuplicateProviderRecordIds()
                 val batch = store.ingest(
                     ProviderIngestionCommand(
                         providerCode = adapter.providerCode,
@@ -168,7 +169,7 @@ class ProviderSyncPipeline(
                         dataType = item.dataType,
                         ingestedAt = now,
                         sourcePayload = sourcePayload,
-                        records = fetched.records,
+                        records = records,
                     ),
                     now = now,
                 )
@@ -179,7 +180,8 @@ class ProviderSyncPipeline(
                         "provider" to adapter.providerCode,
                         "dataType" to item.dataType,
                         "pages" to fetched.pagesFetched,
-                        "records" to fetched.records.size,
+                        "records" to records.size,
+                        "duplicateRecordsCollapsed" to (fetched.records.size - records.size),
                         "batchId" to batch.batchId,
                         "duplicateBatch" to batch.duplicateBatch
                     )

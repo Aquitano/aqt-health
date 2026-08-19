@@ -3,6 +3,7 @@ package me.aquitano.health.application.providersync
 import me.aquitano.health.infrastructure.time.UtcClock
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.buildJsonObject
+import me.aquitano.health.api.dto.IngestionRecord
 import me.aquitano.health.api.dto.StepInterval
 import me.aquitano.health.domain.*
 import java.time.Duration
@@ -118,6 +119,27 @@ class ProviderSyncPipelineTest {
     }
 
     @Test
+    fun duplicateProviderRecordIdsCollapseBeforeIngestion() = runBlocking {
+        // Ingestion rejects the whole batch over one repeated id, non-retryably, which parks the
+        // sync schedule. Providers do repeat records inside a window, so the pipeline collapses
+        // them instead, last one winning.
+        val store = FakeStore()
+        val adapter = FakeAdapter(
+            records = listOf(
+                stepInterval(steps = 1200),
+                stepInterval(steps = 1500),
+            ),
+        )
+        val pipeline = ProviderSyncPipeline(store)
+
+        pipeline.sync(adapter, request, now)
+
+        val stored = store.ingested.single().records
+        assertEquals(1, stored.size)
+        assertEquals(1500, (stored.single() as StepInterval).steps)
+    }
+
+    @Test
     fun syncFailureSurfacesSafeMessageNotRawExceptionText() = runBlocking {
         // The raw exception text can carry internal/upstream detail (DB errors, provider response
         // bodies). It must stay in the logs; the client-facing message is the adapter's safe default.
@@ -141,6 +163,7 @@ class ProviderSyncPipelineTest {
         private var throwUnauthorizedOnce: Boolean = false,
         private val itemCount: Int = 1,
         private val fetchFailure: RuntimeException? = null,
+        private val records: List<IngestionRecord> = listOf(stepInterval(steps = 1200)),
         override val providerRequestInterval: Duration = Duration.ZERO,
     ) : ProviderSyncAdapter {
         var fetchCalls = 0
@@ -205,14 +228,7 @@ class ProviderSyncPipelineTest {
                 pagesFetched = 1,
                 sourceRecordsReceived = 1,
                 sourcePayload = buildJsonObject {},
-                records = listOf(
-                    StepInterval(
-                        providerRecordId = "steps-1",
-                        startAt = "2026-04-01T08:00:00Z",
-                        endAt = "2026-04-01T09:00:00Z",
-                        steps = 1200,
-                    )
-                ),
+                records = records,
             )
         }
 
@@ -348,6 +364,14 @@ class ProviderSyncPipelineTest {
 
     private class InvalidRefreshToken : RuntimeException("invalid refresh")
 }
+
+private fun stepInterval(steps: Int): StepInterval =
+    StepInterval(
+        providerRecordId = "steps-1",
+        startAt = "2026-04-01T08:00:00Z",
+        endAt = "2026-04-01T09:00:00Z",
+        steps = steps,
+    )
 
 private fun syncAccount(
     expiresAt: Instant = Instant.parse("2026-04-20T11:00:00Z"),

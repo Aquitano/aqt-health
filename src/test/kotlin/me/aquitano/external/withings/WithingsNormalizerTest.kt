@@ -13,6 +13,7 @@ import me.aquitano.health.api.dto.SleepSession
 import me.aquitano.health.api.dto.IngestionBatchRequest
 import me.aquitano.health.api.dto.StepInterval
 import me.aquitano.health.application.IngestionMappingService
+import me.aquitano.health.application.providersync.collapseDuplicateProviderRecordIds
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -131,6 +132,40 @@ class WithingsNormalizerTest {
         )
         assertEquals("left_arm", sample.segment)
         assertEquals(3.2, sample.value, 0.000001)
+    }
+
+    @Test
+    fun activityFromTwoTrackingDevicesCollapsesToOneRecordPerDate() {
+        // getactivity returns an entry per tracking device, so a user with a watch and the phone
+        // tracker gets the same date twice. Both entries normalize to the same date-keyed ids; the
+        // sync pipeline collapses them the same way before ingestion, last entry winning.
+        val result = normalizer.normalize(
+            fetchResult(
+                "activity",
+                buildJsonObject {
+                    put("date", "2026-04-01")
+                    put("deviceid", "watch-device")
+                    put("brand", 18)
+                    put("steps", 8000)
+                    put("calories", 420)
+                },
+                buildJsonObject {
+                    put("date", "2026-04-01")
+                    put("deviceid", "phone-tracker")
+                    put("brand", 1)
+                    put("steps", 300)
+                    put("calories", 15)
+                },
+            )
+        )
+
+        val records = result.records.collapseDuplicateProviderRecordIds()
+        assertEquals(
+            listOf("withings:activity:2026-04-01", "withings:activity:2026-04-01:summary"),
+            records.map { it.providerRecordId },
+        )
+        assertEquals(300, records.filterIsInstance<StepInterval>().single().steps)
+        assertAcceptedByIngestion(records)
     }
 
     @Test
