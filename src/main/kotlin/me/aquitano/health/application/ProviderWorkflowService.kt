@@ -271,6 +271,13 @@ class ProviderWorkflowService(
 
 }
 
+/**
+ * Ceiling on the range of a single manual sync or sync job. Providers are fetched in throttled
+ * daily windows, so an unbounded range (`from=1970-01-01`) expands into tens of thousands of
+ * upstream requests inside one job. Longer histories are still reachable, one request at a time.
+ */
+val MAX_PROVIDER_SYNC_RANGE: Duration = Duration.ofDays(1095)
+
 internal fun ProviderSyncRequest.toDomain(now: Instant): DomainProviderSyncRequest {
     val issues = mutableListOf<ValidationIssue>()
     val parsedFrom = from?.let { parseInstant(it, "from", issues) }
@@ -310,6 +317,14 @@ internal fun ProviderSyncRequest.toDomain(now: Instant): DomainProviderSyncReque
                 field = "from",
                 code = ValidationIssueCodes.InvalidRange,
                 message = "must be before to",
+            )
+        )
+    } else if (Duration.between(resolvedFrom, resolvedTo) > MAX_PROVIDER_SYNC_RANGE) {
+        issues.add(
+            ValidationIssue(
+                field = "from",
+                code = ValidationIssueCodes.InvalidRange,
+                message = "range must not exceed ${MAX_PROVIDER_SYNC_RANGE.toDays()} days",
             )
         )
     }

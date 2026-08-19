@@ -129,29 +129,18 @@ class ProviderSyncPipeline(
                     ).also { lastProviderRequestCompletedAtNanos = it.completedAtNanos }.batch
                 }
 
-                if (fetched.records.isEmpty()) {
-                    if (adapter.recordEmptyDataTypes) {
-                        emptyDataTypes += ProviderSyncEmptyDataType(
-                            dataType = item.dataType,
-                            pagesFetched = fetched.pagesFetched,
-                            sourceRecordsReceived = fetched.sourceRecordsReceived,
-                            normalizedRecords = 0,
-                        )
-                    }
-                    logger.infoWithContext(
-                        "provider_data_type_synced",
-                        mapOf(
-                            "provider" to adapter.providerCode,
-                            "dataType" to item.dataType,
-                            "pages" to fetched.pagesFetched,
-                            "sourceRecords" to fetched.sourceRecordsReceived,
-                            "normalizedRecords" to 0
-                        )
+                if (fetched.records.isEmpty() && adapter.recordEmptyDataTypes) {
+                    emptyDataTypes += ProviderSyncEmptyDataType(
+                        dataType = item.dataType,
+                        pagesFetched = fetched.pagesFetched,
+                        sourceRecordsReceived = fetched.sourceRecordsReceived,
+                        normalizedRecords = 0,
                     )
-                    progress.itemCompleted(item)
-                    return@forEach
                 }
 
+                // Empty windows are ingested too, as an empty processed batch: that is what marks
+                // the window done, so a sparse day dedupes on the next run instead of being
+                // re-fetched from the provider on every scheduled run.
                 val sourcePayload = adapter.sourcePayload(
                     ProviderSourcePayloadContext(
                         providerCode = adapter.providerCode,

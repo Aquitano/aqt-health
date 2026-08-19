@@ -124,6 +124,26 @@ class GeneratedGoogleHealthClientTest {
     }
 
     @Test
+    fun transportIsSharedAcrossFetchesAndRebuiltOnlyForANewToken() = runBlocking {
+        val fixture = Fixture()
+        repeat(3) {
+            fixture.service.responses += ListDataPointsResponse.newBuilder().build()
+        }
+
+        fixture.client.fetchDataPoints("token-1", "steps", fixture.from, fixture.to, 1000)
+        fixture.client.fetchDataPoints("token-1", "sleep", fixture.from, fixture.to, 1000)
+        assertEquals(listOf("token-1"), fixture.createdTokens)
+
+        // A refreshed token replaces the transport, and the retired one is closed.
+        fixture.client.fetchDataPoints("token-2", "steps", fixture.from, fixture.to, 1000)
+        assertEquals(listOf("token-1", "token-2"), fixture.createdTokens)
+        assertEquals(1, fixture.service.closes)
+
+        fixture.client.close()
+        assertEquals(2, fixture.service.closes)
+    }
+
+    @Test
     fun fetchDataPointsRejectsUnsupportedDataType() = runBlocking {
         val fixture = Fixture()
 
@@ -139,10 +159,14 @@ class GeneratedGoogleHealthClientTest {
         val from: Instant = Instant.parse("2026-04-01T00:00:00Z")
         val to: Instant = Instant.parse("2026-04-02T00:00:00Z")
         val service = FakeDataPointsService()
+        val createdTokens = mutableListOf<String>()
         val client = GeneratedGoogleHealthClient(
             oauthClient = FakeOAuthClient(),
             dataPointsServiceFactory = object : GoogleHealthDataPointsServiceFactory() {
-                override fun create(accessToken: String): GoogleHealthDataPointsService = service
+                override fun create(accessToken: String): GoogleHealthDataPointsService {
+                    createdTokens.add(accessToken)
+                    return service
+                }
             },
             maxPages = maxPages,
         )
@@ -152,6 +176,7 @@ class GeneratedGoogleHealthClientTest {
         val requests = mutableListOf<ListDataPointsRequest>()
         val responses = ArrayDeque<ListDataPointsResponse>()
         var nextFailure: ApiException? = null
+        var closes = 0
 
         override fun listDataPoints(request: ListDataPointsRequest): ListDataPointsResponse {
             requests.add(request)
@@ -162,7 +187,9 @@ class GeneratedGoogleHealthClientTest {
             return responses.removeFirst()
         }
 
-        override fun close() = Unit
+        override fun close() {
+            closes += 1
+        }
     }
 
     private class FakeOAuthClient : GoogleHealthClient {

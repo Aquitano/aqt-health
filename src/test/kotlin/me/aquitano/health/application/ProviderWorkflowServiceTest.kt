@@ -14,6 +14,8 @@ import me.aquitano.health.domain.ProviderAuthType
 import me.aquitano.health.domain.ProviderConnection
 import me.aquitano.health.domain.ProviderSyncSummary
 import me.aquitano.health.domain.ProviderWorkflowEndpoints
+import me.aquitano.health.domain.RequestValidationException
+import me.aquitano.health.domain.ValidationIssueCodes
 import me.aquitano.health.infrastructure.database.DatabaseFactory
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
 import me.aquitano.health.infrastructure.repositories.ProviderSyncIdempotencyRepository
@@ -91,6 +93,30 @@ class ProviderWorkflowServiceTest {
         service.sync(provider.providerCode, request(), now, idempotencyKey = null)
 
         assertEquals(2, provider.syncCalls.get())
+    }
+
+    @Test
+    fun syncRangeBeyondTheCeilingIsRejected() {
+        // from=1970 would otherwise expand into ~20k throttled daily windows in one job.
+        val error = assertFailsWith<RequestValidationException> {
+            request(from = "1970-01-01T00:00:00Z", to = "2026-05-01T00:00:00Z").toDomain(now)
+        }
+
+        assertEquals(listOf("from"), error.issues.map { it.field })
+        assertEquals(
+            listOf(ValidationIssueCodes.InvalidRange),
+            error.issues.map { it.code },
+        )
+    }
+
+    @Test
+    fun syncRangeAtTheCeilingIsAccepted() {
+        val from = now.minus(MAX_PROVIDER_SYNC_RANGE)
+
+        val domain = request(from = from.toString(), to = now.toString()).toDomain(now)
+
+        assertEquals(from, domain.from)
+        assertEquals(now, domain.to)
     }
 
     private fun serviceWith(provider: HealthProvider): ProviderWorkflowService {

@@ -1,6 +1,7 @@
 package me.aquitano.health.api
 
 import io.ktor.server.application.*
+import me.aquitano.external.google.GeneratedGoogleHealthClient
 import me.aquitano.health.application.*
 import me.aquitano.health.di.adminReplayModule
 import me.aquitano.health.di.coreModule
@@ -64,6 +65,12 @@ fun Application.module() {
     val clock by inject<UtcClock>()
     monitor.subscribe(ApplicationStopping) {
         httpClient.close()
+    }
+
+    // Holds one Google Health transport across syncs; released with the other shared clients.
+    val googleHealthClient by inject<GeneratedGoogleHealthClient>()
+    monitor.subscribe(ApplicationStopping) {
+        googleHealthClient.close()
     }
 
     // Start the scheduled sync background job

@@ -118,6 +118,21 @@ class ProviderSyncPipelineTest {
     }
 
     @Test
+    fun emptyWindowIsIngestedSoTheNextRunDedupesInsteadOfRefetching() = runBlocking {
+        val store = FakeStore()
+        val adapter = FakeAdapter(emptyFetch = true)
+        val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+
+        val summary = pipeline.sync(adapter, request, now)
+
+        // The empty processed batch is what marks the window done for the next run.
+        assertEquals(1, store.ingested.size)
+        assertTrue(store.ingested.single().records.isEmpty())
+        assertEquals(1, summary.batches.size)
+        assertEquals(listOf("steps"), summary.emptyDataTypes.map { it.dataType })
+    }
+
+    @Test
     fun syncFailureSurfacesSafeMessageNotRawExceptionText() = runBlocking {
         // The raw exception text can carry internal/upstream detail (DB errors, provider response
         // bodies). It must stay in the logs; the client-facing message is the adapter's safe default.
@@ -141,8 +156,11 @@ class ProviderSyncPipelineTest {
         private var throwUnauthorizedOnce: Boolean = false,
         private val itemCount: Int = 1,
         private val fetchFailure: RuntimeException? = null,
+        private val emptyFetch: Boolean = false,
         override val providerRequestInterval: Duration = Duration.ZERO,
     ) : ProviderSyncAdapter {
+        override val recordEmptyDataTypes: Boolean = true
+
         var fetchCalls = 0
         var refreshCalls = 0
 
@@ -203,16 +221,20 @@ class ProviderSyncPipelineTest {
             return ProviderFetchedBatch(
                 dataType = item.dataType,
                 pagesFetched = 1,
-                sourceRecordsReceived = 1,
+                sourceRecordsReceived = if (emptyFetch) 0 else 1,
                 sourcePayload = buildJsonObject {},
-                records = listOf(
-                    StepInterval(
-                        providerRecordId = "steps-1",
-                        startAt = "2026-04-01T08:00:00Z",
-                        endAt = "2026-04-01T09:00:00Z",
-                        steps = 1200,
+                records = if (emptyFetch) {
+                    emptyList()
+                } else {
+                    listOf(
+                        StepInterval(
+                            providerRecordId = "steps-1",
+                            startAt = "2026-04-01T08:00:00Z",
+                            endAt = "2026-04-01T09:00:00Z",
+                            steps = 1200,
+                        )
                     )
-                ),
+                },
             )
         }
 

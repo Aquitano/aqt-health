@@ -48,11 +48,16 @@ class IngestionService(
             )
         }
 
+    /**
+     * [allowEmptyRecords] lets provider sync store a window that returned nothing as an empty
+     * processed batch, so the window's external id dedupes instead of being re-fetched forever.
+     */
     suspend fun ingestBatch(
         request: IngestionBatchRequest,
-        now: Instant
+        now: Instant,
+        allowEmptyRecords: Boolean = false,
     ): IngestionSummaryResponse {
-        val validated = mappingService.validateAndMap(request)
+        val validated = mappingService.validateAndMap(request, allowEmptyRecords)
         logger.infoWithContext(
             "ingestion_batch_received",
             "provider" to validated.provider,
