@@ -160,17 +160,20 @@ class ProviderSyncPipeline(
                         fetched = fetched,
                     )
                 )
+                // A backfill runs for minutes, so `now` (captured when the run started) would
+                // stamp every batch with the start time. Each batch records when it was ingested.
+                val ingestedAt = clock.now()
                 val batch = store.ingest(
                     ProviderIngestionCommand(
                         providerCode = adapter.providerCode,
                         providerInstanceId = account.providerInstanceId,
                         batchExternalId = batchExternalId,
                         dataType = item.dataType,
-                        ingestedAt = now,
+                        ingestedAt = ingestedAt,
                         sourcePayload = sourcePayload,
                         records = fetched.records,
                     ),
-                    now = now,
+                    now = ingestedAt,
                 )
                 batches += batch
                 logger.infoWithContext(
@@ -227,7 +230,7 @@ class ProviderSyncPipeline(
         store.finishRun(
             runId = runId,
             status = status,
-            finishedAt = now,
+            finishedAt = clock.now(),
             errorMessage = errors.joinToString("; ") { "${it.dataType}: ${it.message}" }
                 .ifBlank { null },
         )

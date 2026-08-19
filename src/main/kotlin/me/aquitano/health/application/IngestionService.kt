@@ -12,6 +12,7 @@ import me.aquitano.health.infrastructure.repositories.SupportRepository
 import me.aquitano.health.shared.AppJson
 import org.jetbrains.exposed.v1.jdbc.Database
 import me.aquitano.health.infrastructure.database.suspendDbTransaction
+import me.aquitano.health.infrastructure.database.withSavepoint
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.aquitano.health.infrastructure.logging.*
 import java.time.Instant
@@ -140,12 +141,18 @@ class IngestionService(
                 var affectedDates = mapOf<DerivedKind, Set<LocalDate>>()
 
                 try {
-                    val writeResult = metricWriteService.writeAll(
-                        provider = validated.provider,
-                        sourceInstanceId = sourceInstance.id,
-                        writes = ingestionRecords.map { MetricWrite(it.id, it.record) },
-                        now = now,
-                    )
+                    // The metric writes run in a savepoint: a SQL-level failure would otherwise
+                    // abort the whole transaction, so markFailed below would throw too and the
+                    // batch row would vanish. Rolling back to the savepoint also drops the metric
+                    // rows written before the failure, so a retry cannot double-record them.
+                    val writeResult = withSavepoint("ingestion_metric_writes") {
+                        metricWriteService.writeAll(
+                            provider = validated.provider,
+                            sourceInstanceId = sourceInstance.id,
+                            writes = ingestionRecords.map { MetricWrite(it.id, it.record) },
+                            now = now,
+                        )
+                    }
                     created = writeResult.created
                     duplicateSkipped = writeResult.duplicateSkipped
                     affectedDates = writeResult.affectedDates

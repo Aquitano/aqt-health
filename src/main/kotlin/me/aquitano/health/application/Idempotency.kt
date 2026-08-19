@@ -8,7 +8,7 @@ internal fun syncRequestHash(request: ProviderSyncRequest): String =
         request.providerInstanceId?.takeIf { it.isNotBlank() },
         request.from,
         request.to,
-        request.dataTypes?.distinct()?.idempotencyListPart(),
+        request.dataTypes?.idempotencyListPart(),
         request.pageSize?.toString(),
     )
 
@@ -25,5 +25,9 @@ internal fun idempotencyRequestHash(vararg parts: String?): String {
     return digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
 }
 
+/**
+ * Order- and duplicate-insensitive: the same key replayed with the type list reordered is the
+ * same request, so it must hash the same instead of raising a spurious idempotency conflict.
+ */
 internal fun Iterable<String>.idempotencyListPart(): String =
-    joinToString("\n")
+    distinct().sorted().joinToString("\n")

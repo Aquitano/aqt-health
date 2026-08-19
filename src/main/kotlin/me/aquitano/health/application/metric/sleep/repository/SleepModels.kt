@@ -2,14 +2,14 @@ package me.aquitano.health.application.metric.sleep.repository
 
 import me.aquitano.health.infrastructure.database.tables.SleepSessionsTable
 import me.aquitano.health.infrastructure.database.tables.SleepSummariesTable
-import me.aquitano.health.infrastructure.database.toApiString
 import org.jetbrains.exposed.v1.core.ResultRow
+import java.time.Instant
 
 data class SleepSessionRow(
     val id: Int,
     val sourceInstanceId: Int,
-    val startAt: String,
-    val endAt: String,
+    val startAt: Instant,
+    val endAt: Instant,
     val durationSeconds: Long
 )
 
@@ -22,16 +22,16 @@ data class SleepNightRow(
 
 data class SleepStageRow(
     val stage: String,
-    val startAt: String,
-    val endAt: String,
+    val startAt: Instant,
+    val endAt: Instant,
     val durationSeconds: Long
 )
 
 data class SleepSummaryRow(
     val id: Int,
     val sourceInstanceId: Int,
-    val startAt: String,
-    val endAt: String,
+    val startAt: Instant,
+    val endAt: Instant,
     val timeInBedSeconds: Long?,
     val totalSleepSeconds: Long?,
     val lightSleepSeconds: Long?,
@@ -66,8 +66,8 @@ internal fun toSleepSessionRow(row: ResultRow): SleepSessionRow =
     SleepSessionRow(
         id = row[SleepSessionsTable.id].value,
         sourceInstanceId = row[SleepSessionsTable.sourceInstanceId],
-        startAt = row[SleepSessionsTable.startAt].toApiString(),
-        endAt = row[SleepSessionsTable.endAt].toApiString(),
+        startAt = row[SleepSessionsTable.startAt].toInstant(),
+        endAt = row[SleepSessionsTable.endAt].toInstant(),
         durationSeconds = row[SleepSessionsTable.durationSeconds],
     )
 
@@ -75,8 +75,8 @@ internal fun toSleepSummaryRow(row: ResultRow): SleepSummaryRow =
     SleepSummaryRow(
         id = row[SleepSummariesTable.id].value,
         sourceInstanceId = row[SleepSummariesTable.sourceInstanceId],
-        startAt = row[SleepSummariesTable.startAt].toApiString(),
-        endAt = row[SleepSummariesTable.endAt].toApiString(),
+        startAt = row[SleepSummariesTable.startAt].toInstant(),
+        endAt = row[SleepSummariesTable.endAt].toInstant(),
         timeInBedSeconds = row[SleepSummariesTable.timeInBedSeconds],
         totalSleepSeconds = row[SleepSummariesTable.totalSleepSeconds],
         lightSleepSeconds = row[SleepSummariesTable.lightSleepSeconds],

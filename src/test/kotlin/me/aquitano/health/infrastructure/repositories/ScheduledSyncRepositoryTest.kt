@@ -41,6 +41,14 @@ class ScheduledSyncRepositoryTest {
         val stepsCheckpoint = repository.checkpoints(config.id).single { it.dataType == "steps" }
         assertEquals(now, stepsCheckpoint.checkpointAt)
 
+        repository.markSuccess(
+            configId = config.id,
+            from = Instant.parse("2026-05-30T00:00:00Z"),
+            to = now,
+            nextRunAt = now,
+            now = now,
+        )
+
         repository.upsertConfig(
             providerCode = "google_health",
             providerInstanceId = "google-health-me",
@@ -52,6 +60,9 @@ class ScheduledSyncRepositoryTest {
             now = now,
         )
         assertEquals(listOf("steps"), repository.checkpoints(config.id).map { it.dataType })
+        // Editing the config must not reset the scheduler's run history.
+        assertEquals(now, repository.checkpoints(config.id).single().checkpointAt)
+        assertEquals(now, repository.getConfig("google_health", "google-health-me")?.lastSuccessAt)
 
         val due = repository.dueConfigs(now)
         assertEquals(config.id, due.single().id)

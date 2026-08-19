@@ -132,15 +132,13 @@ class CanonicalStepDerivationService(
         row: StepSampleRow,
         metadata: Map<Int, me.aquitano.health.application.metric.common.repository.SourceMetadata>
     ): PreparedCanonicalStepSample {
-        val startAt = Instant.parse(row.startAt)
-        val endAt = Instant.parse(row.endAt)
-        val duration = Duration.between(startAt, endAt).seconds
+        val duration = Duration.between(row.startAt, row.endAt).seconds
         return PreparedCanonicalStepSample(
             candidate = CanonicalIntervalCandidate(
                 row = row,
                 sourceInstanceId = row.sourceInstanceId,
-                startAt = startAt,
-                endAt = endAt,
+                startAt = row.startAt,
+                endAt = row.endAt,
             ),
             durationSeconds = duration,
             providerRank = stepProviderRank(metadata[row.sourceInstanceId]?.provider),

@@ -6,7 +6,6 @@ import me.aquitano.health.application.metric.common.repository.SourceMetadata
 import me.aquitano.health.infrastructure.database.tables.CanonicalSleepSessionsTable
 import me.aquitano.health.infrastructure.database.tables.SleepSessionsTable
 import me.aquitano.health.infrastructure.database.tables.SleepStagesTable
-import me.aquitano.health.infrastructure.database.toApiString
 import me.aquitano.health.application.metric.common.repository.BaseMetricReadRepository
 import me.aquitano.health.application.metric.common.repository.TimeFilterMode
 import org.jetbrains.exposed.v1.core.*
@@ -22,8 +21,8 @@ class CanonicalSleepSessionDerivationRepository : BaseMetricReadRepository() {
             .map {
                 it[SleepStagesTable.sleepSessionId] to SleepStageRow(
                     stage = it[SleepStagesTable.stage],
-                    startAt = it[SleepStagesTable.startAt].toApiString(),
-                    endAt = it[SleepStagesTable.endAt].toApiString(),
+                    startAt = it[SleepStagesTable.startAt].toInstant(),
+                    endAt = it[SleepStagesTable.endAt].toInstant(),
                     durationSeconds = it[SleepStagesTable.durationSeconds],
                 )
             }

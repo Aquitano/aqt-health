@@ -36,7 +36,7 @@ class ScalarSampleWriteRepository {
      * Duplicates are detected before inserting (conflict-ignored rows can't be told apart from
      * inserted ones in a multi-row statement), against two keys that mirror the DB unique indexes:
      *  - rows that carry a provider record id -> scalar_samples_provider_record_uq
-     *  - rows without one -> scalar_samples_natural_key_uq (source, metric type, measured at, segment)
+     *  - rows without one -> scalar_samples_natural_key_uq (source, metric type, measured at, context, segment)
      * so re-syncs of id-less feeds (derived metrics, some Google data) stop accumulating duplicates.
      * `ignore = true` stays on the insert as a guard against concurrent writers.
      */
@@ -82,6 +82,7 @@ class ScalarSampleWriteRepository {
                 .select(
                     ScalarSamplesTable.providerRecordId,
                     ScalarSamplesTable.metricType,
+                    ScalarSamplesTable.context,
                     ScalarSamplesTable.segment,
                 )
                 .where {
@@ -93,6 +94,7 @@ class ScalarSampleWriteRepository {
                         keys += SampleKey.ByRecord(
                             providerRecordId = providerRecordId,
                             metricType = row[ScalarSamplesTable.metricType],
+                            context = row[ScalarSamplesTable.context] ?: "",
                             segment = row[ScalarSamplesTable.segment] ?: "",
                         )
                     }
@@ -139,13 +141,15 @@ private data class SampleRow(
 
 /**
  * Dedup key. Rows carrying a provider record id mirror scalar_samples_provider_record_uq; id-less
- * rows fall back to the natural key (scalar_samples_natural_key_uq), both coalescing NULL context
- * and segment to ''.
+ * rows fall back to the natural key (scalar_samples_natural_key_uq). Both include context, so a
+ * provider emitting one record id under two contexts keeps both rows; NULL context and segment
+ * coalesce to '' exactly as the indexes do.
  */
 private sealed interface SampleKey {
     data class ByRecord(
         val providerRecordId: String,
         val metricType: String,
+        val context: String,
         val segment: String,
     ) : SampleKey
 
@@ -162,6 +166,7 @@ private fun SampleRow.uniqueKey(): SampleKey =
         SampleKey.ByRecord(
             providerRecordId = providerRecordId,
             metricType = value.metricType,
+            context = value.context ?: "",
             segment = value.segment ?: "",
         )
     } ?: SampleKey.ByNatural(

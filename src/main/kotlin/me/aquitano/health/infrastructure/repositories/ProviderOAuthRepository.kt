@@ -5,11 +5,9 @@ import me.aquitano.health.infrastructure.database.tables.ProviderOAuthAccountsTa
 import me.aquitano.health.infrastructure.database.tables.ProviderOAuthStatesTable
 import me.aquitano.health.infrastructure.database.tables.ProviderSyncRunsTable
 import org.jetbrains.exposed.v1.core.*
-import org.jetbrains.exposed.v1.core.statements.UpdateBuilder
 import org.jetbrains.exposed.v1.jdbc.*
 import me.aquitano.health.infrastructure.database.suspendDbTransaction
 import java.time.Instant
-import java.time.OffsetDateTime
 
 data class ProviderOAuthAccount(
     val id: Int,
@@ -131,6 +129,9 @@ class ProviderOAuthRepository(private val database: Database) {
     ) {
         suspendDbTransaction(db = database) {
             val nowTimestamp = now.toDbTimestamp()
+            // Read only to decide connectedAt: reconnecting a disconnected or reauth-needed
+            // account restarts the connection, an ordinary token refresh keeps the original.
+            // The write itself is a single upsert, so a concurrent callback can't 23505.
             val existing = ProviderOAuthAccountsTable
                 .selectAll()
                 .where {
@@ -140,44 +141,39 @@ class ProviderOAuthRepository(private val database: Database) {
                 .limit(1)
                 .singleOrNull()
 
-            fun UpdateBuilder<*>.writeConnectedAccount(connectedAtValue: OffsetDateTime) {
-                this[ProviderOAuthAccountsTable.providerInstanceId] = providerInstanceId
-                this[ProviderOAuthAccountsTable.accessTokenCiphertext] = accessTokenCiphertext
-                this[ProviderOAuthAccountsTable.refreshTokenCiphertext] = refreshTokenCiphertext
-                this[ProviderOAuthAccountsTable.tokenType] = tokenType
-                this[ProviderOAuthAccountsTable.expiresAt] = expiresAt.toDbTimestamp()
-                this[ProviderOAuthAccountsTable.scope] = scope
-                this[ProviderOAuthAccountsTable.accountStatus] = ACCOUNT_STATUS_CONNECTED
-                this[ProviderOAuthAccountsTable.connectedAt] = connectedAtValue
-                this[ProviderOAuthAccountsTable.disconnectedAt] = null
-                this[ProviderOAuthAccountsTable.lastTokenRefreshAt] = null
-                this[ProviderOAuthAccountsTable.lastTokenRefreshStatus] = null
-                this[ProviderOAuthAccountsTable.lastAuthErrorCode] = null
-                this[ProviderOAuthAccountsTable.lastAuthErrorMessage] = null
-                this[ProviderOAuthAccountsTable.updatedAt] = nowTimestamp
-            }
+            val previousStatus = existing?.get(ProviderOAuthAccountsTable.accountStatus)
+            val connectedAtValue =
+                if (existing == null ||
+                    previousStatus == ACCOUNT_STATUS_DISCONNECTED ||
+                    previousStatus == ACCOUNT_STATUS_NEEDS_REAUTH
+                ) {
+                    nowTimestamp
+                } else {
+                    existing[ProviderOAuthAccountsTable.connectedAt] ?: nowTimestamp
+                }
 
-            if (existing == null) {
-                ProviderOAuthAccountsTable.insert {
-                    it[this.providerCode] = providerCode
-                    it[this.providerUserId] = providerUserId
-                    it[createdAt] = nowTimestamp
-                    it.writeConnectedAccount(nowTimestamp)
-                }
-            } else {
-                val previousStatus = existing[ProviderOAuthAccountsTable.accountStatus]
-                val previousConnectedAt = existing[ProviderOAuthAccountsTable.connectedAt]
-                val nextConnectedAt =
-                    if (previousStatus == ACCOUNT_STATUS_DISCONNECTED || previousStatus == ACCOUNT_STATUS_NEEDS_REAUTH) {
-                        nowTimestamp
-                    } else {
-                        previousConnectedAt ?: nowTimestamp
-                    }
-                ProviderOAuthAccountsTable.update({
-                    ProviderOAuthAccountsTable.id eq existing[ProviderOAuthAccountsTable.id]
-                }) {
-                    it.writeConnectedAccount(nextConnectedAt)
-                }
+            ProviderOAuthAccountsTable.upsert(
+                ProviderOAuthAccountsTable.providerCode,
+                ProviderOAuthAccountsTable.providerUserId,
+                onUpdateExclude = listOf(ProviderOAuthAccountsTable.createdAt),
+            ) {
+                it[this.providerCode] = providerCode
+                it[this.providerUserId] = providerUserId
+                it[this.providerInstanceId] = providerInstanceId
+                it[this.accessTokenCiphertext] = accessTokenCiphertext
+                it[this.refreshTokenCiphertext] = refreshTokenCiphertext
+                it[this.tokenType] = tokenType
+                it[this.expiresAt] = expiresAt.toDbTimestamp()
+                it[this.scope] = scope
+                it[accountStatus] = ACCOUNT_STATUS_CONNECTED
+                it[connectedAt] = connectedAtValue
+                it[disconnectedAt] = null
+                it[lastTokenRefreshAt] = null
+                it[lastTokenRefreshStatus] = null
+                it[lastAuthErrorCode] = null
+                it[lastAuthErrorMessage] = null
+                it[createdAt] = nowTimestamp
+                it[updatedAt] = nowTimestamp
             }
         }
     }

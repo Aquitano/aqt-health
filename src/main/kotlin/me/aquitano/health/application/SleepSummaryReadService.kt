@@ -26,7 +26,7 @@ class SleepSummaryReadService(
                 limit = filters.limit,
                 sort = filters.sort,
                 order = filters.order,
-                sortValue = { it.endAt },
+                sortValue = { it.endAt.toString() },
                 id = { it.id.toLong() },
             )
             SleepSummariesResponse(

@@ -35,33 +35,24 @@ class PendingDerivedRebuildRepository(private val database: Database) {
         val nowTimestamp = now.toDbTimestamp()
         request.affectedDates.forEach { (kind, dates) ->
             dates.forEach { date ->
-                val existing = PendingDerivedRebuildsTable
-                    .selectAll()
-                    .where {
-                        (PendingDerivedRebuildsTable.sourceInstanceId eq request.sourceInstanceId) and
-                                (PendingDerivedRebuildsTable.derivedKind eq kind.name) and
-                                (PendingDerivedRebuildsTable.affectedDate eq date)
-                    }
-                    .limit(1)
-                    .singleOrNull()
-                if (existing == null) {
-                    PendingDerivedRebuildsTable.insert {
-                        it[sourceInstanceId] = request.sourceInstanceId
-                        it[derivedKind] = kind.name
-                        it[affectedDate] = date
-                        it[attempts] = 0
-                        it[nextAttemptAt] = nowTimestamp
-                        it[lastErrorMessage] = error.take(2000)
-                        it[createdAt] = nowTimestamp
-                        it[updatedAt] = nowTimestamp
-                    }
-                } else {
-                    PendingDerivedRebuildsTable.update({
-                        PendingDerivedRebuildsTable.id eq existing[PendingDerivedRebuildsTable.id]
-                    }) {
-                        it[lastErrorMessage] = error.take(2000)
-                        it[updatedAt] = nowTimestamp
-                    }
+                PendingDerivedRebuildsTable.upsert(
+                    PendingDerivedRebuildsTable.sourceInstanceId,
+                    PendingDerivedRebuildsTable.derivedKind,
+                    PendingDerivedRebuildsTable.affectedDate,
+                    onUpdateExclude = listOf(
+                        PendingDerivedRebuildsTable.attempts,
+                        PendingDerivedRebuildsTable.nextAttemptAt,
+                        PendingDerivedRebuildsTable.createdAt,
+                    ),
+                ) {
+                    it[sourceInstanceId] = request.sourceInstanceId
+                    it[derivedKind] = kind.name
+                    it[affectedDate] = date
+                    it[attempts] = 0
+                    it[nextAttemptAt] = nowTimestamp
+                    it[lastErrorMessage] = error.take(2000)
+                    it[createdAt] = nowTimestamp
+                    it[updatedAt] = nowTimestamp
                 }
             }
         }

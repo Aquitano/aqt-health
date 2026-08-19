@@ -5,7 +5,10 @@ import kotlinx.serialization.json.buildJsonObject
 import me.aquitano.health.domain.BatchStatus
 import me.aquitano.health.domain.ConflictException
 import me.aquitano.health.api.dto.IngestionBatchRequest
+import me.aquitano.health.api.dto.ScalarSample
 import me.aquitano.health.api.dto.StepInterval
+import me.aquitano.health.domain.ScalarMetricTypes
+import me.aquitano.health.test.NoOpDerivedRebuildExecutor
 import me.aquitano.health.test.metricWriteService
 import me.aquitano.health.infrastructure.config.DatabaseConfig
 import me.aquitano.health.infrastructure.database.DatabaseFactory
@@ -113,6 +116,90 @@ class IngestionServiceTest {
 
         assertEquals("ingestion_batch_in_progress", error.code)
         assertTrue(error.message!!.contains("status 'legacy'"))
+    }
+
+    @Test
+    fun metricWriteFailureKeepsFailedBatchAndDiscardsPartialMetrics() = runBlocking {
+        val dbConfig = PostgresTestDatabase.config()
+        val database = DatabaseFactory().initialize(dbConfig)
+        val service = IngestionService(
+            database = database,
+            mappingService = IngestionMappingService(),
+            supportRepository = SupportRepository(database),
+            ingestionRepository = IngestionRepository(),
+            metricWriteService = metricWriteService(),
+            derivedRebuildExecutor = FailingDerivedRebuildExecutor,
+            pendingDerivedRebuildRepository = PendingDerivedRebuildRepository(database),
+        )
+        // Makes the step write fail at the SQL level, which aborts the transaction unless the
+        // metric writes run in their own savepoint.
+        execute(dbConfig, "ALTER TABLE step_samples ADD CONSTRAINT step_samples_test_reject CHECK (steps < 100)")
+
+        assertFailsWith<Exception> {
+            service.ingestBatch(
+                IngestionBatchRequest(
+                    provider = "health_connect",
+                    providerInstanceId = "pixel-8-health-connect",
+                    batchExternalId = "metric-write-fails",
+                    ingestedAt = "2026-04-21T10:00:00Z",
+                    sourcePayload = buildJsonObject {},
+                    records = listOf(
+                        StepInterval(
+                            providerRecordId = "steps-rejected",
+                            startAt = "2026-04-21T08:00:00Z",
+                            endAt = "2026-04-21T09:00:00Z",
+                            steps = 1200,
+                        )
+                    ),
+                ),
+                Instant.parse("2026-04-21T10:01:00Z"),
+            )
+        }
+
+        assertEquals("failed", singleString(dbConfig, "SELECT status FROM ingestion_batches"))
+        assertEquals(0, singleInt(dbConfig, "SELECT COUNT(*) FROM step_samples"))
+    }
+
+    @Test
+    fun sameProviderRecordIdKeepsOneSamplePerContext() = runBlocking {
+        val dbConfig = PostgresTestDatabase.config()
+        val database = DatabaseFactory().initialize(dbConfig)
+        val service = IngestionService(
+            database = database,
+            mappingService = IngestionMappingService(),
+            supportRepository = SupportRepository(database),
+            ingestionRepository = IngestionRepository(),
+            metricWriteService = metricWriteService(),
+            derivedRebuildExecutor = NoOpDerivedRebuildExecutor,
+            pendingDerivedRebuildRepository = PendingDerivedRebuildRepository(database),
+        )
+
+        listOf("general", "sleep").forEachIndexed { index, context ->
+            service.ingestBatch(
+                IngestionBatchRequest(
+                    provider = "withings",
+                    providerInstanceId = "withings-1",
+                    batchExternalId = "context-$context",
+                    ingestedAt = "2026-04-22T10:00:00Z",
+                    sourcePayload = buildJsonObject {},
+                    records = listOf(
+                        ScalarSample(
+                            providerRecordId = "hr-1",
+                            measuredAt = "2026-04-22T08:00:00Z",
+                            metricType = ScalarMetricTypes.HEART_RATE,
+                            value = 60.0 + index,
+                            context = context,
+                        )
+                    ),
+                ),
+                Instant.parse("2026-04-22T10:0${index}:00Z"),
+            )
+        }
+
+        assertEquals(
+            2,
+            singleInt(dbConfig, "SELECT COUNT(*) FROM scalar_samples WHERE provider_record_id = 'hr-1'"),
+        )
     }
 
     private object FailingDerivedRebuildExecutor : DerivedRebuildExecutor {

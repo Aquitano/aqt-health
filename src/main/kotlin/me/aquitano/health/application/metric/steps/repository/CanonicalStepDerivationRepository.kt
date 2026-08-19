@@ -9,7 +9,6 @@ import me.aquitano.health.infrastructure.database.tables.StepDailySummariesTable
 import me.aquitano.health.infrastructure.database.tables.CanonicalStepDayBucketContributionsTable
 import me.aquitano.health.infrastructure.database.tables.CanonicalStepSamplesTable
 import me.aquitano.health.infrastructure.database.tables.StepSamplesTable
-import me.aquitano.health.infrastructure.database.toApiString
 import me.aquitano.health.infrastructure.database.toDbTimestamp
 import me.aquitano.health.application.metric.common.repository.BaseMetricReadRepository
 import me.aquitano.health.application.metric.common.repository.TimeFilterMode
@@ -48,8 +47,8 @@ data class CanonicalStepOutput(
 
 
 data class StepBucketContributionRow(
-    val bucketStartAt: String,
-    val bucketEndAt: String,
+    val bucketStartAt: Instant,
+    val bucketEndAt: Instant,
     val value: Double,
 )
 
@@ -225,8 +224,8 @@ class CanonicalStepDerivationRepository : BaseMetricReadRepository() {
             .orderBy(CanonicalStepDayBucketContributionsTable.bucketStartAt to SortOrder.ASC)
             .map {
                 StepBucketContributionRow(
-                    bucketStartAt = it[CanonicalStepDayBucketContributionsTable.bucketStartAt].toApiString(),
-                    bucketEndAt = it[CanonicalStepDayBucketContributionsTable.bucketEndAt].toApiString(),
+                    bucketStartAt = it[CanonicalStepDayBucketContributionsTable.bucketStartAt].toInstant(),
+                    bucketEndAt = it[CanonicalStepDayBucketContributionsTable.bucketEndAt].toInstant(),
                     value = it[CanonicalStepDayBucketContributionsTable.value],
                 )
             }
