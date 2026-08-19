@@ -133,6 +133,21 @@ class ProviderSyncPipelineTest {
     }
 
     @Test
+    fun windowWhoseRecordsWereAllNormalizedAwayIsNotMarkedDone() = runBlocking {
+        // Marking it done would make the window a permanent cache hit, so a provider correction or
+        // a normalizer fix could never bring the dropped records back.
+        val store = FakeStore()
+        val adapter = FakeAdapter(normalizedAwayFetch = true)
+        val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+
+        val summary = pipeline.sync(adapter, request, now)
+
+        assertTrue(store.ingested.isEmpty())
+        assertTrue(summary.batches.isEmpty())
+        assertEquals(listOf(1), summary.emptyDataTypes.map { it.sourceRecordsReceived })
+    }
+
+    @Test
     fun syncFailureSurfacesSafeMessageNotRawExceptionText() = runBlocking {
         // The raw exception text can carry internal/upstream detail (DB errors, provider response
         // bodies). It must stay in the logs; the client-facing message is the adapter's safe default.
@@ -157,6 +172,7 @@ class ProviderSyncPipelineTest {
         private val itemCount: Int = 1,
         private val fetchFailure: RuntimeException? = null,
         private val emptyFetch: Boolean = false,
+        private val normalizedAwayFetch: Boolean = false,
         override val providerRequestInterval: Duration = Duration.ZERO,
     ) : ProviderSyncAdapter {
         override val recordEmptyDataTypes: Boolean = true
@@ -223,7 +239,7 @@ class ProviderSyncPipelineTest {
                 pagesFetched = 1,
                 sourceRecordsReceived = if (emptyFetch) 0 else 1,
                 sourcePayload = buildJsonObject {},
-                records = if (emptyFetch) {
+                records = if (emptyFetch || normalizedAwayFetch) {
                     emptyList()
                 } else {
                     listOf(

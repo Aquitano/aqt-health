@@ -194,6 +194,7 @@ private class DataPointsServiceCache(
     private val lock = Any()
     private var currentToken: String? = null
     private var current: Entry? = null
+    private var closed = false
 
     fun <T> use(accessToken: String, block: (GoogleHealthDataPointsService) -> T): T {
         val entry = acquire(accessToken)
@@ -205,6 +206,15 @@ private class DataPointsServiceCache(
     }
 
     private fun acquire(accessToken: String): Entry = synchronized(lock) {
+        // Shutdown closes the cache before the sync producers have necessarily stopped. Without
+        // this, a fetch that starts after close() would build a replacement transport that nothing
+        // ever closes.
+        if (closed) {
+            throw GoogleHealthHttpException(
+                "google_health_client_closed",
+                "Google Health client is shutting down",
+            )
+        }
         current
             ?.takeIf { currentToken == accessToken && !it.retired }
             ?.let {
@@ -232,7 +242,10 @@ private class DataPointsServiceCache(
         currentToken = null
     }
 
-    override fun close() = synchronized(lock) { retireCurrent() }
+    override fun close() = synchronized(lock) {
+        closed = true
+        retireCurrent()
+    }
 }
 
 open class GoogleHealthDataPointsServiceFactory(

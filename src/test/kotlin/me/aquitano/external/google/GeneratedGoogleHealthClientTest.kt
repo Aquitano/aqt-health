@@ -144,6 +144,19 @@ class GeneratedGoogleHealthClientTest {
     }
 
     @Test
+    fun fetchAfterCloseIsRejectedInsteadOfBuildingAnUnclosableTransport() = runBlocking {
+        val fixture = Fixture()
+        fixture.client.close()
+
+        val error = assertFailsWith<GoogleHealthHttpException> {
+            fixture.client.fetchDataPoints("token-1", "steps", fixture.from, fixture.to, 1000)
+        }
+
+        assertEquals("google_health_client_closed", error.code)
+        assertTrue(fixture.createdTokens.isEmpty())
+    }
+
+    @Test
     fun fetchDataPointsRejectsUnsupportedDataType() = runBlocking {
         val fixture = Fixture()
 

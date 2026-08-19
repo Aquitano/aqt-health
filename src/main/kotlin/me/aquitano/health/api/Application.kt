@@ -67,11 +67,10 @@ fun Application.module() {
         httpClient.close()
     }
 
-    // Holds one Google Health transport across syncs; released with the other shared clients.
+    // Holds one Google Health transport across syncs. Its ApplicationStopping handler is
+    // registered after the sync producers below so the transport is released last: handlers run in
+    // registration order, and closing it first would fail syncs that are still winding down.
     val googleHealthClient by inject<GeneratedGoogleHealthClient>()
-    monitor.subscribe(ApplicationStopping) {
-        googleHealthClient.close()
-    }
 
     // Start the scheduled sync background job
     val scheduler by inject<ScheduledProviderSyncScheduler>()
@@ -97,6 +96,10 @@ fun Application.module() {
     replayService.start(clock.now())
     monitor.subscribe(ApplicationStopping) {
         replayService.stop()
+    }
+
+    monitor.subscribe(ApplicationStopping) {
+        googleHealthClient.close()
     }
 
     // Re-upsert metric_catalog and provider_ranks from the Kotlin registry
