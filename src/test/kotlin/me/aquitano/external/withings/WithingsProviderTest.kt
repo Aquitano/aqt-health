@@ -256,8 +256,11 @@ class WithingsProviderTest {
         )
 
         assertEquals("processed", summary.status)
-        assertTrue(summary.batches.isEmpty())
         assertTrue(summary.errors.isEmpty())
+        // Empty windows are still stored as batches, so the next run dedupes them instead of
+        // re-fetching the same empty day.
+        assertEquals(2, summary.batches.size)
+        assertTrue(summary.batches.all { it.recordsReceived == 0 })
         assertEquals(listOf("activity", "sleep"), summary.emptyDataTypes.map { it.dataType })
         assertEquals(1, summary.emptyDataTypes.first().pagesFetched)
         assertEquals(0, summary.emptyDataTypes.first().sourceRecordsReceived)

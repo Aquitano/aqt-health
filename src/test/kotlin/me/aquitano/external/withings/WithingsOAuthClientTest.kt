@@ -218,7 +218,8 @@ class WithingsOAuthClientTest {
         assertEquals(listOf("1,6"), forms[0]["meastypes"])
         assertEquals(listOf("1"), forms[0]["category"])
         assertEquals(listOf("1775001600"), forms[0]["startdate"])
-        assertEquals(listOf("1775088000"), forms[0]["enddate"])
+        // Half-open window, inclusive Withings bounds: the last second belongs to the next window.
+        assertEquals(listOf("1775087999"), forms[0]["enddate"])
         assertEquals(listOf("25"), forms[1]["offset"])
         assertEquals(2, result.records.size)
     }
@@ -273,7 +274,8 @@ class WithingsOAuthClientTest {
         // A multi-day range stays one request: window splitting is the sync adapter's job.
         assertEquals(1, forms.size)
         assertEquals(listOf("1775001600"), forms[0]["startdate"])
-        assertEquals(listOf("1775174400"), forms[0]["enddate"])
+        // Half-open window, inclusive Withings bounds: the last second belongs to the next window.
+        assertEquals(listOf("1775174399"), forms[0]["enddate"])
         assertNull(forms[0]["meastypes"])
     }
 

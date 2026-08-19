@@ -191,7 +191,7 @@ class KtorWithingsClient(
                 "meastypes" to measureTypes.joinToString(","),
                 "category" to category.toString(),
                 "startdate" to from.epochSecond.toString(),
-                "enddate" to to.epochSecond.toString(),
+                "enddate" to inclusiveEndSeconds(from, to).toString(),
             ),
         )
 
@@ -230,7 +230,7 @@ class KtorWithingsClient(
             recordsKey = "series",
             baseParameters = listOf(
                 "startdate" to from.epochSecond.toString(),
-                "enddate" to to.epochSecond.toString(),
+                "enddate" to inclusiveEndSeconds(from, to).toString(),
                 "data_fields" to dataFields.joinToString(","),
             ),
         )
@@ -468,6 +468,15 @@ class KtorWithingsClient(
 
             else -> emptyList()
         }
+
+    /**
+     * Withings `startdate`/`enddate` are inclusive epoch seconds while sync windows are half-open,
+     * so the window's last second is dropped. Without it a record measured exactly at `to` is
+     * returned for this window and for the next one, which costs a redundant write on every
+     * boundary. Clamped so a sub-second window still queries at least its own start second.
+     */
+    private fun inclusiveEndSeconds(from: Instant, to: Instant): Long =
+        maxOf(from.epochSecond, to.epochSecond - 1)
 
     private fun ymdRange(
         from: Instant,

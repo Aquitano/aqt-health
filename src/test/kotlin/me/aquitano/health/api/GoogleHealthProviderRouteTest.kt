@@ -49,13 +49,13 @@ class GoogleHealthProviderRouteTest {
     }
 
     @Test
-    fun syncLongHistoricalRangeIsNotRejectedByRangeValidation() = testApplication {
+    fun syncMultiYearRangeWithinTheCeilingIsNotRejectedByRangeValidation() = testApplication {
         configureTestApplication()
 
         val response = client.post("/api/v2/providers/google-health/sync") {
             authorized()
             contentType(ContentType.Application.Json)
-            setBody("""{"from":"2020-01-01T00:00:00Z","to":"2026-01-01T00:00:00Z","dataTypes":["steps"]}""")
+            setBody("""{"from":"2023-06-01T00:00:00Z","to":"2026-01-01T00:00:00Z","dataTypes":["steps"]}""")
         }
 
         assertEquals(HttpStatusCode.Conflict, response.status)
@@ -63,13 +63,28 @@ class GoogleHealthProviderRouteTest {
     }
 
     @Test
-    fun syncJobLongHistoricalRangeIsAcceptedAndPollable() = testApplication {
+    fun syncRangeBeyondTheCeilingIsRejected() = testApplication {
+        configureTestApplication()
+
+        val response = client.post("/api/v2/providers/google-health/sync") {
+            authorized()
+            contentType(ContentType.Application.Json)
+            setBody("""{"from":"1970-01-01T00:00:00Z","to":"2026-01-01T00:00:00Z","dataTypes":["steps"]}""")
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        val error = AppJson.parseToJsonElement(response.bodyAsText()).jsonObject["error"]!!.jsonObject
+        assertEquals("validation_failed", error["code"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun syncJobMultiYearRangeWithinTheCeilingIsAcceptedAndPollable() = testApplication {
         val dbConfig = configureTestApplication()
 
         val startResponse = client.post("/api/v2/providers/google-health/sync-jobs") {
             authorized()
             contentType(ContentType.Application.Json)
-            setBody("""{"from":"2020-01-01T00:00:00Z","to":"2026-01-01T00:00:00Z","dataTypes":["steps"]}""")
+            setBody("""{"from":"2023-06-01T00:00:00Z","to":"2026-01-01T00:00:00Z","dataTypes":["steps"]}""")
         }
 
         assertEquals(HttpStatusCode.Accepted, startResponse.status)

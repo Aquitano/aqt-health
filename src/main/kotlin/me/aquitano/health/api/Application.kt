@@ -1,6 +1,7 @@
 package me.aquitano.health.api
 
 import io.ktor.server.application.*
+import me.aquitano.external.google.GeneratedGoogleHealthClient
 import me.aquitano.health.application.*
 import me.aquitano.health.di.adminReplayModule
 import me.aquitano.health.di.coreModule
@@ -66,6 +67,11 @@ fun Application.module() {
         httpClient.close()
     }
 
+    // Holds one Google Health transport across syncs. Its ApplicationStopping handler is
+    // registered after the sync producers below so the transport is released last: handlers run in
+    // registration order, and closing it first would fail syncs that are still winding down.
+    val googleHealthClient by inject<GeneratedGoogleHealthClient>()
+
     // Start the scheduled sync background job
     val scheduler by inject<ScheduledProviderSyncScheduler>()
     scheduler.start()
@@ -90,6 +96,10 @@ fun Application.module() {
     replayService.start(clock.now())
     monitor.subscribe(ApplicationStopping) {
         replayService.stop()
+    }
+
+    monitor.subscribe(ApplicationStopping) {
+        googleHealthClient.close()
     }
 
     // Re-upsert metric_catalog and provider_ranks from the Kotlin registry

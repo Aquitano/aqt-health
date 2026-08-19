@@ -129,23 +129,31 @@ class ProviderSyncPipeline(
                     ).also { lastProviderRequestCompletedAtNanos = it.completedAtNanos }.batch
                 }
 
-                if (fetched.records.isEmpty()) {
-                    if (adapter.recordEmptyDataTypes) {
-                        emptyDataTypes += ProviderSyncEmptyDataType(
-                            dataType = item.dataType,
-                            pagesFetched = fetched.pagesFetched,
-                            sourceRecordsReceived = fetched.sourceRecordsReceived,
-                            normalizedRecords = 0,
-                        )
-                    }
-                    logger.infoWithContext(
-                        "provider_data_type_synced",
+                if (fetched.records.isEmpty() && adapter.recordEmptyDataTypes) {
+                    emptyDataTypes += ProviderSyncEmptyDataType(
+                        dataType = item.dataType,
+                        pagesFetched = fetched.pagesFetched,
+                        sourceRecordsReceived = fetched.sourceRecordsReceived,
+                        normalizedRecords = 0,
+                    )
+                }
+
+                // A window the provider had no data for is ingested as an empty processed batch:
+                // that is what marks the window done, so a sparse day dedupes on the next run
+                // instead of being re-fetched from the provider on every scheduled run.
+                // A window where the provider *did* return records that normalization dropped is
+                // left unmarked, so a provider correction or a normalizer fix is still picked up.
+                // Caching it would hide those records for good: replay rebuilds from
+                // ingestion_records, and a dropped record never got one.
+                if (fetched.records.isEmpty() && fetched.sourceRecordsReceived > 0) {
+                    logger.warnWithContext(
+                        "provider_source_records_all_dropped",
                         mapOf(
                             "provider" to adapter.providerCode,
                             "dataType" to item.dataType,
-                            "pages" to fetched.pagesFetched,
-                            "sourceRecords" to fetched.sourceRecordsReceived,
-                            "normalizedRecords" to 0
+                            "from" to item.from,
+                            "to" to item.to,
+                            "sourceRecords" to fetched.sourceRecordsReceived
                         )
                     )
                     progress.itemCompleted(item)

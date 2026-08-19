@@ -220,7 +220,7 @@ class WithingsNormalizerTest {
     }
 
     @Test
-    fun incompleteBloodPressureIsPreservedOnlyInSourcePayload() {
+    fun incompleteBloodPressureIsDroppedAndRawPagesAreTheOnlySourceCopy() {
         val result = normalizer.normalize(
             fetchResult(
                 "measures",
@@ -235,7 +235,10 @@ class WithingsNormalizerTest {
         )
 
         assertTrue(result.records.isEmpty())
-        assertEquals(1, result.sourcePayload["records"]!!.jsonArray.size)
+        // Raw pages are the only source copy: duplicating the records here doubled peak memory and
+        // was dropped before storage anyway.
+        assertEquals(1, result.sourcePayload["pages"]!!.jsonArray.size)
+        assertTrue("records" !in result.sourcePayload)
     }
 
     @Test

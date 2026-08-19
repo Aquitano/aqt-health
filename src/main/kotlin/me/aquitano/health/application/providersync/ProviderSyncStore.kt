@@ -215,6 +215,9 @@ class OAuthProviderSyncStore(
                 records = command.records,
             ),
             now = now,
+            // A window the provider had no data for is still stored, as an empty processed batch,
+            // so the next run dedupes it instead of re-fetching the same empty day forever.
+            allowEmptyRecords = true,
         )
         return ProviderSyncBatch(
             dataType = command.dataType,
