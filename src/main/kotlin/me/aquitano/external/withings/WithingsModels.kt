@@ -2,6 +2,7 @@ package me.aquitano.external.withings
 
 import me.aquitano.health.application.providersync.RefreshedTokenSet
 import kotlinx.serialization.json.JsonObject
+import java.time.Duration
 import java.time.Instant
 
 const val WITHINGS_PROVIDER_CODE = "withings"
@@ -45,6 +46,16 @@ val WITHINGS_SLEEP_FIELDS = listOf(
     "rr",
     "rmssd",
 )
+
+/**
+ * How far before a sync window's start the `sleep` fetch reaches back.
+ *
+ * Sleep windows are UTC days, so a night that starts in the evening of the previous day would
+ * otherwise arrive cut in half. Fetching the extra day makes such a night arrive whole; the
+ * normalizer then keeps only the sessions that end inside the window, so each night is stored once,
+ * by the window holding its end.
+ */
+val WITHINGS_SLEEP_LOOKBEHIND: Duration = Duration.ofDays(1)
 
 val WITHINGS_SLEEP_SUMMARY_FIELDS = listOf(
     "total_timeinbed",

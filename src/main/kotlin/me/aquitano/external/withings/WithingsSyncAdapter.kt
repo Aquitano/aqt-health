@@ -7,6 +7,7 @@ import me.aquitano.health.application.providersync.ProviderSyncItem
 import me.aquitano.health.application.providersync.ProviderSyncPlan
 import me.aquitano.health.application.providersync.RefreshedTokenSet
 import me.aquitano.health.application.providersync.SyncAccount
+import me.aquitano.health.application.providersync.SyncWindow
 import me.aquitano.health.application.providersync.dailySyncWindows
 import me.aquitano.health.domain.ConflictException
 import me.aquitano.health.domain.ProviderSyncRequest
@@ -92,7 +93,7 @@ class WithingsSyncAdapter(
         now: Instant,
     ): ProviderFetchedBatch {
         val result = fetchDataType(accessToken, item.dataType, item.from, item.to)
-        val normalized = normalizer.normalize(result)
+        val normalized = normalizer.normalize(result, SyncWindow(item.from, item.to))
         return ProviderFetchedBatch(
             dataType = result.dataType,
             pagesFetched = result.pages.size,
@@ -164,9 +165,11 @@ class WithingsSyncAdapter(
                 WITHINGS_SLEEP_SUMMARY_FIELDS,
             )
 
+            // Reaches back past the window start so a night that began on the previous UTC day is
+            // fetched whole; the normalizer keeps the sessions that end inside the window.
             "sleep" -> client.fetchSleep(
                 accessToken,
-                from,
+                from.minus(WITHINGS_SLEEP_LOOKBEHIND),
                 to,
                 WITHINGS_SLEEP_FIELDS,
             )
