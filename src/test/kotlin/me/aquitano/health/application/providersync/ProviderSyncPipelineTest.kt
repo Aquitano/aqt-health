@@ -6,6 +6,8 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.put
 import me.aquitano.health.api.dto.StepInterval
 import me.aquitano.health.domain.*
 import java.time.Duration
@@ -141,14 +143,49 @@ class ProviderSyncPipelineTest {
     }
 
     @Test
-    fun refreshFetchesCompletedWindowsAndUsesNewBatchIdentity() = runBlocking {
+    fun refreshFetchesCompletedWindowsButSkipsUnchangedContent() = runBlocking {
         val store = FakeStore(existingBatch = ExistingProviderBatch(42, BatchStatus.Processed))
         val adapter = FakeAdapter()
         val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
         repeat(2) { pipeline.sync(adapter, request.copy(refresh = true), now) }
         assertEquals(2, adapter.fetchCalls)
+        assertEquals(1, store.ingested.size)
+    }
+
+    @Test
+    fun changedAndRevertedSnapshotsAreIngestedAndFailedSnapshotIsRetried() = runBlocking {
+        val store = FakeStore()
+        val adapter = FakeAdapter()
+        val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+        val refresh = request.copy(refresh = true)
+        pipeline.sync(adapter, refresh, now)
+        adapter.steps = 2400
+        store.ingestionFailure = IllegalStateException("write failed")
+        assertFailsWith<UpstreamProviderException> { pipeline.sync(adapter, refresh, now) }
+        store.ingestionFailure = null
+        pipeline.sync(adapter, refresh, now)
+        adapter.steps = 1200
+        pipeline.sync(adapter, refresh, now)
+        assertEquals(listOf(1200, 2400, 1200), store.ingested.map { (it.records.single() as StepInterval).steps })
+        assertEquals(3, store.ingested.map { it.batchExternalId }.distinct().size)
+        assertEquals(3, pipeline.sync(adapter, refresh, now).batches.single().batchId)
+        assertEquals(3, store.ingested.size)
+    }
+
+    @Test
+    fun sourceRecordChangesArePreservedWithoutEnvelopeNoise() = runBlocking {
+        val store = FakeStore()
+        val adapter = FakeAdapter()
+        val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+        val refresh = request.copy(refresh = true)
+        adapter.sourceRecords = listOf(buildJsonObject { put("quality", 1); put("device", "scale") })
+        pipeline.sync(adapter, refresh, now)
+        adapter.sourceRecords = listOf(buildJsonObject { put("device", "scale"); put("quality", 1) })
+        pipeline.sync(adapter, refresh, now)
+        assertEquals(1, store.ingested.size)
+        adapter.sourceRecords = listOf(buildJsonObject { put("quality", 2); put("device", "scale") })
+        pipeline.sync(adapter, refresh, now)
         assertEquals(2, store.ingested.size)
-        assertEquals(2, store.ingested.map { it.batchExternalId }.distinct().size)
     }
 
     @Test
@@ -218,6 +255,8 @@ class ProviderSyncPipelineTest {
     ) : ProviderSyncAdapter {
         var fetchCalls = 0
         var refreshCalls = 0
+        var steps = 1200
+        var sourceRecords = emptyList<JsonObject>()
 
         override val providerCode = "fake"
         override val defaultSyncFailureMessage = "Fake sync failed"
@@ -277,13 +316,14 @@ class ProviderSyncPipelineTest {
                 dataType = item.dataType,
                 pagesFetched = 1,
                 sourceRecordsReceived = 1,
-                sourcePayload = buildJsonObject {},
+                sourcePayload = buildJsonObject { put("requestId", fetchCalls) },
+                sourceRecords = sourceRecords,
                 records = listOf(
                     StepInterval(
                         providerRecordId = "steps-1",
                         startAt = "2026-04-01T08:00:00Z",
                         endAt = "2026-04-01T09:00:00Z",
-                        steps = 1200,
+                        steps = steps,
                     )
                 ),
             )
@@ -314,6 +354,7 @@ class ProviderSyncPipelineTest {
         var saveCount = 0
         var runsStarted = 0
         val ingested = mutableListOf<ProviderIngestionCommand>()
+        var ingestionFailure: Exception? = null
 
         override suspend fun selectForSync(
             providerCode: String,
@@ -389,14 +430,25 @@ class ProviderSyncPipelineTest {
             now: Instant,
         ): ExistingProviderBatch? = existingBatch
 
+        override suspend fun findLatestSnapshot(
+            providerCode: String,
+            providerInstanceId: String,
+            windowKey: String,
+            now: Instant,
+        ): ProcessedIngestionSnapshot? = ingested.withIndex().lastOrNull {
+            it.value.providerCode == providerCode && it.value.providerInstanceId == providerInstanceId &&
+                it.value.snapshot.windowKey == windowKey
+        }?.let { ProcessedIngestionSnapshot(it.index + 1, it.value.snapshot.contentHash) }
+
         override suspend fun ingest(
             command: ProviderIngestionCommand,
             now: Instant,
         ): ProviderSyncBatch {
+            ingestionFailure?.let { throw it }
             ingested += command
             return ProviderSyncBatch(
                 dataType = command.dataType,
-                batchId = 1,
+                batchId = ingested.size,
                 duplicateBatch = false,
                 recordsReceived = command.records.size,
                 ingestionRecordsStored = command.records.size,

@@ -48,6 +48,30 @@ class ScheduledProviderSyncServiceTest : PostgresIntegrationTest() {
     }
 
     @Test
+    fun longOutageCatchesUpInBoundedWindowsAtMaximumLookback() = runBlocking {
+        val provider = BlockingProvider().apply { release.complete(Unit) }
+        val (service, repository) = serviceWith(provider)
+        val originalCheckpoint = Instant.parse("2026-01-01T10:00:00Z")
+        val now = Instant.parse("2026-07-01T10:00:00Z")
+        val config = repository.upsertConfig(
+            provider.providerCode, provider.defaultProviderInstanceId, true, listOf("steps"),
+            1_440, 31, now, originalCheckpoint,
+        )
+        repository.markDataTypeSuccess(config.id, "steps", originalCheckpoint.minusSeconds(86_400), originalCheckpoint, originalCheckpoint)
+        var checkpoint = originalCheckpoint
+        repeat(6) {
+            service.runNow(provider.providerCode, provider.defaultProviderInstanceId, now)
+            val requested = provider.requests.last()
+            assertEquals(checkpoint.minusSeconds(31 * 86_400L), requested.from)
+            assertEquals(minOf(now, checkpoint.plusSeconds(31 * 86_400L)), requested.to)
+            assertTrue(requested.to.isAfter(checkpoint))
+            checkpoint = repository.checkpoints(config.id).single().checkpointAt!!
+            assertEquals(requested.to, checkpoint)
+        }
+        assertEquals(now, checkpoint)
+    }
+
+    @Test
     fun manualRunConflictsWhileScheduledRunIsActiveForSameAccount() = runBlocking {
         val database = openDatabase(PostgresTestDatabase.config())
         val repository = ScheduledSyncRepository(database)

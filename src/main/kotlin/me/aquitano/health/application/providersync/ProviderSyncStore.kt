@@ -2,6 +2,7 @@ package me.aquitano.health.application.providersync
 
 import me.aquitano.health.api.dto.IngestionBatchRequest
 import me.aquitano.health.application.IngestionService
+import me.aquitano.health.domain.ProcessedIngestionSnapshot
 import me.aquitano.health.domain.MetricCreatedCounts
 import me.aquitano.health.domain.ProviderSyncBatch
 import me.aquitano.health.domain.SyncStatus
@@ -73,6 +74,13 @@ interface ProviderSyncStore {
         batchExternalId: String,
         now: Instant,
     ): ExistingProviderBatch?
+
+    suspend fun findLatestSnapshot(
+        providerCode: String,
+        providerInstanceId: String,
+        windowKey: String,
+        now: Instant,
+    ): ProcessedIngestionSnapshot?
 
     suspend fun ingest(
         command: ProviderIngestionCommand,
@@ -198,6 +206,15 @@ class OAuthProviderSyncStore(
             batch.status?.let { ExistingProviderBatch(batch.id, it) }
         }
 
+    override suspend fun findLatestSnapshot(
+        providerCode: String,
+        providerInstanceId: String,
+        windowKey: String,
+        now: Instant,
+    ): ProcessedIngestionSnapshot? = ingestionService.findLatestSyncSnapshot(
+        providerCode, providerInstanceId, windowKey, now,
+    )
+
     override suspend fun ingest(
         command: ProviderIngestionCommand,
         now: Instant,
@@ -212,6 +229,7 @@ class OAuthProviderSyncStore(
                 records = command.records,
             ),
             now = now,
+            snapshot = command.snapshot,
         )
         return ProviderSyncBatch(
             dataType = command.dataType,

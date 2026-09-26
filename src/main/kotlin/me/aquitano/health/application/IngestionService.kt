@@ -50,9 +50,22 @@ class IngestionService(
             )
         }
 
+    suspend fun findLatestSyncSnapshot(
+        provider: String,
+        providerInstanceId: String,
+        windowKey: String,
+        now: Instant,
+    ): ProcessedIngestionSnapshot? = suspendDbTransaction(db = database) {
+        val sourceInstance = supportRepository.resolveOrCreateSourceInstanceInTransaction(
+            provider, providerInstanceId, now,
+        )
+        ingestionRepository.findLatestSyncSnapshot(sourceInstance.id, windowKey)
+    }
+
     suspend fun ingestBatch(
         request: IngestionBatchRequest,
-        now: Instant
+        now: Instant,
+        snapshot: IngestionSnapshot? = null,
     ): IngestionSummaryResponse {
         val validated = mappingService.validateAndMap(request)
         logger.infoWithContext(
@@ -130,6 +143,7 @@ class IngestionService(
                     sourcePayloadJson = AppJson.encodeToString(validated.sourcePayload),
                     ingestedAt = validated.ingestedAt,
                     receivedAt = now,
+                    snapshot = snapshot,
                 )
                 val ingestionRecords = ingestionRepository.insertRecords(
                     batchId,

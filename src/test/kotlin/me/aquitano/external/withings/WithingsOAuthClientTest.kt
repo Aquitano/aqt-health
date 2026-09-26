@@ -23,6 +23,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.test.assertFalse
 
 class WithingsOAuthClientTest {
     private val now = Instant.parse("2026-04-20T10:00:00Z")
@@ -38,7 +39,8 @@ class WithingsOAuthClientTest {
         assertNull(dataError.providerStatus)
         assertTrue(adapter.isUnauthorized(dataError))
         val tokenError = assertFailsWith<WithingsHttpException> { client.refreshToken("refresh", now) }
-        assertTrue(adapter.isInvalidRefreshToken(tokenError))
+        assertEquals(401, tokenError.httpStatus)
+        assertFalse(adapter.isInvalidRefreshToken(tokenError))
     }
 
     @Test

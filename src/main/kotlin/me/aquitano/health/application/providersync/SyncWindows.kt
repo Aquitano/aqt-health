@@ -28,10 +28,8 @@ fun syncWindows(from: Instant, to: Instant, windowSize: Duration): List<SyncWind
 /**
  * Splits [from]..[to] into one-day windows anchored to UTC midnight.
  *
- * Overlapping re-syncs (the scheduled lookback moves `from` and `to` on every run) then produce
- * identical batch external ids for elapsed days, so those days dedupe against already-processed
- * batches instead of re-fetching and re-storing the whole lookback window each time. Only the
- * current, still-open day keeps a moving `to` and is re-ingested until the day completes.
+ * Completed days share a stable window key. Manual backfills cache processed batches;
+ * scheduled refreshes fetch again and compare content with the latest successful snapshot.
  */
 fun dailySyncWindows(from: Instant, to: Instant): List<SyncWindow> =
     syncWindows(from.truncatedTo(ChronoUnit.DAYS), to, Duration.ofDays(1))

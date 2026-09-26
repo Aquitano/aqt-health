@@ -1,5 +1,7 @@
 package me.aquitano.health.infrastructure.repositories
 
+import me.aquitano.health.domain.IngestionSnapshot
+import me.aquitano.health.domain.ProcessedIngestionSnapshot
 import me.aquitano.health.domain.BatchStatus
 import me.aquitano.health.domain.HealthRecord
 import me.aquitano.health.domain.RequestValidationException
@@ -94,16 +96,37 @@ class IngestionRepository {
             .map(::toExistingBatch)
             .singleOrNull()
 
+    fun findLatestSyncSnapshot(sourceInstanceId: Int, windowKey: String): ProcessedIngestionSnapshot? =
+        IngestionBatchesTable
+            .select(IngestionBatchesTable.id, IngestionBatchesTable.syncContentHash)
+            .where {
+                (IngestionBatchesTable.sourceInstanceId eq sourceInstanceId) and
+                    (IngestionBatchesTable.syncWindowKey eq windowKey) and
+                    (IngestionBatchesTable.status eq "processed")
+            }
+            .orderBy(IngestionBatchesTable.id to SortOrder.DESC)
+            .limit(1)
+            .singleOrNull()
+            ?.let {
+                ProcessedIngestionSnapshot(
+                    it[IngestionBatchesTable.id].value,
+                    requireNotNull(it[IngestionBatchesTable.syncContentHash]),
+                )
+            }
+
     fun insertBatch(
         sourceInstanceId: Int,
         batchExternalId: String?,
         sourcePayloadJson: String,
         ingestedAt: Instant,
         receivedAt: Instant,
+        snapshot: IngestionSnapshot? = null,
     ): Int =
         IngestionBatchesTable.insertAndGetId {
             it[this.sourceInstanceId] = sourceInstanceId
             it[this.batchExternalId] = batchExternalId
+            it[syncWindowKey] = snapshot?.windowKey
+            it[syncContentHash] = snapshot?.contentHash
             it[this.sourcePayloadJson] = sourcePayloadJson
             it[status] = "received"
             it[this.ingestedAt] = ingestedAt.toDbTimestamp()
