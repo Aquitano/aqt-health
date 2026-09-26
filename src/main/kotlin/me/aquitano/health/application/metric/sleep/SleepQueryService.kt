@@ -28,7 +28,6 @@ class SleepQueryService(
         suspendDbTransaction(db = database) {
             val filters = params.readFilters(
                 sortSpec = QueryParamSpecs.sortByStartAt,
-                latestSupported = true,
             )
             val (sessions, sourceMetadata) =
                 canonicalSessionRepository.listCanonicalSleepSessions(filters)

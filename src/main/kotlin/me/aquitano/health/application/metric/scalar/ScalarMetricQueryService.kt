@@ -51,7 +51,6 @@ class ScalarMetricQueryService(
         return suspendDbTransaction(db = database) {
             val filters = params.readFilters(
                 sortSpec = QueryParamSpecs.sortByMeasuredAt,
-                latestSupported = true,
             )
             val (rows, sourceMetadata) =
                 scalarRepository.list(filters, setOf(metricType), canonical = !raw)

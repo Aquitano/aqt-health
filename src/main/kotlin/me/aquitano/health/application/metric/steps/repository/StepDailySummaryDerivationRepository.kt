@@ -24,6 +24,7 @@ class StepDailySummaryDerivationRepository {
                     (StepSamplesTable.startAt less dayEnd.toDbTimestamp()) and
                     (StepSamplesTable.endAt greater dayStart.toDbTimestamp())
             }
+            .orderBy(StepSamplesTable.id to SortOrder.ASC)
             .map {
                 StepDailySummaryRawSample(
                     startAt = it[StepSamplesTable.startAt].toInstant(),

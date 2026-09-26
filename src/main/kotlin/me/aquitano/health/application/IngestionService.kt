@@ -8,6 +8,7 @@ import me.aquitano.health.application.metric.common.MetricWriteService
 import me.aquitano.health.domain.*
 import me.aquitano.health.infrastructure.repositories.IngestionRepository
 import me.aquitano.health.infrastructure.repositories.PendingDerivedRebuildRepository
+import me.aquitano.health.infrastructure.repositories.PendingDerivedRebuildRecord
 import me.aquitano.health.infrastructure.repositories.SupportRepository
 import me.aquitano.health.shared.AppJson
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -196,6 +197,7 @@ class IngestionService(
                     response,
                     rebuildRequest,
                     created,
+                    pendingDerivedRebuildRepository.enqueueInTransaction(rebuildRequest, now = now),
                 )
             }
 
@@ -208,6 +210,7 @@ class IngestionService(
                             transactionResult.derivedRebuildRequest,
                             now,
                         )
+                        pendingDerivedRebuildRepository.deleteCompleted(transactionResult.pendingRebuilds)
                     } catch (exception: Exception) {
                         if (exception is CancellationException) throw exception
                         val rebuildError = exception.message ?: "Unknown derived rebuild error"
@@ -216,11 +219,6 @@ class IngestionService(
                                 response.batchId,
                                 now,
                                 rebuildError,
-                            )
-                            pendingDerivedRebuildRepository.enqueueInTransaction(
-                                transactionResult.derivedRebuildRequest,
-                                error = rebuildError,
-                                now = now,
                             )
                         }
                         logger.errorWithContext(
@@ -250,6 +248,7 @@ private sealed interface IngestionTransactionResult {
         val response: IngestionSummaryResponse,
         val derivedRebuildRequest: DerivedRebuildRequest,
         val createdCounts: MetricCreatedCounts,
+        val pendingRebuilds: List<PendingDerivedRebuildRecord> = emptyList(),
     ) :
         IngestionTransactionResult
 

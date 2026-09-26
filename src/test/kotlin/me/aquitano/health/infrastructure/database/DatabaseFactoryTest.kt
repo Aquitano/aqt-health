@@ -59,7 +59,6 @@ class DatabaseFactoryTest : PostgresIntegrationTest() {
 
         assertContains(viewNames, "canonical_scalar_samples")
         assertContains(viewNames, "canonical_activity_summaries")
-        assertContains(viewNames, "canonical_step_daily_summaries")
         assertContains(viewNames, "canonical_sleep_summaries")
         assertContains(viewNames, "canonical_sleep_sessions")
     }

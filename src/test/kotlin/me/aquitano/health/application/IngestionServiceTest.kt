@@ -24,6 +24,35 @@ import kotlin.test.assertTrue
 
 class IngestionServiceTest : PostgresIntegrationTest() {
     @Test
+    fun cancellationAfterCommitLeavesDurableWorkEvenWhenBatchIsRetried() = runBlocking {
+        val config = PostgresTestDatabase.config()
+        val database = DatabaseFactory().initialize(config)
+        val pending = PendingDerivedRebuildRepository(database)
+        val service = IngestionService(
+            database, IngestionMappingService(), SupportRepository(database), IngestionRepository(),
+            metricWriteService(), object : DerivedRebuildExecutor {
+                override suspend fun rebuild(request: DerivedRebuildRequest, computedAt: Instant) {
+                    throw java.util.concurrent.CancellationException("request cancelled")
+                }
+            }, pending,
+        )
+        val now = Instant.parse("2026-04-19T10:00:00Z")
+        val request = IngestionBatchRequest(
+            provider = "health_connect", providerInstanceId = "cancelled", batchExternalId = "cancelled",
+            ingestedAt = now.toString(), sourcePayload = buildJsonObject {},
+            records = listOf(StepInterval(startAt = "2026-04-19T08:00:00Z", endAt = "2026-04-19T09:00:00Z", steps = 100)),
+        )
+        assertFailsWith<java.util.concurrent.CancellationException> { service.ingestBatch(request, now) }
+        assertEquals(1, pending.due(now, 10).size)
+        assertTrue(service.ingestBatch(request, now).duplicateBatch)
+        assertEquals(1, pending.due(now, 10).size)
+        val sweeper = PendingDerivedRebuildSweeper(pending, me.aquitano.health.test.realDerivedRebuildExecutor(database), me.aquitano.health.infrastructure.time.UtcClock())
+        assertEquals(1, sweeper.sweep(now))
+        assertEquals(0, pending.due(now, 10).size)
+        assertEquals(100, singleInt(config, "SELECT SUM(value)::integer FROM canonical_step_day_bucket_contributions"))
+    }
+
+    @Test
     fun derivedRebuildFailureDoesNotFailRawIngestion() = runBlocking {
         val dbConfig = PostgresTestDatabase.config()
         val database = openDatabase(dbConfig)

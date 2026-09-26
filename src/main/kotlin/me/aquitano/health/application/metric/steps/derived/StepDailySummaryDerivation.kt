@@ -1,6 +1,8 @@
 package me.aquitano.health.application.metric.steps.derived
 
 import me.aquitano.health.application.metric.steps.repository.StepDailySummaryDerivationRepository
+import org.jetbrains.exposed.v1.jdbc.Database
+import me.aquitano.health.infrastructure.database.suspendDbTransaction
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
@@ -11,6 +13,7 @@ class StepDailySummaryDerivation(
     private val repository: StepDailySummaryDerivationRepository,
 ) {
     suspend fun recompute(
+        database: Database,
         sourceInstanceId: Int,
         dates: Set<LocalDate>,
         computedAt: Instant,
@@ -18,20 +21,24 @@ class StepDailySummaryDerivation(
         dates.forEach { date ->
             val dayStart = date.atStartOfDay(ZoneOffset.UTC).toInstant()
             val dayEnd = date.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant()
-            val samples = repository.listStepSamplesOverlapping(
+            val samples = suspendDbTransaction(db = database) {
+                repository.listStepSamplesOverlapping(sourceInstanceId, dayStart, dayEnd)
+            }
+            val output = StepDailySummaryOutput(
                 sourceInstanceId = sourceInstanceId,
-                dayStart = dayStart,
-                dayEnd = dayEnd,
+                date = date,
+                computedAt = computedAt,
+                steps = samples.sumOf { allocatedStepsForDay(it, dayStart, dayEnd) },
+                sampleCount = samples.size,
             )
-            repository.upsertStepDailySummary(
-                StepDailySummaryOutput(
-                    sourceInstanceId = sourceInstanceId,
-                    date = date,
-                    computedAt = computedAt,
-                    steps = samples.sumOf { allocatedStepsForDay(it, dayStart, dayEnd) },
-                    sampleCount = samples.size,
-                )
-            )
+            suspendDbTransaction(db = database) {
+                // Serialize persistence per date, then reject computations made from stale raw rows.
+                exec("SELECT pg_advisory_xact_lock(384729, ${date.toEpochDay().toInt()})")
+                check(samples == repository.listStepSamplesOverlapping(sourceInstanceId, dayStart, dayEnd)) {
+                    "Step samples changed during derivation; retry required"
+                }
+                repository.upsertStepDailySummary(output)
+            }
         }
     }
 }
@@ -46,18 +53,28 @@ internal fun allocatedStepsForDay(
     dayStart: Instant,
     dayEnd: Instant,
 ): Int {
-    val totalSeconds = Duration.between(sample.startAt, sample.endAt).seconds
-    if (totalSeconds <= 0) return 0
-
-    val overlapStart = maxOf(sample.startAt, dayStart)
-    val overlapEnd = minOf(sample.endAt, dayEnd)
-    if (!overlapStart.isBefore(overlapEnd)) return 0
-
-    fun cumulativeSteps(at: Instant): Int =
-        (sample.steps.toDouble() * Duration.between(sample.startAt, at).seconds / totalSeconds).roundToInt()
-
-    return cumulativeSteps(overlapEnd) - cumulativeSteps(overlapStart)
+    return allocatedSteps(sample.startAt, sample.endAt, sample.steps, dayStart, dayEnd)
 }
+
+/** Cumulative rounding preserves the sample total across adjacent days and buckets. */
+internal fun allocatedSteps(
+    startAt: Instant,
+    endAt: Instant,
+    steps: Int,
+    from: Instant,
+    to: Instant,
+    duration: Double = secondsBetween(startAt, endAt),
+): Int {
+    if (duration <= 0) return 0
+    val start = maxOf(startAt, from)
+    val end = minOf(endAt, to)
+    if (!start.isBefore(end)) return 0
+    fun cumulative(at: Instant) = (steps * secondsBetween(startAt, at) / duration).roundToInt()
+    return cumulative(end) - cumulative(start)
+}
+
+internal fun secondsBetween(start: Instant, end: Instant): Double =
+    Duration.between(start, end).let { it.seconds + it.nano / 1_000_000_000.0 }
 
 data class StepDailySummaryRawSample(
     val startAt: Instant,

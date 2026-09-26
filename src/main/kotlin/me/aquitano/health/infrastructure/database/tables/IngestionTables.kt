@@ -30,6 +30,7 @@ object IngestionRecordsTable : IntIdTable("ingestion_records") {
 }
 
 object PendingDerivedRebuildsTable : IntIdTable("pending_derived_rebuilds") {
+    val revision = text("revision")
     val sourceInstanceId =
         integer("source_instance_id").references(SourceInstancesTable.id)
     val derivedKind = text("derived_kind")

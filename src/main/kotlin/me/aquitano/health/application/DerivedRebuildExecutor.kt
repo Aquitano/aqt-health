@@ -6,12 +6,14 @@ import me.aquitano.health.domain.DerivedKind
 import me.aquitano.health.domain.RecordTypes
 import me.aquitano.health.shared.utcDate
 import org.jetbrains.exposed.v1.jdbc.Database
-import me.aquitano.health.infrastructure.database.suspendDbTransaction
 import java.time.Instant
 import java.time.LocalDate
 
 interface DerivedRebuildExecutor {
     suspend fun rebuild(request: DerivedRebuildRequest, computedAt: Instant)
+    suspend fun rebuildAll(requests: List<DerivedRebuildRequest>, computedAt: Instant) {
+        requests.forEach { rebuild(it, computedAt) }
+    }
 }
 
 data class DerivedRebuildRequest(
@@ -19,12 +21,10 @@ data class DerivedRebuildRequest(
     val affectedDates: Map<DerivedKind, Set<LocalDate>> = emptyMap(),
 ) {
     operator fun get(kind: DerivedKind): Set<LocalDate> = affectedDates[kind] ?: emptySet()
-
-    fun hasWork(): Boolean = affectedDates.values.any { it.isNotEmpty() }
 }
 
 fun interface DerivedRebuildAction {
-    suspend fun rebuild(sourceInstanceId: Int, dates: Set<LocalDate>, computedAt: Instant)
+    suspend fun rebuild(database: Database, sourceInstanceIds: Set<Int>, dates: Set<LocalDate>, computedAt: Instant)
 }
 
 /** Maps one raw record's time span to the dates whose derived data it invalidates. */
@@ -80,9 +80,9 @@ fun derivedRebuildModules(
                     emptySet()
                 }
             },
-            action = { sourceInstanceId, dates, computedAt ->
-                stepSummaryService.recompute(sourceInstanceId, dates, computedAt)
-                canonicalStepService.recompute(dates, computedAt)
+            action = { database, sourceInstanceIds, dates, computedAt ->
+                sourceInstanceIds.forEach { stepSummaryService.recompute(database, it, dates, computedAt) }
+                canonicalStepService.recompute(database, dates, computedAt)
             },
         )
     )
@@ -105,13 +105,19 @@ class TransactionalDerivedRebuildExecutor(
     private val database: Database,
     private val registry: DerivedRebuildModuleRegistry,
 ) : DerivedRebuildExecutor {
-    override suspend fun rebuild(request: DerivedRebuildRequest, computedAt: Instant) {
+    override suspend fun rebuild(request: DerivedRebuildRequest, computedAt: Instant) =
+        rebuildAll(listOf(request), computedAt)
+
+    override suspend fun rebuildAll(requests: List<DerivedRebuildRequest>, computedAt: Instant) {
         registry.modules.forEach { module ->
-            val dates = request[module.kind]
-            if (dates.isNotEmpty()) {
-                suspendDbTransaction(db = database) {
-                    module.action.rebuild(request.sourceInstanceId, dates, computedAt)
+            val sourcesByDate = mutableMapOf<LocalDate, MutableSet<Int>>()
+            requests.forEach { request ->
+                request[module.kind].forEach { date ->
+                    sourcesByDate.getOrPut(date) { linkedSetOf() }.add(request.sourceInstanceId)
                 }
+            }
+            sourcesByDate.toSortedMap().forEach { (date, sources) ->
+                module.action.rebuild(database, sources, setOf(date), computedAt)
             }
         }
     }

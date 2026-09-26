@@ -12,6 +12,7 @@ import me.aquitano.health.api.dto.ReplayJobStartResponse
 import me.aquitano.health.api.dto.ReplayJobStatusResponse
 import me.aquitano.health.api.dto.ReplayRequest
 import me.aquitano.health.application.metric.common.MetricWriteService
+import me.aquitano.health.application.metric.common.MetricWrite
 import me.aquitano.health.domain.DerivedKind
 import me.aquitano.health.domain.ConflictException
 import me.aquitano.health.domain.NotFoundException
@@ -217,17 +218,27 @@ class ReplayService(
         val affectedBySource =
             mutableMapOf<Int, MutableMap<DerivedKind, MutableSet<LocalDate>>>()
 
+        val rows = suspendDbTransaction(db = database) {
+            ingestionRepository.listRecordsForReplay(dayStart, dayEnd, plan.recordTypes)
+        }
+        val prepared = if (plan.includesProjections) rows.mapNotNull { row ->
+            decodeAndMap(row)?.let { record -> row to MetricWrite(row.id, record) }
+        } else emptyList()
+        val writesBySource = prepared.groupBy { it.first.sourceInstanceId }
+        if (plan.includesDerived) {
+            rows.forEach { row ->
+                derivedRebuildRegistry.affectedDatesFor(row.recordType, row.recordStartAt, row.recordEndAt)
+                    .forEach { (kind, dates) ->
+                        affectedBySource.getOrPut(row.sourceInstanceId) { mutableMapOf() }
+                            .getOrPut(kind) { linkedSetOf() }.addAll(dates)
+                    }
+            }
+        }
         val result = suspendDbTransaction(db = database) {
-            val rows = ingestionRepository.listRecordsForReplay(
-                dayStart = dayStart,
-                dayEnd = dayEnd,
-                recordTypes = plan.recordTypes,
-            )
-
             var recordsReplayed = 0
             var metricsWritten = 0
             var duplicatesSkipped = 0
-            var mappingFailures = 0
+            val mappingFailures = if (plan.includesProjections) rows.size - prepared.size else 0
 
             if (plan.includesProjections) {
                 if (plan.wipe) {
@@ -238,52 +249,28 @@ class ReplayService(
                         recordTypes = plan.recordTypes ?: replayableRecordTypes,
                     )
                 }
-                rows.forEach { row ->
-                    val record = decodeAndMap(row)
-                    if (record == null) {
-                        mappingFailures += 1
-                        return@forEach
-                    }
-                    val writeResult = metricWriteService.write(
-                        provider = row.provider,
-                        sourceInstanceId = row.sourceInstanceId,
-                        ingestionRecordId = row.id,
-                        record = record,
+                writesBySource.forEach { (sourceId, entries) ->
+                    val writeResult = metricWriteService.writeAll(
+                        provider = entries.first().first.provider,
+                        sourceInstanceId = sourceId,
+                        writes = entries.map { it.second },
                         now = now,
                     )
-                    recordsReplayed += 1
+                    recordsReplayed += entries.size
                     metricsWritten += writeResult.created.counts.values.sum()
                     duplicatesSkipped += writeResult.duplicateSkipped
-                }
-            }
-
-            if (plan.includesDerived) {
-                rows.forEach { row ->
-                    derivedRebuildRegistry.affectedDatesFor(
-                        row.recordType,
-                        row.recordStartAt,
-                        row.recordEndAt,
-                    ).forEach { (kind, dates) ->
-                        affectedBySource
-                            .getOrPut(row.sourceInstanceId) { mutableMapOf() }
-                            .getOrPut(kind) { linkedSetOf() }
-                            .addAll(dates)
-                    }
                 }
             }
 
             DayReplayResult(recordsReplayed, metricsWritten, duplicatesSkipped, mappingFailures)
         }
 
-        affectedBySource.forEach { (sourceInstanceId, affectedDates) ->
-            derivedRebuildExecutor.rebuild(
-                DerivedRebuildRequest(
-                    sourceInstanceId = sourceInstanceId,
-                    affectedDates = affectedDates.mapValues { it.value.toSet() },
-                ),
-                clock.now(),
-            )
-        }
+        derivedRebuildExecutor.rebuildAll(
+            affectedBySource.map { (sourceInstanceId, affectedDates) ->
+                DerivedRebuildRequest(sourceInstanceId, affectedDates.mapValues { it.value.toSet() })
+            },
+            clock.now(),
+        )
 
         return result
     }

@@ -37,8 +37,11 @@ data class HealthDayQueryContext(
 )
 
 interface HealthDayModule<T> {
-    val name: String
+    val name: HealthDayModuleName
     suspend fun read(context: HealthDayQueryContext): T
+    fun apply(response: HealthDayResponse, result: T): HealthDayResponse
+    suspend fun appendTo(context: HealthDayQueryContext, response: HealthDayResponse): HealthDayResponse =
+        apply(response, read(context))
 }
 
 class HealthDayModuleRegistry(
@@ -46,9 +49,12 @@ class HealthDayModuleRegistry(
 ) {
     private val byName = modules.associateBy { it.name }
 
-    // Callers pass wire names already validated against HealthDayModuleName, and the
-    // registry is constructed with exactly those modules.
-    fun resolve(names: List<String>): List<HealthDayModule<*>> =
+    init {
+        require(byName.size == modules.size) { "Duplicate health-day modules" }
+        require(byName.keys == HealthDayModuleName.entries.toSet()) { "Missing health-day modules" }
+    }
+
+    fun resolve(names: List<HealthDayModuleName>): List<HealthDayModule<*>> =
         names.map { byName.getValue(it) }
 }
 
@@ -69,8 +75,7 @@ class HealthDayQueryService(
                 )
             )
         val moduleNames = parseModules(params.required("modules"))
-        val moduleKeys = moduleNames.map { it.wireName }
-        val modules = registry.resolve(moduleKeys)
+        val modules = registry.resolve(moduleNames)
         val from = date.atStartOfDay(timezone).toInstant()
         val to = date.plusDays(1).atStartOfDay(timezone).toInstant()
         val context = HealthDayQueryContext(
@@ -85,18 +90,19 @@ class HealthDayQueryService(
         )
 
         return suspendDbTransaction(db = database) {
-            val results = modules.associate { it.name to it.read(context) }
-            HealthDayResponse(
+            var response = HealthDayResponse(
                 date = date.toString(),
                 timezone = timezone.id,
                 from = from.toString(),
                 to = to.toString(),
                 modules = moduleNames,
-                steps = results["steps"] as? HealthDayStepsResponse,
-                heartRate = results["heartRate"] as? HealthDayHeartRateResponse,
-                weight = results["weight"] as? HealthDayWeightResponse,
-                sleep = results["sleep"] as? HealthDaySleepResponse,
+                steps = null,
+                heartRate = null,
+                weight = null,
+                sleep = null,
             )
+            modules.forEach { response = it.appendTo(context, response) }
+            response
         }
     }
 
@@ -133,7 +139,9 @@ class HealthDayQueryService(
 class StepsDayModule(
     private val canonicalRepository: CanonicalStepDerivationRepository,
 ) : HealthDayModule<HealthDayStepsResponse> {
-    override val name = "steps"
+    override val name = HealthDayModuleName.Steps
+
+    override fun apply(response: HealthDayResponse, result: HealthDayStepsResponse) = response.copy(steps = result)
 
     override suspend fun read(context: HealthDayQueryContext): HealthDayStepsResponse {
         val filters = context.filters()
@@ -157,7 +165,7 @@ class StepsDayModule(
             }
 
         return HealthDayStepsResponse(
-            total = values.sum().toInt(),
+            total = values.sum().roundToInt(),
             sampleCount = rows.size,
             buckets = buckets.mapIndexed { index, (start, end) ->
                 HealthDayBucketResponse(
@@ -175,7 +183,9 @@ class StepsDayModule(
 class HeartRateDayModule(
     private val scalarRepository: ScalarSampleReadRepository,
 ) : HealthDayModule<HealthDayHeartRateResponse> {
-    override val name = "heartRate"
+    override val name = HealthDayModuleName.HeartRate
+
+    override fun apply(response: HealthDayResponse, result: HealthDayHeartRateResponse) = response.copy(heartRate = result)
 
     private val metricTypes = setOf(ScalarMetricTypes.HEART_RATE)
 
@@ -221,7 +231,9 @@ class HeartRateDayModule(
 class WeightDayModule(
     private val scalarRepository: ScalarSampleReadRepository,
 ) : HealthDayModule<HealthDayWeightResponse> {
-    override val name = "weight"
+    override val name = HealthDayModuleName.Weight
+
+    override fun apply(response: HealthDayResponse, result: HealthDayWeightResponse) = response.copy(weight = result)
 
     private val metricTypes = setOf(BodyMetricTypes.WEIGHT)
 
@@ -245,7 +257,9 @@ class WeightDayModule(
 class SleepDayModule(
     private val sleepRepository: SleepRepository,
 ) : HealthDayModule<HealthDaySleepResponse> {
-    override val name = "sleep"
+    override val name = HealthDayModuleName.Sleep
+
+    override fun apply(response: HealthDayResponse, result: HealthDaySleepResponse) = response.copy(sleep = result)
 
     override suspend fun read(context: HealthDayQueryContext): HealthDaySleepResponse {
         val filters = SleepNightReadFilters(

@@ -22,6 +22,56 @@ import me.aquitano.health.domain.BodyMetricTypes
 
 class ReadApiRouteTest : PostgresIntegrationTest() {
     @Test
+    fun weightTrendKeepsAttributionWhenPreviousMeasurementUsedAnotherDevice() = testApplication {
+        configureTestApplication()
+        listOf("withings" to "2026-04-19", "health_connect" to "2026-04-20").forEach { (provider, date) ->
+            val response = client.post("/api/v2/ingestion/batches") {
+                authorized()
+                contentType(ContentType.Application.Json)
+                setBody("""{"provider":"$provider","providerInstanceId":"$provider","ingestedAt":"${date}T10:00:00Z","sourcePayload":{},"records":[{"type":"scalar","metricType":"weight","measuredAt":"${date}T08:00:00Z","value":80.0}]}""")
+            }
+            assertEquals(HttpStatusCode.Created, response.status)
+        }
+        val weight = authorizedGet("/api/v2/dashboard/trends?toDate=2026-04-20").jsonBody()["weight"]!!.jsonObject
+        assertEquals("health_connect", weight["latest"]!!.jsonObject["source"]!!.jsonObject["provider"]!!.jsonPrimitive.content)
+        assertEquals("withings", weight["previous"]!!.jsonObject["source"]!!.jsonObject["provider"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun canonicalStepTotalsAgreeAcrossEndpointsAndPreserveMidnightRemainders() = testApplication {
+        configureTestApplication()
+        val samples = listOf(
+            "health_connect" to """{"type":"step_interval","startAt":"2026-04-19T08:00:00Z","endAt":"2026-04-19T09:00:00Z","steps":100}""",
+            "withings" to """{"type":"step_interval","startAt":"2026-04-19T23:59:59.750Z","endAt":"2026-04-20T00:00:00.250Z","steps":3}""",
+        )
+        samples.forEach { (provider, record) ->
+            val response = client.post("/api/v2/ingestion/batches") {
+                authorized()
+                contentType(ContentType.Application.Json)
+                setBody("""{"provider":"$provider","providerInstanceId":"$provider","batchExternalId":"$provider","ingestedAt":"2026-04-20T10:00:00Z","sourcePayload":{},"records":[$record]}""")
+            }
+            assertEquals(HttpStatusCode.Created, response.status)
+        }
+        listOf("2026-04-19" to 102, "2026-04-20" to 1).forEach { (date, expected) ->
+            val daily = authorizedGet("/api/v2/steps/daily?date=$date").items().single().jsonObject
+            val dashboard = authorizedGet("/api/v2/dashboard/summary?fromDate=$date&toDate=$date").jsonBody()
+            val day = authorizedGet("/api/v2/health/day?date=$date&timezone=UTC&modules=steps").jsonBody()
+            val trends = authorizedGet("/api/v2/dashboard/trends?toDate=$date&periodDays=1").jsonBody()
+            assertEquals(expected, daily["steps"]!!.jsonPrimitive.int)
+            assertEquals(expected, dashboard["steps"]!!.jsonObject["steps"]!!.jsonPrimitive.int)
+            assertEquals(expected, day["steps"]!!.jsonObject["total"]!!.jsonPrimitive.int)
+            assertEquals(expected, trends["steps"]!!.jsonObject["currentTotal"]!!.jsonPrimitive.int)
+        }
+        val filtered = authorizedGet("/api/v2/steps/daily?date=2026-04-19&provider=withings&includeSource=true").items().single().jsonObject
+        assertEquals(2, filtered["steps"]!!.jsonPrimitive.int)
+        assertEquals("withings", filtered["source"]!!.jsonObject["provider"]!!.jsonPrimitive.content)
+        val firstPage = authorizedGet("/api/v2/steps/daily?limit=1&order=asc").jsonBody()
+        val cursor = firstPage["meta"]!!.jsonObject["nextCursor"]!!.jsonPrimitive.content
+        val secondPage = authorizedGet("/api/v2/steps/daily?limit=1&order=asc&cursor=$cursor").items()
+        assertEquals("2026-04-20", secondPage.single().jsonObject["date"]!!.jsonPrimitive.content)
+    }
+
+    @Test
     fun readEndpointsReturnPersistedMetrics() = testApplication {
         configureTestApplication()
         ingestMixedBatch()

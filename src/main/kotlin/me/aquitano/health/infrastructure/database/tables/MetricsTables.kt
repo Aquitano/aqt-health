@@ -81,16 +81,6 @@ object CanonicalStepSamplesTable : IntIdTable("canonical_step_samples") {
     }
 }
 
-/** Read-only mapping of the canonical_step_daily_summaries view (see V15). */
-object CanonicalStepDailySummariesTable : Table("canonical_step_daily_summaries") {
-    val id = integer("id")
-    val date = date("date")
-    val sourceInstanceId = integer("source_instance_id")
-    val stepDailySummaryId =
-        integer("step_daily_summary_id").references(StepDailySummariesTable.id)
-    val steps = integer("steps")
-}
-
 object CanonicalStepDayBucketContributionsTable : IntIdTable("canonical_step_day_bucket_contributions") {
     val date = date("date")
     val sourceInstanceId =

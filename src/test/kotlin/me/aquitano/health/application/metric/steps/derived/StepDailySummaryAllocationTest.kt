@@ -12,6 +12,15 @@ class StepDailySummaryAllocationTest {
             date.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant()
 
     @Test
+    fun subsecondSampleAndAdjacentBucketsPreserveTheTotal() {
+        val start = Instant.parse("2026-06-01T23:59:59.750Z")
+        val middle = Instant.parse("2026-06-02T00:00:00Z")
+        val end = Instant.parse("2026-06-02T00:00:00.250Z")
+        assertEquals(2, allocatedSteps(start, end, 3, start, middle))
+        assertEquals(1, allocatedSteps(start, end, 3, middle, end))
+    }
+
+    @Test
     fun sampleSpanningMidnightAllocatesExactlyItsTotal() {
         // 101 steps split evenly across midnight: independent rounding would yield 51 + 51.
         val sample = StepDailySummaryRawSample(

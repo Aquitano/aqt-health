@@ -82,8 +82,7 @@ class ReplayServiceTest : PostgresIntegrationTest() {
         assertEquals(ReplayJobStatus.Completed, job.status)
         assertEquals(0, job.recordsReplayed)
         assertEquals(1, fixture.count("step_daily_summaries"))
-        // canonical views need no rebuild: they reflect the underlying tables directly
-        assertEquals(1, fixture.count("canonical_step_daily_summaries"))
+        assertEquals(1, fixture.count("canonical_step_samples"))
         assertEquals(1, fixture.count("canonical_activity_summaries"))
     }
 
