@@ -4,6 +4,7 @@ import me.aquitano.health.application.metric.common.MetricWrite
 import me.aquitano.health.domain.RecordTypes
 import me.aquitano.health.domain.ScalarMetricRegistry
 import me.aquitano.health.domain.ScalarSampleRecord
+import me.aquitano.health.shared.normalizeProviderCode
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import java.time.Instant
 
@@ -13,7 +14,9 @@ data class ReplacedRecordSpan(val recordType: String, val startAt: Instant, val 
 data class PreparedMetricWrites(
     val writes: List<MetricWrite>,
     val replacedSpans: List<ReplacedRecordSpan>,
-    val replacedRecordIds: Set<Int>,
+    val acceptedGoogleStepIds: Set<Int> = emptySet(),
+    val googleStepRecordIds: Set<Int> = emptySet(),
+    val googleStepDecisions: Map<Int, Boolean> = emptyMap(),
 )
 
 /**
@@ -21,11 +24,12 @@ data class PreparedMetricWrites(
  * log determines the newest version even when replay has deleted the projection being rebuilt.
  */
 class ProviderRecordCorrections {
-    fun prepare(sourceInstanceId: Int, writes: List<MetricWrite>): PreparedMetricWrites {
-        if (writes.isEmpty()) return PreparedMetricWrites(emptyList(), emptyList(), emptySet())
+    fun prepare(provider: String, sourceInstanceId: Int, writes: List<MetricWrite>): PreparedMetricWrites {
+        if (writes.isEmpty()) return PreparedMetricWrites(emptyList(), emptyList())
         val transaction = TransactionManager.current()
-        // Ingestion inserts its raw records before taking this lock. Replay takes its raw-log
-        // table lock first, then locks sources in ascending order through writeAll.
+        // Acceptance metadata may be written even in a replay without a wipe. Acquire the raw-log
+        // write lock before the source lock, matching ingestion and wipe-replay lock order.
+        transaction.exec("LOCK TABLE ingestion_records IN ROW EXCLUSIVE MODE")
         transaction.exec("SELECT pg_advisory_xact_lock(384730, $sourceInstanceId)")
         val latest = mutableMapOf<ProviderIdentity, MetricWrite>()
         writes.forEach { write ->
@@ -38,36 +42,31 @@ class ProviderRecordCorrections {
             if ((latest[key]?.ingestionRecordId ?: -1) < write.ingestionRecordId) latest[key] = write
         }
         val identified = latest.values.toList()
-        if (identified.isEmpty()) return PreparedMetricWrites(writes, emptyList(), emptySet())
+        if (identified.isEmpty()) return PreparedMetricWrites(writes, emptyList())
 
+        val googleStepIds = if (normalizeProviderCode(provider) == "google_health") {
+            identified.filter { it.record.recordType == RecordTypes.STEP_INTERVAL }
+                .mapTo(hashSetOf()) { it.ingestionRecordId }
+        } else emptySet()
         val eligibleIds = hashSetOf<Int>()
-        val firstVersionIds = hashMapOf<Int, Int>()
-        val replacedRecordIds = hashSetOf<Int>()
+        val acceptedGoogleStepIds = hashSetOf<Int>()
+        val googleStepDecisions = mutableMapOf<Int, Boolean>()
         identified.chunked(CHUNK_SIZE).forEach { chunk ->
             val ids = chunk.joinToString(",") { it.ingestionRecordId.toString() }
-            transaction.exec(
-                """
-                SELECT incoming.id, EXISTS (
-                    SELECT 1 FROM ingestion_records older
+            val priorStepDecision = if (googleStepIds.isNotEmpty()) {
+                """(SELECT older.google_step_projection_accepted FROM ingestion_records older
                     JOIN ingestion_batches batch ON batch.id = older.batch_id
                     WHERE older.provider_record_id = incoming.provider_record_id
-                      AND older.record_type = incoming.record_type
+                      AND older.record_type = 'step_interval'
                       AND older.id < incoming.id
                       AND batch.source_instance_id = $sourceInstanceId
                       AND batch.status = 'processed'
-                      AND older.normalized_record_json <> incoming.normalized_record_json
-                      AND ${sameScalarIdentity("older", "incoming")}
-                ) AS has_previous_version,
-                COALESCE((
-                    SELECT MIN(older.id) FROM ingestion_records older
-                    JOIN ingestion_batches batch ON batch.id = older.batch_id
-                    WHERE older.provider_record_id = incoming.provider_record_id
-                      AND older.record_type = incoming.record_type
-                      AND older.id < incoming.id
-                      AND batch.source_instance_id = $sourceInstanceId
-                      AND (batch.status = 'processed' OR older.batch_id = incoming.batch_id)
-                      AND ${sameScalarIdentity("older", "incoming")}
-                ), incoming.id) AS first_version_id
+                    ORDER BY older.id DESC LIMIT 1)"""
+            } else "NULL::boolean"
+            transaction.exec(
+                """
+                SELECT incoming.id, incoming.google_step_projection_accepted AS step_accepted,
+                       $priorStepDecision AS previous_step_accepted
                 FROM ingestion_records incoming
                 WHERE incoming.id IN ($ids)
                   AND NOT EXISTS (
@@ -84,9 +83,14 @@ class ProviderRecordCorrections {
             ) { rows ->
                 while (rows.next()) {
                     val id = rows.getInt("id")
+                    if (id in googleStepIds) {
+                        val decision = rows.getObject("step_accepted") as Boolean?
+                        if (decision == false) continue
+                        if (decision == true || rows.getBoolean("previous_step_accepted")) {
+                            acceptedGoogleStepIds += id
+                        }
+                    }
                     eligibleIds += id
-                    firstVersionIds[id] = rows.getInt("first_version_id")
-                    if (rows.getBoolean("has_previous_version")) replacedRecordIds += id
                 }
             }
         }
@@ -126,11 +130,14 @@ class ProviderRecordCorrections {
                     ) { rows ->
                         while (rows.next()) {
                             val incomingId = rows.getInt("incoming_id")
+                            if (incomingId in googleStepIds) {
+                                acceptedGoogleStepIds += incomingId
+                                googleStepDecisions[incomingId] = true
+                            }
                             if (rows.getInt("ingestion_record_id") >= incomingId || rows.getBoolean("unchanged")) {
                                 eligibleIds -= incomingId
                             } else {
                                 deleteIds += rows.getLong("id")
-                                replacedRecordIds += incomingId
                                 replacedSpans += ReplacedRecordSpan(
                                     recordType,
                                     rows.getTimestamp("previous_start").toInstant(),
@@ -147,12 +154,24 @@ class ProviderRecordCorrections {
                 }
             }
         return PreparedMetricWrites(
-            // Repeated unchanged snapshots must retain their original overlap priority during replay.
-            writes.filter { it.record.providerRecordId == null || it.ingestionRecordId in eligibleIds }
-                .sortedBy { firstVersionIds[it.ingestionRecordId] ?: it.ingestionRecordId },
+            writes.filter { it.record.providerRecordId == null || it.ingestionRecordId in eligibleIds },
             replacedSpans,
-            replacedRecordIds,
+            acceptedGoogleStepIds,
+            googleStepIds,
+            googleStepDecisions,
         )
+    }
+
+    fun recordGoogleStepDecisions(decisions: Map<Int, Boolean>) {
+        decisions.entries.groupBy { it.value }.forEach { (accepted, entries) ->
+            entries.chunked(CHUNK_SIZE).forEach { chunk ->
+                val ids = chunk.joinToString(",") { it.key.toString() }
+                TransactionManager.current().exec(
+                    "UPDATE ingestion_records SET google_step_projection_accepted = $accepted " +
+                        "WHERE id IN ($ids) AND google_step_projection_accepted IS NULL"
+                )
+            }
+        }
     }
 }
 

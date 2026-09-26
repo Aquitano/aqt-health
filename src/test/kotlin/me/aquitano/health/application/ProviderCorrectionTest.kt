@@ -124,8 +124,16 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
         val fixture = Fixture(provider = "google_health")
         fixture.ingest(listOf(StepInterval("first", "2026-04-19T08:00:00Z", "2026-04-19T09:00:00Z", 100)))
         fixture.ingest(listOf(StepInterval("neighbor", "2026-04-19T09:00:00Z", "2026-04-19T10:00:00Z", 200)))
-        fixture.ingest(listOf(StepInterval("first", "2026-04-19T08:00:00Z", "2026-04-19T09:30:00Z", 300)))
+        val corrected = StepInterval("first", "2026-04-19T08:00:00Z", "2026-04-19T09:30:00Z", 300)
+        fixture.ingest(listOf(corrected))
+        fixture.ingest(listOf(corrected))
         assertEquals(300, fixture.number("SELECT steps FROM step_samples WHERE provider_record_id = 'first'"))
+        fixture.replay(ReplayRequest(scope = "all", wipe = true))
+        assertEquals(300, fixture.number("SELECT steps FROM step_samples WHERE provider_record_id = 'first'"))
+        assertEquals(2, fixture.number("SELECT COUNT(*) FROM step_samples"))
+        fixture.ingest(listOf(corrected.copy(steps = 100)))
+        fixture.ingest(listOf(corrected))
+        fixture.ingest(listOf(corrected))
         fixture.replay(ReplayRequest(scope = "all", wipe = true))
         assertEquals(300, fixture.number("SELECT steps FROM step_samples WHERE provider_record_id = 'first'"))
         assertEquals(2, fixture.number("SELECT COUNT(*) FROM step_samples"))
@@ -148,6 +156,29 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
         fixture.replay(ReplayRequest(scope = "all", wipe = true))
         assertEquals(1, fixture.number("SELECT COUNT(*) FROM step_samples"))
         assertEquals("neighbor", fixture.text("SELECT provider_record_id FROM step_samples"))
+        fixture.ingest(listOf(neighbor.copy(steps = 300)))
+        fixture.replay(ReplayRequest(scope = "all", wipe = true))
+        assertEquals(1, fixture.number("SELECT COUNT(*) FROM step_samples"))
+        assertEquals(300, fixture.number("SELECT steps FROM step_samples"))
+        assertEquals(2, fixture.number("SELECT COUNT(*) FROM ingestion_records WHERE google_step_projection_accepted = false"))
+    }
+
+    @Test
+    fun acceptedGoogleCorrectionAcrossDaysKeepsSkippedNeighborsOutOfReplay() = runBlocking {
+        val fixture = Fixture(provider = "google_health")
+        fixture.ingest(listOf(StepInterval("winner", "2026-04-19T23:00:00Z", "2026-04-20T02:00:00Z", 300)))
+        val skipped = StepInterval("skipped", "2026-04-20T01:00:00Z", "2026-04-20T02:00:00Z", 100)
+        fixture.ingest(listOf(skipped))
+        fixture.ingest(listOf(StepInterval("winner", "2026-04-18T23:00:00Z", "2026-04-19T02:00:00Z", 400)))
+        fixture.replay(ReplayRequest(scope = "all", wipe = true))
+        assertEquals(1, fixture.number("SELECT COUNT(*) FROM step_samples"))
+        assertEquals("winner", fixture.text("SELECT provider_record_id FROM step_samples"))
+        assertEquals(400, fixture.number("SELECT steps FROM step_samples"))
+        // A new arrival for a previously skipped identity still gets the normal overlap check.
+        fixture.ingest(listOf(skipped))
+        assertEquals(2, fixture.number("SELECT COUNT(*) FROM step_samples"))
+        fixture.replay(ReplayRequest(scope = "all", wipe = true))
+        assertEquals(2, fixture.number("SELECT COUNT(*) FROM step_samples"))
     }
 
     @Test
