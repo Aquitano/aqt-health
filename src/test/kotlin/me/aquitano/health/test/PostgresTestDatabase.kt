@@ -81,7 +81,7 @@ object PostgresTestDatabase {
             container.password,
         )
 
-    private fun externalConfig(
+    internal fun externalConfig(
         jdbcUrl: String,
         user: String,
         password: String,
@@ -91,9 +91,15 @@ object PostgresTestDatabase {
         try {
             DriverManager.getConnection(jdbcUrl.withJdbcParameter("connectTimeout", "1"), user, password)
                 .use { connection ->
+                    connection.autoCommit = false
                     connection.createStatement().use { statement ->
+                        // Extensions belong to the database, so disposable fixture schemas
+                        // must not own their operator classes. The lock also covers other JVMs.
+                        statement.execute("SELECT pg_advisory_xact_lock(718204, 1)")
+                        statement.execute("CREATE EXTENSION IF NOT EXISTS btree_gist WITH SCHEMA public")
                         statement.execute("CREATE SCHEMA $schema")
                     }
+                    connection.commit()
                 }
         } catch (exception: SQLException) {
             if (required) {
@@ -106,7 +112,7 @@ object PostgresTestDatabase {
         }
         externalSchemas.add(ExternalSchema(jdbcUrl, user, password, schema))
         return DatabaseConfig(
-            jdbcUrl = jdbcUrl.withJdbcParameter("currentSchema", schema),
+            jdbcUrl = jdbcUrl.withJdbcParameter("currentSchema", "$schema,public"),
             driver = "org.postgresql.Driver",
             user = user,
             password = password,
@@ -132,8 +138,9 @@ object PostgresTestDatabase {
         }
 
     private fun String.withJdbcParameter(name: String, value: String): String {
-        val separator = if (contains("?")) "&" else "?"
-        return "$this$separator$name=$value"
+        val parameters = substringAfter('?', "").split('&')
+            .filter { it.isNotEmpty() && it.substringBefore('=') != name }
+        return substringBefore('?') + "?" + (parameters + "$name=$value").joinToString("&")
     }
 
     init {
