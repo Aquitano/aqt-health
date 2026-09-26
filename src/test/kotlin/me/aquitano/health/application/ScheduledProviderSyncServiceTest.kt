@@ -1,5 +1,6 @@
 package me.aquitano.health.application
 
+import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.application.providersync.ProviderSyncProgressSink
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
@@ -13,7 +14,6 @@ import me.aquitano.health.domain.ProviderConnection
 import me.aquitano.health.domain.ProviderSyncRequest
 import me.aquitano.health.domain.ProviderSyncSummary
 import me.aquitano.health.domain.ProviderWorkflowEndpoints
-import me.aquitano.health.infrastructure.database.DatabaseFactory
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
 import me.aquitano.health.infrastructure.repositories.ScheduledSyncRepository
 import me.aquitano.health.test.PostgresTestDatabase
@@ -25,10 +25,10 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
-class ScheduledProviderSyncServiceTest {
+class ScheduledProviderSyncServiceTest : PostgresIntegrationTest() {
     @Test
     fun manualRunConflictsWhileScheduledRunIsActiveForSameAccount() = runBlocking {
-        val database = DatabaseFactory().initialize(PostgresTestDatabase.config())
+        val database = openDatabase(PostgresTestDatabase.config())
         val repository = ScheduledSyncRepository(database)
         val provider = BlockingProvider()
         val service = ScheduledProviderSyncService(
@@ -104,7 +104,7 @@ class ScheduledProviderSyncServiceTest {
     private fun serviceWith(
         provider: HealthProvider,
     ): Pair<ScheduledProviderSyncService, ScheduledSyncRepository> {
-        val database = DatabaseFactory().initialize(PostgresTestDatabase.config())
+        val database = openDatabase(PostgresTestDatabase.config())
         val repository = ScheduledSyncRepository(database)
         val service = ScheduledProviderSyncService(
             providerRegistry = HealthProviderRegistry(listOf(provider)),

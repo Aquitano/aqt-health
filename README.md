@@ -584,18 +584,21 @@ Timestamps are stored as PostgreSQL `timestamptz` values and returned as UTC ISO
 
 ## Tests
 
+Run unit tests without a database:
+
 ```powershell
 .\gradlew.bat test
 ```
 
-Tests run against temporary PostgreSQL databases via Testcontainers and apply the same Flyway migrations as the application.
+Run `./gradlew check` for both unit and integration tests, or `./gradlew integrationTest` for integration tests alone.
+Integration tests run against temporary PostgreSQL databases via Testcontainers and apply the same Flyway migrations as the application.
 If Docker is unavailable, point tests at an existing PostgreSQL database; each test gets an isolated schema:
 
 ```bash
 export AQT_HEALTH_TEST_JDBC_URL="jdbc:postgresql://localhost:5432/aqt_health_test"
 export AQT_HEALTH_TEST_DB_USER="aqt_health"
 export AQT_HEALTH_TEST_DB_PASSWORD="aqt_health"
-./gradlew test
+./gradlew check
 ```
 
 ## Contributing

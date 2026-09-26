@@ -1,5 +1,6 @@
 package me.aquitano.health.infrastructure.database
 
+import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.infrastructure.config.DatabaseConfig
 import me.aquitano.health.test.PostgresTestDatabase
 import kotlin.test.Test
@@ -11,7 +12,7 @@ import kotlin.test.assertEquals
  * families (sleep sessions/nights) keep ALL rows of the winning provider so naps survive.
  * Activity/steps rank google_health first; sleep and sleep_summary rank withings first.
  */
-class CanonicalStructuralViewsTest {
+class CanonicalStructuralViewsTest : PostgresIntegrationTest() {
     @Test
     fun activitySummaryRankWinnerPerDate() {
         val fixture = Fixture()
@@ -70,11 +71,11 @@ class CanonicalStructuralViewsTest {
         assertEquals(listOf(1, 2), fixture.canonicalIds("canonical_sleep_sessions", "start_at"))
     }
 
-    private class Fixture {
+    private inner class Fixture {
         val dbConfig: DatabaseConfig = PostgresTestDatabase.config()
 
         init {
-            DatabaseFactory().initialize(dbConfig)
+            openDatabase(dbConfig)
             execute(
                 """
                 INSERT INTO sources (id, code, display_name, created_at)

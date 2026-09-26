@@ -1,8 +1,8 @@
 package me.aquitano.health.application
 
+import me.aquitano.health.test.PostgresIntegrationTest
 import kotlinx.coroutines.runBlocking
 import me.aquitano.health.domain.DerivedKind
-import me.aquitano.health.infrastructure.database.DatabaseFactory
 import me.aquitano.health.infrastructure.database.suspendDbTransaction
 import me.aquitano.health.infrastructure.repositories.PendingDerivedRebuildRepository
 import me.aquitano.health.infrastructure.repositories.SupportRepository
@@ -14,10 +14,10 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-class PendingDerivedRebuildSweeperTest {
+class PendingDerivedRebuildSweeperTest : PostgresIntegrationTest() {
     @Test
     fun retriesQueuedRebuildWithBackoffUntilItSucceeds() = runBlocking {
-        val database = DatabaseFactory().initialize(PostgresTestDatabase.config())
+        val database = openDatabase(PostgresTestDatabase.config())
         val repository = PendingDerivedRebuildRepository(database)
         val supportRepository = SupportRepository(database)
         val executor = FlakyDerivedRebuildExecutor(failuresBeforeSuccess = 1)

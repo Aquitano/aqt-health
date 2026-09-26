@@ -1,5 +1,6 @@
 package me.aquitano.external.withings
 
+import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.infrastructure.time.UtcClock
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.buildJsonObject
@@ -18,7 +19,6 @@ import me.aquitano.health.domain.RequestValidationException
 import me.aquitano.health.domain.UpstreamProviderException
 import me.aquitano.health.infrastructure.config.DatabaseConfig
 import me.aquitano.health.infrastructure.config.ProviderOAuthConfig
-import me.aquitano.health.infrastructure.database.DatabaseFactory
 import me.aquitano.health.infrastructure.repositories.IngestionRepository
 import me.aquitano.health.infrastructure.repositories.PendingDerivedRebuildRepository
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
@@ -35,7 +35,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-class WithingsProviderTest {
+class WithingsProviderTest : PostgresIntegrationTest() {
     @Test
     fun oauthStartUrlContainsWithingsParameters() = runBlocking {
         val fixture = Fixture()
@@ -443,7 +443,7 @@ class WithingsProviderTest {
         )
     }
 
-    private class Fixture(
+    private inner class Fixture(
         val dbPath: DatabaseConfig = PostgresTestDatabase.config(),
         val now: Instant = Instant.parse("2026-04-20T10:00:00Z"),
     ) {
@@ -456,7 +456,7 @@ class WithingsProviderTest {
             oauthTokenUrl = "https://wbsapi.withings.net/v2/oauth2",
             oauthAuthUrl = "https://account.withings.com/oauth2_user/authorize2",
         )
-        private val database: Database = DatabaseFactory().initialize(
+        private val database: Database = openDatabase(
             dbPath
         )
         val providerRepository = ProviderOAuthRepository(database)

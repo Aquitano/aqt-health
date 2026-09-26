@@ -1,5 +1,6 @@
 package me.aquitano.health.application
 
+import me.aquitano.health.test.PostgresIntegrationTest
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.buildJsonObject
 import me.aquitano.health.domain.BatchStatus
@@ -11,7 +12,6 @@ import me.aquitano.health.domain.ScalarMetricTypes
 import me.aquitano.health.test.NoOpDerivedRebuildExecutor
 import me.aquitano.health.test.metricWriteService
 import me.aquitano.health.infrastructure.config.DatabaseConfig
-import me.aquitano.health.infrastructure.database.DatabaseFactory
 import me.aquitano.health.infrastructure.repositories.IngestionRepository
 import me.aquitano.health.infrastructure.repositories.PendingDerivedRebuildRepository
 import me.aquitano.health.infrastructure.repositories.SupportRepository
@@ -22,11 +22,11 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
-class IngestionServiceTest {
+class IngestionServiceTest : PostgresIntegrationTest() {
     @Test
     fun derivedRebuildFailureDoesNotFailRawIngestion() = runBlocking {
         val dbConfig = PostgresTestDatabase.config()
-        val database = DatabaseFactory().initialize(dbConfig)
+        val database = openDatabase(dbConfig)
         val service = IngestionService(
             database = database,
             mappingService = IngestionMappingService(),
@@ -80,7 +80,7 @@ class IngestionServiceTest {
     @Test
     fun unknownExistingBatchStatusReturnsConflictInsteadOfParseFailure() = runBlocking {
         val dbConfig = PostgresTestDatabase.config()
-        val database = DatabaseFactory().initialize(dbConfig)
+        val database = openDatabase(dbConfig)
         val service = IngestionService(
             database = database,
             mappingService = IngestionMappingService(),
@@ -121,7 +121,7 @@ class IngestionServiceTest {
     @Test
     fun metricWriteFailureKeepsFailedBatchAndDiscardsPartialMetrics() = runBlocking {
         val dbConfig = PostgresTestDatabase.config()
-        val database = DatabaseFactory().initialize(dbConfig)
+        val database = openDatabase(dbConfig)
         val service = IngestionService(
             database = database,
             mappingService = IngestionMappingService(),
@@ -163,7 +163,7 @@ class IngestionServiceTest {
     @Test
     fun sameProviderRecordIdKeepsOneSamplePerContext() = runBlocking {
         val dbConfig = PostgresTestDatabase.config()
-        val database = DatabaseFactory().initialize(dbConfig)
+        val database = openDatabase(dbConfig)
         val service = IngestionService(
             database = database,
             mappingService = IngestionMappingService(),

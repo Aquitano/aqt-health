@@ -1,5 +1,6 @@
 package me.aquitano.health.infrastructure.database
 
+import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.application.ApiClientBootstrapService
 import me.aquitano.health.infrastructure.config.AuthConfig
 import me.aquitano.health.infrastructure.config.DatabaseConfig
@@ -15,10 +16,10 @@ import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
-class DatabaseFactoryTest {
+class DatabaseFactoryTest : PostgresIntegrationTest() {
     @Test
     fun migrationsCreateExpectedTables() {
-        val database = DatabaseFactory().initialize(tempDatabaseConfig())
+        val database = openDatabase(tempDatabaseConfig())
 
         val tableNames = transaction(database) {
             val names = mutableSetOf<String>()
@@ -65,7 +66,7 @@ class DatabaseFactoryTest {
 
     @Test
     fun bootstrapStoresOnlyHashedApiKey() {
-        val database = DatabaseFactory().initialize(tempDatabaseConfig())
+        val database = openDatabase(tempDatabaseConfig())
         val hasher = ApiKeyHasher()
         ApiClientBootstrapService(
             authConfig = AuthConfig(
@@ -90,7 +91,7 @@ class DatabaseFactoryTest {
 
     @Test
     fun postgresForeignKeysAreEnforced() {
-        val database = DatabaseFactory().initialize(tempDatabaseConfig())
+        val database = openDatabase(tempDatabaseConfig())
 
         transaction(database) {
             assertFailsWith<Exception> {
@@ -118,7 +119,7 @@ class DatabaseFactoryTest {
 
     @Test
     fun postgresConnectionUsesReadCommitted() {
-        val database = DatabaseFactory().initialize(tempDatabaseConfig())
+        val database = openDatabase(tempDatabaseConfig())
 
         transaction(database) {
             assertEquals("read committed", singleString("SHOW transaction_isolation"))
@@ -127,7 +128,7 @@ class DatabaseFactoryTest {
 
     @Test
     fun sleepStagesCascadeWhenSessionIsDeleted() {
-        val database = DatabaseFactory().initialize(tempDatabaseConfig())
+        val database = openDatabase(tempDatabaseConfig())
 
         transaction(database) {
             insertSourceInstance()
@@ -182,7 +183,7 @@ class DatabaseFactoryTest {
 
     @Test
     fun integrityConstraintsRejectInvalidMetricRows() {
-        val database = DatabaseFactory().initialize(tempDatabaseConfig())
+        val database = openDatabase(tempDatabaseConfig())
 
         transaction(database) {
             insertSourceInstance()

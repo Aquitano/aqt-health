@@ -1,5 +1,6 @@
 package me.aquitano.health.api
 
+import me.aquitano.health.test.PostgresIntegrationTest
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -16,7 +17,7 @@ import me.aquitano.health.test.PostgresTestDatabase
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-class IngestionRouteTest {
+class IngestionRouteTest : PostgresIntegrationTest() {
     @Test
     fun ingestionRequiresBearerToken() = testApplication {
         val dbPath = configureTestApplication()
