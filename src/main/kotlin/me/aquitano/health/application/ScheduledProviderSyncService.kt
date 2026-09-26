@@ -172,7 +172,7 @@ class ScheduledProviderSyncService(
         var latestTo: Instant? = null
 
         for (dataType in config.dataTypes) {
-            val (from, to) = syncWindow(provider, config, checkpoints[dataType], now)
+            val (from, to) = syncWindow(config, checkpoints[dataType], now)
             earliestFrom = listOfNotNull(earliestFrom, from).minOrNull()
             latestTo = listOfNotNull(latestTo, to).maxOrNull()
             try {
@@ -182,6 +182,7 @@ class ScheduledProviderSyncService(
                         from = from,
                         to = to,
                         dataTypes = listOf(dataType),
+                        refresh = true,
                     ),
                     now,
                 )
@@ -228,16 +229,14 @@ class ScheduledProviderSyncService(
     }
 
     private fun syncWindow(
-        provider: HealthProvider,
         config: ScheduledSyncConfigRecord,
         checkpoint: ScheduledSyncCheckpointRecord?,
         now: Instant,
     ): Pair<Instant, Instant> {
         val lookback = Duration.ofDays(config.lookbackDays.toLong())
         val candidateFrom = checkpoint?.checkpointAt?.minus(lookback) ?: now.minus(lookback)
-        val maxTo = candidateFrom.plus(Duration.ofDays(provider.descriptor.maxSyncRangeDays.toLong()))
-        val to = if (maxTo.isBefore(now)) maxTo else now
-        return candidateFrom to to
+        // Adapters split this range into daily requests, including after a long outage.
+        return candidateFrom to now
     }
 
     private fun runKey(config: ScheduledSyncConfigRecord): String =

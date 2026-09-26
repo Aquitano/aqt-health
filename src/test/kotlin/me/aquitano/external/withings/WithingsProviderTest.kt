@@ -220,6 +220,7 @@ class WithingsProviderTest : PostgresIntegrationTest() {
         fixture.seedAccount()
         fixture.providerRepository.markNeedsReauth(
             accountId = singleInt(fixture.dbPath, "SELECT id FROM provider_oauth_accounts"),
+            expectedRefreshTokenCiphertext = singleString(fixture.dbPath, "SELECT refresh_token_ciphertext FROM provider_oauth_accounts"),
             errorCode = "withings_needs_reauth",
             errorMessage = "invalid refresh token",
             now = fixture.now,
@@ -373,6 +374,30 @@ class WithingsProviderTest : PostgresIntegrationTest() {
     }
 
     @Test
+    fun refreshAddsLateMeasurementsFromAnAlreadyProcessedDay() = runBlocking {
+        val fixture = Fixture()
+        fixture.seedAccount()
+        val request = ProviderSyncRequest(
+            from = Instant.parse("2026-04-01T00:00:00Z"),
+            to = Instant.parse("2026-04-02T00:00:00Z"),
+            dataTypes = listOf("measures"),
+        )
+        fixture.provider.sync(request, fixture.now)
+        assertEquals(1, singleInt(fixture.dbPath, "SELECT COUNT(*) FROM scalar_samples WHERE metric_type = 'weight'"))
+        fixture.client.lateMeasure = buildJsonObject {
+            put("grpid", 101)
+            put("date", 1775005200)
+            putJsonArray("measures") {
+                add(buildJsonObject { put("type", 1); put("value", 80200); put("unit", -3) })
+            }
+        }
+        fixture.provider.sync(request.copy(refresh = true), fixture.now.plusSeconds(1))
+        assertEquals(2, singleInt(fixture.dbPath, "SELECT COUNT(*) FROM scalar_samples WHERE metric_type = 'weight'"))
+        assertEquals(2, fixture.client.fetchRequests.size)
+        assertEquals(2, countRows(fixture.dbPath, "ingestion_batches"))
+    }
+
+    @Test
     fun duplicateProcessedBatchReturnsCachedBatch() = runBlocking {
         val fixture = Fixture()
         fixture.seedAccount()
@@ -523,6 +548,7 @@ class WithingsProviderTest : PostgresIntegrationTest() {
         var nextExchangeFailure: WithingsHttpException? = null
         var nextRefreshFailure: WithingsHttpException? = null
         var refreshCalls = 0
+        var lateMeasure: kotlinx.serialization.json.JsonObject? = null
         var failDataRequestsWithAccessToken: String? = null
         var failuresRemaining = 0
         val emptyDataTypes = mutableSetOf<String>()
@@ -583,7 +609,7 @@ class WithingsProviderTest : PostgresIntegrationTest() {
                             addMeasure(11, 62, 0)
                         }
                     }
-                ),
+                ) + listOfNotNull(lateMeasure),
             )
         }
 

@@ -268,6 +268,7 @@ class KtorWithingsClient(
             throw WithingsHttpException(
                 "withings_token_request_failed",
                 "Withings OAuth token request failed with ${status.value}",
+                httpStatus = status.value,
                 providerAction = "requesttoken",
                 providerEndpoint = config.oauthTokenUrl,
             )
@@ -418,6 +419,7 @@ class KtorWithingsClient(
             throw WithingsHttpException(
                 "withings_data_request_failed",
                 "Withings $action request failed with ${status.value}",
+                httpStatus = status.value,
                 providerAction = action,
                 providerEndpoint = endpoint,
             )

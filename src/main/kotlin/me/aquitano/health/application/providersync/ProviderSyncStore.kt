@@ -36,21 +36,21 @@ interface ProviderSyncStore {
         account: SyncAccount,
         tokens: RefreshedTokenSet,
         now: Instant,
-    )
+    ): Boolean
 
     suspend fun markNeedsReauth(
-        accountId: Int,
+        account: SyncAccount,
         code: String,
         message: String,
         now: Instant,
-    )
+    ): Boolean
 
     suspend fun markTokenRefreshFailed(
-        accountId: Int,
+        account: SyncAccount,
         code: String,
         message: String,
         now: Instant,
-    )
+    ): Boolean
 
     suspend fun startRun(
         providerCode: String,
@@ -131,10 +131,11 @@ class OAuthProviderSyncStore(
         account: SyncAccount,
         tokens: RefreshedTokenSet,
         now: Instant,
-    ) {
+    ): Boolean {
         val cipher = cipherFor(account.providerCode)
-        repository.updateAccessToken(
+        return repository.updateAccessToken(
             accountId = account.id,
+            expectedRefreshTokenCiphertext = account.encryptedRefreshToken,
             accessTokenCiphertext = cipher.encrypt(tokens.accessToken),
             refreshTokenCiphertext = tokens.refreshToken?.let(cipher::encrypt),
             tokenType = tokens.tokenType,
@@ -145,22 +146,18 @@ class OAuthProviderSyncStore(
     }
 
     override suspend fun markNeedsReauth(
-        accountId: Int,
+        account: SyncAccount,
         code: String,
         message: String,
         now: Instant,
-    ) {
-        repository.markNeedsReauth(accountId, code, message, now)
-    }
+    ): Boolean = repository.markNeedsReauth(account.id, account.encryptedRefreshToken, code, message, now)
 
     override suspend fun markTokenRefreshFailed(
-        accountId: Int,
+        account: SyncAccount,
         code: String,
         message: String,
         now: Instant,
-    ) {
-        repository.markTokenRefreshFailed(accountId, code, message, now)
-    }
+    ): Boolean = repository.markTokenRefreshFailed(account.id, account.encryptedRefreshToken, code, message, now)
 
     override suspend fun startRun(
         providerCode: String,

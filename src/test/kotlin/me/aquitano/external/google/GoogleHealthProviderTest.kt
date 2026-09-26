@@ -177,6 +177,7 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
         fixture.storeAccount(accessToken = "access-token", refreshToken = "refresh-token")
         fixture.providerRepository.markNeedsReauth(
             accountId = singleInt(fixture.dbPath, "SELECT id FROM provider_oauth_accounts"),
+            expectedRefreshTokenCiphertext = singleString(fixture.dbPath, "SELECT refresh_token_ciphertext FROM provider_oauth_accounts"),
             errorCode = "google_health_needs_reauth",
             errorMessage = "invalid refresh token",
             now = fixture.now,

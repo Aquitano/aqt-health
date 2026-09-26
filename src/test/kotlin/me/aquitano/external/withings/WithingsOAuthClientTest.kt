@@ -28,6 +28,20 @@ class WithingsOAuthClientTest {
     private val now = Instant.parse("2026-04-20T10:00:00Z")
 
     @Test
+    fun transportUnauthorizedIsClassifiedForTokenRecovery() = runBlocking {
+        val client = client { respond("unauthorized", HttpStatusCode.Unauthorized) }
+        val adapter = WithingsSyncAdapter(client, WithingsNormalizer())
+        val dataError = assertFailsWith<WithingsHttpException> {
+            client.fetchMeasures("token", now.minusSeconds(3600), now, listOf(1), 1)
+        }
+        assertEquals(401, dataError.httpStatus)
+        assertNull(dataError.providerStatus)
+        assertTrue(adapter.isUnauthorized(dataError))
+        val tokenError = assertFailsWith<WithingsHttpException> { client.refreshToken("refresh", now) }
+        assertTrue(adapter.isInvalidRefreshToken(tokenError))
+    }
+
+    @Test
     fun authorizationCodeExchangeSendsRequiredFormFieldsAndParsesResponse() = runBlocking {
         var form = emptyMap<String, List<String>>()
         val client = client { request ->

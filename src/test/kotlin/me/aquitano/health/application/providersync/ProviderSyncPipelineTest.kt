@@ -1,6 +1,9 @@
 package me.aquitano.health.application.providersync
 
 import me.aquitano.health.infrastructure.time.UtcClock
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.buildJsonObject
 import me.aquitano.health.api.dto.StepInterval
@@ -27,7 +30,7 @@ class ProviderSyncPipelineTest {
             existingBatch = ExistingProviderBatch(id = 42, status = BatchStatus.Processed),
         )
         val adapter = FakeAdapter()
-        val pipeline = ProviderSyncPipeline(store)
+        val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
 
         val summary = pipeline.sync(adapter, request, now)
 
@@ -45,7 +48,7 @@ class ProviderSyncPipelineTest {
         val adapter = FakeAdapter(
             refreshFailure = InvalidRefreshToken(),
         )
-        val pipeline = ProviderSyncPipeline(store)
+        val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
 
         val error = assertFailsWith<ConflictException> {
             pipeline.sync(adapter, request, now)
@@ -84,6 +87,7 @@ class ProviderSyncPipelineTest {
         val pipeline = ProviderSyncPipeline(
             FakeStore(),
             throttleDelay = { delays += it },
+            clock = UtcClock.fixed(now),
         )
 
         val summary = pipeline.sync(adapter, request, now)
@@ -136,7 +140,76 @@ class ProviderSyncPipelineTest {
         assertFalse(error.message!!.contains(secret))
     }
 
-    private class FakeAdapter(
+    @Test
+    fun refreshFetchesCompletedWindowsAndUsesNewBatchIdentity() = runBlocking {
+        val store = FakeStore(existingBatch = ExistingProviderBatch(42, BatchStatus.Processed))
+        val adapter = FakeAdapter()
+        val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+        repeat(2) { pipeline.sync(adapter, request.copy(refresh = true), now) }
+        assertEquals(2, adapter.fetchCalls)
+        assertEquals(2, store.ingested.size)
+        assertEquals(2, store.ingested.map { it.batchExternalId }.distinct().size)
+    }
+
+    @Test
+    fun concurrentSyncsRotateExpiredTokenOnlyOnce() = runBlocking {
+        val refreshStarted = CompletableDeferred<Unit>()
+        val releaseRefresh = CompletableDeferred<Unit>()
+        val adapter = BlockingRefreshAdapter(refreshStarted, releaseRefresh)
+        val store = FakeStore(account = syncAccount(now.minusSeconds(1)))
+        val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+        val first = async { pipeline.sync(adapter, request, now) }
+        refreshStarted.await()
+        val second = async(start = CoroutineStart.UNDISPATCHED) { pipeline.sync(adapter, request, now) }
+        releaseRefresh.complete(Unit)
+        first.await()
+        second.await()
+        assertEquals(1, adapter.refreshCalls)
+        assertEquals(1, store.saveCount)
+        assertEquals(2, adapter.fetchCalls)
+    }
+
+    @Test
+    fun rejectedTokenSaveStopsBeforeProviderFetch() = runBlocking {
+        val store = RejectingSaveStore(syncAccount(now.minusSeconds(1)))
+        val adapter = FakeAdapter()
+        val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+        val error = assertFailsWith<UpstreamProviderException> { pipeline.sync(adapter, request, now) }
+        assertEquals("provider_account_changed", error.code)
+        assertEquals(0, adapter.fetchCalls)
+        assertEquals(0, store.runsStarted)
+    }
+
+    @Test
+    fun refreshFailureDoesNotExposeExceptionDetails() = runBlocking {
+        val adapter = FakeAdapter(refreshFailure = IllegalStateException("secret upstream credentials"))
+        val store = FakeStore(account = syncAccount(now.minusSeconds(1)))
+        val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+        val error = assertFailsWith<UpstreamProviderException> { pipeline.sync(adapter, request, now) }
+        assertEquals("Fake refresh failed", error.message)
+        assertEquals("Fake refresh failed", store.refreshFailureMessage)
+    }
+
+    private class BlockingRefreshAdapter(
+        private val started: CompletableDeferred<Unit>,
+        private val release: CompletableDeferred<Unit>,
+    ) : FakeAdapter() {
+        override suspend fun refreshAccessToken(
+            refreshToken: String, account: SyncAccount, now: Instant,
+        ): RefreshedTokenSet {
+            started.complete(Unit)
+            release.await()
+            return super.refreshAccessToken(refreshToken, account, now)
+        }
+    }
+
+    private class RejectingSaveStore(account: SyncAccount) : FakeStore(account = account) {
+        override suspend fun saveRefreshedToken(
+            account: SyncAccount, tokens: RefreshedTokenSet, now: Instant,
+        ): Boolean = false
+    }
+
+    private open class FakeAdapter(
         private val refreshFailure: RuntimeException? = null,
         private var throwUnauthorizedOnce: Boolean = false,
         private val itemCount: Int = 1,
@@ -232,10 +305,11 @@ class ProviderSyncPipelineTest {
 
     /** In-memory [ProviderSyncStore] with counters for the interactions the tests assert on. */
     private open class FakeStore(
-        private val account: SyncAccount = syncAccount(),
+        private var account: SyncAccount = syncAccount(),
         private val existingBatch: ExistingProviderBatch? = null,
     ) : ProviderSyncStore {
         var needsReauthCode: String? = null
+        var refreshFailureMessage: String? = null
         var savedAccessToken: String? = null
         var saveCount = 0
         var runsStarted = 0
@@ -251,34 +325,44 @@ class ProviderSyncPipelineTest {
             providerInstanceId: String?,
         ): SyncAccount? = account
 
-        override suspend fun decryptAccessToken(account: SyncAccount): String = "access"
+        override suspend fun decryptAccessToken(account: SyncAccount): String = account.encryptedAccessToken
 
-        override suspend fun decryptRefreshToken(account: SyncAccount): String = "refresh"
+        override suspend fun decryptRefreshToken(account: SyncAccount): String = account.encryptedRefreshToken
 
         override suspend fun saveRefreshedToken(
             account: SyncAccount,
             tokens: RefreshedTokenSet,
             now: Instant,
-        ) {
+        ): Boolean {
             saveCount += 1
             savedAccessToken = tokens.accessToken
+            this.account = account.copy(
+                encryptedAccessToken = tokens.accessToken,
+                encryptedRefreshToken = tokens.refreshToken ?: account.encryptedRefreshToken,
+                expiresAt = tokens.expiresAt,
+            )
+            return true
         }
 
         override suspend fun markNeedsReauth(
-            accountId: Int,
+            account: SyncAccount,
             code: String,
             message: String,
             now: Instant,
-        ) {
+        ): Boolean {
             needsReauthCode = code
+            return true
         }
 
         override suspend fun markTokenRefreshFailed(
-            accountId: Int,
+            account: SyncAccount,
             code: String,
             message: String,
             now: Instant,
-        ) = Unit
+        ): Boolean {
+            refreshFailureMessage = message
+            return true
+        }
 
         override suspend fun startRun(
             providerCode: String,
@@ -288,7 +372,7 @@ class ProviderSyncPipelineTest {
             startedAt: Instant,
         ): Int {
             runsStarted += 1
-            return 7
+            return runsStarted
         }
 
         override suspend fun finishRun(

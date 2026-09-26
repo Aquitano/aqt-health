@@ -42,24 +42,8 @@ const val ACCOUNT_STATUS_DISCONNECTED = "disconnected"
 const val TOKEN_REFRESH_STATUS_SUCCESS = "success"
 const val TOKEN_REFRESH_STATUS_FAILED = "failed"
 
-data class ProviderOAuthState(
-    val state: String,
-    val providerCode: String,
-    val expiresAt: Instant,
-    val consumedAt: Instant?,
-)
-
-sealed class ProviderOAuthStateConsumeResult {
-    data class Consumed(val state: ProviderOAuthState) :
-        ProviderOAuthStateConsumeResult()
-
-    data class AlreadyUsed(val state: ProviderOAuthState) :
-        ProviderOAuthStateConsumeResult()
-
-    data class Expired(val state: ProviderOAuthState) :
-        ProviderOAuthStateConsumeResult()
-
-    data object NotFound : ProviderOAuthStateConsumeResult()
+enum class ProviderOAuthStateConsumeResult {
+    Consumed, AlreadyUsed, Expired, NotFound,
 }
 
 class ProviderOAuthRepository(private val database: Database) {
@@ -104,15 +88,14 @@ class ProviderOAuthRepository(private val database: Database) {
                 }
                 .limit(1)
                 .singleOrNull()
-                ?.toOAuthState()
                 ?: return@suspendDbTransaction ProviderOAuthStateConsumeResult.NotFound
 
             return@suspendDbTransaction when {
-                updated == 1 -> ProviderOAuthStateConsumeResult.Consumed(existing)
-                existing.consumedAt != null -> ProviderOAuthStateConsumeResult.AlreadyUsed(existing)
-                !now.isBefore(existing.expiresAt) -> ProviderOAuthStateConsumeResult.Expired(existing)
+                updated == 1 -> ProviderOAuthStateConsumeResult.Consumed
+                existing[ProviderOAuthStatesTable.consumedAt] != null -> ProviderOAuthStateConsumeResult.AlreadyUsed
+                !now.isBefore(existing[ProviderOAuthStatesTable.expiresAt].toInstant()) -> ProviderOAuthStateConsumeResult.Expired
                 // Raced: another request consumed the state between our update and select.
-                else -> ProviderOAuthStateConsumeResult.AlreadyUsed(existing)
+                else -> ProviderOAuthStateConsumeResult.AlreadyUsed
             }
         }
 
@@ -178,17 +161,24 @@ class ProviderOAuthRepository(private val database: Database) {
         }
     }
 
+    // Reconnect encrypts credentials with fresh nonces, even when the provider returns the same
+    // plaintext token. Comparing the snapshot ciphertext also rejects writes after reconnect.
     suspend fun updateAccessToken(
         accountId: Int,
+        expectedRefreshTokenCiphertext: String,
         accessTokenCiphertext: String,
         refreshTokenCiphertext: String?,
         tokenType: String,
         expiresAt: Instant,
         scope: String?,
         now: Instant,
-    ) {
+    ): Boolean =
         suspendDbTransaction(db = database) {
-            ProviderOAuthAccountsTable.update({ ProviderOAuthAccountsTable.id eq accountId }) {
+            ProviderOAuthAccountsTable.update({
+                (ProviderOAuthAccountsTable.id eq accountId) and
+                    (ProviderOAuthAccountsTable.accountStatus eq ACCOUNT_STATUS_CONNECTED) and
+                    (ProviderOAuthAccountsTable.refreshTokenCiphertext eq expectedRefreshTokenCiphertext)
+            }) {
                 it[this.accessTokenCiphertext] = accessTokenCiphertext
                 refreshTokenCiphertext?.let { value ->
                     it[this.refreshTokenCiphertext] = value
@@ -196,50 +186,56 @@ class ProviderOAuthRepository(private val database: Database) {
                 it[this.tokenType] = tokenType
                 it[this.expiresAt] = expiresAt.toDbTimestamp()
                 scope?.let { value -> it[this.scope] = value }
-                it[accountStatus] = ACCOUNT_STATUS_CONNECTED
                 it[lastTokenRefreshAt] = now.toDbTimestamp()
                 it[lastTokenRefreshStatus] = TOKEN_REFRESH_STATUS_SUCCESS
                 it[lastAuthErrorCode] = null
                 it[lastAuthErrorMessage] = null
                 it[updatedAt] = now.toDbTimestamp()
-            }
+            } > 0
         }
-    }
 
     suspend fun markNeedsReauth(
         accountId: Int,
+        expectedRefreshTokenCiphertext: String,
         errorCode: String,
         errorMessage: String,
         now: Instant,
-    ) {
+    ): Boolean =
         suspendDbTransaction(db = database) {
-            ProviderOAuthAccountsTable.update({ ProviderOAuthAccountsTable.id eq accountId }) {
+            ProviderOAuthAccountsTable.update({
+                (ProviderOAuthAccountsTable.id eq accountId) and
+                    (ProviderOAuthAccountsTable.accountStatus eq ACCOUNT_STATUS_CONNECTED) and
+                    (ProviderOAuthAccountsTable.refreshTokenCiphertext eq expectedRefreshTokenCiphertext)
+            }) {
                 it[accountStatus] = ACCOUNT_STATUS_NEEDS_REAUTH
                 it[lastTokenRefreshAt] = now.toDbTimestamp()
                 it[lastTokenRefreshStatus] = TOKEN_REFRESH_STATUS_FAILED
                 it[lastAuthErrorCode] = errorCode.take(200)
                 it[lastAuthErrorMessage] = errorMessage.take(1000)
                 it[updatedAt] = now.toDbTimestamp()
-            }
+            } > 0
         }
-    }
 
     suspend fun markTokenRefreshFailed(
         accountId: Int,
+        expectedRefreshTokenCiphertext: String,
         errorCode: String,
         errorMessage: String,
         now: Instant,
-    ) {
+    ): Boolean =
         suspendDbTransaction(db = database) {
-            ProviderOAuthAccountsTable.update({ ProviderOAuthAccountsTable.id eq accountId }) {
+            ProviderOAuthAccountsTable.update({
+                (ProviderOAuthAccountsTable.id eq accountId) and
+                    (ProviderOAuthAccountsTable.accountStatus eq ACCOUNT_STATUS_CONNECTED) and
+                    (ProviderOAuthAccountsTable.refreshTokenCiphertext eq expectedRefreshTokenCiphertext)
+            }) {
                 it[lastTokenRefreshAt] = now.toDbTimestamp()
                 it[lastTokenRefreshStatus] = TOKEN_REFRESH_STATUS_FAILED
                 it[lastAuthErrorCode] = errorCode.take(200)
                 it[lastAuthErrorMessage] = errorMessage.take(1000)
                 it[updatedAt] = now.toDbTimestamp()
-            }
+            } > 0
         }
-    }
 
     suspend fun disconnectAccount(
         providerCode: String,
@@ -282,18 +278,12 @@ class ProviderOAuthRepository(private val database: Database) {
 
     suspend fun accountsByProvider(
         providerCode: String,
-        includeDisconnected: Boolean = true,
     ): List<ProviderOAuthAccount> =
         suspendDbTransaction(db = database) {
             ProviderOAuthAccountsTable
                 .selectAll()
                 .where {
-                    if (includeDisconnected) {
-                        ProviderOAuthAccountsTable.providerCode eq providerCode
-                    } else {
-                        (ProviderOAuthAccountsTable.providerCode eq providerCode) and
-                                (ProviderOAuthAccountsTable.accountStatus neq ACCOUNT_STATUS_DISCONNECTED)
-                    }
+                    ProviderOAuthAccountsTable.providerCode eq providerCode
                 }
                 .orderBy(ProviderOAuthAccountsTable.updatedAt to SortOrder.DESC)
                 .map { it.toOAuthAccount() }
@@ -387,14 +377,6 @@ class ProviderOAuthRepository(private val database: Database) {
             }
         }
     }
-
-    private fun ResultRow.toOAuthState(): ProviderOAuthState =
-        ProviderOAuthState(
-            state = this[ProviderOAuthStatesTable.state],
-            providerCode = this[ProviderOAuthStatesTable.providerCode],
-            expiresAt = this[ProviderOAuthStatesTable.expiresAt].toInstant(),
-            consumedAt = this[ProviderOAuthStatesTable.consumedAt]?.toInstant(),
-        )
 
     private fun ResultRow.toOAuthAccount(): ProviderOAuthAccount =
         ProviderOAuthAccount(

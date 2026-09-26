@@ -111,12 +111,12 @@ class WithingsSyncAdapter(
     override fun isUnauthorized(error: Throwable): Boolean =
         error is WithingsHttpException &&
                 error.code == "withings_data_request_failed" &&
-                error.providerStatus == 401
+                (error.providerStatus == 401 || error.httpStatus == 401)
 
     override fun isInvalidRefreshToken(error: Throwable): Boolean =
         error is WithingsHttpException &&
                 error.code == "withings_token_request_failed" &&
-                error.providerStatus == 401
+                (error.providerStatus == 401 || error.httpStatus == 401)
 
     override fun errorCode(error: Throwable): String =
         when (error) {
@@ -128,6 +128,7 @@ class WithingsSyncAdapter(
     override fun errorAttributes(error: Throwable): Map<String, String> =
         when (error) {
             is WithingsHttpException -> buildMap {
+                error.httpStatus?.let { put("httpStatus", it.toString()) }
                 error.providerStatus?.let { put("providerStatus", it.toString()) }
                 error.providerAction?.let { put("providerAction", it) }
                 error.providerEndpoint?.let { put("providerEndpoint", it) }

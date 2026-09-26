@@ -24,8 +24,29 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class ScheduledProviderSyncServiceTest : PostgresIntegrationTest() {
+    @Test
+    fun maximumLookbackAdvancesCheckpointAndRefreshesHistory() = runBlocking {
+        val provider = BlockingProvider().apply { release.complete(Unit) }
+        val (service, repository) = serviceWith(provider)
+        val now = Instant.parse("2026-05-31T10:00:00Z")
+        repository.upsertConfig(
+            provider.providerCode, provider.defaultProviderInstanceId, true, listOf("steps"),
+            1_440, 31, now, now,
+        )
+        repeat(3) { offset ->
+            val runAt = now.plusSeconds(offset * 86_400L)
+            assertEquals(1, service.runDue(runAt))
+            val config = repository.getConfig(provider.providerCode, provider.defaultProviderInstanceId)!!
+            assertEquals(runAt, repository.checkpoints(config.id).single().checkpointAt)
+            assertTrue(provider.requests.last().refresh)
+        }
+        assertEquals(now.minusSeconds(31 * 86_400L), provider.requests[1].from)
+        assertEquals(now.plusSeconds(86_400), provider.requests[1].to)
+    }
+
     @Test
     fun manualRunConflictsWhileScheduledRunIsActiveForSameAccount() = runBlocking {
         val database = openDatabase(PostgresTestDatabase.config())
@@ -165,6 +186,7 @@ class ScheduledProviderSyncServiceTest : PostgresIntegrationTest() {
         val started = CompletableDeferred<Unit>()
         val release = CompletableDeferred<Unit>()
         val syncCalls = AtomicInteger(0)
+        val requests = mutableListOf<ProviderSyncRequest>()
 
         override val providerCode = "blocking_provider"
         override val defaultProviderInstanceId = "blocking-provider-me"
@@ -193,6 +215,7 @@ class ScheduledProviderSyncServiceTest : PostgresIntegrationTest() {
             progress: ProviderSyncProgressSink,
         ): ProviderSyncSummary {
             syncCalls.incrementAndGet()
+            requests += request
             started.complete(Unit)
             release.await()
             return ProviderSyncSummary(
