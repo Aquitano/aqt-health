@@ -176,7 +176,7 @@ async function VisualizationsSection({
     sleepNights, respiratoryRates, sleepSummaries,
   ];
   const limited = responses.some((response) => response.ok && Boolean(response.data.meta.nextCursor))
-    || (bodyMeasurements.ok && bodyMeasurements.data.meta.count >= bodyMeasurements.data.meta.limit);
+    || (bodyMeasurements.ok && bodyMeasurements.data.truncated);
 
   return (
     <>

@@ -195,6 +195,28 @@ describe("ProviderSyncPanel polling", () => {
     container.remove();
   });
 
+  it.each(["processed", "failed", "network"])("preserves another tab's newer job after an old poll is %s", async (outcome) => {
+    storeActiveJob();
+    let finish!: (value: unknown) => void;
+    let fail!: (reason: Error) => void;
+    fetchMock.mockReturnValueOnce(new Promise((resolve, reject) => { finish = resolve; fail = reject; }));
+    fetchMock.mockReturnValue(new Promise(() => {}));
+    renderPanel();
+    const newerJob = JSON.stringify({ providerCode: "google-health", jobId: "job-2" });
+    window.localStorage.setItem(SYNC_JOB_STORAGE_KEY, newerJob);
+    await act(async () => {
+      if (outcome === "network") fail(new Error("offline"));
+      else finish({ json: async () => outcome === "failed"
+        ? { ok: false, message: "expired" }
+        : { ok: true, data: jobStatus({ status: "processed" }) } });
+    });
+    expect(window.localStorage.getItem(SYNC_JOB_STORAGE_KEY)).toBe(newerJob);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/api/backend/providers/google-health/sync-jobs/job-2",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    ));
+  });
+
   it("aborts and ignores a status response after unmount", async () => {
     storeActiveJob();
     let finish!: (value: unknown) => void;

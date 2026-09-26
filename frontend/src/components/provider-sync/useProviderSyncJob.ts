@@ -67,6 +67,12 @@ function parse(raw: string | null): ActiveSyncJob | null {
   }
 }
 
+function clearStoredJob(job: ActiveSyncJob) {
+  const current = parse(snapshot());
+  if (current?.providerCode === job.providerCode && current.jobId === job.jobId)
+    store(null);
+}
+
 export function isFinishedSyncJob(status: string): boolean {
   return (
     status === "processed" || status === "partial_failed" || status === "failed"
@@ -102,7 +108,7 @@ export function useProviderSyncJob() {
         if (!body.ok) {
           setResult(body);
           setSyncJob(null);
-          store(null);
+          clearStoredJob(pollingJob);
           return;
         }
         setSyncJob(body.data);
@@ -116,7 +122,7 @@ export function useProviderSyncJob() {
                     body.data.errorMessage ?? "Provider sync job failed.",
                 }
           );
-          store(null);
+          clearStoredJob(pollingJob);
           router.refresh();
           return;
         }
@@ -131,7 +137,7 @@ export function useProviderSyncJob() {
               : "Provider sync status check failed.",
         });
         setSyncJob(null);
-        store(null);
+        clearStoredJob(pollingJob);
       }
     }
     void poll();

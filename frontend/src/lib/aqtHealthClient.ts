@@ -2,6 +2,7 @@ import createClient from "openapi-fetch";
 import type {
   ApiResult,
   ApiSchema,
+  BodyMeasurementsResponse,
   ScheduledSyncConfig,
   ScheduledSyncConfigUpdateRequest,
   ScheduledSyncRunResponse,
@@ -319,8 +320,8 @@ function listScalarMetric(
 function listScalarMetrics(
   metricTypes: string[],
   query: ScalarSamplesQuery,
-): Promise<ApiResult<ApiSchema<"ScalarSamplesResponse">>> {
-  return call<ApiSchema<"ScalarSamplesResponse">>((headers) =>
+): Promise<ApiResult<BodyMeasurementsResponse>> {
+  return call<BodyMeasurementsResponse>((headers) =>
     mergedScalarMetrics(metricTypes, query, headers),
   );
 }
@@ -329,7 +330,7 @@ async function mergedScalarMetrics(
   metricTypes: string[],
   query: ScalarSamplesQuery,
   headers: HeadersInit,
-): Promise<ClientResponse<ApiSchema<"ScalarSamplesResponse">>> {
+): Promise<ClientResponse<BodyMeasurementsResponse>> {
   const responses = await Promise.all(
     metricTypes.map((metricType) =>
       rawClient.GET("/api/v2/metrics/{metricType}", {
@@ -339,7 +340,7 @@ async function mergedScalarMetrics(
     ),
   );
   const failed = responses.find((result) => result.error || !result.response?.ok);
-  if (failed) return failed as ClientResponse<ApiSchema<"ScalarSamplesResponse">>;
+  if (failed) return { error: failed.error, response: failed.response };
 
   const order = query.order ?? (query.latest ? "desc" : "asc");
   const requestedLimit = query.limit ?? 500;
@@ -357,6 +358,7 @@ async function mergedScalarMetrics(
   return {
     data: {
       items,
+      truncated: items.length < mergedItems.length || responses.some((result) => Boolean(result.data?.meta.nextCursor)),
       meta: {
         count: items.length,
         limit: requestedLimit,
