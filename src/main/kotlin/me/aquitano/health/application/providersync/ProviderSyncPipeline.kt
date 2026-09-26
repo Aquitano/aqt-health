@@ -156,7 +156,7 @@ class ProviderSyncPipeline(
                 val snapshot = IngestionSnapshot(windowKey, fetched.contentHash())
                 if (request.refresh) {
                     val previous = store.findLatestSnapshot(
-                        adapter.providerCode, account.providerInstanceId, windowKey, now,
+                        adapter.providerCode, account.providerInstanceId, windowKey, snapshot.contentHash, now,
                     )
                     if (previous?.contentHash == snapshot.contentHash) {
                         batches += cachedBatchResponse(item.dataType, previous.batchId)

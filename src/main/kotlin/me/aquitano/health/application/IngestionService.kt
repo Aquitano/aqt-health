@@ -54,12 +54,13 @@ class IngestionService(
         provider: String,
         providerInstanceId: String,
         windowKey: String,
+        contentHash: String,
         now: Instant,
     ): ProcessedIngestionSnapshot? = suspendDbTransaction(db = database) {
         val sourceInstance = supportRepository.resolveOrCreateSourceInstanceInTransaction(
             provider, providerInstanceId, now,
         )
-        ingestionRepository.findLatestSyncSnapshot(sourceInstance.id, windowKey)
+        ingestionRepository.findLatestSyncSnapshot(sourceInstance.id, windowKey, contentHash)
     }
 
     suspend fun ingestBatch(

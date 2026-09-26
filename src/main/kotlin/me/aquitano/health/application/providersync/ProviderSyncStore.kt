@@ -79,6 +79,7 @@ interface ProviderSyncStore {
         providerCode: String,
         providerInstanceId: String,
         windowKey: String,
+        contentHash: String,
         now: Instant,
     ): ProcessedIngestionSnapshot?
 
@@ -210,9 +211,10 @@ class OAuthProviderSyncStore(
         providerCode: String,
         providerInstanceId: String,
         windowKey: String,
+        contentHash: String,
         now: Instant,
     ): ProcessedIngestionSnapshot? = ingestionService.findLatestSyncSnapshot(
-        providerCode, providerInstanceId, windowKey, now,
+        providerCode, providerInstanceId, windowKey, contentHash, now,
     )
 
     override suspend fun ingest(

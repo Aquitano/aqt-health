@@ -434,6 +434,7 @@ class ProviderSyncPipelineTest {
             providerCode: String,
             providerInstanceId: String,
             windowKey: String,
+            contentHash: String,
             now: Instant,
         ): ProcessedIngestionSnapshot? = ingested.withIndex().lastOrNull {
             it.value.providerCode == providerCode && it.value.providerInstanceId == providerInstanceId &&

@@ -20,6 +20,7 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greaterEq
 import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import java.time.Instant
 import java.time.ZoneOffset
 
@@ -96,7 +97,11 @@ class IngestionRepository {
             .map(::toExistingBatch)
             .singleOrNull()
 
-    fun findLatestSyncSnapshot(sourceInstanceId: Int, windowKey: String): ProcessedIngestionSnapshot? =
+    fun findLatestSyncSnapshot(
+        sourceInstanceId: Int,
+        windowKey: String,
+        contentHash: String,
+    ): ProcessedIngestionSnapshot? =
         IngestionBatchesTable
             .select(IngestionBatchesTable.id, IngestionBatchesTable.syncContentHash)
             .where {
@@ -113,6 +118,41 @@ class IngestionRepository {
                     requireNotNull(it[IngestionBatchesTable.syncContentHash]),
                 )
             }
+            ?.takeUnless { snapshot ->
+                snapshot.contentHash == contentHash && snapshotHasNewerValues(sourceInstanceId, snapshot.batchId)
+            }
+
+    // A record can move to another sync window and later return with its original content.
+    // A matching window hash is reusable only while its identified records still have those values.
+    private fun snapshotHasNewerValues(sourceInstanceId: Int, batchId: Int): Boolean =
+        requireNotNull(TransactionManager.current().exec(
+            """
+            SELECT EXISTS (
+                SELECT 1 FROM ingestion_records snapshot
+                JOIN LATERAL (
+                    SELECT newer.normalized_record_json
+                    FROM ingestion_records newer
+                    JOIN ingestion_batches batch ON batch.id = newer.batch_id
+                    WHERE newer.provider_record_id = snapshot.provider_record_id
+                      AND newer.record_type = snapshot.record_type
+                      AND newer.id > snapshot.id
+                      AND batch.source_instance_id = $sourceInstanceId
+                      AND batch.status = 'processed'
+                      AND ${sameScalarIdentity("newer", "snapshot")}
+                    ORDER BY newer.id DESC LIMIT 1
+                ) latest ON TRUE
+                WHERE snapshot.batch_id = $batchId
+                  AND snapshot.provider_record_id IS NOT NULL
+                  AND CASE WHEN snapshot.record_type = 'scalar'
+                      THEN snapshot.normalized_record_json - 'unit' - 'context' - 'segment'
+                      ELSE snapshot.normalized_record_json END
+                      IS DISTINCT FROM
+                      CASE WHEN snapshot.record_type = 'scalar'
+                      THEN latest.normalized_record_json - 'unit' - 'context' - 'segment'
+                      ELSE latest.normalized_record_json END
+            )
+            """.trimIndent()
+        ) { rows -> rows.next(); rows.getBoolean(1) })
 
     fun insertBatch(
         sourceInstanceId: Int,
