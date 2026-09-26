@@ -1,22 +1,27 @@
 "use client";
 
-import { FormEvent, useEffect, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { FormEvent, useState, useTransition } from "react";
 import type {
   ApiResult,
   ProviderCatalogResponse,
   ProviderDescriptor,
   ProviderOAuthStartResponse,
-  ProviderAccountStatus,
   ProviderStatus,
   ProviderStatusCatalogResponse,
   ScheduledSyncConfig,
-  ScheduledSyncRunResponse,
-  ProviderSyncResponse,
-  ProviderSyncJobStatusResponse,
 } from "@/lib/types";
-import { formatDateTime, toPositiveInteger } from "@/lib/format";
+import { toPositiveInteger } from "@/lib/format";
 import { ErrorNotice } from "./ErrorNotice";
+import { useProviderSyncJob } from "./provider-sync/useProviderSyncJob";
+import { proxyFetch } from "./provider-sync/proxyFetch";
+import { ProviderAccountRow } from "./provider-sync/ProviderAccountRow";
+import { SyncProgressView, SyncResult } from "./provider-sync/SyncJobViews";
+import {
+  actionLabel,
+  actionDetail,
+  primaryOAuthLabel,
+  formatStatus,
+} from "./provider-sync/labels";
 import styles from "./ProviderSyncPanel.module.css";
 
 type ProviderSyncPanelProps = {
@@ -31,76 +36,10 @@ type ProviderOption = {
 };
 
 export function ProviderSyncPanel({ catalog, statuses, scheduledSyncConfigs }: ProviderSyncPanelProps) {
-  const router = useRouter();
   const [selectedProviderCode, setSelectedProviderCode] = useState("");
-  const [result, setResult] = useState<ApiResult<ProviderSyncResponse> | null>(null);
-  const [syncJob, setSyncJob] = useState<ProviderSyncJobStatusResponse | null>(null);
-  const [activeSyncJob, setActiveSyncJob] = useState<ActiveSyncJob | null>(() => readStoredSyncJob());
   const [oauthError, setOAuthError] = useState<string | null>(null);
-  const [accountActionError, setAccountActionError] = useState<string | null>(null);
-  const [pendingAccountAction, setPendingAccountAction] = useState<string | null>(null);
-  const [scheduledResult, setScheduledResult] = useState<ApiResult<ScheduledSyncRunResponse> | null>(null);
-  const [scheduledError, setScheduledError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
   const [isOAuthPending, startOAuthTransition] = useTransition();
-  const [, startAccountActionTransition] = useTransition();
-  const [, startScheduledTransition] = useTransition();
-
-  useEffect(() => {
-    if (!activeSyncJob) return;
-
-    const pollingJob = activeSyncJob;
-    let stopped = false;
-
-    async function poll() {
-      while (!stopped) {
-        try {
-          const body = await proxyFetch<ProviderSyncJobStatusResponse>(
-            `/providers/${encodeURIComponent(pollingJob.providerCode)}/sync-jobs/${encodeURIComponent(pollingJob.jobId)}`,
-          );
-          if (!body.ok) {
-            setResult(body);
-            setSyncJob(null);
-            clearStoredSyncJob();
-            setActiveSyncJob(null);
-            return;
-          }
-
-          setSyncJob(body.data);
-          if (isFinishedSyncJob(body.data.status)) {
-            setResult(
-              body.data.summary
-                ? { ok: true, data: body.data.summary }
-                : { ok: false, message: body.data.errorMessage ?? "Provider sync job failed." },
-            );
-            clearStoredSyncJob();
-            setActiveSyncJob(null);
-            router.refresh();
-            return;
-          }
-        } catch (error) {
-          // A thrown fetch (network blip, abort) must not spin forever: clear the job so the UI
-          // leaves "Syncing…" and the bad job doesn't survive reloads via localStorage.
-          setResult({
-            ok: false,
-            message: error instanceof Error ? error.message : "Provider sync status check failed.",
-          });
-          setSyncJob(null);
-          clearStoredSyncJob();
-          setActiveSyncJob(null);
-          return;
-        }
-
-        await delay(SYNC_JOB_POLL_INTERVAL_MS);
-      }
-    }
-
-    void poll();
-
-    return () => {
-      stopped = true;
-    };
-  }, [activeSyncJob, router]);
+  const { activeSyncJob, syncJob, result, isPending, startSync, clearResult } = useProviderSyncJob();
 
   if (!catalog.ok || !statuses.ok) {
     return (
@@ -131,8 +70,7 @@ export function ProviderSyncPanel({ catalog, statuses, scheduledSyncConfigs }: P
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedProvider || !canSync) return;
-    setResult(null);
-    setSyncJob(null);
+    clearResult();
 
     const formData = new FormData(event.currentTarget);
     const dataTypes = selectedDataTypes(formData);
@@ -145,41 +83,13 @@ export function ProviderSyncPanel({ catalog, statuses, scheduledSyncConfigs }: P
         : undefined,
     };
 
-    startTransition(async () => {
-      try {
-        const body = await proxyFetch<{ jobId: string }>(
-          `/providers/${encodeURIComponent(selectedProvider.descriptor.providerCode)}/sync-jobs`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          },
-        );
-        if (!body.ok) {
-          setResult(body);
-          return;
-        }
-
-        const activeJob = {
-          providerCode: selectedProvider.descriptor.providerCode,
-          jobId: body.data.jobId,
-        };
-        storeSyncJob(activeJob);
-        setActiveSyncJob(activeJob);
-      } catch (error) {
-        setResult({
-          ok: false,
-          message: error instanceof Error ? error.message : "Provider sync failed. Try again.",
-        });
-      }
-    });
+    startSync(selectedProvider.descriptor.providerCode, payload);
   }
 
   function onStartOAuth() {
     if (!selectedProvider?.descriptor.workflowEndpoints.oauthStart) return;
-    setResult(null);
+    clearResult();
     setOAuthError(null);
-    setAccountActionError(null);
 
     startOAuthTransition(async () => {
       try {
@@ -194,90 +104,6 @@ export function ProviderSyncPanel({ catalog, statuses, scheduledSyncConfigs }: P
         }
       } catch (error) {
         setOAuthError(error instanceof Error ? error.message : "OAuth start failed. Try again.");
-      }
-    });
-  }
-
-  function onAccountAction(action: "disconnect" | "reconnect", providerInstanceId: string) {
-    if (!selectedProvider) return;
-    setResult(null);
-    setAccountActionError(null);
-    setPendingAccountAction(`${action}:${providerInstanceId}`);
-    const url = `/providers/${encodeURIComponent(selectedProvider.descriptor.providerCode)}/accounts/${encodeURIComponent(providerInstanceId)}/${action}`;
-
-    startAccountActionTransition(async () => {
-      try {
-        if (action === "reconnect") {
-          const body = await proxyFetch<ProviderOAuthStartResponse>(url, { method: "POST" });
-          if (body.ok) window.location.assign(body.data.authorizationUrl);
-          else setAccountActionError(body.message);
-        } else {
-          const body = await proxyFetch<unknown>(url, { method: "POST" });
-          if (body.ok) router.refresh();
-          else setAccountActionError(body.message);
-        }
-      } catch {
-        setAccountActionError(
-          `${action === "disconnect" ? "Disconnect" : "Reconnect"} failed. Try again.`,
-        );
-      } finally {
-        setPendingAccountAction(null);
-      }
-    });
-  }
-
-  function onToggleScheduled(providerInstanceId: string, enabled: boolean) {
-    if (!selectedProvider) return;
-    setScheduledError(null);
-    setScheduledResult(null);
-    setPendingAccountAction(`scheduled:${providerInstanceId}`);
-    const config = scheduledConfigByAccount.get(
-      `${selectedProvider.descriptor.providerCode}:${providerInstanceId}`,
-    );
-
-    startScheduledTransition(async () => {
-      try {
-        const body = await proxyFetch<ScheduledSyncConfig>(
-          `/providers/${encodeURIComponent(selectedProvider.descriptor.providerCode)}/accounts/${encodeURIComponent(providerInstanceId)}/scheduled-sync`,
-          {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              enabled,
-              dataTypes: config?.dataTypes ?? selectedProvider.descriptor.defaultDataTypes,
-              cadenceMinutes: config?.cadenceMinutes ?? 1440,
-              lookbackDays: config?.lookbackDays ?? 7,
-            }),
-          },
-        );
-        if (body.ok) router.refresh();
-        else setScheduledError(body.message);
-      } catch {
-        setScheduledError("Automatic sync update failed. Try again.");
-      } finally {
-        setPendingAccountAction(null);
-      }
-    });
-  }
-
-  function onRunScheduled(providerInstanceId: string) {
-    if (!selectedProvider) return;
-    setScheduledError(null);
-    setScheduledResult(null);
-    setPendingAccountAction(`scheduled-run:${providerInstanceId}`);
-
-    startScheduledTransition(async () => {
-      try {
-        const body = await proxyFetch<ScheduledSyncRunResponse>(
-          `/providers/${encodeURIComponent(selectedProvider.descriptor.providerCode)}/accounts/${encodeURIComponent(providerInstanceId)}/scheduled-sync/run`,
-          { method: "POST" },
-        );
-        setScheduledResult(body);
-        if (body.ok) router.refresh();
-      } catch {
-        setScheduledError("Automatic sync run failed. Try again.");
-      } finally {
-        setPendingAccountAction(null);
       }
     });
   }
@@ -297,7 +123,7 @@ export function ProviderSyncPanel({ catalog, statuses, scheduledSyncConfigs }: P
             className={provider === selectedProvider ? styles.providerTabActive : styles.providerTab}
             key={provider.descriptor.providerCode}
             onClick={() => {
-              setResult(null);
+              clearResult();
               setSelectedProviderCode(provider.descriptor.providerCode);
             }}
             type="button"
@@ -310,15 +136,10 @@ export function ProviderSyncPanel({ catalog, statuses, scheduledSyncConfigs }: P
 
       {selectedProvider ? (
         <ProviderStatusSummary
+          key={selectedProvider.descriptor.providerCode}
           isOAuthPending={isOAuthPending}
-          accountActionError={accountActionError}
           oauthError={oauthError}
-          pendingAccountAction={pendingAccountAction}
-          onDisconnect={(providerInstanceId) => onAccountAction("disconnect", providerInstanceId)}
-          onReconnect={(providerInstanceId) => onAccountAction("reconnect", providerInstanceId)}
-          onRunScheduled={onRunScheduled}
           onStartOAuth={onStartOAuth}
-          onToggleScheduled={onToggleScheduled}
           provider={selectedProvider}
           scheduledConfigByAccount={scheduledConfigByAccount}
         />
@@ -378,75 +199,20 @@ export function ProviderSyncPanel({ catalog, statuses, scheduledSyncConfigs }: P
 
       {syncJob ? <SyncProgressView job={syncJob} /> : null}
       {result ? <SyncResult result={result} /> : null}
-      {scheduledError ? <div className={styles.errorNotice}>{scheduledError}</div> : null}
-      {scheduledResult ? <ScheduledRunResult result={scheduledResult} /> : null}
     </section>
-  );
-}
-
-type ActiveSyncJob = {
-  providerCode: string;
-  jobId: string;
-};
-
-function SyncProgressView({ job }: { job: ProviderSyncJobStatusResponse }) {
-  const completedPercent = job.totalItems > 0
-    ? Math.round((job.completedItems / job.totalItems) * 100)
-    : 0;
-  const startedAt = job.startedAt ?? job.createdAt;
-  const elapsedSeconds = Math.max(0, Math.round((new Date(job.updatedAt).getTime() - new Date(startedAt).getTime()) / 1000));
-  const currentLabel = job.currentItem
-    ? `${formatStatus(job.currentItem.dataType)} ${formatWindowLabel(new Date(job.currentItem.from), new Date(job.currentItem.to))}`
-    : "Waiting for backend worker";
-  const lastLabel = job.lastCompletedItem
-    ? `${formatStatus(job.lastCompletedItem.dataType)} ${formatWindowLabel(new Date(job.lastCompletedItem.from), new Date(job.lastCompletedItem.to))}`
-    : null;
-
-  return (
-    <div className={styles.progressPanel}>
-      <div className={styles.progressHeader}>
-        <div>
-          <strong>Sync {formatStatus(job.status)}</strong>
-          <span>
-            {job.completedItems} of {job.totalItems || "?"} windows complete, {elapsedSeconds}s elapsed
-          </span>
-        </div>
-      </div>
-      <div className={styles.progressTrack} aria-label="Provider sync progress">
-        <div className={styles.progressFill} style={{ width: `${completedPercent}%` }} />
-      </div>
-      <div className={styles.progressMeta}>
-        <span>{completedPercent}%</span>
-        <span>{isFinishedSyncJob(job.status) ? "Finished" : currentLabel}</span>
-      </div>
-      {lastLabel ? <small>Last completed: {lastLabel}</small> : null}
-      <small>Job {job.jobId}</small>
-    </div>
   );
 }
 
 function ProviderStatusSummary({
   isOAuthPending,
-  accountActionError,
   oauthError,
-  pendingAccountAction,
-  onDisconnect,
-  onReconnect,
-  onRunScheduled,
   onStartOAuth,
-  onToggleScheduled,
   provider,
   scheduledConfigByAccount,
 }: {
   isOAuthPending: boolean;
-  accountActionError: string | null;
   oauthError: string | null;
-  pendingAccountAction: string | null;
-  onDisconnect: (providerInstanceId: string) => void;
-  onReconnect: (providerInstanceId: string) => void;
-  onRunScheduled: (providerInstanceId: string) => void;
   onStartOAuth: () => void;
-  onToggleScheduled: (providerInstanceId: string, enabled: boolean) => void;
   provider: ProviderOption;
   scheduledConfigByAccount: Map<string, ScheduledSyncConfig>;
 }) {
@@ -477,18 +243,13 @@ function ProviderStatusSummary({
         </button>
       ) : null}
       {oauthError ? <div className={styles.errorNotice}>{oauthError}</div> : null}
-      {accountActionError ? <div className={styles.errorNotice}>{accountActionError}</div> : null}
       {status.accounts.length > 0 ? (
         <div className={styles.accountGrid}>
           {status.accounts.map((account) => (
             <ProviderAccountRow
               account={account}
+              descriptor={provider.descriptor}
               key={account.providerInstanceId}
-              onDisconnect={onDisconnect}
-              onReconnect={onReconnect}
-              onRunScheduled={onRunScheduled}
-              onToggleScheduled={onToggleScheduled}
-              pendingAccountAction={pendingAccountAction}
               scheduledConfig={scheduledConfigByAccount.get(
                 `${provider.descriptor.providerCode}:${account.providerInstanceId}`,
               )}
@@ -498,235 +259,6 @@ function ProviderStatusSummary({
       ) : null}
     </div>
   );
-}
-
-function ProviderAccountRow({
-  account,
-  onDisconnect,
-  onReconnect,
-  onRunScheduled,
-  onToggleScheduled,
-  pendingAccountAction,
-  scheduledConfig,
-}: {
-  account: ProviderAccountStatus;
-  onDisconnect: (providerInstanceId: string) => void;
-  onReconnect: (providerInstanceId: string) => void;
-  onRunScheduled: (providerInstanceId: string) => void;
-  onToggleScheduled: (providerInstanceId: string, enabled: boolean) => void;
-  pendingAccountAction: string | null;
-  scheduledConfig?: ScheduledSyncConfig;
-}) {
-  const disconnectPending = pendingAccountAction === `disconnect:${account.providerInstanceId}`;
-  const reconnectPending = pendingAccountAction === `reconnect:${account.providerInstanceId}`;
-  const scheduledPending = pendingAccountAction === `scheduled:${account.providerInstanceId}`;
-  const scheduledRunPending = pendingAccountAction === `scheduled-run:${account.providerInstanceId}`;
-
-  return (
-    <div className={styles.accountRow}>
-      <div className={styles.accountIdentity}>
-        <strong>{account.providerInstanceId}</strong>
-        <span>{formatStatus(account.status)} account</span>
-      </div>
-      <dl className={styles.accountMeta}>
-        <div>
-          <dt>Token</dt>
-          <dd>{formatStatus(account.tokenStatus)}</dd>
-        </div>
-        <div>
-          <dt>Connected</dt>
-          <dd>{account.connectedAt ? formatDateTime(account.connectedAt) : "Never"}</dd>
-        </div>
-        {account.disconnectedAt ? (
-          <div>
-            <dt>Disconnected</dt>
-            <dd>{formatDateTime(account.disconnectedAt)}</dd>
-          </div>
-        ) : null}
-        <div>
-          <dt>Last sync</dt>
-          <dd>{account.lastSyncAt ? formatDateTime(account.lastSyncAt) : "None"}</dd>
-        </div>
-        {account.lastTokenRefreshAt ? (
-          <div>
-            <dt>Refresh</dt>
-            <dd>
-              {formatStatus(account.lastTokenRefreshStatus ?? "unknown")} {formatDateTime(account.lastTokenRefreshAt)}
-            </dd>
-          </div>
-        ) : null}
-        {account.lastAuthErrorCode ? (
-          <div className={styles.accountError}>
-            <dt>{account.lastAuthErrorCode}</dt>
-            <dd>{account.lastAuthErrorMessage ?? "Authentication failed"}</dd>
-          </div>
-        ) : null}
-        <div className={styles.scheduledMeta}>
-          <dt>Automatic</dt>
-          <dd>
-            {scheduledConfig?.enabled ? "Enabled" : "Paused"}
-            {scheduledConfig?.nextRunAt ? `, next ${formatDateTime(scheduledConfig.nextRunAt)}` : ""}
-          </dd>
-        </div>
-        {scheduledConfig?.lastErrorMessage ? (
-          <div className={styles.accountError}>
-            <dt>Scheduled sync error</dt>
-            <dd>{scheduledConfig.lastErrorMessage}</dd>
-          </div>
-        ) : null}
-      </dl>
-      <div className={styles.accountActions}>
-        {account.status === "connected" ? (
-          <>
-            <button
-              className={styles.secondaryButton}
-              disabled={scheduledPending || scheduledRunPending}
-              onClick={() => onToggleScheduled(account.providerInstanceId, !scheduledConfig?.enabled)}
-              type="button"
-            >
-              {scheduledPending ? "Saving..." : scheduledConfig?.enabled ? "Pause auto" : "Enable auto"}
-            </button>
-            <button
-              className={styles.oauthButton}
-              disabled={scheduledPending || scheduledRunPending}
-              onClick={() => onRunScheduled(account.providerInstanceId)}
-              type="button"
-            >
-              {scheduledRunPending ? "Running..." : "Run auto now"}
-            </button>
-          </>
-        ) : null}
-        {account.status === "connected" ? (
-          <button
-            className={styles.secondaryButton}
-            disabled={disconnectPending || reconnectPending}
-            onClick={() => onDisconnect(account.providerInstanceId)}
-            type="button"
-          >
-            {disconnectPending ? "Disconnecting..." : "Disconnect"}
-          </button>
-        ) : null}
-        {account.status === "needs_reauth" || account.status === "disconnected" ? (
-          <button
-            className={styles.oauthButton}
-            disabled={disconnectPending || reconnectPending}
-            onClick={() => onReconnect(account.providerInstanceId)}
-            type="button"
-          >
-            {reconnectPending ? "Starting..." : "Reconnect"}
-          </button>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-function ScheduledRunResult({ result }: { result: ApiResult<ScheduledSyncRunResponse> }) {
-  if (!result.ok) return <ErrorNotice result={result} />;
-
-  return (
-    <div className={styles.result}>
-      <strong>Automatic sync {result.data.status}</strong>
-      <span>
-        {result.data.providerCode}: {result.data.requestedFrom ?? "n/a"} - {result.data.requestedTo ?? "n/a"}
-      </span>
-      {result.data.errors.length > 0 ? (
-        <ul>
-          {result.data.errors.map((error) => (
-            <li key={error}>{error}</li>
-          ))}
-        </ul>
-      ) : null}
-    </div>
-  );
-}
-
-function SyncResult({ result }: { result: ApiResult<ProviderSyncResponse> }) {
-  if (!result.ok) {
-    return <ErrorNotice result={result} />;
-  }
-
-  const created = result.data.batches.reduce(
-    (sum, batch) =>
-      sum + Object.values(batch.metricsCreated).reduce((batchSum, count) => batchSum + count, 0),
-    0,
-  );
-
-  return (
-    <div className={styles.result}>
-      <strong>
-        Synced {result.data.batches.length} batches, created {created} metrics
-      </strong>
-      <span>
-        {result.data.providerCode}: {result.data.requestedFrom} - {result.data.requestedTo}
-      </span>
-      {result.data.errors.length > 0 ? (
-        <ul>
-          {result.data.errors.map((error) => (
-            <li key={`${error.dataType}-${error.code}`}>
-              {error.dataType}: {error.message}
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </div>
-  );
-}
-
-export function actionLabel(descriptor: ProviderDescriptor, status: ProviderStatus): string {
-  switch (status.nextAction) {
-    case "configure":
-      return `${descriptor.displayName} is not configured`;
-    case "connect":
-      return `${descriptor.displayName} needs OAuth`;
-    case "reconnect":
-      return `${descriptor.displayName} needs reconnection`;
-    case "sync":
-      return `${descriptor.displayName} is ready to sync`;
-  }
-}
-
-export function actionDetail(descriptor: ProviderDescriptor, status: ProviderStatus): string {
-  switch (status.nextAction) {
-    case "configure":
-      return `Set the ${descriptor.displayName} credentials and token encryption key on the backend.`;
-    case "connect":
-      return descriptor.workflowEndpoints.oauthStart
-        ? "Login before syncing this provider."
-        : "Connect this provider before syncing.";
-    case "reconnect":
-      return descriptor.workflowEndpoints.oauthStart
-        ? "Restart OAuth if provider access was revoked."
-        : "Reconnect this provider before syncing.";
-    case "sync":
-      return status.accounts.length === 1
-        ? `Connected as ${status.accounts[0].providerInstanceId}.`
-        : `${status.accounts.length} connected accounts.`;
-  }
-}
-
-export function primaryOAuthLabel(status: ProviderStatus): string {
-  switch (status.nextAction) {
-    case "connect":
-      return "Connect";
-    case "reconnect":
-      return "Reconnect";
-    default:
-      return "Start OAuth";
-  }
-}
-
-export function formatStatus(value: string): string {
-  return value
-    .split(/[_-]/)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
-async function proxyFetch<T>(path: string, init?: RequestInit): Promise<ApiResult<T>> {
-  const url = `/api/backend${path}`;
-  const response = await (init ? fetch(url, init) : fetch(url));
-  return (await response.json()) as ApiResult<T>;
 }
 
 function selectedDataTypes(formData: FormData): string[] | undefined {
@@ -740,48 +272,3 @@ function toIso(value: FormDataEntryValue | null): string | undefined {
   if (Number.isNaN(date.getTime())) return undefined;
   return date.toISOString();
 }
-
-function formatWindowLabel(from: Date, to: Date): string {
-  const formatter = new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
-  return `${formatter.format(from)} - ${formatter.format(to)}`;
-}
-
-function isFinishedSyncJob(status: string): boolean {
-  return status === "processed" || status === "partial_failed" || status === "failed";
-}
-
-function readStoredSyncJob(): ActiveSyncJob | null {
-  if (typeof window === "undefined") return null;
-  const raw = window.localStorage.getItem(SYNC_JOB_STORAGE_KEY);
-  if (!raw) return null;
-  return parseStoredSyncJob(raw);
-}
-
-function parseStoredSyncJob(raw: string): ActiveSyncJob | null {
-  try {
-    const parsed = JSON.parse(raw) as Partial<ActiveSyncJob>;
-    return typeof parsed.providerCode === "string" && typeof parsed.jobId === "string"
-      ? { providerCode: parsed.providerCode, jobId: parsed.jobId }
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-function storeSyncJob(job: ActiveSyncJob) {
-  window.localStorage.setItem(SYNC_JOB_STORAGE_KEY, JSON.stringify(job));
-}
-
-function clearStoredSyncJob() {
-  window.localStorage.removeItem(SYNC_JOB_STORAGE_KEY);
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
-}
-
-const SYNC_JOB_STORAGE_KEY = "aqt-health.provider-sync.active-job";
-const SYNC_JOB_POLL_INTERVAL_MS = 1500;

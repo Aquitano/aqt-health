@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type {
   ApiResult,
   ProviderCatalogResponse,
@@ -8,6 +8,8 @@ import type {
   ProviderStatusCatalogResponse,
   ProviderSyncJobStatusResponse,
 } from "@/lib/types";
+import { renderToString } from "react-dom/server";
+import { hydrateRoot } from "react-dom/client";
 import { ProviderSyncPanel } from "./ProviderSyncPanel";
 
 const mocks = vi.hoisted(() => ({
@@ -15,7 +17,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh: mocks.refresh }),
+  useRouter: () => mocks,
 }));
 
 const SYNC_JOB_STORAGE_KEY = "aqt-health.provider-sync.active-job";
@@ -127,6 +129,7 @@ describe("ProviderSyncPanel polling", () => {
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
         "/api/backend/providers/google-health/sync-jobs/job-1",
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
       );
     });
     await screen.findByText(/1 of 2 windows complete/);
@@ -174,4 +177,53 @@ describe("ProviderSyncPanel polling", () => {
     expect(window.localStorage.getItem(SYNC_JOB_STORAGE_KEY)).toBeNull();
     expect(screen.getByRole("button", { name: "Start sync" })).toBeEnabled();
   });
+
+  it("hydrates a saved job without replacing server-rendered markup", async () => {
+    storeActiveJob();
+    fetchMock.mockReturnValue(new Promise(() => {}));
+    const element = <ProviderSyncPanel catalog={catalog()} statuses={statuses()} scheduledSyncConfigs={[]} />;
+    const container = document.createElement("div");
+    container.innerHTML = renderToString(element);
+    expect(container.textContent).toContain("Start sync");
+    document.body.append(container);
+    const recoverableError = vi.fn();
+    let root: ReturnType<typeof hydrateRoot>;
+    await act(async () => { root = hydrateRoot(container, element, { onRecoverableError: recoverableError }); });
+    expect(container.textContent).toContain("Syncing...");
+    expect(recoverableError).not.toHaveBeenCalled();
+    act(() => root.unmount());
+    container.remove();
+  });
+
+  it("aborts and ignores a status response after unmount", async () => {
+    storeActiveJob();
+    let finish!: (value: unknown) => void;
+    fetchMock.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+    const view = renderPanel();
+    const signal = fetchMock.mock.calls[0][1].signal as AbortSignal;
+    view.unmount();
+    expect(signal.aborted).toBe(true);
+    await act(async () => { finish({ json: async () => ({ ok: false, message: "expired" }) }); });
+    expect(window.localStorage.getItem(SYNC_JOB_STORAGE_KEY)).not.toBeNull();
+    expect(mocks.refresh).not.toHaveBeenCalled();
+  });
+
+  it("keeps pending account actions independent", async () => {
+    const finishes: ((value: unknown) => void)[] = [];
+    fetchMock.mockImplementation(() => new Promise((resolve) => { finishes.push(resolve); }));
+    render(<ProviderSyncPanel catalog={catalog()} statuses={{ ok: true, data: { items: [{ ...status(), accounts: [
+      { providerInstanceId: "first", status: "connected", tokenStatus: "valid" },
+      { providerInstanceId: "second", status: "connected", tokenStatus: "valid" },
+    ] }] } }} scheduledSyncConfigs={[]} />);
+    const first = screen.getByText("first").closest("div")!.parentElement!;
+    const second = screen.getByText("second").closest("div")!.parentElement!;
+    fireEvent.click(within(first).getByRole("button", { name: "Run auto now" }));
+    fireEvent.click(within(second).getByRole("button", { name: "Run auto now" }));
+    await act(async () => { finishes[0]({ json: async () => ({ ok: false, message: "first failed" }) }); });
+    expect(within(first).getByRole("button", { name: "Run auto now" })).toBeEnabled();
+    expect(within(second).getByRole("button", { name: "Running..." })).toBeDisabled();
+    expect(within(second).getByRole("button", { name: "Disconnect" })).toBeDisabled();
+    await act(async () => { finishes[1]({ json: async () => ({ ok: false, message: "second failed" }) }); });
+  });
+
 });
