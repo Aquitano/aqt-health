@@ -212,6 +212,13 @@ class ReplayService(
     }
 
     private suspend fun replayDay(day: LocalDate, plan: ReplayPlan): DayReplayResult {
+        repeat(3) {
+            tryReplayDay(day, plan)?.let { return it }
+        }
+        throw ConflictException("replay_source_changed", "Ingestion changed repeatedly while preparing replay for $day. Retry the replay.")
+    }
+
+    private suspend fun tryReplayDay(day: LocalDate, plan: ReplayPlan): DayReplayResult? {
         val dayStart = day.atStartOfDay(ZoneOffset.UTC).toInstant()
         val dayEnd = day.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant()
         val now = clock.now()
@@ -221,10 +228,11 @@ class ReplayService(
         val rows = suspendDbTransaction(db = database) {
             ingestionRepository.listRecordsForReplay(dayStart, dayEnd, plan.recordTypes)
         }
+        val recordIds = rows.mapTo(hashSetOf()) { it.id }
         val prepared = if (plan.includesProjections) rows.mapNotNull { row ->
             decodeAndMap(row)?.let { record -> row to MetricWrite(row.id, record) }
         } else emptyList()
-        val writesBySource = prepared.groupBy { it.first.sourceInstanceId }
+        val writesBySource = prepared.groupBy { it.first.sourceInstanceId }.toSortedMap()
         if (plan.includesDerived) {
             rows.forEach { row ->
                 derivedRebuildRegistry.affectedDatesFor(row.recordType, row.recordStartAt, row.recordEndAt)
@@ -235,6 +243,14 @@ class ReplayService(
             }
         }
         val result = suspendDbTransaction(db = database) {
+            if (plan.includesProjections && plan.wipe) {
+                // Ingestion takes a write lock here before touching projections. Taking the
+                // conflicting lock first waits for commits and prevents new writes during wipe.
+                exec("LOCK TABLE ingestion_records IN SHARE ROW EXCLUSIVE MODE")
+                if (ingestionRepository.recordIdsForReplay(dayStart, dayEnd, plan.recordTypes) != recordIds) {
+                    return@suspendDbTransaction null
+                }
+            }
             var recordsReplayed = 0
             var metricsWritten = 0
             var duplicatesSkipped = 0
@@ -256,6 +272,12 @@ class ReplayService(
                         writes = entries.map { it.second },
                         now = now,
                     )
+                    if (plan.includesDerived) {
+                        writeResult.affectedDates.forEach { (kind, dates) ->
+                            affectedBySource.getOrPut(sourceId) { mutableMapOf() }
+                                .getOrPut(kind) { linkedSetOf() }.addAll(dates)
+                        }
+                    }
                     recordsReplayed += entries.size
                     metricsWritten += writeResult.created.counts.values.sum()
                     duplicatesSkipped += writeResult.duplicateSkipped
@@ -263,7 +285,7 @@ class ReplayService(
             }
 
             DayReplayResult(recordsReplayed, metricsWritten, duplicatesSkipped, mappingFailures)
-        }
+        } ?: return null
 
         derivedRebuildExecutor.rebuildAll(
             affectedBySource.map { (sourceInstanceId, affectedDates) ->

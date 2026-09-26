@@ -1,6 +1,7 @@
 package me.aquitano.health.application
 
 import me.aquitano.health.test.PostgresIntegrationTest
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -35,6 +36,41 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class ReplayServiceTest : PostgresIntegrationTest() {
+    @Test
+    fun wipeRepreparesWhenIngestionCommitsAfterTheSnapshotWasRead() = runBlocking {
+        val fixture = Fixture(poolSize = 3)
+        fixture.ingestMixedBatch()
+        val jobId = PostgresTestDatabase.connection(fixture.dbConfig).use { blocker ->
+            blocker.autoCommit = false
+            blocker.createStatement().use { it.execute("LOCK TABLE scalar_samples IN SHARE MODE") }
+            val ingestion = async { fixture.ingestAdditionalScalar() }
+            try {
+                withTimeout(10_000) {
+                    while (fixture.waitingLocks("scalar_samples", "RowExclusiveLock") == 0) delay(10)
+                }
+                val start = fixture.replayService.create(
+                    ReplayRequest(scope = "projections", metricTypes = listOf(RecordTypes.SCALAR), wipe = true),
+                    fixture.clock.now(),
+                )
+                withTimeout(10_000) {
+                    while (fixture.waitingLocks("ingestion_records", "ShareRowExclusiveLock") == 0) delay(10)
+                }
+                // Ingestion owns its raw-log write lock but has not committed. Replay has
+                // prepared the old committed records and is waiting for that ingestion.
+                blocker.rollback()
+                ingestion.await()
+                start.jobId
+            } finally {
+                blocker.rollback()
+            }
+        }
+        val job = fixture.awaitReplay(jobId)
+        assertEquals(ReplayJobStatus.Completed, job.status)
+        assertEquals(2, job.recordsReplayed)
+        assertEquals(2, fixture.count("scalar_samples"))
+        assertEquals(1, fixture.singleInt("SELECT COUNT(*) FROM scalar_samples WHERE provider_record_id = 'hr-late'"))
+    }
+
     @Test
     fun replayRestoresWipedProjectionsAndDerivedTables() = runBlocking {
         val fixture = Fixture()
@@ -213,8 +249,8 @@ class ReplayServiceTest : PostgresIntegrationTest() {
         }
     }
 
-    private inner class Fixture {
-        val dbConfig: DatabaseConfig = PostgresTestDatabase.config()
+    private inner class Fixture(poolSize: Int = 1) {
+        val dbConfig: DatabaseConfig = PostgresTestDatabase.config().copy(maxPoolSize = poolSize)
         val database: Database = openDatabase(dbConfig)
         val clock = UtcClock()
         private val mappingService = IngestionMappingService()
@@ -280,17 +316,38 @@ class ReplayServiceTest : PostgresIntegrationTest() {
             )
         }
 
+        suspend fun ingestAdditionalScalar() {
+            ingestionService.ingestBatch(
+                IngestionBatchRequest(
+                    provider = "withings", providerInstanceId = "scale-1",
+                    ingestedAt = "2026-04-19T10:02:00Z", sourcePayload = buildJsonObject {},
+                    records = listOf(ScalarSample(
+                        providerRecordId = "hr-late", measuredAt = "2026-04-19T08:31:00Z",
+                        metricType = "heart_rate", value = 65.0, context = "resting",
+                    )),
+                ),
+                Instant.parse("2026-04-19T10:02:00Z"),
+            )
+        }
+
         suspend fun runReplay(request: ReplayRequest): ReplayJobStatusResponse {
             val start = replayService.create(request, clock.now())
-            return withTimeout(60_000) {
-                var job = replayService.get(start.jobId)
+            return awaitReplay(start.jobId)
+        }
+
+        suspend fun awaitReplay(jobId: String): ReplayJobStatusResponse =
+            withTimeout(60_000) {
+                var job = replayService.get(jobId)
                 while (!job.status.terminal) {
                     delay(100)
-                    job = replayService.get(start.jobId)
+                    job = replayService.get(jobId)
                 }
                 job
             }
-        }
+
+        fun waitingLocks(table: String, mode: String): Int = singleInt(
+            "SELECT COUNT(*) FROM pg_locks WHERE relation = '$table'::regclass AND mode = '$mode' AND NOT granted"
+        )
 
         fun count(table: String): Int = singleInt("SELECT COUNT(*) FROM $table")
 
