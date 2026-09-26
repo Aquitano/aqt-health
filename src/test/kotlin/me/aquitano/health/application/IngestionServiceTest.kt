@@ -2,6 +2,9 @@ package me.aquitano.health.application
 
 import me.aquitano.health.test.PostgresIntegrationTest
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.buildJsonObject
 import me.aquitano.health.domain.BatchStatus
 import me.aquitano.health.domain.ConflictException
@@ -11,6 +14,7 @@ import me.aquitano.health.api.dto.StepInterval
 import me.aquitano.health.domain.ScalarMetricTypes
 import me.aquitano.health.test.NoOpDerivedRebuildExecutor
 import me.aquitano.health.test.metricWriteService
+import me.aquitano.health.test.realDerivedRebuildExecutor
 import me.aquitano.health.infrastructure.config.DatabaseConfig
 import me.aquitano.health.infrastructure.repositories.IngestionRepository
 import me.aquitano.health.infrastructure.repositories.PendingDerivedRebuildRepository
@@ -23,6 +27,59 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class IngestionServiceTest : PostgresIntegrationTest() {
+    @Test
+    fun ingestionCommittedAfterCanonicalSnapshotConvergesToTheNewerTotal() = runBlocking {
+        val config = PostgresTestDatabase.config().copy(maxPoolSize = 3)
+        val database = openDatabase(config)
+        val pending = PendingDerivedRebuildRepository(database)
+        val service = IngestionService(
+            database, IngestionMappingService(), SupportRepository(database), IngestionRepository(),
+            metricWriteService(), realDerivedRebuildExecutor(database), pending,
+        )
+        val now = Instant.parse("2026-04-19T10:00:00Z")
+        fun request(hour: Int) = IngestionBatchRequest(
+            provider = "health_connect", providerInstanceId = "concurrent", batchExternalId = "steps-$hour",
+            ingestedAt = now.toString(), sourcePayload = buildJsonObject {},
+            records = listOf(StepInterval(
+                startAt = "2026-04-19T${hour.toString().padStart(2, '0')}:00:00Z",
+                endAt = "2026-04-19T${(hour + 1).toString().padStart(2, '0')}:00:00Z",
+                steps = 100,
+            )),
+        )
+        PostgresTestDatabase.connection(config).use { blocker ->
+            blocker.autoCommit = false
+            blocker.createStatement().use {
+                it.execute("LOCK TABLE canonical_step_day_bucket_contributions IN SHARE MODE")
+            }
+            val first = async { service.ingestBatch(request(8), now) }
+            try {
+                withTimeout(10_000) {
+                    while (singleInt(config, """
+                        SELECT COUNT(*) FROM pg_locks
+                        WHERE relation = 'canonical_step_day_bucket_contributions'::regclass
+                          AND mode = 'RowExclusiveLock' AND NOT granted
+                    """.trimIndent()) == 0) delay(10)
+                }
+                // The first canonical writer holds its date lock and has checked the raw IDs.
+                val originalRevision = pending.due(now, 10).single().revision
+                val second = async { service.ingestBatch(request(9), now) }
+                withTimeout(10_000) {
+                    while (singleInt(config, "SELECT COUNT(*) FROM step_samples") != 2) delay(10)
+                }
+                assertTrue(originalRevision != pending.due(now, 10).single().revision)
+                blocker.rollback()
+                withTimeout(10_000) {
+                    first.await()
+                    second.await()
+                }
+            } finally {
+                blocker.rollback()
+            }
+        }
+        assertEquals(200, singleInt(config, "SELECT SUM(value)::integer FROM canonical_step_day_bucket_contributions"))
+        assertEquals(0, pending.due(now, 10).size)
+    }
+
     @Test
     fun cancellationAfterCommitLeavesDurableWorkEvenWhenBatchIsRetried() = runBlocking {
         val config = PostgresTestDatabase.config()

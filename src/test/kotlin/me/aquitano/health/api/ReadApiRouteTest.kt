@@ -22,6 +22,27 @@ import me.aquitano.health.domain.BodyMetricTypes
 
 class ReadApiRouteTest : PostgresIntegrationTest() {
     @Test
+    fun trendTotalsRoundLegacyFractionalContributionsOnlyAfterSummingTheRange() = testApplication {
+        val config = configureTestApplication()
+        val ingestion = client.post("/api/v2/ingestion/batches") {
+            authorized()
+            contentType(ContentType.Application.Json)
+            setBody("""{"provider":"health_connect","providerInstanceId":"legacy-allocation","ingestedAt":"2026-04-20T10:00:00Z","sourcePayload":{},"records":[{"type":"step_interval","startAt":"2026-04-19T23:45:00Z","endAt":"2026-04-20T00:15:00Z","steps":1}]}""")
+        }
+        assertEquals(HttpStatusCode.Created, ingestion.status)
+        PostgresTestDatabase.connection(config).use { connection ->
+            connection.createStatement().use { statement ->
+                // V30 queues old fractional allocations for repair without hiding them from reads.
+                assertEquals(2, statement.executeUpdate("UPDATE canonical_step_day_bucket_contributions SET value = 0.5"))
+            }
+        }
+        val trends = authorizedGet("/api/v2/dashboard/trends?toDate=2026-04-20&periodDays=2").jsonBody()
+        val dashboard = authorizedGet("/api/v2/dashboard/summary?fromDate=2026-04-19&toDate=2026-04-20").jsonBody()
+        assertEquals(1, trends["steps"]!!.jsonObject["currentTotal"]!!.jsonPrimitive.int)
+        assertEquals(1, dashboard["steps"]!!.jsonObject["steps"]!!.jsonPrimitive.int)
+    }
+
+    @Test
     fun weightTrendKeepsAttributionWhenPreviousMeasurementUsedAnotherDevice() = testApplication {
         configureTestApplication()
         listOf("withings" to "2026-04-19", "health_connect" to "2026-04-20").forEach { (provider, date) ->

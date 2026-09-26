@@ -159,8 +159,18 @@ class CanonicalStepDerivationRepository : BaseMetricReadRepository() {
 
     /** All canonical totals use the same allocated bucket contributions. */
     fun sumCanonicalStepDailySummaries(filters: DailyReadFilters): DashboardStepsSummaryRow {
-        val (rows, _) = listCanonicalStepDailySummaries(filters.copy(limit = Int.MAX_VALUE, includeSource = false))
-        return DashboardStepsSummaryRow(steps = rows.sumOf { it.steps }, dayCount = rows.size)
+        val table = CanonicalStepDayBucketContributionsTable
+        val where = dateConditions(filters, table.sourceInstanceId, table.date).whereOrNull()
+            ?: return DashboardStepsSummaryRow(steps = 0, dayCount = 0)
+        val total = table.value.sum()
+        val days = table.date.countDistinct()
+        val row = table.select(total, days)
+            .where(where and (table.algorithmVersion eq CANONICAL_STEP_ALGORITHM_VERSION))
+            .single()
+        return DashboardStepsSummaryRow(
+            steps = (row[total] ?: 0.0).roundToInt(),
+            dayCount = row[days].toInt(),
+        )
     }
 
     fun listCanonicalStepDailySummaries(
