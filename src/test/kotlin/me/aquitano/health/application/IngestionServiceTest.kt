@@ -26,7 +26,7 @@ class IngestionServiceTest : PostgresIntegrationTest() {
     @Test
     fun cancellationAfterCommitLeavesDurableWorkEvenWhenBatchIsRetried() = runBlocking {
         val config = PostgresTestDatabase.config()
-        val database = DatabaseFactory().initialize(config)
+        val database = openDatabase(config)
         val pending = PendingDerivedRebuildRepository(database)
         val service = IngestionService(
             database, IngestionMappingService(), SupportRepository(database), IngestionRepository(),

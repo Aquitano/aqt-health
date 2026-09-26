@@ -17,7 +17,7 @@ import kotlin.test.assertEquals
 class PendingDerivedRebuildSweeperTest : PostgresIntegrationTest() {
     @Test
     fun staleWorkerCannotAcknowledgeOrDelayNewerWork() = runBlocking {
-        val database = DatabaseFactory().initialize(PostgresTestDatabase.config())
+        val database = openDatabase(PostgresTestDatabase.config())
         val repository = PendingDerivedRebuildRepository(database)
         val now = Instant.parse("2026-06-01T10:00:00Z")
         val source = suspendDbTransaction(db = database) {
