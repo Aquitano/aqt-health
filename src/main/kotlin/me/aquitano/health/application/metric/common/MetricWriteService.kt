@@ -95,7 +95,7 @@ class MetricWriteService(
             duplicateSkipped += scalarWrites.size - insertedTypes.size
         }
 
-        corrections.recordGoogleStepDecisions(googleStepDecisions)
+        corrections.recordGoogleStepDecisions(googleStepDecisions, prepared.googleStepPriorities)
         return MetricWriteResult(
             created = created,
             duplicateSkipped = duplicateSkipped,

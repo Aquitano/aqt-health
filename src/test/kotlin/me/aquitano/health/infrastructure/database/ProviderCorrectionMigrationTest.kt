@@ -6,6 +6,9 @@ import kotlinx.coroutines.withTimeout
 import me.aquitano.health.api.dto.ReplayRequest
 import me.aquitano.health.application.IngestionMappingService
 import me.aquitano.health.application.ReplayService
+import me.aquitano.health.application.metric.common.QueryParams
+import me.aquitano.health.application.metric.steps.StepQueryService
+import me.aquitano.health.application.metric.steps.repository.CanonicalStepDerivationRepository
 import me.aquitano.health.domain.ReplayJobStatus
 import me.aquitano.health.infrastructure.repositories.IngestionRepository
 import me.aquitano.health.infrastructure.repositories.ProjectionWipeRepository
@@ -33,23 +36,31 @@ class ProviderCorrectionMigrationTest : PostgresIntegrationTest() {
                 statement.execute("""
                     INSERT INTO ingestion_batches (id, source_instance_id, source_payload_json, status,
                         ingested_at, received_at, processed_at, created_at, updated_at)
-                    SELECT id, 1, '{}', 'processed', now(), now(), now(), now(), now()
-                    FROM generate_series(1, 3) id
+                    SELECT id, 1, '{}', CASE WHEN id = 6 THEN 'failed' ELSE 'processed' END, now(), now(), now(), now(), now()
+                    FROM generate_series(1, 8) id
                 """.trimIndent())
                 statement.execute("""
                     INSERT INTO ingestion_records (id, batch_id, record_type, provider_record_id,
                         normalized_record_json, record_start_at, record_end_at, created_at)
-                    SELECT id, id, 'step_interval', CASE WHEN id = 2 THEN 'skipped' ELSE 'accepted' END,
-                        jsonb_build_object('type', 'step_interval', 'providerRecordId', CASE WHEN id = 2 THEN 'skipped' ELSE 'accepted' END,
-                            'startAt', CASE WHEN id = 2 THEN '2026-04-19T09:00:00Z' ELSE '2026-04-19T08:00:00Z' END,
-                            'endAt', '2026-04-19T10:00:00Z', 'steps', CASE WHEN id = 2 THEN 100 ELSE 200 END),
-                        CASE WHEN id = 2 THEN '2026-04-19T09:00:00Z'::timestamptz ELSE '2026-04-19T08:00:00Z'::timestamptz END,
-                        '2026-04-19T10:00:00Z', now()
-                    FROM generate_series(1, 3) id
+                    SELECT id, id, 'step_interval', provider_id,
+                        jsonb_build_object('type', 'step_interval', 'providerRecordId', provider_id,
+                            'startAt', start_at, 'endAt', end_at, 'steps', steps),
+                        start_at::timestamptz, end_at::timestamptz, now()
+                    FROM (VALUES
+                        (1, 'accepted', '2026-04-19T08:00:00Z', '2026-04-19T09:00:00Z', 100),
+                        (2, 'skipped', '2026-04-19T08:30:00Z', '2026-04-19T08:45:00Z', 50),
+                        (3, 'neighbor', '2026-04-19T09:00:00Z', '2026-04-19T10:00:00Z', 600),
+                        (4, 'accepted', '2026-04-19T08:00:00Z', '2026-04-19T09:30:00Z', 300),
+                        (5, 'accepted', '2026-04-19T08:00:00Z', '2026-04-19T09:30:00Z', 300),
+                        (6, 'accepted', '2026-04-19T08:00:00Z', '2026-04-19T09:30:00Z', 900),
+                        (7, 'neighbor', '2026-04-19T09:00:00Z', '2026-04-19T10:00:00Z', 600),
+                        (8, 'accepted', '2026-04-19T08:00:00Z', '2026-04-19T09:30:00Z', 300)
+                    ) raw(id, provider_id, start_at, end_at, steps)
                 """.trimIndent())
                 statement.execute("""
                     INSERT INTO step_samples (source_instance_id, ingestion_record_id, provider_record_id, start_at, end_at, steps, created_at)
-                    VALUES (1, 1, 'accepted', '2026-04-19T08:00:00Z', '2026-04-19T10:00:00Z', 200, now())
+                    VALUES (1, 1, 'accepted', '2026-04-19T08:00:00Z', '2026-04-19T09:00:00Z', 100, now()),
+                           (1, 3, 'neighbor', '2026-04-19T09:00:00Z', '2026-04-19T10:00:00Z', 600, now())
                 """.trimIndent())
             }
         }
@@ -64,12 +75,12 @@ class ProviderCorrectionMigrationTest : PostgresIntegrationTest() {
         val database = openDatabase(config)
         val decisions = PostgresTestDatabase.connection(config).use { connection ->
             connection.createStatement().use { statement ->
-                statement.executeQuery("SELECT google_step_projection_accepted FROM ingestion_records ORDER BY id").use { result ->
-                    buildList { while (result.next()) add(result.getBoolean(1)) }
+                statement.executeQuery("SELECT google_step_projection_accepted, google_step_allocation_priority_record_id FROM ingestion_records ORDER BY id").use { result ->
+                    buildList { while (result.next()) add((result.getObject(1) as Boolean?) to (result.getObject(2) as Int?)) }
                 }
             }
         }
-        assertEquals(listOf(true, false, true), decisions)
+        assertEquals(listOf(true to 1, false to 2, true to 3, true to 4, true to 4, null to null, true to 3, true to 4), decisions)
         val now = Instant.parse("2026-05-01T00:00:00Z")
         val replay = ReplayService(
             database, IngestionRepository(), IngestionMappingService(), metricWriteService(),
@@ -89,11 +100,14 @@ class ProviderCorrectionMigrationTest : PostgresIntegrationTest() {
             assertEquals(ReplayJobStatus.Completed, result.status, result.errorMessage)
             PostgresTestDatabase.connection(config).use { connection ->
                 connection.createStatement().use { statement ->
-                    statement.executeQuery("SELECT provider_record_id FROM step_samples").use { rows ->
-                        assertEquals(listOf("accepted"), buildList { while (rows.next()) add(rows.getString(1)) })
+                    statement.executeQuery("SELECT provider_record_id FROM step_samples ORDER BY provider_record_id").use { rows ->
+                        assertEquals(listOf("accepted", "neighbor"), buildList { while (rows.next()) add(rows.getString(1)) })
                     }
                 }
             }
+            val daily = StepQueryService(database, CanonicalStepDerivationRepository())
+                .listStepDailySummaries(QueryParams(mapOf("date" to "2026-04-19")), now)
+            assertEquals(600, daily.items.single().steps)
             assertEquals(originalPayloads, payloads())
         } finally {
             replay.stop()

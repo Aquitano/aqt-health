@@ -7,6 +7,12 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.buildJsonObject
 import me.aquitano.health.api.dto.*
+import me.aquitano.health.application.metric.common.QueryParams
+import me.aquitano.health.application.metric.dashboard.DashboardQueryService
+import me.aquitano.health.application.metric.scalar.ScalarSampleReadRepository
+import me.aquitano.health.application.metric.sleep.repository.SleepRepository
+import me.aquitano.health.application.metric.sleep.repository.CanonicalSleepSessionDerivationRepository
+import me.aquitano.health.application.metric.steps.StepQueryService
 import me.aquitano.health.application.metric.common.MetricWrite
 import me.aquitano.health.application.metric.steps.derived.CanonicalStepDerivationService
 import me.aquitano.health.application.metric.steps.repository.CanonicalStepDerivationRepository
@@ -127,16 +133,84 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
         val corrected = StepInterval("first", "2026-04-19T08:00:00Z", "2026-04-19T09:30:00Z", 300)
         fixture.ingest(listOf(corrected))
         fixture.ingest(listOf(corrected))
+        fixture.assertStepReadTotals(mapOf("2026-04-19" to 400))
         assertEquals(300, fixture.number("SELECT steps FROM step_samples WHERE provider_record_id = 'first'"))
         fixture.replay(ReplayRequest(scope = "all", wipe = true))
+        fixture.assertStepReadTotals(mapOf("2026-04-19" to 400))
         assertEquals(300, fixture.number("SELECT steps FROM step_samples WHERE provider_record_id = 'first'"))
         assertEquals(2, fixture.number("SELECT COUNT(*) FROM step_samples"))
         fixture.ingest(listOf(corrected.copy(steps = 100)))
         fixture.ingest(listOf(corrected))
         fixture.ingest(listOf(corrected))
         fixture.replay(ReplayRequest(scope = "all", wipe = true))
+        fixture.assertStepReadTotals(mapOf("2026-04-19" to 400))
         assertEquals(300, fixture.number("SELECT steps FROM step_samples WHERE provider_record_id = 'first'"))
         assertEquals(2, fixture.number("SELECT COUNT(*) FROM step_samples"))
+    }
+
+    @Test
+    fun unchangedGoogleVersionsKeepPriorityWhileChangedAndRevertedValuesAdvanceIt() = runBlocking {
+        val fixture = Fixture(provider = "google_health")
+        val neighbor = StepInterval("neighbor", "2026-04-19T09:00:00Z", "2026-04-19T10:00:00Z", 600)
+        fixture.ingest(listOf(StepInterval("moving", "2026-04-19T08:00:00Z", "2026-04-19T09:00:00Z", 100)))
+        fixture.ingest(listOf(neighbor))
+        fixture.ingest(listOf(StepInterval("moving", "2026-04-19T08:00:00Z", "2026-04-19T09:30:00Z", 300)))
+        val projectionId = fixture.number("SELECT id FROM step_samples WHERE provider_record_id = 'neighbor'")
+        fixture.ingest(listOf(neighbor))
+        fixture.appendFailed(neighbor.copy(steps = 900))
+        fixture.ingest(listOf(neighbor))
+        assertEquals(projectionId, fixture.number("SELECT id FROM step_samples WHERE provider_record_id = 'neighbor'"))
+        fixture.assertStepReadTotals(mapOf("2026-04-19" to 600))
+        fixture.replay(ReplayRequest(scope = "all"))
+        fixture.assertStepReadTotals(mapOf("2026-04-19" to 600))
+        fixture.replay(ReplayRequest(scope = "all", wipe = true))
+        fixture.assertStepReadTotals(mapOf("2026-04-19" to 600))
+
+        fixture.ingest(listOf(neighbor.copy(steps = 900)))
+        fixture.assertStepReadTotals(mapOf("2026-04-19" to 1100))
+        fixture.ingest(listOf(neighbor))
+        fixture.ingest(listOf(neighbor))
+        fixture.assertStepReadTotals(mapOf("2026-04-19" to 800))
+        fixture.replay(ReplayRequest(scope = "all", wipe = true))
+        fixture.assertStepReadTotals(mapOf("2026-04-19" to 800))
+    }
+
+    @Test
+    fun googleCorrectionKeepsTwoNeighborFragmentsInOneBucket() = runBlocking {
+        val fixture = Fixture(provider = "google_health")
+        fixture.ingest(listOf(StepInterval("neighbor", "2026-04-19T08:00:00Z", "2026-04-19T08:00:04Z", 8)))
+        fixture.ingest(listOf(StepInterval("moving", "2026-04-19T08:00:04Z", "2026-04-19T08:00:06Z", 10)))
+        fixture.ingest(listOf(StepInterval("moving", "2026-04-19T08:00:01Z", "2026-04-19T08:00:03Z", 10)))
+        repeat(2) {
+            fixture.assertStepReadTotals(mapOf("2026-04-19" to 14))
+            assertEquals(4, fixture.number("SELECT value::int FROM canonical_step_day_bucket_contributions c JOIN step_samples s ON s.id = c.step_sample_id WHERE s.provider_record_id = 'neighbor'"))
+            fixture.replay(ReplayRequest(scope = "all", wipe = true))
+        }
+    }
+
+    @Test
+    fun coveredGoogleNeighborDoesNotCountOnDatesWithNoSurvivingSpan() = runBlocking {
+        val fixture = Fixture(provider = "google_health")
+        fixture.ingest(listOf(StepInterval("neighbor", "2026-04-19T23:00:00Z", "2026-04-21T01:00:00Z", 2600)))
+        fixture.ingest(listOf(StepInterval("moving", "2026-04-21T01:00:00Z", "2026-04-21T02:00:00Z", 2400)))
+        fixture.ingest(listOf(StepInterval("moving", "2026-04-20T00:00:00Z", "2026-04-21T00:00:00Z", 2400)))
+        repeat(2) {
+            fixture.assertStepReadTotals(mapOf("2026-04-19" to 100, "2026-04-20" to 2400, "2026-04-21" to 100))
+            assertEquals(1, fixture.number("SELECT sample_count FROM step_daily_summaries WHERE date = '2026-04-20'"))
+            assertEquals(1, fixture.number("SELECT COUNT(*) FROM canonical_step_samples WHERE date = '2026-04-20'"))
+            fixture.replay(ReplayRequest(scope = "all", wipe = true))
+        }
+    }
+
+    @Test
+    fun subsecondGoogleCorrectionAgreesAcrossMidnightAndReplay() = runBlocking {
+        val fixture = Fixture(provider = "google_health")
+        fixture.ingest(listOf(StepInterval("neighbor", "2026-04-19T23:59:59.500Z", "2026-04-20T00:00:00.500Z", 8)))
+        fixture.ingest(listOf(StepInterval("moving", "2026-04-20T00:00:00.500Z", "2026-04-20T00:00:01Z", 6)))
+        fixture.ingest(listOf(StepInterval("moving", "2026-04-19T23:59:59.750Z", "2026-04-20T00:00:00.250Z", 6)))
+        fixture.assertStepReadTotals(mapOf("2026-04-19" to 5, "2026-04-20" to 5))
+        fixture.replay(ReplayRequest(scope = "all", wipe = true))
+        fixture.assertStepReadTotals(mapOf("2026-04-19" to 5, "2026-04-20" to 5))
     }
 
     @Test
@@ -288,6 +362,25 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
             }
             assertEquals(ReplayJobStatus.Completed, result.status, result.errorMessage)
             return result
+        }
+
+        suspend fun assertStepReadTotals(expected: Map<String, Int>) {
+            val from = expected.keys.min()
+            val to = expected.keys.max()
+            val params = QueryParams(mapOf("fromDate" to from, "toDate" to to))
+            val canonical = CanonicalStepDerivationRepository()
+            val daily = StepQueryService(database, canonical).listStepDailySummaries(params, now)
+            assertEquals(expected, daily.items.associate { it.date to it.steps })
+            expected.forEach { (day, steps) ->
+                assertEquals(steps, number("SELECT steps FROM step_daily_summaries WHERE date = '$day'"))
+            }
+            val dashboard = DashboardQueryService(database, canonical, SleepRepository(), ScalarSampleReadRepository())
+                .dashboardSummary(params, now)
+            assertEquals(expected.values.sum(), dashboard.steps.steps)
+            val days = java.time.temporal.ChronoUnit.DAYS.between(LocalDate.parse(from), LocalDate.parse(to)) + 1
+            val trends = TrendQueryService(database, canonical, CanonicalSleepSessionDerivationRepository(), ScalarSampleReadRepository())
+                .dashboardTrends(QueryParams(mapOf("toDate" to to, "periodDays" to days.toString())), now)
+            assertEquals(expected.values.sum(), trends.steps!!.currentTotal)
         }
 
         fun projectionIds(): List<Int> = projectionTables.map { number("SELECT id FROM $it") }

@@ -17,6 +17,7 @@ data class PreparedMetricWrites(
     val acceptedGoogleStepIds: Set<Int> = emptySet(),
     val googleStepRecordIds: Set<Int> = emptySet(),
     val googleStepDecisions: Map<Int, Boolean> = emptyMap(),
+    val googleStepPriorities: Map<Int, Int> = emptyMap(),
 )
 
 /**
@@ -51,23 +52,33 @@ class ProviderRecordCorrections {
         val eligibleIds = hashSetOf<Int>()
         val acceptedGoogleStepIds = hashSetOf<Int>()
         val googleStepDecisions = mutableMapOf<Int, Boolean>()
+        val googleStepPriorities = mutableMapOf<Int, Int>()
         identified.chunked(CHUNK_SIZE).forEach { chunk ->
             val ids = chunk.joinToString(",") { it.ingestionRecordId.toString() }
-            val priorStepDecision = if (googleStepIds.isNotEmpty()) {
-                """(SELECT older.google_step_projection_accepted FROM ingestion_records older
+            val priorStep = if (googleStepIds.isNotEmpty()) {
+                """LEFT JOIN LATERAL (
+                    SELECT older.google_step_projection_accepted AS accepted,
+                           older.google_step_allocation_priority_record_id AS priority,
+                           older.normalized_record_json = incoming.normalized_record_json AS unchanged
+                    FROM ingestion_records older
                     JOIN ingestion_batches batch ON batch.id = older.batch_id
                     WHERE older.provider_record_id = incoming.provider_record_id
                       AND older.record_type = 'step_interval'
                       AND older.id < incoming.id
                       AND batch.source_instance_id = $sourceInstanceId
                       AND batch.status = 'processed'
-                    ORDER BY older.id DESC LIMIT 1)"""
-            } else "NULL::boolean"
+                    ORDER BY older.id DESC LIMIT 1
+                ) previous_step ON TRUE"""
+            } else "LEFT JOIN (SELECT NULL::boolean AS accepted, NULL::integer AS priority, FALSE AS unchanged) previous_step ON TRUE"
             transaction.exec(
                 """
                 SELECT incoming.id, incoming.google_step_projection_accepted AS step_accepted,
-                       $priorStepDecision AS previous_step_accepted
+                       previous_step.accepted AS previous_step_accepted,
+                       COALESCE(incoming.google_step_allocation_priority_record_id,
+                           CASE WHEN previous_step.accepted AND previous_step.unchanged THEN previous_step.priority END,
+                           incoming.id) AS step_priority
                 FROM ingestion_records incoming
+                $priorStep
                 WHERE incoming.id IN ($ids)
                   AND NOT EXISTS (
                     SELECT 1 FROM ingestion_records newer
@@ -86,6 +97,7 @@ class ProviderRecordCorrections {
                     if (id in googleStepIds) {
                         val decision = rows.getObject("step_accepted") as Boolean?
                         if (decision == false) continue
+                        googleStepPriorities[id] = rows.getInt("step_priority")
                         if (decision == true || rows.getBoolean("previous_step_accepted")) {
                             acceptedGoogleStepIds += id
                         }
@@ -159,18 +171,20 @@ class ProviderRecordCorrections {
             acceptedGoogleStepIds,
             googleStepIds,
             googleStepDecisions,
+            googleStepPriorities,
         )
     }
 
-    fun recordGoogleStepDecisions(decisions: Map<Int, Boolean>) {
-        decisions.entries.groupBy { it.value }.forEach { (accepted, entries) ->
-            entries.chunked(CHUNK_SIZE).forEach { chunk ->
-                val ids = chunk.joinToString(",") { it.key.toString() }
-                TransactionManager.current().exec(
-                    "UPDATE ingestion_records SET google_step_projection_accepted = $accepted " +
-                        "WHERE id IN ($ids) AND google_step_projection_accepted IS NULL"
-                )
-            }
+    fun recordGoogleStepDecisions(decisions: Map<Int, Boolean>, priorities: Map<Int, Int>) {
+        decisions.entries.chunked(CHUNK_SIZE).forEach { chunk ->
+            val values = chunk.joinToString(",") { (id, accepted) -> "($id, $accepted, ${priorities.getValue(id)})" }
+            TransactionManager.current().exec(
+                """UPDATE ingestion_records record
+                   SET google_step_projection_accepted = decision.accepted,
+                       google_step_allocation_priority_record_id = decision.priority
+                   FROM (VALUES $values) AS decision(id, accepted, priority)
+                   WHERE record.id = decision.id AND record.google_step_projection_accepted IS NULL"""
+            )
         }
     }
 }
