@@ -2,7 +2,8 @@ package me.aquitano.health.application.metric.common.repository
 
 import me.aquitano.health.application.metric.common.MetricWrite
 import me.aquitano.health.domain.RecordTypes
-import me.aquitano.health.domain.ScalarMetricRegistry
+import me.aquitano.health.infrastructure.repositories.sameScalarIdentity
+import me.aquitano.health.infrastructure.repositories.scalarContext
 import me.aquitano.health.shared.normalizeProviderCode
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import java.time.Instant
@@ -177,23 +178,6 @@ class ProviderRecordCorrections {
         }
     }
 }
-
-private fun sameScalarIdentity(left: String, right: String): String =
-    """($right.record_type <> 'scalar' OR (
-        $left.normalized_record_json->>'metricType' = $right.normalized_record_json->>'metricType'
-        AND ${scalarContext(left)} = ${scalarContext(right)}
-        AND COALESCE($left.normalized_record_json->>'segment', '') = COALESCE($right.normalized_record_json->>'segment', '')
-    ))"""
-
-// Defaults mirror mapScalarSample; absent context means "unknown" for context-bearing metrics.
-private val contextualMetricTypes = ScalarMetricRegistry.descriptors
-    .filter { it.allowedContexts != null }
-    .joinToString(",") { "'${it.metricType.replace("'", "''")}'" }
-
-private fun scalarContext(alias: String): String =
-    "COALESCE($alias.normalized_record_json->>'context', " +
-        "CASE WHEN $alias.normalized_record_json->>'metricType' IN ($contextualMetricTypes) " +
-        "THEN 'unknown' ELSE '' END)"
 
 private data class Projection(val table: String, val startColumn: String, val endColumn: String? = null)
 
