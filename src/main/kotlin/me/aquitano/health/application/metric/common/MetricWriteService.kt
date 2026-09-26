@@ -34,8 +34,9 @@ class MetricWriteService(
     private val cardiovascularWriteRepository: CardiovascularWriteRepository,
     private val scalarSampleWriteRepository: ScalarSampleWriteRepository,
     private val derivedRebuildRegistry: DerivedRebuildModuleRegistry,
-    private val corrections: ProviderRecordCorrections = ProviderRecordCorrections(),
 ) {
+    private val corrections = ProviderRecordCorrections()
+
     /**
      * Writes a whole batch, bulk-inserting scalar samples in chunked multi-row statements
      * instead of one round trip per sample. Structural records (sleep, steps, ...) keep the
