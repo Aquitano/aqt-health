@@ -1,7 +1,6 @@
+import Link from "next/link";
 import { DashboardCards } from "@/components/DashboardCards";
-import { DataSection } from "@/components/DataSection";
 import { DateRangeForm } from "@/components/DateRangeForm";
-import { DebugDataPanel } from "@/components/DebugDataPanel";
 import { DayOverview } from "@/components/DayOverview";
 import { ErrorNotice } from "@/components/ErrorNotice";
 import { HealthDataVisualizations } from "@/components/HealthDataVisualizations";
@@ -9,19 +8,8 @@ import { LoadingPulse } from "@/components/motion/LoadingPulse";
 import { MetricHighlights } from "@/components/MetricHighlights";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBar } from "@/components/StatusBar";
-import { ActivitySummariesTable } from "@/components/tables/ActivitySummariesTable";
-import { BloodPressureTable } from "@/components/tables/BloodPressureTable";
-import { BodyMeasurementsTable } from "@/components/tables/BodyMeasurementsTable";
-import { CardiovascularTable } from "@/components/tables/CardiovascularTable";
-import { DailyStepsTable } from "@/components/tables/DailyStepsTable";
-import { ExtendedBodyMeasurementsTable } from "@/components/tables/ExtendedBodyMeasurementsTable";
-import { HeartRateTable } from "@/components/tables/HeartRateTable";
-import { HrvTable } from "@/components/tables/HrvTable";
-import { RespiratoryRateTable } from "@/components/tables/RespiratoryRateTable";
-import { SleepSessionsTable } from "@/components/tables/SleepSessionsTable";
-import { SleepSummariesTable } from "@/components/tables/SleepSummariesTable";
 import { getHealthDataPageSources } from "@/lib/aqtHealthApi";
-import { addUtcDays, parseDateRange } from "@/lib/dates";
+import { addUtcDays, parseDateRange, startOfDayInstant } from "@/lib/dates";
 import type { HealthDataPageSources, ScalarSample } from "@/lib/types";
 import { Suspense } from "react";
 
@@ -59,6 +47,7 @@ export default async function HealthDataPage({ searchParams }: PageProps) {
           sources={sources}
           fromDate={range.fromDate}
           toDate={range.toDate}
+          timezone={range.timezone}
         />
       </Suspense>
 
@@ -71,9 +60,7 @@ export default async function HealthDataPage({ searchParams }: PageProps) {
         />
       </Suspense>
 
-      <Suspense fallback={<LoadingPulse label="Loading raw data…" />}>
-        <DebugSection sources={sources} />
-      </Suspense>
+      <p><Link href={`/health-data/raw?${new URLSearchParams({ fromDate: range.fromDate, toDate: range.toDate, timezone: range.timezone })}`} prefetch={false}>Browse raw data</Link></p>
     </>
   );
 }
@@ -82,10 +69,12 @@ async function OverviewSection({
   sources,
   fromDate,
   toDate,
+  timezone,
 }: {
   sources: HealthDataPageSources;
   fromDate: string;
   toDate: string;
+  timezone: string;
 }) {
   const [
     health,
@@ -112,7 +101,8 @@ async function OverviewSection({
   ]);
 
   const bodyMeasurementItems = bodyMeasurements.ok ? bodyMeasurements.data.items : [];
-  const weightTrendItems = bodyMeasurementItems.filter((item) => isWeightTrendItem(item, toDate));
+  const weightFrom = Date.parse(startOfDayInstant(addUtcDays(toDate, -6), timezone));
+  const weightTrendItems = bodyMeasurementItems.filter((item) => isWeightTrendItem(item, weightFrom));
   const weightDelta = weightChange(weightTrendItems);
 
   return (
@@ -181,101 +171,42 @@ async function VisualizationsSection({
     sources.sleepSummaries,
   ]);
 
+  const responses = [
+    activitySummaries, bodyMeasurements, dailySteps, hrvSamples,
+    sleepNights, respiratoryRates, sleepSummaries,
+  ];
+  const limited = responses.some((response) => response.ok && Boolean(response.data.meta.nextCursor))
+    || (bodyMeasurements.ok && bodyMeasurements.data.meta.count >= bodyMeasurements.data.meta.limit);
+
   return (
-    <HealthDataVisualizations
-      activitySummaries={activitySummaries.ok ? activitySummaries.data : undefined}
-      bodyMeasurements={bodyMeasurements.ok ? bodyMeasurements.data : undefined}
-      dailySteps={dailySteps.ok ? dailySteps.data : undefined}
-      heartRateDaily={heartRateDaily}
-      hrvSamples={hrvSamples.ok ? hrvSamples.data : undefined}
-      sleepNights={sleepNights.ok ? sleepNights.data : undefined}
-      respiratoryRates={respiratoryRates.ok ? respiratoryRates.data : undefined}
-      sleepSummaries={sleepSummaries.ok ? sleepSummaries.data : undefined}
-      fromDate={fromDate}
-      toDate={toDate}
-      timezone={timezone}
-    />
+    <>
+      {responses.map((response, index) =>
+        response.ok ? null : <ErrorNotice key={index} result={response} />,
+      )}
+      {limited ? (
+        <div className="notice warning">
+          Some charts show a limited set of samples. Use Trends for complete daily aggregates,
+          or narrow the date range.
+        </div>
+      ) : null}
+      <HealthDataVisualizations
+        activitySummaries={activitySummaries.ok ? activitySummaries.data : undefined}
+        bodyMeasurements={bodyMeasurements.ok ? bodyMeasurements.data : undefined}
+        dailySteps={dailySteps.ok ? dailySteps.data : undefined}
+        heartRateDaily={heartRateDaily}
+        hrvSamples={hrvSamples.ok ? hrvSamples.data : undefined}
+        sleepNights={sleepNights.ok ? sleepNights.data : undefined}
+        respiratoryRates={respiratoryRates.ok ? respiratoryRates.data : undefined}
+        sleepSummaries={sleepSummaries.ok ? sleepSummaries.data : undefined}
+        fromDate={fromDate}
+        toDate={toDate}
+        timezone={timezone}
+      />
+    </>
   );
 }
 
-async function DebugSection({ sources }: { sources: HealthDataPageSources }) {
-  const [
-    dailySteps,
-    activitySummaries,
-    bodyMeasurements,
-    latestHeartRate,
-    sleepNights,
-    sleepSummaries,
-    respiratoryRates,
-    hrvSamples,
-    bloodPressure,
-    cardiovascular,
-    extendedBodyMeasurements,
-  ] = await Promise.all([
-    sources.dailySteps,
-    sources.activitySummaries,
-    sources.bodyMeasurements,
-    sources.latestHeartRate,
-    sources.sleepNights,
-    sources.sleepSummaries,
-    sources.respiratoryRates,
-    sources.hrvSamples,
-    sources.bloodPressure,
-    sources.cardiovascular,
-    sources.extendedBodyMeasurements,
-  ]);
-
-  return (
-    <DebugDataPanel>
-      <DataSection title="Daily steps" result={dailySteps}>
-        {(response) => <DailyStepsTable items={response.items} />}
-      </DataSection>
-
-      <DataSection title="Activity summaries" result={activitySummaries}>
-        {(response) => <ActivitySummariesTable items={response.items} />}
-      </DataSection>
-
-      <DataSection title="Body measurements" result={bodyMeasurements}>
-        {(response) => <BodyMeasurementsTable items={response.items} />}
-      </DataSection>
-
-      <DataSection title="Latest heart rate" result={latestHeartRate}>
-        {(response) => <HeartRateTable items={response.items} />}
-      </DataSection>
-
-      <DataSection title="Sleep nights" result={sleepNights}>
-        {(response) => <SleepSessionsTable items={response.items.map((night) => night.session)} />}
-      </DataSection>
-
-      <DataSection title="Sleep summaries" result={sleepSummaries}>
-        {(response) => <SleepSummariesTable items={response.items} />}
-      </DataSection>
-
-      <DataSection title="Respiratory rate" result={respiratoryRates}>
-        {(response) => <RespiratoryRateTable items={response.items} />}
-      </DataSection>
-
-      <DataSection title="HRV" result={hrvSamples}>
-        {(response) => <HrvTable items={response.items} />}
-      </DataSection>
-
-      <DataSection title="Blood pressure" result={bloodPressure}>
-        {(response) => <BloodPressureTable items={response.items} />}
-      </DataSection>
-
-      <DataSection title="Cardiovascular" result={cardiovascular}>
-        {(response) => <CardiovascularTable items={response.items} />}
-      </DataSection>
-
-      <DataSection title="Extended body metrics" result={extendedBodyMeasurements}>
-        {(response) => <ExtendedBodyMeasurementsTable items={response.items} />}
-      </DataSection>
-    </DebugDataPanel>
-  );
-}
-
-function isWeightTrendItem(item: ScalarSample, toDate: string): boolean {
-  const from = Date.parse(`${addUtcDays(toDate, -6)}T00:00:00.000Z`);
+function isWeightTrendItem(item: ScalarSample, from: number): boolean {
   const measuredAt = Date.parse(item.measuredAt);
   return item.metricType === "weight" && !Number.isNaN(measuredAt) && measuredAt >= from;
 }

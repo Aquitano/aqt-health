@@ -23,8 +23,8 @@ export function parseDateRange(values: {
   timezone?: string | string[];
 }): DateRange {
   const timezoneInput = first(values.timezone);
-  const timezone =
-    timezoneInput != null && isTimezoneLike(timezoneInput) ? timezoneInput : "UTC";
+  const parsedTimezone = timezoneInput == null ? "UTC" : parseTimezone(timezoneInput);
+  const timezone = parsedTimezone ?? "UTC";
   // Resolve the default range in the requested timezone so an unset range matches the local dates
   // the picker produces, rather than UTC "today" (off-by-one for users east/west of UTC).
   const fallback = defaultDateRange(new Date(), timezone);
@@ -34,7 +34,7 @@ export function parseDateRange(values: {
   if (
     !isDateOnly(fromDate) ||
     !isDateOnly(toDate) ||
-    (timezoneInput != null && !isTimezoneLike(timezoneInput))
+    parsedTimezone === undefined
   ) {
     return {
       ...fallback,
@@ -74,7 +74,9 @@ export function first(value?: string | string[]): string | undefined {
 }
 
 function isDateOnly(value: string): boolean {
-  return dateOnlyPattern.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`));
+  if (!dateOnlyPattern.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
 function toDateInputValue(value: Date): string {
@@ -95,6 +97,27 @@ function dateInputValueInTimeZone(value: Date, timeZone: string): string {
   }
 }
 
-function isTimezoneLike(value: string): boolean {
-  return /^[A-Za-z_]+(?:\/[A-Za-z0-9_+\-]+)+$|^UTC$/.test(value);
+function parseTimezone(value: string): string | undefined {
+  try {
+    return new Intl.DateTimeFormat("en", { timeZone: value }).resolvedOptions().timeZone;
+  } catch {
+    return undefined;
+  }
+}
+
+/** First instant of the calendar date, including days with a midnight DST change. */
+export function startOfDayInstant(date: string, timezone: string): string {
+  if (timezone === "UTC") return dateOnlyToUtcInstant(date);
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit",
+  });
+  const center = Date.parse(dateOnlyToUtcInstant(date));
+  let low = center - 36 * 3_600_000;
+  let high = center + 36 * 3_600_000;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (formatter.format(middle) < date) low = middle + 1;
+    else high = middle;
+  }
+  return new Date(low).toISOString();
 }

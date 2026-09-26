@@ -37,19 +37,6 @@ export function toProviderCode(value: string): ProviderCode | null {
 }
 
 const bodyMetricTypes = ["weight", "body_fat", "muscle", "water", "visceral_fat"];
-const cardiovascularMetricTypes = ["pulse_wave_velocity", "vascular_age", "standing_heart_rate"];
-const extendedBodyMetricTypes = [
-  "fat_mass",
-  "fat_free_mass",
-  "bone_mass",
-  "intracellular_water",
-  "extracellular_water",
-  "basal_metabolic_rate",
-  "segmental_fat_mass",
-  "segmental_muscle_mass",
-  "segmental_fat_free_mass",
-];
-
 const defaultBaseUrl = "http://localhost:8080";
 const backendRequestTimeoutMs = 8_000;
 const longRunningBackendRequestTimeoutMs = 300_000;
@@ -231,17 +218,6 @@ export const aqtHealthClient = {
       }),
     ),
 
-  listHeartRateSamples: (query: ScalarSamplesQuery) =>
-    listScalarMetric("heart_rate", query),
-
-  getScalarSummary: (metricType: string, query: GetQuery<"/api/v2/metrics/{metricType}/summary">) =>
-    call<ApiSchema<"ScalarSummaryResponse">>((headers) =>
-      rawClient.GET("/api/v2/metrics/{metricType}/summary", {
-        headers,
-        params: { path: { metricType }, query },
-      }),
-    ),
-
   getScalarDailySummaries: (
     metricType: string,
     query: GetQuery<"/api/v2/metrics/{metricType}/daily">,
@@ -283,9 +259,6 @@ export const aqtHealthClient = {
       }),
     ),
 
-  getLatestBodyMeasurement: (query: ScalarSamplesQuery) =>
-    listScalarMetric("weight", { ...query, latest: true }),
-
   listBodyMeasurements: (query: ScalarSamplesQuery) =>
     listScalarMetrics(bodyMetricTypes, query),
 
@@ -321,11 +294,12 @@ export const aqtHealthClient = {
       }),
     ),
 
-  listCardiovascular: (query: ScalarSamplesQuery) =>
-    listScalarMetrics(cardiovascularMetricTypes, query),
+  listScalarSamples: listScalarMetric,
 
-  listExtendedBodyMeasurements: (query: ScalarSamplesQuery) =>
-    listScalarMetrics(extendedBodyMetricTypes, query),
+  listSleepSessions: (query: GetQuery<"/api/v2/sleep/sessions">) =>
+    call<ApiSchema<"SleepSessionsResponse">>((headers) =>
+      rawClient.GET("/api/v2/sleep/sessions", { headers, params: { query } }),
+    ),
 };
 
 type ScalarSamplesQuery = GetQuery<"/api/v2/metrics/{metricType}">;
