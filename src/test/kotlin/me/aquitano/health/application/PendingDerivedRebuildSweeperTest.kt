@@ -16,6 +16,47 @@ import kotlin.test.assertEquals
 
 class PendingDerivedRebuildSweeperTest : PostgresIntegrationTest() {
     @Test
+    fun failingDateDoesNotDelayOtherDatesOrSources() = runBlocking {
+        val database = openDatabase(PostgresTestDatabase.config())
+        val repository = PendingDerivedRebuildRepository(database)
+        val now = Instant.parse("2026-06-01T10:00:00Z")
+        val failingDate = LocalDate.parse("2026-05-30")
+        val healthyDate = failingDate.plusDays(1)
+        val sources = suspendDbTransaction(db = database) {
+            val support = SupportRepository(database)
+            listOf("first", "second").map { instance ->
+                support.resolveOrCreateSourceInstanceInTransaction("health_connect", instance, now).id
+            }.also { sourceIds ->
+                repository.enqueueInTransaction(
+                    DerivedRebuildRequest(sourceIds.first(), mapOf(DerivedKind.STEP_SUMMARY to setOf(failingDate))),
+                    now = now.minusSeconds(1),
+                )
+                sourceIds.forEach { sourceId ->
+                    repository.enqueueInTransaction(
+                        DerivedRebuildRequest(sourceId, mapOf(DerivedKind.STEP_SUMMARY to setOf(healthyDate))),
+                        now = now,
+                    )
+                }
+            }
+        }
+        val rebuilt = mutableListOf<DerivedRebuildRequest>()
+        val executor = object : DerivedRebuildExecutor {
+            override suspend fun rebuild(request: DerivedRebuildRequest, computedAt: Instant) {
+                check(failingDate !in request[DerivedKind.STEP_SUMMARY]) { "Date cannot be rebuilt" }
+                rebuilt += request
+            }
+        }
+        val sweeper = PendingDerivedRebuildSweeper(repository, executor, UtcClock())
+
+        assertEquals(2, sweeper.sweep(now))
+        assertEquals(sources.toSet(), rebuilt.map { it.sourceInstanceId }.toSet())
+        assertEquals(setOf(healthyDate), rebuilt.flatMap { it[DerivedKind.STEP_SUMMARY] }.toSet())
+        val remaining = repository.due(now.plusSeconds(60), 10).single()
+        assertEquals(failingDate, remaining.affectedDate)
+        assertEquals(1, remaining.attempts)
+    }
+
+    @Test
     fun staleWorkerCannotAcknowledgeOrDelayNewerWork() = runBlocking {
         val database = openDatabase(PostgresTestDatabase.config())
         val repository = PendingDerivedRebuildRepository(database)

@@ -49,32 +49,33 @@ class PendingDerivedRebuildSweeper(
     suspend fun sweep(now: Instant, limit: Int = DEFAULT_SWEEP_LIMIT): Int {
         val due = repository.due(now, limit)
         if (due.isEmpty()) return 0
-        val requests = due.groupBy { it.sourceInstanceId }.map { (sourceInstanceId, rows) ->
-            DerivedRebuildRequest(
-                sourceInstanceId = sourceInstanceId,
-                affectedDates = rows.groupBy({ it.derivedKind }, { it.affectedDate }).mapValues { it.value.toSet() },
-            )
+        var rebuilt = 0
+        due.groupBy { it.derivedKind to it.affectedDate }.forEach { (key, rows) ->
+            val (kind, date) = key
+            val requests = rows.map { row ->
+                DerivedRebuildRequest(row.sourceInstanceId, mapOf(kind to setOf(date)))
+            }
+            try {
+                derivedRebuildExecutor.rebuildAll(requests, clock.now())
+                repository.deleteCompleted(rows)
+                rebuilt += rows.size
+                sweeperLogger.infoWithContext("pending_derived_rebuild_repaired", "dateCount" to rows.size)
+            } catch (exception: Exception) {
+                if (exception is CancellationException) throw exception
+                repository.markAttemptFailed(
+                    records = rows,
+                    nextAttemptAt = { attempts -> PendingDerivedRebuildPolicy.nextAttemptAfterFailure(now, attempts) },
+                    error = exception.message ?: "Derived rebuild failed",
+                    now = now,
+                )
+                sweeperLogger.warnWithContext(
+                    "pending_derived_rebuild_retry_failed",
+                    "dateCount" to rows.size,
+                    throwable = exception,
+                )
+            }
         }
-        return try {
-            derivedRebuildExecutor.rebuildAll(requests, clock.now())
-            repository.deleteCompleted(due)
-            sweeperLogger.infoWithContext("pending_derived_rebuild_repaired", "dateCount" to due.size)
-            due.size
-        } catch (exception: Exception) {
-            if (exception is CancellationException) throw exception
-            repository.markAttemptFailed(
-                records = due,
-                nextAttemptAt = { attempts -> PendingDerivedRebuildPolicy.nextAttemptAfterFailure(now, attempts) },
-                error = exception.message ?: "Derived rebuild failed",
-                now = now,
-            )
-            sweeperLogger.warnWithContext(
-                "pending_derived_rebuild_retry_failed",
-                "dateCount" to due.size,
-                throwable = exception,
-            )
-            0
-        }
+        return rebuilt
     }
 }
 
