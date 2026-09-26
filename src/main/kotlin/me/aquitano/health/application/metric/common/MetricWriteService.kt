@@ -1,6 +1,7 @@
 package me.aquitano.health.application.metric.common
 
 import me.aquitano.health.application.DerivedRebuildModuleRegistry
+import me.aquitano.health.application.metric.common.repository.ProviderRecordCorrections
 import me.aquitano.health.application.metric.activity.repository.ActivitySummaryWriteRepository
 import me.aquitano.health.application.metric.cardiovascular.repository.CardiovascularWriteRepository
 import me.aquitano.health.application.metric.scalar.ScalarSampleWrite
@@ -33,6 +34,7 @@ class MetricWriteService(
     private val cardiovascularWriteRepository: CardiovascularWriteRepository,
     private val scalarSampleWriteRepository: ScalarSampleWriteRepository,
     private val derivedRebuildRegistry: DerivedRebuildModuleRegistry,
+    private val corrections: ProviderRecordCorrections = ProviderRecordCorrections(),
 ) {
     /**
      * Writes a whole batch, bulk-inserting scalar samples in chunked multi-row statements
@@ -45,17 +47,25 @@ class MetricWriteService(
         writes: List<MetricWrite>,
         now: Instant,
     ): MetricWriteResult {
+        val prepared = corrections.prepare(sourceInstanceId, writes)
         var created = MetricCreatedCounts()
-        var duplicateSkipped = 0
+        var duplicateSkipped = writes.size - prepared.writes.size
         val affectedDates = mutableMapOf<DerivedKind, MutableSet<LocalDate>>()
+        prepared.replacedSpans.forEach { previous ->
+            derivedRebuildRegistry.affectedDatesFor(previous.recordType, previous.startAt, previous.endAt)
+                .forEach { (kind, dates) -> affectedDates.getOrPut(kind) { linkedSetOf() }.addAll(dates) }
+        }
         val scalarWrites = mutableListOf<ScalarSampleWrite>()
 
-        writes.forEach { entry ->
+        prepared.writes.forEach { entry ->
             if (entry.record is ScalarSampleRecord) {
                 scalarWrites += ScalarSampleWrite(entry.ingestionRecordId, entry.record)
                 return@forEach
             }
-            val result = write(provider, sourceInstanceId, entry.ingestionRecordId, entry.record, now)
+            val result = writePrepared(
+                provider, sourceInstanceId, entry.ingestionRecordId, entry.record, now,
+                replacing = entry.ingestionRecordId in prepared.replacedRecordIds,
+            )
             created += result.created
             duplicateSkipped += result.duplicateSkipped
             result.affectedDates.forEach { (kind, dates) ->
@@ -91,6 +101,15 @@ class MetricWriteService(
         ingestionRecordId: Int,
         record: HealthRecord,
         now: Instant,
+    ): MetricWriteResult = writeAll(provider, sourceInstanceId, listOf(MetricWrite(ingestionRecordId, record)), now)
+
+    private fun writePrepared(
+        provider: String,
+        sourceInstanceId: Int,
+        ingestionRecordId: Int,
+        record: HealthRecord,
+        now: Instant,
+        replacing: Boolean,
     ): MetricWriteResult =
         when (record) {
             is StepIntervalRecord -> writeStepInterval(
@@ -99,6 +118,7 @@ class MetricWriteService(
                 ingestionRecordId,
                 record,
                 now,
+                replacing,
             )
 
             is SleepSessionRecord -> writeSleepSession(
@@ -143,6 +163,7 @@ class MetricWriteService(
         ingestionRecordId: Int,
         record: StepIntervalRecord,
         now: Instant,
+        replacing: Boolean,
     ): MetricWriteResult {
         val inserted = stepWriteRepository.insertStepSample(
             provider,
@@ -150,6 +171,7 @@ class MetricWriteService(
             ingestionRecordId,
             record,
             now,
+            replacing,
         )
         return if (inserted) {
             MetricWriteResult(

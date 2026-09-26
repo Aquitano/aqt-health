@@ -22,8 +22,9 @@ class StepWriteRepository {
         ingestionRecordId: Int,
         record: StepIntervalRecord,
         now: Instant,
+        replacing: Boolean = false,
     ): Boolean {
-        if (normalizeProviderCode(provider) == GOOGLE_HEALTH_PROVIDER_CODE && stepSampleOverlaps(
+        if (!replacing && normalizeProviderCode(provider) == GOOGLE_HEALTH_PROVIDER_CODE && stepSampleOverlaps(
                 sourceInstanceId,
                 record,
             )
