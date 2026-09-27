@@ -16,6 +16,8 @@ import { formatStatus } from "./labels";
 import { proxyFetch } from "./proxyFetch";
 import styles from "../ProviderSyncPanel.module.css";
 
+type AccountAction = "disconnect" | "reconnect" | "scheduled" | "run";
+
 export function ProviderAccountRow({
   account,
   descriptor,
@@ -26,19 +28,17 @@ export function ProviderAccountRow({
   scheduledConfig?: ScheduledSyncConfig;
 }) {
   const router = useRouter();
-  const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<AccountAction | null>(
+    null
+  );
   const [error, setError] = useState<string | null>(null);
   const [scheduledResult, setScheduledResult] =
     useState<ApiResult<ScheduledSyncRunResponse> | null>(null);
   const base = `/providers/${encodeURIComponent(
     descriptor.providerCode
   )}/accounts/${encodeURIComponent(account.providerInstanceId)}`;
-  const disconnectPending = pendingAction === "disconnect";
-  const reconnectPending = pendingAction === "reconnect";
-  const scheduledPending = pendingAction === "scheduled";
-  const scheduledRunPending = pendingAction === "run";
 
-  async function perform(action: string, execute: () => Promise<void>) {
+  async function perform(action: AccountAction, execute: () => Promise<void>) {
     if (pendingAction) return;
     setPendingAction(action);
     setError(null);
@@ -177,7 +177,7 @@ export function ProviderAccountRow({
               onClick={() => onToggleScheduled(!scheduledConfig?.enabled)}
               type="button"
             >
-              {scheduledPending
+              {pendingAction === "scheduled"
                 ? "Saving..."
                 : scheduledConfig?.enabled
                 ? "Pause auto"
@@ -189,7 +189,7 @@ export function ProviderAccountRow({
               onClick={() => onRunScheduled()}
               type="button"
             >
-              {scheduledRunPending ? "Running..." : "Run auto now"}
+              {pendingAction === "run" ? "Running..." : "Run auto now"}
             </button>
           </>
         ) : null}
@@ -200,7 +200,7 @@ export function ProviderAccountRow({
             onClick={() => onAccountAction("disconnect")}
             type="button"
           >
-            {disconnectPending ? "Disconnecting..." : "Disconnect"}
+            {pendingAction === "disconnect" ? "Disconnecting..." : "Disconnect"}
           </button>
         ) : null}
         {account.status === "needs_reauth" ||
@@ -211,7 +211,7 @@ export function ProviderAccountRow({
             onClick={() => onAccountAction("reconnect")}
             type="button"
           >
-            {reconnectPending ? "Starting..." : "Reconnect"}
+            {pendingAction === "reconnect" ? "Starting..." : "Reconnect"}
           </button>
         ) : null}
       </div>

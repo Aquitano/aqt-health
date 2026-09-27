@@ -11,8 +11,6 @@ const bodyMetricConfig: Record<string, { label: string; color: string }> = {
   visceral_fat: { label: "Visceral fat", color: "var(--hue-visceral-fat)" },
 };
 
-const bodyMetricOrder = ["weight", "body_fat", "muscle", "water", "visceral_fat"];
-
 export type NormalizedChart = {
   series: HealthChartSeries[];
   data: HealthChartDatum[];
@@ -22,7 +20,7 @@ export type NormalizedChart = {
 
 export function buildBodyChart(items: ScalarSample[]): NormalizedChart {
   const supported = items.filter((item) => item.metricType in bodyMetricConfig);
-  const presentMetricKeys = bodyMetricOrder.filter((metricKey) =>
+  const presentMetricKeys = Object.keys(bodyMetricConfig).filter((metricKey) =>
     supported.some((item) => item.metricType === metricKey),
   );
   const unitByMetric = new Map<string, string>();

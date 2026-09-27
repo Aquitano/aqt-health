@@ -207,10 +207,13 @@ function normalizeScheduledSyncPayload(
 
 function dataTypes(value: unknown): string[] | undefined {
   if (value == null) return undefined;
-  if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
+  if (
+    !Array.isArray(value) ||
+    !value.every((item): item is string => typeof item === "string")
+  ) {
     throw new InvalidPayloadError("dataTypes must be an array of strings.");
   }
-  const items = value.map((item: string) => item.trim()).filter(Boolean);
+  const items = value.map((item) => item.trim()).filter(Boolean);
   return items.length ? items : undefined;
 }
 
