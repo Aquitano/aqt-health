@@ -3,6 +3,9 @@ ALTER TABLE pending_derived_rebuilds ADD COLUMN revision TEXT NOT NULL DEFAULT '
 -- Daily canonical reads now aggregate the same contributions as day and dashboard reads.
 DROP VIEW canonical_step_daily_summaries;
 
+CREATE INDEX canonical_step_bucket_contributions_version_date_idx
+    ON canonical_step_day_bucket_contributions (algorithm_version, date);
+
 -- Repair every raw step date, including rows whose original derived rebuild never ran.
 INSERT INTO pending_derived_rebuilds
     (source_instance_id, derived_kind, affected_date, attempts, next_attempt_at, created_at, updated_at, revision)

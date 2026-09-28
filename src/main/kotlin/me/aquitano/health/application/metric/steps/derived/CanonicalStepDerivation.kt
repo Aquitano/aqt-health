@@ -21,56 +21,62 @@ import me.aquitano.health.application.metric.common.canonicalIntervalRows
 const val CANONICAL_STEP_ALGORITHM_VERSION = 1
 
 private const val UNKNOWN_PROVIDER_RANK = 10_000
+private const val MAX_SNAPSHOT_ATTEMPTS = 3
 
 class CanonicalStepDerivationService(
     private val repository: CanonicalStepDerivationRepository,
 ) {
     suspend fun recompute(database: Database, dates: Set<LocalDate>, computedAt: Instant) {
         dates.forEach { date ->
-            val dayStart = date.atStartOfDay().toInstant(ZoneOffset.UTC)
-            val dayEnd = date.plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC)
-            val (rawSamples, metadata) = suspendDbTransaction(db = database) {
-                val rows = repository.listRawSamplesForDay(dayStart, dayEnd)
-                rows to repository.sourceMetadataFor(rows.map { it.sourceInstanceId }.toSet())
-            }
-            val sampleIds = rawSamples.mapTo(hashSetOf()) { it.id }
-            val providerRanks = metadata.mapValues { stepProviderRank(it.value.provider) }
-            val preparedSamples = rawSamples.map { preparedCanonicalSample(it, providerRanks) }
-                .sortedWith(compareBy<PreparedCanonicalStepSample> { it.row.startAt }
-                    .thenBy { it.row.endAt }
-                    .thenBy { it.row.id })
+            val persisted = (1..MAX_SNAPSHOT_ATTEMPTS).any { recomputeFromCurrentSamples(database, date, computedAt) }
+            check(persisted) { "Step samples kept changing while deriving $date; retry required" }
+        }
+    }
 
-            val canonicalSamples = canonicalIntervalRows(
-                rows = preparedSamples.map { it.asIntervalCandidate() },
-                choosePreferred = { left, right ->
-                    if (stepPreference.compare(left.row, right.row) <= 0) left else right
-                }
-            )
-            val output = CanonicalStepOutput(
-                date = date,
-                algorithmVersion = CANONICAL_STEP_ALGORITHM_VERSION,
-                computedAt = computedAt,
-                samples = canonicalSamples.map {
-                    CanonicalStepSampleOutput(
-                        sampleId = it.row.id,
-                        sourceInstanceId = it.row.sourceInstanceId,
-                        startAt = it.row.startAt,
-                        endAt = it.row.endAt,
-                        steps = it.row.steps,
-                    )
-                },
-                bucketContributions = canonicalSamples.flatMap {
-                    bucketContributions(date, dayStart, dayEnd, it, computedAt)
-                },
-            )
-            suspendDbTransaction(db = database) {
-                // Serialize persistence per date, then reject computations made from stale raw rows.
-                exec("SELECT pg_advisory_xact_lock(384729, ${date.toEpochDay().toInt()})")
-                check(repository.rawSampleIdsForDay(dayStart, dayEnd) == sampleIds) {
-                    "Step samples changed during derivation; retry required"
-                }
-                repository.persistCanonicalOutput(output)
+    /** Returns false when raw samples changed between the read and the locked persist. */
+    private suspend fun recomputeFromCurrentSamples(database: Database, date: LocalDate, computedAt: Instant): Boolean {
+        val dayStart = date.atStartOfDay().toInstant(ZoneOffset.UTC)
+        val dayEnd = date.plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC)
+        val (rawSamples, metadata) = suspendDbTransaction(db = database) {
+            val rows = repository.listRawSamplesForDay(dayStart, dayEnd)
+            rows to repository.sourceMetadataFor(rows.map { it.sourceInstanceId }.toSet())
+        }
+        val sampleIds = rawSamples.mapTo(hashSetOf()) { it.id }
+        val providerRanks = metadata.mapValues { stepProviderRank(it.value.provider) }
+        val preparedSamples = rawSamples.map { preparedCanonicalSample(it, providerRanks) }
+            .sortedWith(compareBy<PreparedCanonicalStepSample> { it.row.startAt }
+                .thenBy { it.row.endAt }
+                .thenBy { it.row.id })
+
+        val canonicalSamples = canonicalIntervalRows(
+            rows = preparedSamples.map { it.asIntervalCandidate() },
+            choosePreferred = { left, right ->
+                if (stepPreference.compare(left.row, right.row) <= 0) left else right
             }
+        )
+        val output = CanonicalStepOutput(
+            date = date,
+            algorithmVersion = CANONICAL_STEP_ALGORITHM_VERSION,
+            computedAt = computedAt,
+            samples = canonicalSamples.map {
+                CanonicalStepSampleOutput(
+                    sampleId = it.row.id,
+                    sourceInstanceId = it.row.sourceInstanceId,
+                    startAt = it.row.startAt,
+                    endAt = it.row.endAt,
+                    steps = it.row.steps,
+                )
+            },
+            bucketContributions = canonicalSamples.flatMap {
+                bucketContributions(date, dayStart, dayEnd, it, computedAt)
+            },
+        )
+        return suspendDbTransaction(db = database) {
+            // Serialize persistence per date, then reject computations made from stale raw rows.
+            exec("SELECT pg_advisory_xact_lock(384729, ${date.toEpochDay().toInt()})")
+            if (repository.rawSampleIdsForDay(dayStart, dayEnd) != sampleIds) return@suspendDbTransaction false
+            repository.persistCanonicalOutput(output)
+            true
         }
     }
 
@@ -130,7 +136,7 @@ class CanonicalStepDerivationService(
             row = row,
             durationSeconds = duration,
             providerRank = providerRanks[row.sourceInstanceId] ?: UNKNOWN_PROVIDER_RANK,
-            stepsPerSecond = row.steps.toDouble() / duration.coerceAtLeast(0.000000001),
+            stepsPerSecond = row.steps.toDouble() / duration,
         )
     }
 }

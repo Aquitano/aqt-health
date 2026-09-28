@@ -99,7 +99,6 @@ class PendingDerivedRebuildSweeperTest : PostgresIntegrationTest() {
                     sourceInstanceId = sourceInstance.id,
                     affectedDates = mapOf(DerivedKind.STEP_SUMMARY to setOf(date)),
                 ),
-                error = "initial rebuild failure",
                 now = now,
             )
             sourceInstance.id

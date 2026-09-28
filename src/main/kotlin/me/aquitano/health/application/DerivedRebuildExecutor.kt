@@ -101,7 +101,7 @@ internal fun affectedUtcDates(
     return dates
 }
 
-class TransactionalDerivedRebuildExecutor(
+class PerDateDerivedRebuildExecutor(
     private val database: Database,
     private val registry: DerivedRebuildModuleRegistry,
 ) : DerivedRebuildExecutor {

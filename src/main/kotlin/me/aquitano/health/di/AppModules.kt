@@ -126,7 +126,7 @@ fun ingestionModule() = module {
             )
         )
     }
-    singleOf(::TransactionalDerivedRebuildExecutor) { bind<DerivedRebuildExecutor>() }
+    singleOf(::PerDateDerivedRebuildExecutor) { bind<DerivedRebuildExecutor>() }
     single {
         PendingDerivedRebuildSweeper(
             repository = get(),
@@ -279,6 +279,7 @@ fun adminReplayModule() = module {
             metricWriteService = get(),
             derivedRebuildExecutor = get(),
             derivedRebuildRegistry = get(),
+            pendingDerivedRebuildRepository = get(),
             replayJobRepository = get(),
             projectionWipeRepository = get(),
             clock = get(),

@@ -32,11 +32,12 @@ class PendingDerivedRebuildRepository(private val database: Database) {
      * Enqueue with the metric writes. Each revision identifies exactly the work observed by
      * a worker, so its completion cannot erase a newer ingestion for the same source and date.
      */
-    fun enqueueInTransaction(request: DerivedRebuildRequest, error: String? = null, now: Instant): List<PendingDerivedRebuildRecord> {
+    fun enqueueInTransaction(request: DerivedRebuildRequest, now: Instant): List<PendingDerivedRebuildRecord> {
         val queued = mutableListOf<PendingDerivedRebuildRecord>()
         val nowTimestamp = now.toDbTimestamp()
         request.affectedDates.forEach { (kind, dates) ->
-            dates.forEach { date ->
+            // Concurrent batches upsert the same unique keys; a fixed order cannot deadlock.
+            dates.sorted().forEach { date ->
                 PendingDerivedRebuildsTable.upsert(
                     PendingDerivedRebuildsTable.sourceInstanceId,
                     PendingDerivedRebuildsTable.derivedKind,
@@ -52,7 +53,7 @@ class PendingDerivedRebuildRepository(private val database: Database) {
                     it[affectedDate] = date
                     it[attempts] = 0
                     it[nextAttemptAt] = nowTimestamp
-                    it[lastErrorMessage] = error?.take(2000)
+                    it[lastErrorMessage] = null
                     it[revision] = UUID.randomUUID().toString()
                     it[createdAt] = nowTimestamp
                     it[updatedAt] = nowTimestamp

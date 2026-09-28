@@ -9,6 +9,8 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 import kotlin.math.roundToInt
 
+private const val MAX_SNAPSHOT_ATTEMPTS = 3
+
 class StepDailySummaryDerivation(
     private val repository: StepDailySummaryDerivationRepository,
 ) {
@@ -19,26 +21,40 @@ class StepDailySummaryDerivation(
         computedAt: Instant,
     ) {
         dates.forEach { date ->
-            val dayStart = date.atStartOfDay(ZoneOffset.UTC).toInstant()
-            val dayEnd = date.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant()
-            val samples = suspendDbTransaction(db = database) {
-                repository.listStepSamplesOverlapping(sourceInstanceId, dayStart, dayEnd)
+            val persisted = (1..MAX_SNAPSHOT_ATTEMPTS).any {
+                recomputeFromCurrentSamples(database, sourceInstanceId, date, computedAt)
             }
-            val output = StepDailySummaryOutput(
-                sourceInstanceId = sourceInstanceId,
-                date = date,
-                computedAt = computedAt,
-                steps = samples.sumOf { allocatedStepsForDay(it, dayStart, dayEnd) },
-                sampleCount = samples.size,
-            )
-            suspendDbTransaction(db = database) {
-                // Serialize persistence per date, then reject computations made from stale raw rows.
-                exec("SELECT pg_advisory_xact_lock(384729, ${date.toEpochDay().toInt()})")
-                check(samples == repository.listStepSamplesOverlapping(sourceInstanceId, dayStart, dayEnd)) {
-                    "Step samples changed during derivation; retry required"
-                }
-                repository.upsertStepDailySummary(output)
+            check(persisted) { "Step samples kept changing while deriving $date; retry required" }
+        }
+    }
+
+    /** Returns false when raw samples changed between the read and the locked persist. */
+    private suspend fun recomputeFromCurrentSamples(
+        database: Database,
+        sourceInstanceId: Int,
+        date: LocalDate,
+        computedAt: Instant,
+    ): Boolean {
+        val dayStart = date.atStartOfDay(ZoneOffset.UTC).toInstant()
+        val dayEnd = date.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant()
+        val samples = suspendDbTransaction(db = database) {
+            repository.listStepSamplesOverlapping(sourceInstanceId, dayStart, dayEnd)
+        }
+        val output = StepDailySummaryOutput(
+            sourceInstanceId = sourceInstanceId,
+            date = date,
+            computedAt = computedAt,
+            steps = samples.sumOf { allocatedStepsForDay(it, dayStart, dayEnd) },
+            sampleCount = samples.size,
+        )
+        return suspendDbTransaction(db = database) {
+            // Serialize persistence per date, then reject computations made from stale raw rows.
+            exec("SELECT pg_advisory_xact_lock(384729, ${date.toEpochDay().toInt()})")
+            if (samples != repository.listStepSamplesOverlapping(sourceInstanceId, dayStart, dayEnd)) {
+                return@suspendDbTransaction false
             }
+            repository.upsertStepDailySummary(output)
+            true
         }
     }
 }

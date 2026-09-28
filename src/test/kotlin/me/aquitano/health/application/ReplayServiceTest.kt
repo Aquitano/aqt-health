@@ -272,6 +272,7 @@ class ReplayServiceTest : PostgresIntegrationTest() {
             metricWriteService = metricWriteService,
             derivedRebuildExecutor = derivedRebuildExecutor,
             derivedRebuildRegistry = derivedRebuildRegistry(),
+            pendingDerivedRebuildRepository = PendingDerivedRebuildRepository(database),
             replayJobRepository = ReplayJobRepository(database),
             projectionWipeRepository = ProjectionWipeRepository(),
             clock = clock,
