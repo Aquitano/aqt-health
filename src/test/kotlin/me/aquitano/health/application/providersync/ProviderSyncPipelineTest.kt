@@ -153,23 +153,18 @@ class ProviderSyncPipelineTest {
     }
 
     @Test
-    fun changedAndRevertedSnapshotsAreIngestedAndFailedSnapshotIsRetried() = runBlocking {
+    fun openDayRefreshReusesTheSnapshotAsThePollEndAdvances() = runBlocking {
         val store = FakeStore()
         val adapter = FakeAdapter()
         val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
-        val refresh = request.copy(refresh = true)
-        pipeline.sync(adapter, refresh, now)
+        val morning = request.copy(to = Instant.parse("2026-04-01T10:00:00Z"), refresh = true)
+        pipeline.sync(adapter, morning, now)
+        val later = pipeline.sync(adapter, morning.copy(to = Instant.parse("2026-04-01T10:15:00Z")), now)
+        assertEquals(1, store.ingested.size)
+        assertTrue(later.batches.single().duplicateBatch)
         adapter.steps = 2400
-        store.ingestionFailure = IllegalStateException("write failed")
-        assertFailsWith<UpstreamProviderException> { pipeline.sync(adapter, refresh, now) }
-        store.ingestionFailure = null
-        pipeline.sync(adapter, refresh, now)
-        adapter.steps = 1200
-        pipeline.sync(adapter, refresh, now)
-        assertEquals(listOf(1200, 2400, 1200), store.ingested.map { (it.records.single() as StepInterval).steps })
-        assertEquals(3, store.ingested.map { it.batchExternalId }.distinct().size)
-        assertEquals(3, pipeline.sync(adapter, refresh, now).batches.single().batchId)
-        assertEquals(3, store.ingested.size)
+        pipeline.sync(adapter, morning.copy(to = Instant.parse("2026-04-02T00:00:00Z")), now)
+        assertEquals(2, store.ingested.size)
     }
 
     @Test
@@ -354,7 +349,6 @@ class ProviderSyncPipelineTest {
         var saveCount = 0
         var runsStarted = 0
         val ingested = mutableListOf<ProviderIngestionCommand>()
-        var ingestionFailure: Exception? = null
 
         override suspend fun selectForSync(
             providerCode: String,
@@ -430,22 +424,21 @@ class ProviderSyncPipelineTest {
             now: Instant,
         ): ExistingProviderBatch? = existingBatch
 
-        override suspend fun findLatestSnapshot(
+        override suspend fun reusableBatchId(
             providerCode: String,
             providerInstanceId: String,
             windowKey: String,
             contentHash: String,
             now: Instant,
-        ): ProcessedIngestionSnapshot? = ingested.withIndex().lastOrNull {
+        ): Int? = ingested.withIndex().lastOrNull {
             it.value.providerCode == providerCode && it.value.providerInstanceId == providerInstanceId &&
                 it.value.snapshot.windowKey == windowKey
-        }?.let { ProcessedIngestionSnapshot(it.index + 1, it.value.snapshot.contentHash) }
+        }?.takeIf { it.value.snapshot.contentHash == contentHash }?.let { it.index + 1 }
 
         override suspend fun ingest(
             command: ProviderIngestionCommand,
             now: Instant,
         ): ProviderSyncBatch {
-            ingestionFailure?.let { throw it }
             ingested += command
             return ProviderSyncBatch(
                 dataType = command.dataType,

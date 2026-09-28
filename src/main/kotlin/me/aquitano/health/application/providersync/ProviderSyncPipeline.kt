@@ -73,11 +73,14 @@ class ProviderSyncPipeline(
 
         plan.items.forEach { item ->
             progress.itemStarted(item)
-            val windowKey = adapter.batchExternalId(
+            val windowBatchExternalId = adapter.batchExternalId(
                 providerInstanceId = account.providerInstanceId,
                 item = item,
             )
-            val batchExternalId = if (request.refresh) "$windowKey:run:$runId" else windowKey
+            // Keyed by window start so the open day and a clamped catch-up window compare against
+            // the same snapshot as the completed day.
+            val windowKey = "${adapter.providerCode}:${account.providerInstanceId}:${item.dataType}:${item.from}"
+            val batchExternalId = if (request.refresh) "$windowBatchExternalId:run:$runId" else windowBatchExternalId
             val existingBatch = if (request.refresh) null else store.findExistingBatch(
                 providerCode = adapter.providerCode,
                 providerInstanceId = account.providerInstanceId,
@@ -155,11 +158,10 @@ class ProviderSyncPipeline(
 
                 val snapshot = IngestionSnapshot(windowKey, fetched.contentHash())
                 if (request.refresh) {
-                    val previous = store.findLatestSnapshot(
+                    store.reusableBatchId(
                         adapter.providerCode, account.providerInstanceId, windowKey, snapshot.contentHash, now,
-                    )
-                    if (previous?.contentHash == snapshot.contentHash) {
-                        batches += cachedBatchResponse(item.dataType, previous.batchId)
+                    )?.let { batchId ->
+                        batches += cachedBatchResponse(item.dataType, batchId)
                         progress.itemCompleted(item)
                         return@forEach
                     }
@@ -363,6 +365,16 @@ class ProviderSyncPipeline(
             adapter.refreshAccessToken(refreshToken, account, now)
         } catch (exception: Exception) {
             if (exception is CancellationException) throw exception
+            logger.warnWithContext(
+                "provider_token_refresh_failed",
+                mapOf(
+                    "provider" to adapter.providerCode,
+                    "providerInstanceId" to account.providerInstanceId,
+                    "errorCode" to adapter.errorCode(exception),
+                    "providerError" to adapter.errorAttributes(exception),
+                ),
+                exception,
+            )
             val message = adapter.tokenRefreshFailureMessage
             if (adapter.isInvalidRefreshToken(exception)) {
                 val updated = store.markNeedsReauth(

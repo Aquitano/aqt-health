@@ -1,7 +1,6 @@
 package me.aquitano.health.infrastructure.repositories
 
 import me.aquitano.health.domain.IngestionSnapshot
-import me.aquitano.health.domain.ProcessedIngestionSnapshot
 import me.aquitano.health.domain.BatchStatus
 import me.aquitano.health.domain.HealthRecord
 import me.aquitano.health.domain.RequestValidationException
@@ -97,11 +96,12 @@ class IngestionRepository {
             .map(::toExistingBatch)
             .singleOrNull()
 
-    fun findLatestSyncSnapshot(
+    /** The latest processed batch for the window, when its snapshot still matches [contentHash]. */
+    fun reusableSyncBatchId(
         sourceInstanceId: Int,
         windowKey: String,
         contentHash: String,
-    ): ProcessedIngestionSnapshot? =
+    ): Int? =
         IngestionBatchesTable
             .select(IngestionBatchesTable.id, IngestionBatchesTable.syncContentHash)
             .where {
@@ -112,15 +112,9 @@ class IngestionRepository {
             .orderBy(IngestionBatchesTable.id to SortOrder.DESC)
             .limit(1)
             .singleOrNull()
-            ?.let {
-                ProcessedIngestionSnapshot(
-                    it[IngestionBatchesTable.id].value,
-                    requireNotNull(it[IngestionBatchesTable.syncContentHash]),
-                )
-            }
-            ?.takeUnless { snapshot ->
-                snapshot.contentHash == contentHash && snapshotHasNewerValues(sourceInstanceId, snapshot.batchId)
-            }
+            ?.takeIf { it[IngestionBatchesTable.syncContentHash] == contentHash }
+            ?.let { it[IngestionBatchesTable.id].value }
+            ?.takeUnless { batchId -> snapshotHasNewerValues(sourceInstanceId, batchId) }
 
     // A record can move to another sync window and later return with its original content.
     // A matching window hash is reusable only while its identified records still have those values.

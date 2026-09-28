@@ -31,19 +31,19 @@ class ProviderSnapshotPersistenceTest : PostgresIntegrationTest() {
         )
         val original = sample("2026-04-01T08:00:00Z")
         val first = service.ingestBatch(request("first", original), now, IngestionSnapshot("day-a", "hash-a"))
-        assertEquals(first.batchId, service.findLatestSyncSnapshot("withings", "account", "day-a", "hash-a", now)?.batchId)
+        assertEquals(first.batchId, service.reusableSyncBatchId("withings", "account", "day-a", "hash-a", now))
 
         service.ingestBatch(request("moved", original.copy(measuredAt = "2026-04-02T08:00:00Z")), now,
             IngestionSnapshot("day-b", "hash-b"))
         // No empty day-a response needs to be observed before this return to the old window.
-        assertNull(service.findLatestSyncSnapshot("withings", "account", "day-a", "hash-a", now))
+        assertNull(service.reusableSyncBatchId("withings", "account", "day-a", "hash-a", now))
         val returned = service.ingestBatch(request("returned", original), now, IngestionSnapshot("day-a", "hash-a"))
-        assertEquals(returned.batchId, service.findLatestSyncSnapshot("withings", "account", "day-a", "hash-a", now)?.batchId)
+        assertEquals(returned.batchId, service.reusableSyncBatchId("withings", "account", "day-a", "hash-a", now))
 
         // An overlapping window can copy the same record without making either cache stale.
         service.ingestBatch(request("overlap", original), now, IngestionSnapshot("overlap", "hash-overlap"))
-        assertEquals(returned.batchId, service.findLatestSyncSnapshot("withings", "account", "day-a", "hash-a", now)?.batchId)
-        assertNotNull(service.findLatestSyncSnapshot("withings", "account", "overlap", "hash-overlap", now))
+        assertEquals(returned.batchId, service.reusableSyncBatchId("withings", "account", "day-a", "hash-a", now))
+        assertNotNull(service.reusableSyncBatchId("withings", "account", "overlap", "hash-overlap", now))
         Unit
     }
 
@@ -65,10 +65,10 @@ class ProviderSnapshotPersistenceTest : PostgresIntegrationTest() {
         PostgresTestDatabase.connection(config).use { connection ->
             connection.createStatement().use { it.executeUpdate("UPDATE ingestion_batches SET status = 'failed' WHERE id = ${failed.batchId}") }
         }
-        assertNotNull(service.findLatestSyncSnapshot("withings", "account", "window", "hash", now))
+        assertNotNull(service.reusableSyncBatchId("withings", "account", "window", "hash", now))
 
         service.ingestBatch(request("changed", original.copy(context = "unknown", value = 68.0)), now)
-        assertNull(service.findLatestSyncSnapshot("withings", "account", "window", "hash", now))
+        assertNull(service.reusableSyncBatchId("withings", "account", "window", "hash", now))
     }
 
     private fun sample(measuredAt: String) = ScalarSample(

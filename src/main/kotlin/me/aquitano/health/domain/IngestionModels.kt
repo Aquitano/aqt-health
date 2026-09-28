@@ -5,8 +5,6 @@ import java.time.Instant
 
 data class IngestionSnapshot(val windowKey: String, val contentHash: String)
 
-data class ProcessedIngestionSnapshot(val batchId: Int, val contentHash: String)
-
 data class ValidatedIngestionBatch(
     val provider: String,
     val providerInstanceId: String,
