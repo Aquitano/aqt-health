@@ -39,8 +39,7 @@ class PostgresTestDatabaseTest : PostgresIntegrationTest() {
                         assertTrue(rows.next())
                         rows.getString(1)
                     }
-                    assertEquals("public", extensionSchema)
-                    // This requires the original index and its extension-owned operator classes.
+                    assertEquals(PostgresTestDatabase.EXTENSIONS_SCHEMA, extensionSchema)
                     statement.execute("REINDEX INDEX step_samples_source_instance_time_range_gist_idx")
                 }
             }

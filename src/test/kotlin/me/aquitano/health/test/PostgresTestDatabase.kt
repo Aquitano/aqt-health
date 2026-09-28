@@ -5,6 +5,7 @@ import org.testcontainers.containers.PostgreSQLContainer
 import java.sql.Connection
 import java.sql.DriverManager
 import java.sql.SQLException
+import java.sql.Statement
 import java.util.Collections
 import java.util.UUID
 
@@ -88,6 +89,7 @@ object PostgresTestDatabase {
         required: Boolean,
     ): DatabaseConfig? {
         val schema = "aqt_health_test_${UUID.randomUUID().toString().replace("-", "")}"
+        val extensionSchema: String
         try {
             DriverManager.getConnection(jdbcUrl.withJdbcParameter("connectTimeout", "1"), user, password)
                 .use { connection ->
@@ -96,7 +98,9 @@ object PostgresTestDatabase {
                         // Extensions belong to the database, so disposable fixture schemas
                         // must not own their operator classes. The lock also covers other JVMs.
                         statement.execute("SELECT pg_advisory_xact_lock(718204, 1)")
-                        statement.execute("CREATE EXTENSION IF NOT EXISTS btree_gist WITH SCHEMA public")
+                        statement.execute("CREATE SCHEMA IF NOT EXISTS $EXTENSIONS_SCHEMA")
+                        statement.execute("CREATE EXTENSION IF NOT EXISTS btree_gist WITH SCHEMA $EXTENSIONS_SCHEMA")
+                        extensionSchema = statement.rescueExtensionFromFixtureSchema()
                         statement.execute("CREATE SCHEMA $schema")
                     }
                     connection.commit()
@@ -112,12 +116,29 @@ object PostgresTestDatabase {
         }
         externalSchemas.add(ExternalSchema(jdbcUrl, user, password, schema))
         return DatabaseConfig(
-            jdbcUrl = jdbcUrl.withJdbcParameter("currentSchema", "$schema,public"),
+            jdbcUrl = jdbcUrl.withJdbcParameter("currentSchema", "$schema,$extensionSchema"),
             driver = "org.postgresql.Driver",
             user = user,
             password = password,
             maxPoolSize = 1,
         )
+    }
+
+    /** A fixture schema left behind by a killed run may still own the extension. */
+    private fun Statement.rescueExtensionFromFixtureSchema(): String {
+        val owner = executeQuery(
+            """
+            SELECT n.nspname FROM pg_extension e
+            JOIN pg_namespace n ON n.oid = e.extnamespace
+            WHERE e.extname = 'btree_gist'
+            """.trimIndent()
+        ).use { rows ->
+            rows.next()
+            rows.getString(1)
+        }
+        if (owner == EXTENSIONS_SCHEMA || !owner.startsWith("aqt_health_test_")) return owner
+        execute("ALTER EXTENSION btree_gist SET SCHEMA $EXTENSIONS_SCHEMA")
+        return EXTENSIONS_SCHEMA
     }
 
     private fun dockerIsAvailable(): Boolean =
@@ -162,6 +183,8 @@ object PostgresTestDatabase {
             }
         )
     }
+
+    internal const val EXTENSIONS_SCHEMA = "aqt_health_test_extensions"
 
     private const val LOCAL_JDBC_URL =
         "jdbc:postgresql://localhost:5432/aqt_health"

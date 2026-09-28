@@ -86,7 +86,6 @@ dependencies {
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit:$kotlin_version")
     testImplementation("org.testcontainers:postgresql:$testcontainers_version")
     testImplementation("com.lemonappdev:konsist:$konsist_version")
-    testCompileOnly("org.jetbrains.kotlin:kotlin-compiler-embeddable:2.0.21") // Already supplied at runtime by Konsist.
 }
 
 fun dockerIsAvailable(): Boolean =
@@ -129,7 +128,6 @@ tasks.test {
     useJUnit {
         excludeCategories("me.aquitano.health.test.PostgresIntegration")
     }
-    exclude("**/OpenApiExportTest.class")
 }
 
 tasks.register<Test>("integrationTest") {
