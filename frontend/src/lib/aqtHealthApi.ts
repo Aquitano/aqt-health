@@ -271,16 +271,19 @@ function ingestionStatus(value?: string): "processed" | "failed" | undefined {
 
 type ReadPage<T> = { items: T[]; meta: ApiSchema<"ReadResponseMeta"> };
 
+const maxReadPages = 20;
+
 async function readAllPages<T>(
   readPage: (cursor?: string) => Promise<ApiResult<ReadPage<T>>>,
 ): Promise<ApiResult<ReadPage<T>>> {
   const items: T[] = [];
   let cursor: string | undefined;
-  for (;;) {
+  for (let pages = 0; pages < maxReadPages; pages++) {
     const page = await readPage(cursor);
     if (!page.ok) return page;
     items.push(...page.data.items);
     cursor = page.data.meta.nextCursor ?? undefined;
     if (!cursor) return { ok: true, data: { items, meta: { ...page.data.meta, count: items.length } } };
   }
+  return { ok: false, message: `Stopped after ${maxReadPages} pages; the backend kept returning a next cursor.` };
 }

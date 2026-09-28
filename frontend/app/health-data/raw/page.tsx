@@ -25,7 +25,7 @@ import {
 } from "@/lib/dates";
 import type { ApiResult, ScalarSample } from "@/lib/types";
 
-const scalarTables: Record<string, ComponentType<{ items: ScalarSample[] }>> = {
+const scalarTables = {
   weight: BodyMeasurementsTable,
   body_fat: BodyMeasurementsTable,
   muscle: BodyMeasurementsTable,
@@ -46,15 +46,20 @@ const scalarTables: Record<string, ComponentType<{ items: ScalarSample[] }>> = {
   segmental_fat_mass: ExtendedBodyMeasurementsTable,
   segmental_muscle_mass: ExtendedBodyMeasurementsTable,
   segmental_fat_free_mass: ExtendedBodyMeasurementsTable,
-};
+} satisfies Record<string, ComponentType<{ items: ScalarSample[] }>>;
 const datasets = [
   "steps",
   "activity",
   "sleep-sessions",
   "sleep-summaries",
   "blood-pressure",
-  ...Object.keys(scalarTables),
-];
+  ...(Object.keys(scalarTables) as (keyof typeof scalarTables)[]),
+] as const;
+type Dataset = (typeof datasets)[number];
+
+function isDataset(value: string): value is Dataset {
+  return (datasets as readonly string[]).includes(value);
+}
 
 export default async function RawDataPage({
   searchParams,
@@ -64,7 +69,7 @@ export default async function RawDataPage({
   const params = (await searchParams) ?? {};
   const range = parseDateRange(params);
   const requestedDataset = first(params.dataset) ?? "steps";
-  const dataset = datasets.includes(requestedDataset)
+  const dataset: Dataset = isDataset(requestedDataset)
     ? requestedDataset
     : "steps";
   const cursor = first(params.cursor);
@@ -106,21 +111,23 @@ export default async function RawDataPage({
         <DataSection title={dataset.replaceAll(/[_-]/g, " ")} result={result}>
           {(data) => <Table items={data.items} />}
         </DataSection>
-        <nav aria-label="Raw data pages">
-          {cursor ? (
-            <Link href={`?${query}`} prefetch={false}>
-              First page
-            </Link>
-          ) : null}
-          {nextCursor ? (
-            <>
-              {" "}
-              <Link href={`?${next}`} prefetch={false}>
-                Next 100 records
+        {cursor || nextCursor ? (
+          <nav aria-label="Raw data pages">
+            {cursor ? (
+              <Link href={`?${query}`} prefetch={false}>
+                First page
               </Link>
-            </>
-          ) : null}
-        </nav>
+            ) : null}
+            {nextCursor ? (
+              <>
+                {" "}
+                <Link href={`?${next}`} prefetch={false}>
+                  Next 100 records
+                </Link>
+              </>
+            ) : null}
+          </nav>
+        ) : null}
       </>
     );
   }

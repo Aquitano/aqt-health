@@ -2,21 +2,34 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getHealthDataPageSources, getTrendsPageData } from "./aqtHealthApi";
 import { buildTrendStats } from "./trends";
 
-const mocks = vi.hoisted(() => ({
-  calls: new Map<string, ReturnType<typeof vi.fn>>(),
-}));
+const mocks = vi.hoisted(() => {
+  const names = [
+    "getHealth",
+    "listScalarSamples",
+    "listDailyStepSummaries",
+    "listSleepSummaries",
+    "getScalarDailySummaries",
+    "listActivitySummaries",
+    "getDashboardSummary",
+    "getDashboardTrends",
+    "getHealthDay",
+    "listBodyMeasurements",
+    "listBloodPressure",
+    "listSleepNights",
+    "listRespiratoryRateSamples",
+    "listHrvSamples",
+    "getLatestActivitySummary",
+    "getLatestSleepSummary",
+    "getLatestBloodPressure",
+  ] as const;
+  return Object.fromEntries(names.map((name) => [name, vi.fn()])) as Record<
+    (typeof names)[number],
+    ReturnType<typeof vi.fn>
+  >;
+});
 vi.mock("./aqtHealthClient", () => ({
   toProviderCode: (value: string) => value,
-  aqtHealthClient: new Proxy(
-    { apiBaseUrl: "http://test" },
-    {
-      get(target, property: string) {
-        if (property === "apiBaseUrl") return target.apiBaseUrl;
-        if (!mocks.calls.has(property)) mocks.calls.set(property, vi.fn());
-        return mocks.calls.get(property);
-      },
-    }
-  ),
+  aqtHealthClient: { apiBaseUrl: "http://test", ...mocks },
 }));
 function response(items: unknown[] = [], nextCursor?: string) {
   return {
@@ -33,31 +46,8 @@ function response(items: unknown[] = [], nextCursor?: string) {
     },
   };
 }
-function mock(name: string) {
-  if (!mocks.calls.has(name)) mocks.calls.set(name, vi.fn());
-  return mocks.calls.get(name)!;
-}
-const methodNames = [
-  "getHealth",
-  "listScalarSamples",
-  "listDailyStepSummaries",
-  "listSleepSummaries",
-  "getScalarDailySummaries",
-  "listActivitySummaries",
-  "getDashboardSummary",
-  "getDashboardTrends",
-  "getHealthDay",
-  "listBodyMeasurements",
-  "listSleepNights",
-  "listRespiratoryRateSamples",
-  "listHrvSamples",
-  "getLatestActivitySummary",
-  "getLatestSleepSummary",
-  "getLatestBloodPressure",
-];
 beforeEach(() => {
-  mocks.calls.clear();
-  for (const name of methodNames) mock(name).mockResolvedValue(response());
+  for (const fn of Object.values(mocks)) fn.mockReset().mockResolvedValue(response());
 });
 
 describe("page data requests", () => {
@@ -69,7 +59,7 @@ describe("page data requests", () => {
       value: 80,
       unit: "kg",
     }));
-    mock("listScalarSamples")
+    mocks.listScalarSamples
       .mockResolvedValueOnce(response(firstPage, "next-weight"))
       .mockResolvedValueOnce(
         response([
@@ -83,7 +73,7 @@ describe("page data requests", () => {
         ])
       );
     const data = await getTrendsPageData("2026-09-01", 365);
-    expect(mock("listScalarSamples")).toHaveBeenLastCalledWith(
+    expect(mocks.listScalarSamples).toHaveBeenLastCalledWith(
       "weight",
       expect.objectContaining({ cursor: "next-weight" })
     );
@@ -92,19 +82,19 @@ describe("page data requests", () => {
         weight: data.weight.ok ? data.weight.data : undefined,
       })[0].latest
     ).toBe(75);
-    expect(mock("getScalarDailySummaries")).toHaveBeenCalledWith(
+    expect(mocks.getScalarDailySummaries).toHaveBeenCalledWith(
       "hrv_rmssd",
       expect.any(Object)
     );
-    expect(mock("getScalarDailySummaries")).toHaveBeenCalledWith(
+    expect(mocks.getScalarDailySummaries).toHaveBeenCalledWith(
       "respiratory_rate",
       expect.any(Object)
     );
-    expect(mock("listBodyMeasurements")).not.toHaveBeenCalled();
+    expect(mocks.listBodyMeasurements).not.toHaveBeenCalled();
   });
 
   it("propagates a later page failure instead of displaying partial data as complete", async () => {
-    mock("listScalarSamples")
+    mocks.listScalarSamples
       .mockResolvedValueOnce(response([], "next"))
       .mockResolvedValueOnce({ ok: false, status: 503, message: "offline" });
     expect((await getTrendsPageData("2026-09-01", 30)).weight).toEqual({
@@ -121,18 +111,18 @@ describe("page data requests", () => {
       "America/New_York"
     );
     await Promise.all(Object.values(sources));
-    expect(mock("listBodyMeasurements")).toHaveBeenCalledWith(
+    expect(mocks.listBodyMeasurements).toHaveBeenCalledWith(
       expect.objectContaining({
         from: "2026-03-08T05:00:00.000Z",
         to: "2026-03-09T04:00:00.000Z",
       })
     );
-    expect(mock("getScalarDailySummaries")).toHaveBeenCalledWith("heart_rate", {
+    expect(mocks.getScalarDailySummaries).toHaveBeenCalledWith("heart_rate", {
       from: "2026-03-08T05:00:00.000Z",
       to: "2026-03-09T04:00:00.000Z",
       timezone: "America/New_York",
     });
-    expect(mock("listBloodPressure")).not.toHaveBeenCalled();
-    expect(mock("listScalarSamples")).not.toHaveBeenCalled();
+    expect(mocks.listBloodPressure).not.toHaveBeenCalled();
+    expect(mocks.listScalarSamples).not.toHaveBeenCalled();
   });
 });
