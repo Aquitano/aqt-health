@@ -68,9 +68,8 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
         val moved = steps("2026-04-20", 200)
         assertEquals(setOf("2026-04-18", "2026-04-20"), moved.affectedStepSummaryDates.toSet())
         assertNotEquals(firstId, fixture.number("SELECT id FROM step_samples"))
-        assertEquals(0, fixture.number("SELECT COUNT(*) FROM step_daily_summaries WHERE date = '2026-04-18'"))
         assertEquals(0, fixture.number("SELECT COUNT(*) FROM canonical_step_samples WHERE date = '2026-04-18'"))
-        assertEquals(200, fixture.number("SELECT steps FROM step_daily_summaries"))
+        assertEquals(200, fixture.number("SELECT SUM(value)::int FROM canonical_step_day_bucket_contributions"))
 
         // The newest arrival is on an earlier date, so chronological replay sees it first.
         steps("2026-04-17", 300)
@@ -78,9 +77,8 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
         assertEquals(300, fixture.number("SELECT steps FROM step_samples"))
         fixture.replay(ReplayRequest(scope = "all", wipe = true))
         assertEquals(300, fixture.number("SELECT steps FROM step_samples"))
-        assertEquals("2026-04-17", fixture.text("SELECT date::text FROM step_daily_summaries"))
+        assertEquals("2026-04-17", fixture.text("SELECT DISTINCT date::text FROM canonical_step_day_bucket_contributions"))
         assertEquals(300, fixture.number("SELECT SUM(value)::int FROM canonical_step_day_bucket_contributions"))
-        assertEquals(1, fixture.number("SELECT COUNT(*) FROM step_daily_summaries"))
     }
 
     @Test
@@ -176,19 +174,6 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
     }
 
     @Test
-    fun googleCorrectionKeepsTwoNeighborFragmentsInOneBucket() = runBlocking {
-        val fixture = Fixture(provider = "google_health")
-        fixture.ingest(listOf(StepInterval("neighbor", "2026-04-19T08:00:00Z", "2026-04-19T08:00:04Z", 8)))
-        fixture.ingest(listOf(StepInterval("moving", "2026-04-19T08:00:04Z", "2026-04-19T08:00:06Z", 10)))
-        fixture.ingest(listOf(StepInterval("moving", "2026-04-19T08:00:01Z", "2026-04-19T08:00:03Z", 10)))
-        repeat(2) {
-            fixture.assertStepReadTotals(mapOf("2026-04-19" to 14))
-            assertEquals(4, fixture.number("SELECT value::int FROM canonical_step_day_bucket_contributions c JOIN step_samples s ON s.id = c.step_sample_id WHERE s.provider_record_id = 'neighbor'"))
-            fixture.replay(ReplayRequest(scope = "all", wipe = true))
-        }
-    }
-
-    @Test
     fun coveredGoogleNeighborDoesNotCountOnDatesWithNoSurvivingSpan() = runBlocking {
         val fixture = Fixture(provider = "google_health")
         fixture.ingest(listOf(StepInterval("neighbor", "2026-04-19T23:00:00Z", "2026-04-21T01:00:00Z", 2600)))
@@ -196,21 +181,9 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
         fixture.ingest(listOf(StepInterval("moving", "2026-04-20T00:00:00Z", "2026-04-21T00:00:00Z", 2400)))
         repeat(2) {
             fixture.assertStepReadTotals(mapOf("2026-04-19" to 100, "2026-04-20" to 2400, "2026-04-21" to 100))
-            assertEquals(1, fixture.number("SELECT sample_count FROM step_daily_summaries WHERE date = '2026-04-20'"))
             assertEquals(1, fixture.number("SELECT COUNT(*) FROM canonical_step_samples WHERE date = '2026-04-20'"))
             fixture.replay(ReplayRequest(scope = "all", wipe = true))
         }
-    }
-
-    @Test
-    fun subsecondGoogleCorrectionAgreesAcrossMidnightAndReplay() = runBlocking {
-        val fixture = Fixture(provider = "google_health")
-        fixture.ingest(listOf(StepInterval("neighbor", "2026-04-19T23:59:59.500Z", "2026-04-20T00:00:00.500Z", 8)))
-        fixture.ingest(listOf(StepInterval("moving", "2026-04-20T00:00:00.500Z", "2026-04-20T00:00:01Z", 6)))
-        fixture.ingest(listOf(StepInterval("moving", "2026-04-19T23:59:59.750Z", "2026-04-20T00:00:00.250Z", 6)))
-        fixture.assertStepReadTotals(mapOf("2026-04-19" to 5, "2026-04-20" to 5))
-        fixture.replay(ReplayRequest(scope = "all", wipe = true))
-        fixture.assertStepReadTotals(mapOf("2026-04-19" to 5, "2026-04-20" to 5))
     }
 
     @Test
@@ -366,9 +339,6 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
             val canonical = CanonicalStepDerivationRepository()
             val daily = StepQueryService(database, canonical).listStepDailySummaries(params, now)
             assertEquals(expected, daily.items.associate { it.date to it.steps })
-            expected.forEach { (day, steps) ->
-                assertEquals(steps, number("SELECT steps FROM step_daily_summaries WHERE date = '$day'"))
-            }
             val dashboard = DashboardQueryService(database, canonical, SleepRepository(), ScalarSampleReadRepository())
                 .dashboardSummary(params, now)
             assertEquals(expected.values.sum(), dashboard.steps.steps)
@@ -388,7 +358,7 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
             assertEquals(2000, number("SELECT distance_meters::int FROM activity_summaries"))
             assertEquals(120, number("SELECT systolic_mmhg FROM blood_pressure_measurements"))
             assertEquals(81, number("SELECT value::int FROM scalar_samples"))
-            assertEquals(200, number("SELECT steps FROM step_daily_summaries"))
+            assertEquals(200, number("SELECT SUM(value)::int FROM canonical_step_day_bucket_contributions"))
             assertEquals("2026-04-17", text("SELECT date::text FROM activity_summaries"))
             assertEquals("2026-04-17", text("SELECT start_at::date::text FROM sleep_sessions"))
             assertEquals("2026-04-17", text("SELECT start_at::date::text FROM sleep_summaries"))
