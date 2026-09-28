@@ -271,7 +271,7 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
     }
 
     @Test
-    fun preparedCanonicalOutputIsRejectedAfterStepCorrection() = runBlocking {
+    fun preparedCanonicalOutputIsRecomputedAfterStepCorrection() = runBlocking {
         val fixture = Fixture(rebuildOnIngest = false, poolSize = 2)
         val day = LocalDate.parse("2030-03-01")
         val sample = StepInterval("steps", "2030-03-01T08:00:00Z", "2030-03-01T09:00:00Z", 100)
@@ -280,9 +280,7 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
         PostgresTestDatabase.connection(fixture.config).use { lock ->
             lock.autoCommit = false
             lock.createStatement().use { it.execute("SELECT pg_advisory_xact_lock(384729, ${day.toEpochDay()})") }
-            val stale = async(Dispatchers.IO) {
-                runCatching { derivation.recompute(fixture.database, setOf(day), fixture.now) }
-            }
+            val stale = async(Dispatchers.IO) { derivation.recompute(fixture.database, setOf(day), fixture.now) }
             try {
                 withTimeout(10_000) {
                     while (fixture.number("SELECT COUNT(*) FROM pg_locks WHERE locktype = 'advisory' AND classid = 384729 AND objid = ${day.toEpochDay()} AND NOT granted") == 0) delay(20)
@@ -291,11 +289,8 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
             } finally {
                 lock.commit()
             }
-            val failure = stale.await().exceptionOrNull()
-            assertIs<IllegalStateException>(failure)
-            assertTrue(failure.message!!.contains("changed during derivation"))
+            stale.await()
         }
-        derivation.recompute(fixture.database, setOf(day), fixture.now)
         assertEquals(200, fixture.number("SELECT SUM(value)::int FROM canonical_step_day_bucket_contributions"))
     }
 
@@ -325,7 +320,7 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
             PendingDerivedRebuildRepository(database),
         )
         private val replays = ReplayService(
-            database, records, mapping, writer, derived, derivedRebuildRegistry(),
+            database, records, mapping, writer, derived, derivedRebuildRegistry(), PendingDerivedRebuildRepository(database),
             ReplayJobRepository(database), ProjectionWipeRepository(), UtcClock.fixed(now),
         ).also { replayServices += it }
 
@@ -340,8 +335,8 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
                 val batchId = records.insertBatch(source.id, null, "{}", now, now)
                 batchId to records.insertRecords(batchId, chunk.map { mapping.mapRecord(it)!! }, now)
             }
-            writer.writeAll(provider, source.id, batches.flatMap { (_, inserted) -> inserted.map { MetricWrite(it.id, it.record) } }, now)
             batches.forEach { (batchId, _) -> records.markProcessed(batchId, now) }
+            writer.writeAll(provider, source.id, batches.flatMap { (_, inserted) -> inserted.map { MetricWrite(it.id, it.record) } }, now)
         }
 
         suspend fun appendFailed(value: IngestionRecord) = suspendDbTransaction(db = database) {

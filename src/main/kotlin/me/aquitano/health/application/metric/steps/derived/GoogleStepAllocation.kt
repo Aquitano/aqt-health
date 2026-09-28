@@ -39,7 +39,6 @@ internal fun resolveGoogleStepSpans(
                     result += StepAllocationSpan(winner, previous, at)
                 }
             }
-            // All events at a boundary are applied before allocating the next half-open span.
             while (index < boundaries.size && boundaries[index].at == at) {
                 val boundary = boundaries[index++]
                 if (boundary.starts) active.add(boundary.sample) else active.remove(boundary.sample)

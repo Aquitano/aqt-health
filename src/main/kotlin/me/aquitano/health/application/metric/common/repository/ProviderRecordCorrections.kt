@@ -3,7 +3,6 @@ package me.aquitano.health.application.metric.common.repository
 import me.aquitano.health.application.metric.common.MetricWrite
 import me.aquitano.health.domain.RecordTypes
 import me.aquitano.health.domain.ScalarMetricRegistry
-import me.aquitano.health.domain.ScalarSampleRecord
 import me.aquitano.health.shared.normalizeProviderCode
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import java.time.Instant
@@ -32,17 +31,7 @@ class ProviderRecordCorrections {
         // write lock before the source lock, matching ingestion and wipe-replay lock order.
         transaction.exec("LOCK TABLE ingestion_records IN ROW EXCLUSIVE MODE")
         transaction.exec("SELECT pg_advisory_xact_lock(384730, $sourceInstanceId)")
-        val latest = mutableMapOf<ProviderIdentity, MetricWrite>()
-        writes.forEach { write ->
-            val providerId = write.record.providerRecordId ?: return@forEach
-            val scalar = write.record as? ScalarSampleRecord
-            val key = ProviderIdentity(
-                providerId, write.record.recordType, scalar?.value?.metricType,
-                scalar?.value?.context, scalar?.value?.segment,
-            )
-            if ((latest[key]?.ingestionRecordId ?: -1) < write.ingestionRecordId) latest[key] = write
-        }
-        val identified = latest.values.toList()
+        val identified = writes.filter { it.record.providerRecordId != null }
         if (identified.isEmpty()) return PreparedMetricWrites(writes, emptyList())
 
         val googleStepIds = if (normalizeProviderCode(provider) == "google_health") {
@@ -87,7 +76,7 @@ class ProviderRecordCorrections {
                       AND newer.record_type = incoming.record_type
                       AND newer.id > incoming.id
                       AND batch.source_instance_id = $sourceInstanceId
-                      AND (batch.status = 'processed' OR newer.batch_id = incoming.batch_id)
+                      AND batch.status = 'processed'
                       AND ${sameScalarIdentity("newer", "incoming")}
                   )
                 """.trimIndent()
@@ -206,21 +195,13 @@ private fun scalarContext(alias: String): String =
         "CASE WHEN $alias.normalized_record_json->>'metricType' IN ($contextualMetricTypes) " +
         "THEN 'unknown' ELSE '' END)"
 
-private data class ProviderIdentity(
-    val providerId: String,
-    val recordType: String,
-    val metricType: String?,
-    val context: String?,
-    val segment: String?,
-)
-
 private data class Projection(val table: String, val startColumn: String, val endColumn: String? = null)
 
 private fun projectionFor(recordType: String): Projection = when (recordType) {
     RecordTypes.STEP_INTERVAL -> Projection("step_samples", "start_at", "end_at")
     RecordTypes.SLEEP_SESSION -> Projection("sleep_sessions", "start_at", "end_at")
     RecordTypes.SLEEP_SUMMARY -> Projection("sleep_summaries", "start_at", "end_at")
-    RecordTypes.ACTIVITY_SUMMARY -> Projection("activity_summaries", "date")
+    RecordTypes.ACTIVITY_SUMMARY -> Projection("activity_summaries", "date::timestamp AT TIME ZONE 'UTC'")
     RecordTypes.BLOOD_PRESSURE -> Projection("blood_pressure_measurements", "measured_at")
     RecordTypes.SCALAR -> Projection("scalar_samples", "measured_at")
     else -> error("Unsupported correction record type: $recordType")

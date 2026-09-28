@@ -12,6 +12,7 @@ import me.aquitano.health.application.metric.steps.repository.CanonicalStepDeriv
 import me.aquitano.health.domain.ReplayJobStatus
 import me.aquitano.health.infrastructure.repositories.IngestionRepository
 import me.aquitano.health.infrastructure.repositories.ProjectionWipeRepository
+import me.aquitano.health.infrastructure.repositories.PendingDerivedRebuildRepository
 import me.aquitano.health.infrastructure.repositories.ReplayJobRepository
 import me.aquitano.health.infrastructure.time.UtcClock
 import me.aquitano.health.test.*
@@ -84,7 +85,8 @@ class ProviderCorrectionMigrationTest : PostgresIntegrationTest() {
         val now = Instant.parse("2026-05-01T00:00:00Z")
         val replay = ReplayService(
             database, IngestionRepository(), IngestionMappingService(), metricWriteService(),
-            realDerivedRebuildExecutor(database), derivedRebuildRegistry(), ReplayJobRepository(database),
+            realDerivedRebuildExecutor(database), derivedRebuildRegistry(), PendingDerivedRebuildRepository(database),
+            ReplayJobRepository(database),
             ProjectionWipeRepository(), UtcClock.fixed(now),
         )
         try {
