@@ -88,7 +88,7 @@ class IngestionServiceTest : PostgresIntegrationTest() {
         val service = IngestionService(
             database, IngestionMappingService(), SupportRepository(database), IngestionRepository(),
             metricWriteService(), object : DerivedRebuildExecutor {
-                override suspend fun rebuild(request: DerivedRebuildRequest, computedAt: Instant) {
+                override suspend fun rebuild(requests: List<DerivedRebuildRequest>, computedAt: Instant) {
                     throw java.util.concurrent.CancellationException("request cancelled")
                 }
             }, pending,
@@ -146,7 +146,7 @@ class IngestionServiceTest : PostgresIntegrationTest() {
         assertEquals("processed", singleString(dbConfig, "SELECT status FROM ingestion_batches"))
         assertEquals(1, singleInt(dbConfig, "SELECT COUNT(*) FROM ingestion_records"))
         assertEquals(1, singleInt(dbConfig, "SELECT COUNT(*) FROM step_samples"))
-        assertEquals(0, singleInt(dbConfig, "SELECT COUNT(*) FROM step_daily_summaries"))
+        assertEquals(0, singleInt(dbConfig, "SELECT COUNT(*) FROM canonical_step_day_bucket_contributions"))
         assertTrue(
             singleString(dbConfig, "SELECT error_message FROM ingestion_batches")
                 .startsWith("Derived rebuild failed: test derived failure")
@@ -289,7 +289,7 @@ class IngestionServiceTest : PostgresIntegrationTest() {
     }
 
     private object FailingDerivedRebuildExecutor : DerivedRebuildExecutor {
-        override suspend fun rebuild(request: DerivedRebuildRequest, computedAt: Instant) {
+        override suspend fun rebuild(requests: List<DerivedRebuildRequest>, computedAt: Instant) {
             throw IllegalStateException("test derived failure")
         }
     }

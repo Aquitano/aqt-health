@@ -297,7 +297,7 @@ class ReplayService(
             )
         } ?: return null
 
-        derivedRebuildExecutor.rebuildAll(replayed.rebuildRequests, clock.now())
+        derivedRebuildExecutor.rebuild(replayed.rebuildRequests, clock.now())
         pendingDerivedRebuildRepository.deleteCompleted(replayed.queuedRebuilds)
 
         return replayed.result

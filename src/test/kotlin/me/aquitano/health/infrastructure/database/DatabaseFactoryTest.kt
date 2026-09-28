@@ -37,7 +37,6 @@ class DatabaseFactoryTest : PostgresIntegrationTest() {
         assertContains(tableNames, "ingestion_batches")
         assertContains(tableNames, "ingestion_records")
         assertContains(tableNames, "step_samples")
-        assertContains(tableNames, "step_daily_summaries")
         assertContains(tableNames, "sleep_sessions")
         assertContains(tableNames, "sleep_stages")
         assertContains(tableNames, "scalar_samples")

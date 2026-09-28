@@ -41,9 +41,9 @@ class PendingDerivedRebuildSweeperTest : PostgresIntegrationTest() {
         }
         val rebuilt = mutableListOf<DerivedRebuildRequest>()
         val executor = object : DerivedRebuildExecutor {
-            override suspend fun rebuild(request: DerivedRebuildRequest, computedAt: Instant) {
-                check(failingDate !in request[DerivedKind.STEP_SUMMARY]) { "Date cannot be rebuilt" }
-                rebuilt += request
+            override suspend fun rebuild(requests: List<DerivedRebuildRequest>, computedAt: Instant) {
+                check(requests.none { failingDate in it[DerivedKind.STEP_SUMMARY] }) { "Date cannot be rebuilt" }
+                rebuilt += requests
             }
         }
         val sweeper = PendingDerivedRebuildSweeper(repository, executor, UtcClock())
@@ -133,8 +133,8 @@ class PendingDerivedRebuildSweeperTest : PostgresIntegrationTest() {
         val calls = AtomicInteger(0)
         var lastRequest: DerivedRebuildRequest? = null
 
-        override suspend fun rebuild(request: DerivedRebuildRequest, computedAt: Instant) {
-            lastRequest = request
+        override suspend fun rebuild(requests: List<DerivedRebuildRequest>, computedAt: Instant) {
+            lastRequest = requests.single()
             if (calls.incrementAndGet() <= failuresBeforeSuccess) {
                 throw IllegalStateException("flaky rebuild failure")
             }

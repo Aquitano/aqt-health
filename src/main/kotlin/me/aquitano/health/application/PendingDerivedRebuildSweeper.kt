@@ -56,7 +56,7 @@ class PendingDerivedRebuildSweeper(
                 DerivedRebuildRequest(row.sourceInstanceId, mapOf(kind to setOf(date)))
             }
             try {
-                derivedRebuildExecutor.rebuildAll(requests, clock.now())
+                derivedRebuildExecutor.rebuild(requests, clock.now())
                 repository.deleteCompleted(rows)
                 rebuilt += rows.size
                 sweeperLogger.infoWithContext("pending_derived_rebuild_repaired", "dateCount" to rows.size)

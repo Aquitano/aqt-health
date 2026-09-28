@@ -206,10 +206,7 @@ class IngestionService(
                 val response = transactionResult.response
                 if (!response.duplicateBatch) {
                     try {
-                        derivedRebuildExecutor.rebuild(
-                            transactionResult.derivedRebuildRequest,
-                            now,
-                        )
+                        derivedRebuildExecutor.rebuild(listOf(transactionResult.derivedRebuildRequest), now)
                         pendingDerivedRebuildRepository.deleteCompleted(transactionResult.pendingRebuilds)
                     } catch (exception: Exception) {
                         if (exception is CancellationException) throw exception

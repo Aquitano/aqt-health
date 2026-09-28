@@ -111,13 +111,12 @@ class ReplayServiceTest : PostgresIntegrationTest() {
         val fixture = Fixture()
         fixture.ingestMixedBatch()
 
-        fixture.execute("DELETE FROM step_daily_summaries")
+        fixture.execute("DELETE FROM canonical_step_samples")
 
         val job = fixture.runReplay(ReplayRequest(scope = "derived"))
 
         assertEquals(ReplayJobStatus.Completed, job.status)
         assertEquals(0, job.recordsReplayed)
-        assertEquals(1, fixture.count("step_daily_summaries"))
         assertEquals(1, fixture.count("canonical_step_samples"))
         assertEquals(1, fixture.count("canonical_activity_summaries"))
     }
@@ -158,14 +157,14 @@ class ReplayServiceTest : PostgresIntegrationTest() {
 
         // The fixture batch contains one record per derived kind; the shared registry mapping
         // must route each of them to a rebuild, so no kind can drift out of the replay path.
-        fixture.execute("DELETE FROM step_daily_summaries")
+        fixture.execute("DELETE FROM canonical_step_samples")
 
         val job = fixture.runReplay(
             ReplayRequest(scope = "derived", fromDate = "2026-04-18", toDate = "2026-04-19")
         )
 
         assertEquals(ReplayJobStatus.Completed, job.status)
-        assertEquals(1, fixture.count("step_daily_summaries"))
+        assertEquals(1, fixture.count("canonical_step_samples"))
     }
 
     @Test

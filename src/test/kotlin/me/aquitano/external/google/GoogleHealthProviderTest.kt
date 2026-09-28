@@ -327,7 +327,7 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
         assertEquals(1, second.batches.single().duplicateMetricsSkipped)
         assertEquals(2, fixture.client.fetchRequests.size)
         assertEquals(1, countRows(fixture.dbPath, "step_samples"))
-        assertEquals(1200, singleInt(fixture.dbPath, "SELECT steps FROM step_daily_summaries"))
+        assertEquals(1200, singleInt(fixture.dbPath, "SELECT SUM(value)::int FROM canonical_step_day_bucket_contributions"))
     }
 
     @Test
@@ -378,7 +378,7 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
         assertEquals(0, second.batches.single().metricsCreated[StructuralMetricKinds.STEP_SAMPLES])
         assertEquals(1, second.batches.single().duplicateMetricsSkipped)
         assertEquals(1, countRows(fixture.dbPath, "step_samples"))
-        assertEquals(20, singleInt(fixture.dbPath, "SELECT steps FROM step_daily_summaries"))
+        assertEquals(20, singleInt(fixture.dbPath, "SELECT SUM(value)::int FROM canonical_step_day_bucket_contributions"))
     }
 
     @Test
@@ -429,7 +429,7 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
         assertEquals(1, second.batches.single().metricsCreated[StructuralMetricKinds.STEP_SAMPLES])
         assertEquals(0, second.batches.single().duplicateMetricsSkipped)
         assertEquals(2, countRows(fixture.dbPath, "step_samples"))
-        assertEquals(2000, singleInt(fixture.dbPath, "SELECT steps FROM step_daily_summaries"))
+        assertEquals(2000, singleInt(fixture.dbPath, "SELECT SUM(value)::int FROM canonical_step_day_bucket_contributions"))
     }
 
     @Test

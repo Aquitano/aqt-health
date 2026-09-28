@@ -38,7 +38,7 @@ class PendingDerivedRebuildRepository(private val database: Database) {
         request.affectedDates.forEach { (kind, dates) ->
             // Concurrent batches upsert the same unique keys; a fixed order cannot deadlock.
             dates.sorted().forEach { date ->
-                PendingDerivedRebuildsTable.upsert(
+                queued += PendingDerivedRebuildsTable.upsertReturning(
                     PendingDerivedRebuildsTable.sourceInstanceId,
                     PendingDerivedRebuildsTable.derivedKind,
                     PendingDerivedRebuildsTable.affectedDate,
@@ -57,11 +57,6 @@ class PendingDerivedRebuildRepository(private val database: Database) {
                     it[revision] = UUID.randomUUID().toString()
                     it[createdAt] = nowTimestamp
                     it[updatedAt] = nowTimestamp
-                }
-                queued += PendingDerivedRebuildsTable.selectAll().where {
-                    (PendingDerivedRebuildsTable.sourceInstanceId eq request.sourceInstanceId) and
-                        (PendingDerivedRebuildsTable.derivedKind eq kind.name) and
-                        (PendingDerivedRebuildsTable.affectedDate eq date)
                 }.single().toRecord()
             }
         }
@@ -81,12 +76,7 @@ class PendingDerivedRebuildRepository(private val database: Database) {
     suspend fun deleteCompleted(records: List<PendingDerivedRebuildRecord>) {
         if (records.isEmpty()) return
         suspendDbTransaction(db = database) {
-            records.forEach { record ->
-                PendingDerivedRebuildsTable.deleteWhere {
-                    (PendingDerivedRebuildsTable.id eq record.id) and
-                        (PendingDerivedRebuildsTable.revision eq record.revision)
-                }
-            }
+            PendingDerivedRebuildsTable.deleteWhere { revision inList records.map { it.revision } }
         }
     }
 

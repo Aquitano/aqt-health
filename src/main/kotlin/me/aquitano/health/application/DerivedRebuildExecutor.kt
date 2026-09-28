@@ -1,7 +1,6 @@
 package me.aquitano.health.application
 
 import me.aquitano.health.application.metric.steps.derived.CanonicalStepDerivationService
-import me.aquitano.health.application.metric.steps.derived.StepDailySummaryDerivation
 import me.aquitano.health.domain.DerivedKind
 import me.aquitano.health.domain.RecordTypes
 import me.aquitano.health.shared.utcDate
@@ -10,10 +9,7 @@ import java.time.Instant
 import java.time.LocalDate
 
 interface DerivedRebuildExecutor {
-    suspend fun rebuild(request: DerivedRebuildRequest, computedAt: Instant)
-    suspend fun rebuildAll(requests: List<DerivedRebuildRequest>, computedAt: Instant) {
-        requests.forEach { rebuild(it, computedAt) }
-    }
+    suspend fun rebuild(requests: List<DerivedRebuildRequest>, computedAt: Instant)
 }
 
 data class DerivedRebuildRequest(
@@ -65,10 +61,7 @@ class DerivedRebuildModuleRegistry(val modules: List<DerivedRebuildModule>) {
 }
 
 /** The canonical post-ingestion rebuild wiring; order is the execution order. */
-fun derivedRebuildModules(
-    stepSummaryService: StepDailySummaryDerivation,
-    canonicalStepService: CanonicalStepDerivationService,
-): List<DerivedRebuildModule> =
+fun derivedRebuildModules(canonicalStepService: CanonicalStepDerivationService): List<DerivedRebuildModule> =
     listOf(
         DerivedRebuildModule(
             kind = DerivedKind.STEP_SUMMARY,
@@ -80,10 +73,7 @@ fun derivedRebuildModules(
                     emptySet()
                 }
             },
-            action = { database, sourceInstanceIds, dates, computedAt ->
-                sourceInstanceIds.forEach { stepSummaryService.recompute(database, it, dates, computedAt) }
-                canonicalStepService.recompute(database, dates, computedAt)
-            },
+            action = { database, _, dates, computedAt -> canonicalStepService.recompute(database, dates, computedAt) },
         )
     )
 
@@ -105,10 +95,7 @@ class PerDateDerivedRebuildExecutor(
     private val database: Database,
     private val registry: DerivedRebuildModuleRegistry,
 ) : DerivedRebuildExecutor {
-    override suspend fun rebuild(request: DerivedRebuildRequest, computedAt: Instant) =
-        rebuildAll(listOf(request), computedAt)
-
-    override suspend fun rebuildAll(requests: List<DerivedRebuildRequest>, computedAt: Instant) {
+    override suspend fun rebuild(requests: List<DerivedRebuildRequest>, computedAt: Instant) {
         registry.modules.forEach { module ->
             val sourcesByDate = mutableMapOf<LocalDate, MutableSet<Int>>()
             requests.forEach { request ->

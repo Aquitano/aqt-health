@@ -1,7 +1,8 @@
 ALTER TABLE pending_derived_rebuilds ADD COLUMN revision TEXT NOT NULL DEFAULT '';
 
--- Daily canonical reads now aggregate the same contributions as day and dashboard reads.
+-- Every step read aggregates canonical bucket contributions; per-source summaries had no reader.
 DROP VIEW canonical_step_daily_summaries;
+DROP TABLE step_daily_summaries;
 
 CREATE INDEX canonical_step_bucket_contributions_version_date_idx
     ON canonical_step_day_bucket_contributions (algorithm_version, date);

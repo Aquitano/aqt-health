@@ -19,19 +19,6 @@ object StepSamplesTable : IntIdTable("step_samples") {
     val createdAt = timestampWithTimeZone("created_at")
 }
 
-object StepDailySummariesTable : IntIdTable("step_daily_summaries") {
-    val date = date("date")
-    val sourceInstanceId =
-        integer("source_instance_id").references(SourceInstancesTable.id)
-    val steps = integer("steps")
-    val sampleCount = integer("sample_count")
-    val computedAt = timestampWithTimeZone("computed_at")
-
-    init {
-        uniqueIndex(date, sourceInstanceId)
-    }
-}
-
 object SleepSessionsTable : IntIdTable("sleep_sessions") {
     val sourceInstanceId =
         integer("source_instance_id").references(SourceInstancesTable.id)

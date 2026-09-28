@@ -562,7 +562,6 @@ Ingestion tables:
 Metric tables:
 
 - `step_samples`
-- `step_daily_summaries`
 - `sleep_sessions`
 - `sleep_stages`
 - `sleep_summaries`
