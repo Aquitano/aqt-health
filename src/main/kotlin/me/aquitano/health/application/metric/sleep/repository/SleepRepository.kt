@@ -15,7 +15,7 @@ class SleepRepository : BaseMetricReadRepository() {
      * local date it ended on, so the label is computed in the requested timezone at read time
      * and the session id doubles as the night id for cursor pagination.
      */
-    fun listCanonicalSleepNights(filters: SleepNightReadFilters): Triple<List<SleepNightRow>, Map<Int, List<SleepStageRow>>, Map<Int, SourceMetadata>> {
+    fun listCanonicalSleepNights(filters: ReadFilters): Triple<List<SleepNightRow>, Map<Int, List<SleepStageRow>>, Map<Int, SourceMetadata>> {
         val sourceIds = filters.sourceInstanceIds()
         if (sourceIds.hasNoMatchingSources()) return emptyTripleReadResult()
 

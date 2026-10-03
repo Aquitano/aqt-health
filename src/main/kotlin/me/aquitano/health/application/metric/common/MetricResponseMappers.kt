@@ -3,9 +3,7 @@ package me.aquitano.health.application.metric.common
 import me.aquitano.health.api.dto.*
 import me.aquitano.health.application.metric.activity.repository.ActivitySummaryRow
 import me.aquitano.health.application.metric.cardiovascular.repository.BloodPressureMeasurementRow
-import me.aquitano.health.application.metric.common.repository.DailyReadFilters
 import me.aquitano.health.application.metric.common.repository.ReadFilters
-import me.aquitano.health.application.metric.common.repository.SleepNightReadFilters
 import me.aquitano.health.application.metric.common.repository.SourceMetadata
 import me.aquitano.health.application.metric.sleep.repository.SleepNightRow
 import me.aquitano.health.application.metric.sleep.repository.SleepSessionRow
@@ -137,30 +135,6 @@ internal fun SleepNightRow.toResponse(
 
 internal fun <T> List<T>.meta(
     filters: ReadFilters,
-    nextCursor: String? = null,
-): ReadResponseMeta =
-    ReadResponseMeta(
-        count = size,
-        limit = filters.limit,
-        sort = filters.sort,
-        order = filters.order,
-        nextCursor = nextCursor,
-    )
-
-internal fun <T> List<T>.meta(
-    filters: DailyReadFilters,
-    nextCursor: String? = null,
-): ReadResponseMeta =
-    ReadResponseMeta(
-        count = size,
-        limit = filters.limit,
-        sort = filters.sort,
-        order = filters.order,
-        nextCursor = nextCursor,
-    )
-
-internal fun <T> List<T>.meta(
-    filters: SleepNightReadFilters,
     nextCursor: String? = null,
 ): ReadResponseMeta =
     ReadResponseMeta(
