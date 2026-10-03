@@ -2,7 +2,7 @@ package me.aquitano.health.application.metric.activity.repository
 
 import me.aquitano.health.application.metric.common.keysetFetchLimit
 import me.aquitano.health.application.metric.common.repository.BaseMetricReadRepository
-import me.aquitano.health.application.metric.common.repository.DailyReadFilters
+import me.aquitano.health.application.metric.common.repository.ReadFilters
 import me.aquitano.health.application.metric.common.repository.SourceMetadata
 import me.aquitano.health.infrastructure.database.tables.ActivitySummariesTable
 import me.aquitano.health.infrastructure.database.tables.CanonicalActivitySummariesTable
@@ -12,7 +12,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 /** Reads through the canonical_activity_summaries view (rank winner per date, see V15). */
 class CanonicalActivitySummaryDerivationRepository : BaseMetricReadRepository() {
     fun listCanonicalActivitySummaries(
-        filters: DailyReadFilters,
+        filters: ReadFilters,
     ): Pair<List<ActivitySummaryRow>, Map<Int, SourceMetadata>> {
         val where =
             dateConditions(

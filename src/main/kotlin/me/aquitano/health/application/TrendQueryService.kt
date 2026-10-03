@@ -2,7 +2,6 @@ package me.aquitano.health.application
 
 import me.aquitano.health.api.dto.*
 import me.aquitano.health.application.metric.common.QueryParams
-import me.aquitano.health.application.metric.common.repository.DailyReadFilters
 import me.aquitano.health.application.metric.common.repository.ReadFilters
 import me.aquitano.health.application.metric.scalar.ScalarSampleReadRepository
 import me.aquitano.health.application.metric.scalar.toScalarResponse
@@ -173,8 +172,8 @@ class TrendQueryService(
     private fun dailyReadFilters(
         fromDate: LocalDate,
         toDate: LocalDate,
-    ): DailyReadFilters =
-        DailyReadFilters(
+    ): ReadFilters =
+        ReadFilters(
             fromDate = fromDate,
             toDate = toDate,
             provider = null,

@@ -70,10 +70,6 @@ abstract class BaseMetricReadRepository {
 
     protected fun ReadFilters.sourceInstanceIds(): List<Int>? = sourceInstanceIds(provider, providerInstanceId)
 
-    protected fun DailyReadFilters.sourceInstanceIds(): List<Int>? = sourceInstanceIds(provider, providerInstanceId)
-
-    protected fun SleepNightReadFilters.sourceInstanceIds(): List<Int>? = sourceInstanceIds(provider, providerInstanceId)
-
     protected fun List<Int>?.hasNoMatchingSources(): Boolean = this != null && isEmpty()
 
     protected fun <T> emptyReadResult(): Pair<List<T>, Map<Int, SourceMetadata>> = emptyList<T>() to emptyMap()
@@ -148,7 +144,7 @@ abstract class BaseMetricReadRepository {
     }
 
     protected fun dateConditions(
-        filters: DailyReadFilters,
+        filters: ReadFilters,
         sourceInstanceIdColumn: Column<Int>,
         dateColumn: Column<LocalDate>,
     ): MetricConditionResult {
@@ -259,10 +255,6 @@ abstract class BaseMetricReadRepository {
         }
 
     protected fun ReadFilters.sortOrder(): SortOrder = sortOrder(order)
-
-    protected fun DailyReadFilters.sortOrder(): SortOrder = sortOrder(order)
-
-    protected fun SleepNightReadFilters.sortOrder(): SortOrder = sortOrder(order)
 }
 
 enum class TimeFilterMode {

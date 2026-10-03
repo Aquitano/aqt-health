@@ -2,7 +2,6 @@ package me.aquitano.health.application.metric.steps.repository
 
 import me.aquitano.health.application.metric.common.keysetFetchLimit
 import me.aquitano.health.application.metric.common.repository.BaseMetricReadRepository
-import me.aquitano.health.application.metric.common.repository.DailyReadFilters
 import me.aquitano.health.application.metric.common.repository.ReadFilters
 import me.aquitano.health.application.metric.common.repository.SourceMetadata
 import me.aquitano.health.application.metric.common.repository.TimeFilterMode
@@ -167,7 +166,7 @@ class CanonicalStepDerivationRepository : BaseMetricReadRepository() {
     }
 
     /** All canonical totals use the same allocated bucket contributions. */
-    fun sumCanonicalStepDailySummaries(filters: DailyReadFilters): DashboardStepsSummaryRow {
+    fun sumCanonicalStepDailySummaries(filters: ReadFilters): DashboardStepsSummaryRow {
         val table = CanonicalStepDayBucketContributionsTable
         val where =
             dateConditions(filters, table.sourceInstanceId, table.date).whereOrNull()
@@ -186,7 +185,7 @@ class CanonicalStepDerivationRepository : BaseMetricReadRepository() {
     }
 
     fun listCanonicalStepDailySummaries(
-        filters: DailyReadFilters,
+        filters: ReadFilters,
     ): Pair<List<StepDailySummaryRow>, Map<Int, SourceMetadata>> {
         val table = CanonicalStepDayBucketContributionsTable
         val where =
@@ -242,7 +241,7 @@ class CanonicalStepDerivationRepository : BaseMetricReadRepository() {
     }
 
     fun summarizeCanonicalStepsForDashboard(
-        filters: DailyReadFilters,
+        filters: ReadFilters,
         algorithmVersion: Int,
     ): Pair<CanonicalDashboardStepsSummary, Map<Int, SourceMetadata>> {
         val contributionWhere =
