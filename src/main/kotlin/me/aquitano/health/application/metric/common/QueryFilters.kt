@@ -22,7 +22,7 @@ internal fun QueryParams.readFilters(): ReadFilters {
         provider = optional("provider"),
         providerInstanceId = optional("providerInstanceId"),
         includeSource = boolean(QueryParamSpecs.includeSource),
-        limit = if (latest) 1 else limit(QueryParamSpecs.readLimit),
+        limit = if (latest) 1 else int(QueryParamSpecs.readLimit),
         order = order,
         cursor = if (latest) null else cursor(order),
         latest = latest,
@@ -54,7 +54,7 @@ internal fun QueryParams.dailyReadFilters(now: Instant): ReadFilters {
         provider = optional("provider"),
         providerInstanceId = optional("providerInstanceId"),
         includeSource = boolean(QueryParamSpecs.includeSource),
-        limit = if (optional("date") != null) 1 else limit(QueryParamSpecs.readLimit),
+        limit = if (optional("date") != null) 1 else int(QueryParamSpecs.readLimit),
         order = order,
         cursor = cursor(order),
     )
@@ -100,7 +100,7 @@ internal fun QueryParams.sleepNightReadFilters(now: Instant): ReadFilters {
         provider = optional("provider"),
         providerInstanceId = optional("providerInstanceId"),
         includeSource = boolean(QueryParamSpecs.includeSource),
-        limit = if (exactDate != null) 1 else limit(QueryParamSpecs.readLimit),
+        limit = if (exactDate != null) 1 else int(QueryParamSpecs.readLimit),
         order = order,
         cursor = cursor(order),
     )

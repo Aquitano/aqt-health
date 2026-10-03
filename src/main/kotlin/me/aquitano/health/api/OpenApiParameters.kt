@@ -6,7 +6,7 @@ import io.ktor.openapi.*
 import io.ktor.utils.io.*
 import me.aquitano.external.withings.WITHINGS_PROVIDER_CODE
 import me.aquitano.health.api.dto.HealthDayModuleName
-import me.aquitano.health.application.metric.common.LimitParamSpec
+import me.aquitano.health.application.metric.common.IntParamSpec
 import me.aquitano.health.application.metric.common.QueryParamSpecs
 import me.aquitano.health.domain.BatchStatus
 import me.aquitano.health.domain.ScalarMetricTypes
@@ -343,7 +343,7 @@ private fun Operation.Builder.orderParameter(orderDescription: String) {
 }
 
 private fun Operation.Builder.limitParameter(
-    spec: LimitParamSpec,
+    spec: IntParamSpec,
     description: String,
     example: Int,
 ) {
@@ -387,4 +387,4 @@ private fun Operation.Builder.timezoneParameter(
     }
 }
 
-private fun defaultLimitDescription(spec: LimitParamSpec): String = "Maximum number of items. Defaults to ${spec.default} and cannot exceed ${spec.max}."
+private fun defaultLimitDescription(spec: IntParamSpec): String = "Maximum number of items. Defaults to ${spec.default} and cannot exceed ${spec.max}."

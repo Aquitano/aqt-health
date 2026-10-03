@@ -10,7 +10,7 @@ internal data class BooleanParamSpec(
     val default: Boolean,
 )
 
-internal data class LimitParamSpec(
+internal data class IntParamSpec(
     val name: String,
     val default: Int,
     val min: Int,
@@ -32,8 +32,9 @@ internal object QueryParamSpecs {
     val latest = BooleanParamSpec("latest", default = false)
     val raw = BooleanParamSpec("raw", default = false)
 
-    val readLimit = LimitParamSpec("limit", default = 500, min = 1, max = 5000)
-    val adminLimit = LimitParamSpec("limit", default = 100, min = 1, max = 1000)
+    val readLimit = IntParamSpec("limit", default = 500, min = 1, max = 5000)
+    val adminLimit = IntParamSpec("limit", default = 100, min = 1, max = 1000)
+    val periodDays = IntParamSpec("periodDays", default = 7, min = 1, max = 90)
 
     val order = EnumParamSpec("order", listOf(Orders.ASC, Orders.DESC), Orders.ASC)
 }
