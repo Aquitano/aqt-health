@@ -160,7 +160,11 @@ describe("page data requests", () => {
       toDate: "2026-03-08",
       timezone: "America/New_York",
     });
-    expect(mocks.getDashboardTrends).toHaveBeenCalledWith({ periodDays: 8, toDate: "2026-03-08" });
+    expect(mocks.getDashboardTrends).toHaveBeenCalledWith({
+      periodDays: 8,
+      toDate: "2026-03-08",
+      timezone: "America/New_York",
+    });
     expect(mocks.listBloodPressure).not.toHaveBeenCalled();
     expect(mocks.listScalarSamples).not.toHaveBeenCalled();
   });

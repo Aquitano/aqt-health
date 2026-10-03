@@ -36,7 +36,7 @@ export function getHealthDataPageSources(
     apiBaseUrl: client.apiBaseUrl,
     health: client.getHealth(),
     summary: client.getDashboardSummary({ fromDate, toDate, timezone }),
-    trends: client.getDashboardTrends({ periodDays: Math.min(rangeDays(fromDate, toDate), 90), toDate }),
+    trends: client.getDashboardTrends({ periodDays: Math.min(rangeDays(fromDate, toDate), 90), toDate, timezone }),
     healthDay: getHealthDay({
       date: toDate,
       timezone,
