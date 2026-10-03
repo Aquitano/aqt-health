@@ -63,12 +63,16 @@ class IngestionService(
         ingestionRepository.reusableSyncBatchId(sourceInstance.id, windowKey, contentHash)
     }
 
+    /**
+     * [allowEmptyRecords] lets provider sync persist empty windows while direct ingestion stays strict.
+     */
     suspend fun ingestBatch(
         request: IngestionBatchRequest,
         now: Instant,
         snapshot: IngestionSnapshot? = null,
+        allowEmptyRecords: Boolean = false,
     ): IngestionSummaryResponse {
-        val validated = mappingService.validateAndMap(request)
+        val validated = mappingService.validateAndMap(request, allowEmptyRecords)
         logger.infoWithContext(
             "ingestion_batch_received",
             "provider" to validated.provider,

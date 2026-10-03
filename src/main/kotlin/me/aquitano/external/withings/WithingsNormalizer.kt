@@ -37,6 +37,8 @@ class WithingsNormalizer {
             "sleep" -> normalizeSleep(fetchResult.records, window)
             else -> emptyList()
         }
+        // Raw records are not repeated here: the pipeline stores only `pages`, which already holds
+        // every raw payload verbatim.
         val sourcePayload = buildJsonObject {
             put("dataType", fetchResult.dataType)
             put(
@@ -52,7 +54,6 @@ class WithingsNormalizer {
                     }
                 )
             )
-            put("records", JsonArray(fetchResult.records))
         }
         return NormalizedProviderBatch(sourcePayload, records)
     }

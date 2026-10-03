@@ -13,6 +13,7 @@ import me.aquitano.health.api.dto.SleepSession
 import me.aquitano.health.api.dto.IngestionBatchRequest
 import me.aquitano.health.api.dto.StepInterval
 import me.aquitano.health.application.IngestionMappingService
+import me.aquitano.health.application.providersync.collapseDuplicateProviderRecordIds
 import me.aquitano.health.application.providersync.SyncWindow
 import java.time.Duration
 import java.time.Instant
@@ -147,6 +148,40 @@ class WithingsNormalizerTest {
     }
 
     @Test
+    fun activityFromTwoTrackingDevicesCollapsesToOneRecordPerDate() {
+        // getactivity returns an entry per tracking device, so a user with a watch and the phone
+        // tracker gets the same date twice. Both entries normalize to the same date-keyed ids; the
+        // sync pipeline collapses them the same way before ingestion, last entry winning.
+        val result = normalize(
+            fetchResult(
+                "activity",
+                buildJsonObject {
+                    put("date", "2026-04-01")
+                    put("deviceid", "watch-device")
+                    put("brand", 18)
+                    put("steps", 8000)
+                    put("calories", 420)
+                },
+                buildJsonObject {
+                    put("date", "2026-04-01")
+                    put("deviceid", "phone-tracker")
+                    put("brand", 1)
+                    put("steps", 300)
+                    put("calories", 15)
+                },
+            )
+        )
+
+        val records = result.records.collapseDuplicateProviderRecordIds()
+        assertEquals(
+            listOf("withings:activity:2026-04-01", "withings:activity:2026-04-01:summary"),
+            records.map { it.providerRecordId },
+        )
+        assertEquals(300, records.filterIsInstance<StepInterval>().single().steps)
+        assertAcceptedByIngestion(records)
+    }
+
+    @Test
     fun activityCreatesSummaryFieldsAlongsideSteps() {
         val result = normalize(
             fetchResult(
@@ -233,7 +268,7 @@ class WithingsNormalizerTest {
     }
 
     @Test
-    fun incompleteBloodPressureIsPreservedOnlyInSourcePayload() {
+    fun incompleteBloodPressureIsDroppedAndRawPagesAreTheOnlySourceCopy() {
         val result = normalize(
             fetchResult(
                 "measures",
@@ -248,7 +283,10 @@ class WithingsNormalizerTest {
         )
 
         assertTrue(result.records.isEmpty())
-        assertEquals(1, result.sourcePayload["records"]!!.jsonArray.size)
+        // Raw pages are the only source copy: duplicating the records here doubled peak memory and
+        // was dropped before storage anyway.
+        assertEquals(1, result.sourcePayload["pages"]!!.jsonArray.size)
+        assertTrue("records" !in result.sourcePayload)
     }
 
     @Test

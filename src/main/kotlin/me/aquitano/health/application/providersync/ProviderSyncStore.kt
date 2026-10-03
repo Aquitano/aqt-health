@@ -229,6 +229,7 @@ class OAuthProviderSyncStore(
                 records = command.records,
             ),
             now = now,
+            allowEmptyRecords = true,
             snapshot = command.snapshot,
         )
         return ProviderSyncBatch(

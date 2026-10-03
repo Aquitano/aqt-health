@@ -191,7 +191,7 @@ class KtorWithingsClient(
                 "meastypes" to measureTypes.joinToString(","),
                 "category" to category.toString(),
                 "startdate" to from.epochSecond.toString(),
-                "enddate" to to.epochSecond.toString(),
+                "enddate" to inclusiveEndSeconds(from, to).toString(),
             ),
         )
 
@@ -230,7 +230,7 @@ class KtorWithingsClient(
             recordsKey = "series",
             baseParameters = listOf(
                 "startdate" to from.epochSecond.toString(),
-                "enddate" to to.epochSecond.toString(),
+                "enddate" to inclusiveEndSeconds(from, to).toString(),
                 "data_fields" to dataFields.joinToString(","),
             ),
         )
@@ -470,6 +470,11 @@ class KtorWithingsClient(
 
             else -> emptyList()
         }
+
+    // Withings accepts inclusive seconds. Subtract before truncating so fractional window ends
+    // retain their last included second; clamp sub-second windows to their start second.
+    private fun inclusiveEndSeconds(from: Instant, to: Instant): Long =
+        maxOf(from.epochSecond, to.minusNanos(1).epochSecond)
 
     private fun ymdRange(
         from: Instant,
