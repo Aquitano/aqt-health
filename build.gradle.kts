@@ -87,7 +87,7 @@ dependencies {
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit:$kotlin_version")
     testImplementation("org.testcontainers:testcontainers-postgresql:$testcontainers_version")
     testImplementation("com.lemonappdev:konsist:$konsist_version")
-    testCompileOnly("org.jetbrains.kotlin:kotlin-compiler-embeddable:2.0.21") // Supplied at runtime by Konsist.
+    testCompileOnly("org.jetbrains.kotlin:kotlin-compiler-embeddable:2.4.20") // Supplied at runtime by Konsist.
 }
 
 fun dockerIsAvailable(): Boolean =
