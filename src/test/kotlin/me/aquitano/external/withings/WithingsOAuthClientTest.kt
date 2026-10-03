@@ -23,9 +23,25 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.test.assertFalse
 
 class WithingsOAuthClientTest {
     private val now = Instant.parse("2026-04-20T10:00:00Z")
+
+    @Test
+    fun transportUnauthorizedIsClassifiedForTokenRecovery() = runBlocking {
+        val client = client { respond("unauthorized", HttpStatusCode.Unauthorized) }
+        val adapter = WithingsSyncAdapter(client, WithingsNormalizer())
+        val dataError = assertFailsWith<WithingsHttpException> {
+            client.fetchMeasures("token", now.minusSeconds(3600), now, listOf(1), 1)
+        }
+        assertEquals(401, dataError.httpStatus)
+        assertNull(dataError.providerStatus)
+        assertTrue(adapter.isUnauthorized(dataError))
+        val tokenError = assertFailsWith<WithingsHttpException> { client.refreshToken("refresh", now) }
+        assertEquals(401, tokenError.httpStatus)
+        assertFalse(adapter.isInvalidRefreshToken(tokenError))
+    }
 
     @Test
     fun authorizationCodeExchangeSendsRequiredFormFieldsAndParsesResponse() = runBlocking {
@@ -222,6 +238,22 @@ class WithingsOAuthClientTest {
         assertEquals(listOf("1775087999"), forms[0]["enddate"])
         assertEquals(listOf("25"), forms[1]["offset"])
         assertEquals(2, result.records.size)
+    }
+
+    @Test
+    fun fractionalWindowEndIncludesItsLastWholeSecond() = runBlocking {
+        val forms = mutableListOf<Map<String, List<String>>>()
+        val client = client { request ->
+            forms += request.formParameters()
+            respondJson("""{"status": 0, "body": {"measuregrps": [], "series": []}}""")
+        }
+        val from = Instant.parse("2026-04-01T00:00:00Z")
+        val to = Instant.parse("2026-04-02T00:00:00.500Z")
+
+        client.fetchMeasures("access", from, to, listOf(1), 1)
+        client.fetchSleep("access", from, to, listOf("hr"))
+
+        assertEquals(listOf("1775088000", "1775088000"), forms.map { it["enddate"]!!.single() })
     }
 
     @Test

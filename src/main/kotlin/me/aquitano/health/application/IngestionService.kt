@@ -8,10 +8,12 @@ import me.aquitano.health.application.metric.common.MetricWriteService
 import me.aquitano.health.domain.*
 import me.aquitano.health.infrastructure.repositories.IngestionRepository
 import me.aquitano.health.infrastructure.repositories.PendingDerivedRebuildRepository
+import me.aquitano.health.infrastructure.repositories.PendingDerivedRebuildRecord
 import me.aquitano.health.infrastructure.repositories.SupportRepository
 import me.aquitano.health.shared.AppJson
 import org.jetbrains.exposed.v1.jdbc.Database
 import me.aquitano.health.infrastructure.database.suspendDbTransaction
+import me.aquitano.health.infrastructure.database.withSavepoint
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.aquitano.health.infrastructure.logging.*
 import java.time.Instant
@@ -48,13 +50,26 @@ class IngestionService(
             )
         }
 
+    suspend fun reusableSyncBatchId(
+        provider: String,
+        providerInstanceId: String,
+        windowKey: String,
+        contentHash: String,
+        now: Instant,
+    ): Int? = suspendDbTransaction(db = database) {
+        val sourceInstance = supportRepository.resolveOrCreateSourceInstanceInTransaction(
+            provider, providerInstanceId, now,
+        )
+        ingestionRepository.reusableSyncBatchId(sourceInstance.id, windowKey, contentHash)
+    }
+
     /**
-     * [allowEmptyRecords] lets provider sync store a window that returned nothing as an empty
-     * processed batch, so the window's external id dedupes instead of being re-fetched forever.
+     * [allowEmptyRecords] lets provider sync persist empty windows while direct ingestion stays strict.
      */
     suspend fun ingestBatch(
         request: IngestionBatchRequest,
         now: Instant,
+        snapshot: IngestionSnapshot? = null,
         allowEmptyRecords: Boolean = false,
     ): IngestionSummaryResponse {
         val validated = mappingService.validateAndMap(request, allowEmptyRecords)
@@ -133,6 +148,7 @@ class IngestionService(
                     sourcePayloadJson = AppJson.encodeToString(validated.sourcePayload),
                     ingestedAt = validated.ingestedAt,
                     receivedAt = now,
+                    snapshot = snapshot,
                 )
                 val ingestionRecords = ingestionRepository.insertRecords(
                     batchId,
@@ -145,12 +161,18 @@ class IngestionService(
                 var affectedDates = mapOf<DerivedKind, Set<LocalDate>>()
 
                 try {
-                    val writeResult = metricWriteService.writeAll(
-                        provider = validated.provider,
-                        sourceInstanceId = sourceInstance.id,
-                        writes = ingestionRecords.map { MetricWrite(it.id, it.record) },
-                        now = now,
-                    )
+                    // The metric writes run in a savepoint: a SQL-level failure would otherwise
+                    // abort the whole transaction, so markFailed below would throw too and the
+                    // batch row would vanish. Rolling back to the savepoint also drops the metric
+                    // rows written before the failure, so a retry cannot double-record them.
+                    val writeResult = withSavepoint("ingestion_metric_writes") {
+                        metricWriteService.writeAll(
+                            provider = validated.provider,
+                            sourceInstanceId = sourceInstance.id,
+                            writes = ingestionRecords.map { MetricWrite(it.id, it.record) },
+                            now = now,
+                        )
+                    }
                     created = writeResult.created
                     duplicateSkipped = writeResult.duplicateSkipped
                     affectedDates = writeResult.affectedDates
@@ -194,6 +216,7 @@ class IngestionService(
                     response,
                     rebuildRequest,
                     created,
+                    pendingDerivedRebuildRepository.enqueueInTransaction(rebuildRequest, now = now),
                 )
             }
 
@@ -202,10 +225,8 @@ class IngestionService(
                 val response = transactionResult.response
                 if (!response.duplicateBatch) {
                     try {
-                        derivedRebuildExecutor.rebuild(
-                            transactionResult.derivedRebuildRequest,
-                            now,
-                        )
+                        derivedRebuildExecutor.rebuild(listOf(transactionResult.derivedRebuildRequest), now)
+                        pendingDerivedRebuildRepository.deleteCompleted(transactionResult.pendingRebuilds)
                     } catch (exception: Exception) {
                         if (exception is CancellationException) throw exception
                         val rebuildError = exception.message ?: "Unknown derived rebuild error"
@@ -214,11 +235,6 @@ class IngestionService(
                                 response.batchId,
                                 now,
                                 rebuildError,
-                            )
-                            pendingDerivedRebuildRepository.enqueueInTransaction(
-                                transactionResult.derivedRebuildRequest,
-                                error = rebuildError,
-                                now = now,
                             )
                         }
                         logger.errorWithContext(
@@ -248,6 +264,7 @@ private sealed interface IngestionTransactionResult {
         val response: IngestionSummaryResponse,
         val derivedRebuildRequest: DerivedRebuildRequest,
         val createdCounts: MetricCreatedCounts,
+        val pendingRebuilds: List<PendingDerivedRebuildRecord> = emptyList(),
     ) :
         IngestionTransactionResult
 

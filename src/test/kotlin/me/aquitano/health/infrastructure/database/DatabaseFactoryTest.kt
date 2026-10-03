@@ -1,5 +1,6 @@
 package me.aquitano.health.infrastructure.database
 
+import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.application.ApiClientBootstrapService
 import me.aquitano.health.infrastructure.config.AuthConfig
 import me.aquitano.health.infrastructure.config.DatabaseConfig
@@ -15,10 +16,10 @@ import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
-class DatabaseFactoryTest {
+class DatabaseFactoryTest : PostgresIntegrationTest() {
     @Test
     fun migrationsCreateExpectedTables() {
-        val database = DatabaseFactory().initialize(tempDatabaseConfig())
+        val database = openDatabase(tempDatabaseConfig())
 
         val tableNames = transaction(database) {
             val names = mutableSetOf<String>()
@@ -36,7 +37,6 @@ class DatabaseFactoryTest {
         assertContains(tableNames, "ingestion_batches")
         assertContains(tableNames, "ingestion_records")
         assertContains(tableNames, "step_samples")
-        assertContains(tableNames, "step_daily_summaries")
         assertContains(tableNames, "sleep_sessions")
         assertContains(tableNames, "sleep_stages")
         assertContains(tableNames, "scalar_samples")
@@ -58,14 +58,13 @@ class DatabaseFactoryTest {
 
         assertContains(viewNames, "canonical_scalar_samples")
         assertContains(viewNames, "canonical_activity_summaries")
-        assertContains(viewNames, "canonical_step_daily_summaries")
         assertContains(viewNames, "canonical_sleep_summaries")
         assertContains(viewNames, "canonical_sleep_sessions")
     }
 
     @Test
     fun bootstrapStoresOnlyHashedApiKey() {
-        val database = DatabaseFactory().initialize(tempDatabaseConfig())
+        val database = openDatabase(tempDatabaseConfig())
         val hasher = ApiKeyHasher()
         ApiClientBootstrapService(
             authConfig = AuthConfig(
@@ -90,7 +89,7 @@ class DatabaseFactoryTest {
 
     @Test
     fun postgresForeignKeysAreEnforced() {
-        val database = DatabaseFactory().initialize(tempDatabaseConfig())
+        val database = openDatabase(tempDatabaseConfig())
 
         transaction(database) {
             assertFailsWith<Exception> {
@@ -118,7 +117,7 @@ class DatabaseFactoryTest {
 
     @Test
     fun postgresConnectionUsesReadCommitted() {
-        val database = DatabaseFactory().initialize(tempDatabaseConfig())
+        val database = openDatabase(tempDatabaseConfig())
 
         transaction(database) {
             assertEquals("read committed", singleString("SHOW transaction_isolation"))
@@ -127,7 +126,7 @@ class DatabaseFactoryTest {
 
     @Test
     fun sleepStagesCascadeWhenSessionIsDeleted() {
-        val database = DatabaseFactory().initialize(tempDatabaseConfig())
+        val database = openDatabase(tempDatabaseConfig())
 
         transaction(database) {
             insertSourceInstance()
@@ -182,7 +181,7 @@ class DatabaseFactoryTest {
 
     @Test
     fun integrityConstraintsRejectInvalidMetricRows() {
-        val database = DatabaseFactory().initialize(tempDatabaseConfig())
+        val database = openDatabase(tempDatabaseConfig())
 
         transaction(database) {
             insertSourceInstance()

@@ -8,6 +8,8 @@ import me.aquitano.health.application.metric.steps.repository.CanonicalStepDeriv
 import me.aquitano.health.application.metric.steps.repository.CanonicalStepOutput
 import me.aquitano.health.application.metric.steps.repository.CanonicalStepSampleOutput
 import me.aquitano.health.application.metric.steps.repository.StepSampleRow
+import org.jetbrains.exposed.v1.jdbc.Database
+import me.aquitano.health.infrastructure.database.suspendDbTransaction
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
@@ -19,54 +21,74 @@ import me.aquitano.health.application.metric.common.canonicalIntervalRows
 const val CANONICAL_STEP_ALGORITHM_VERSION = 1
 
 private const val UNKNOWN_PROVIDER_RANK = 10_000
+private const val MAX_SNAPSHOT_ATTEMPTS = 3
 
 class CanonicalStepDerivationService(
     private val repository: CanonicalStepDerivationRepository,
 ) {
-    suspend fun recompute(dates: Set<LocalDate>, computedAt: Instant) {
+    suspend fun recompute(database: Database, dates: Set<LocalDate>, computedAt: Instant) {
         dates.forEach { date ->
-            val dayStart = date.atStartOfDay().toInstant(ZoneOffset.UTC)
-            val dayEnd = date.plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC)
-            val rawSamples = repository.listRawSamplesForDay(dayStart, dayEnd)
-            val metadata = repository.sourceMetadataFor(rawSamples.map { it.sourceInstanceId }.toSet())
-            val preparedSamples = rawSamples.map { preparedCanonicalSample(it, metadata) }
-                .sortedWith(compareBy<PreparedCanonicalStepSample> { it.candidate.startAt }
-                    .thenBy { it.candidate.endAt }
-                    .thenBy { it.candidate.row.id })
-            
-            val canonicalSamples = canonicalIntervalRows(
-                rows = preparedSamples.map { it.asIntervalCandidate() },
-                overlaps = { left, right ->
-                    left.startAt.isBefore(right.endAt) && right.startAt.isBefore(left.endAt)
-                },
-                choosePreferred = { left, right ->
-                    listOf(left.row, right.row).minWithOrNull(
-                        compareBy<PreparedCanonicalStepSample> { it.providerRank }
-                            .thenBy { it.durationSeconds }
-                            .thenByDescending { it.stepsPerSecond }
-                            .thenBy { it.candidate.row.id }
-                    )!!.asIntervalCandidate()
+            val persisted = (1..MAX_SNAPSHOT_ATTEMPTS).any { recomputeFromCurrentSamples(database, date, computedAt) }
+            check(persisted) { "Step samples kept changing while deriving $date; retry required" }
+        }
+    }
+
+    /** Returns false when raw samples changed between the read and the locked persist. */
+    private suspend fun recomputeFromCurrentSamples(database: Database, date: LocalDate, computedAt: Instant): Boolean {
+        val dayStart = date.atStartOfDay().toInstant(ZoneOffset.UTC)
+        val dayEnd = date.plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC)
+        val (rawSamples, metadata) = suspendDbTransaction(db = database) {
+            val rows = repository.listRawSamplesForDay(dayStart, dayEnd)
+            rows to repository.sourceMetadataFor(rows.map { it.sourceInstanceId }.toSet())
+        }
+        val sampleIds = rawSamples.mapTo(hashSetOf()) { it.id }
+        val providerRanks = metadata.mapValues { stepProviderRank(it.value.provider) }
+        val preparedSamples = rawSamples.map { preparedCanonicalSample(it, providerRanks) }
+            .sortedWith(compareBy<PreparedCanonicalStepSample> { it.row.startAt }
+                .thenBy { it.row.endAt }
+                .thenBy { it.row.id })
+
+        val canonicalSamples = canonicalIntervalRows(
+            rows = preparedSamples.map { it.asIntervalCandidate() },
+            choosePreferred = { left, right ->
+                if (stepPreference.compare(left.row, right.row) <= 0) left else right
+            }
+        )
+        val googleSourceIds = metadata.filterValues { normalizeProviderCode(it.provider) == "google_health" }.keys
+        val spans = resolveGoogleStepSpans(canonicalSamples.map { it.row }, googleSourceIds)
+            .filter { it.startAt.isBefore(dayEnd) && dayStart.isBefore(it.endAt) }
+        val durations = canonicalSamples.associate { it.row.id to it.durationSeconds }
+        val contributions = linkedMapOf<Pair<Int, Instant>, CanonicalStepBucketContributionOutput>()
+        spans.forEach { span ->
+            bucketContributions(date, dayStart, dayEnd, span, durations.getValue(span.sample.id), computedAt)
+                .forEach { contribution ->
+                    val key = contribution.sampleId to contribution.bucketStartAt
+                    val previous = contributions[key]
+                    contributions[key] = if (previous == null) contribution else
+                        previous.copy(value = previous.value + contribution.value)
                 }
-            )
-            repository.persistCanonicalOutput(
-                CanonicalStepOutput(
-                    date = date,
-                    algorithmVersion = CANONICAL_STEP_ALGORITHM_VERSION,
-                    computedAt = computedAt,
-                    samples = canonicalSamples.map {
-                        CanonicalStepSampleOutput(
-                            sampleId = it.candidate.row.id,
-                            sourceInstanceId = it.candidate.row.sourceInstanceId,
-                            startAt = it.candidate.startAt,
-                            endAt = it.candidate.endAt,
-                            steps = it.candidate.row.steps,
-                        )
-                    },
-                    bucketContributions = canonicalSamples.flatMap {
-                        bucketContributions(date, dayStart, dayEnd, it, computedAt)
-                    },
+        }
+        val output = CanonicalStepOutput(
+            date = date,
+            algorithmVersion = CANONICAL_STEP_ALGORITHM_VERSION,
+            computedAt = computedAt,
+            samples = spans.map { it.sample }.distinctBy { it.id }.map {
+                CanonicalStepSampleOutput(
+                    sampleId = it.id,
+                    sourceInstanceId = it.sourceInstanceId,
+                    startAt = it.startAt,
+                    endAt = it.endAt,
+                    steps = it.steps,
                 )
-            )
+            },
+            bucketContributions = contributions.values.toList(),
+        )
+        return suspendDbTransaction(db = database) {
+            // Serialize persistence per date, then reject computations made from stale raw rows.
+            exec("SELECT pg_advisory_xact_lock(384729, ${date.toEpochDay().toInt()})")
+            if (repository.rawSampleIdsForDay(dayStart, dayEnd) != sampleIds) return@suspendDbTransaction false
+            repository.persistCanonicalOutput(output)
+            true
         }
     }
 
@@ -74,45 +96,35 @@ class CanonicalStepDerivationService(
         date: LocalDate,
         dayStart: Instant,
         dayEnd: Instant,
-        sample: PreparedCanonicalStepSample,
+        span: StepAllocationSpan,
+        durationSeconds: Double,
         computedAt: Instant,
     ): List<CanonicalStepBucketContributionOutput> {
-        if (sample.durationSeconds <= 0) return emptyList()
-
+        if (durationSeconds <= 0) return emptyList()
+        val sample = span.sample
         val contributions = mutableListOf<CanonicalStepBucketContributionOutput>()
-        var bucketStart = dayStart
-        while (bucketStart.isBefore(dayEnd)) {
+        val firstBucket = Duration.between(dayStart, maxOf(dayStart, span.startAt)).seconds / 900
+        var bucketStart = dayStart.plusSeconds(firstBucket * 900)
+        val lastEnd = minOf(dayEnd, span.endAt)
+        while (bucketStart.isBefore(lastEnd)) {
             val bucketEnd = minOf(bucketStart.plus(Duration.ofMinutes(15)), dayEnd)
-            val overlapSeconds = overlapSeconds(sample.candidate.startAt, sample.candidate.endAt, bucketStart, bucketEnd)
-            if (overlapSeconds > 0) {
+            if (span.startAt.isBefore(bucketEnd) && bucketStart.isBefore(span.endAt)) {
                 contributions += CanonicalStepBucketContributionOutput(
                     date = date,
-                    sourceInstanceId = sample.candidate.row.sourceInstanceId,
-                    sampleId = sample.candidate.row.id,
+                    sourceInstanceId = sample.sourceInstanceId,
+                    sampleId = sample.id,
                     bucketStartAt = bucketStart,
                     bucketEndAt = bucketEnd,
-                    value = sample.candidate.row.steps * (overlapSeconds.toDouble() / sample.durationSeconds.toDouble()),
+                    value = allocatedSteps(
+                        sample.startAt, sample.endAt, sample.steps,
+                        maxOf(bucketStart, span.startAt), minOf(bucketEnd, span.endAt), durationSeconds,
+                    ).toDouble(),
                     computedAt = computedAt,
                 )
             }
             bucketStart = bucketEnd
         }
         return contributions
-    }
-
-    private fun overlapSeconds(
-        start: Instant,
-        end: Instant,
-        windowStart: Instant,
-        windowEnd: Instant,
-    ): Long {
-        val clippedStart = maxOf(start, windowStart)
-        val clippedEnd = minOf(end, windowEnd)
-        return if (clippedStart.isBefore(clippedEnd)) {
-            Duration.between(clippedStart, clippedEnd).seconds
-        } else {
-            0
-        }
     }
 
     // Ranks providers for canonical step selection from the same list MetricCatalogBootstrap
@@ -130,36 +142,34 @@ class CanonicalStepDerivationService(
 
     private fun preparedCanonicalSample(
         row: StepSampleRow,
-        metadata: Map<Int, me.aquitano.health.application.metric.common.repository.SourceMetadata>
+        providerRanks: Map<Int, Int>
     ): PreparedCanonicalStepSample {
-        val startAt = Instant.parse(row.startAt)
-        val endAt = Instant.parse(row.endAt)
-        val duration = Duration.between(startAt, endAt).seconds
+        val duration = secondsBetween(row.startAt, row.endAt)
         return PreparedCanonicalStepSample(
-            candidate = CanonicalIntervalCandidate(
-                row = row,
-                sourceInstanceId = row.sourceInstanceId,
-                startAt = startAt,
-                endAt = endAt,
-            ),
+            row = row,
             durationSeconds = duration,
-            providerRank = stepProviderRank(metadata[row.sourceInstanceId]?.provider),
-            stepsPerSecond = row.steps.toDouble() / duration.coerceAtLeast(1).toDouble(),
+            providerRank = providerRanks[row.sourceInstanceId] ?: UNKNOWN_PROVIDER_RANK,
+            stepsPerSecond = row.steps.toDouble() / duration,
         )
     }
 }
 
 private data class PreparedCanonicalStepSample(
-    val candidate: CanonicalIntervalCandidate<StepSampleRow>,
-    val durationSeconds: Long,
+    val row: StepSampleRow,
+    val durationSeconds: Double,
     val providerRank: Int,
     val stepsPerSecond: Double,
 ) {
     fun asIntervalCandidate(): CanonicalIntervalCandidate<PreparedCanonicalStepSample> =
         CanonicalIntervalCandidate(
             row = this,
-            sourceInstanceId = candidate.sourceInstanceId,
-            startAt = candidate.startAt,
-            endAt = candidate.endAt,
+            sourceInstanceId = row.sourceInstanceId,
+            startAt = row.startAt,
+            endAt = row.endAt,
         )
 }
+
+private val stepPreference = compareBy<PreparedCanonicalStepSample> { it.providerRank }
+    .thenBy { it.durationSeconds }
+    .thenByDescending { it.stepsPerSecond }
+    .thenBy { it.row.id }

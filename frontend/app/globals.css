@@ -43,6 +43,12 @@
   --hue-bp: #e87ba0;
   --hue-score: #a78bfa;
 
+  /* Body composition — one series each, kept distinct from --hue-weight */
+  --hue-body-fat: #e0a15b;
+  --hue-muscle: #8494f0;
+  --hue-water: #56c0e0;
+  --hue-visceral-fat: #ef6f63;
+
   /* Chart strokes — border hue at chart-specific tints */
   --chart-grid: rgba(148, 168, 196, 0.08);
   --chart-axis: rgba(148, 168, 196, 0.14);

@@ -19,14 +19,13 @@ class SleepSummaryReadService(
         suspendDbTransaction(db = database) {
             val filters = params.readFilters(
                 sortSpec = QueryParamSpecs.sortByEndAt,
-                latestSupported = true,
             )
             val (rows, sourceMetadata) = canonicalRepository.listCanonicalSleepSummaries(filters)
             val page = rows.keysetPage(
                 limit = filters.limit,
                 sort = filters.sort,
                 order = filters.order,
-                sortValue = { it.endAt },
+                sortValue = { it.endAt.toString() },
                 id = { it.id.toLong() },
             )
             SleepSummariesResponse(

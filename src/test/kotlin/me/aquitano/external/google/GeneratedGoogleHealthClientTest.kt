@@ -7,10 +7,16 @@ import com.google.devicesandservices.health.v4.DataPoint
 import com.google.devicesandservices.health.v4.ListDataPointsRequest
 import com.google.devicesandservices.health.v4.ListDataPointsResponse
 import com.google.protobuf.util.JsonFormat
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.jsonPrimitive
 import java.net.URI
 import java.time.Instant
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -141,6 +147,47 @@ class GeneratedGoogleHealthClientTest {
 
         fixture.client.close()
         assertEquals(2, fixture.service.closes)
+    }
+
+    @Test
+    fun replacedTransportStaysOpenUntilItsInflightFetchCompletes() = runBlocking {
+        val started = CompletableDeferred<Unit>()
+        val release = CountDownLatch(1)
+        val oldCloses = AtomicInteger()
+        val oldService = object : GoogleHealthDataPointsService {
+            override fun listDataPoints(request: ListDataPointsRequest): ListDataPointsResponse {
+                started.complete(Unit)
+                check(release.await(10, TimeUnit.SECONDS))
+                return ListDataPointsResponse.getDefaultInstance()
+            }
+
+            override fun close() { oldCloses.incrementAndGet() }
+        }
+        val newService = FakeDataPointsService().apply {
+            responses += ListDataPointsResponse.getDefaultInstance()
+        }
+        val client = GeneratedGoogleHealthClient(
+            FakeOAuthClient(),
+            object : GoogleHealthDataPointsServiceFactory() {
+                override fun create(accessToken: String) = if (accessToken == "old") oldService else newService
+            },
+        )
+        val from = Instant.parse("2026-04-01T00:00:00Z")
+        val to = from.plusSeconds(86400)
+        val first = async { client.fetchDataPoints("old", "steps", from, to, 1000) }
+        try {
+            withTimeout(10_000) { started.await() }
+            client.fetchDataPoints("new", "steps", from, to, 1000)
+            client.close()
+            assertEquals(0, oldCloses.get())
+            assertEquals(1, newService.closes)
+        } finally {
+            release.countDown()
+            client.close()
+        }
+        first.await()
+        assertEquals(1, oldCloses.get())
+        assertEquals(1, newService.closes)
     }
 
     @Test

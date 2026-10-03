@@ -1,5 +1,6 @@
 package me.aquitano.external.withings
 
+import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.infrastructure.time.UtcClock
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.buildJsonObject
@@ -18,7 +19,6 @@ import me.aquitano.health.domain.RequestValidationException
 import me.aquitano.health.domain.UpstreamProviderException
 import me.aquitano.health.infrastructure.config.DatabaseConfig
 import me.aquitano.health.infrastructure.config.ProviderOAuthConfig
-import me.aquitano.health.infrastructure.database.DatabaseFactory
 import me.aquitano.health.infrastructure.repositories.IngestionRepository
 import me.aquitano.health.infrastructure.repositories.PendingDerivedRebuildRepository
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
@@ -35,7 +35,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-class WithingsProviderTest {
+class WithingsProviderTest : PostgresIntegrationTest() {
     @Test
     fun oauthStartUrlContainsWithingsParameters() = runBlocking {
         val fixture = Fixture()
@@ -215,11 +215,71 @@ class WithingsProviderTest {
     }
 
     @Test
+    fun tokenTransportUnauthorizedKeepsAccountConnectedAndRetryable() = runBlocking {
+        val fixture = Fixture()
+        fixture.seedAccount(expiresAt = fixture.now.minusSeconds(1))
+        fixture.client.nextRefreshFailure = WithingsHttpException(
+            "withings_token_request_failed", "client authentication failed", httpStatus = 401,
+        )
+        val error = assertFailsWith<UpstreamProviderException> {
+            fixture.provider.sync(
+                ProviderSyncRequest(
+                    from = Instant.parse("2026-04-01T00:00:00Z"),
+                    to = Instant.parse("2026-04-02T00:00:00Z"),
+                    dataTypes = listOf("activity"),
+                ),
+                fixture.now,
+            )
+        }
+        assertTrue(me.aquitano.health.domain.isRetryableSyncFailure(error))
+        assertEquals("connected", singleString(fixture.dbPath, "SELECT account_status FROM provider_oauth_accounts"))
+        assertEquals("failed", singleString(fixture.dbPath, "SELECT last_token_refresh_status FROM provider_oauth_accounts"))
+    }
+
+    @Test
+    fun refreshStoresOnlyChangedSnapshotsIncludingReversionsAndFailedRetries() = runBlocking {
+        val fixture = Fixture()
+        fixture.seedAccount()
+        val request = ProviderSyncRequest(
+            from = Instant.parse("2026-04-01T00:00:00Z"),
+            to = Instant.parse("2026-04-02T00:00:00Z"),
+            dataTypes = listOf("activity"),
+            refresh = true,
+        )
+        val first = fixture.provider.sync(request.copy(refresh = false), fixture.now).batches.single()
+        val unchanged = fixture.provider.sync(request, fixture.now).batches.single()
+        assertTrue(unchanged.duplicateBatch)
+        assertEquals(first.batchId, unchanged.batchId)
+        assertEquals(1, countRows(fixture.dbPath, "ingestion_batches"))
+        val originalRecords = countRows(fixture.dbPath, "ingestion_records")
+
+        fixture.client.activitySteps = 2345
+        val changed = fixture.provider.sync(request, fixture.now).batches.single()
+        assertFalse(changed.duplicateBatch)
+        fixture.client.activitySteps = 1234
+        val reverted = fixture.provider.sync(request, fixture.now).batches.single()
+        assertFalse(reverted.duplicateBatch)
+        assertEquals(3, countRows(fixture.dbPath, "ingestion_batches"))
+        assertEquals(originalRecords * 3, countRows(fixture.dbPath, "ingestion_records"))
+        assertEquals(reverted.batchId, fixture.provider.sync(request, fixture.now).batches.single().batchId)
+
+        // A failed snapshot with the same content must not suppress the next ingestion attempt.
+        PostgresTestDatabase.connection(fixture.dbPath).use { connection ->
+            connection.createStatement().use { it.executeUpdate("UPDATE ingestion_batches SET status = 'failed' WHERE id = ${reverted.batchId}") }
+        }
+        val retry = fixture.provider.sync(request, fixture.now).batches.single()
+        assertFalse(retry.duplicateBatch)
+        assertEquals(4, countRows(fixture.dbPath, "ingestion_batches"))
+        assertEquals(6, fixture.client.fetchRequests.size)
+    }
+
+    @Test
     fun needsReauthAccountIsNotSelectedForSync() = runBlocking {
         val fixture = Fixture()
         fixture.seedAccount()
         fixture.providerRepository.markNeedsReauth(
             accountId = singleInt(fixture.dbPath, "SELECT id FROM provider_oauth_accounts"),
+            expectedRefreshTokenCiphertext = singleString(fixture.dbPath, "SELECT refresh_token_ciphertext FROM provider_oauth_accounts"),
             errorCode = "withings_needs_reauth",
             errorMessage = "invalid refresh token",
             now = fixture.now,
@@ -376,6 +436,30 @@ class WithingsProviderTest {
     }
 
     @Test
+    fun refreshAddsLateMeasurementsFromAnAlreadyProcessedDay() = runBlocking {
+        val fixture = Fixture()
+        fixture.seedAccount()
+        val request = ProviderSyncRequest(
+            from = Instant.parse("2026-04-01T00:00:00Z"),
+            to = Instant.parse("2026-04-02T00:00:00Z"),
+            dataTypes = listOf("measures"),
+        )
+        fixture.provider.sync(request, fixture.now)
+        assertEquals(1, singleInt(fixture.dbPath, "SELECT COUNT(*) FROM scalar_samples WHERE metric_type = 'weight'"))
+        fixture.client.lateMeasure = buildJsonObject {
+            put("grpid", 101)
+            put("date", 1775005200)
+            putJsonArray("measures") {
+                add(buildJsonObject { put("type", 1); put("value", 80200); put("unit", -3) })
+            }
+        }
+        fixture.provider.sync(request.copy(refresh = true), fixture.now.plusSeconds(1))
+        assertEquals(2, singleInt(fixture.dbPath, "SELECT COUNT(*) FROM scalar_samples WHERE metric_type = 'weight'"))
+        assertEquals(2, fixture.client.fetchRequests.size)
+        assertEquals(2, countRows(fixture.dbPath, "ingestion_batches"))
+    }
+
+    @Test
     fun duplicateProcessedBatchReturnsCachedBatch() = runBlocking {
         val fixture = Fixture()
         fixture.seedAccount()
@@ -422,7 +506,31 @@ class WithingsProviderTest {
         )
     }
 
-    private class Fixture(
+    @Test
+    fun sleepIsFetchedWithALookbehindSoNightsArriveWhole() = runBlocking {
+        val fixture = Fixture()
+        fixture.seedAccount()
+        val request = ProviderSyncRequest(
+            from = Instant.parse("2026-04-01T00:00:00Z"),
+            to = Instant.parse("2026-04-02T00:00:00Z"),
+            dataTypes = listOf("sleep"),
+        )
+
+        fixture.provider.sync(request, fixture.now)
+
+        assertEquals(
+            listOf(
+                WithingsFetchRequest(
+                    "sleep",
+                    Instant.parse("2026-03-31T00:00:00Z"),
+                    Instant.parse("2026-04-02T00:00:00Z"),
+                ),
+            ),
+            fixture.client.fetchRequests,
+        )
+    }
+
+    private inner class Fixture(
         val dbPath: DatabaseConfig = PostgresTestDatabase.config(),
         val now: Instant = Instant.parse("2026-04-20T10:00:00Z"),
     ) {
@@ -435,7 +543,7 @@ class WithingsProviderTest {
             oauthTokenUrl = "https://wbsapi.withings.net/v2/oauth2",
             oauthAuthUrl = "https://account.withings.com/oauth2_user/authorize2",
         )
-        private val database: Database = DatabaseFactory().initialize(
+        private val database: Database = openDatabase(
             dbPath
         )
         val providerRepository = ProviderOAuthRepository(database)
@@ -502,6 +610,8 @@ class WithingsProviderTest {
         var nextExchangeFailure: WithingsHttpException? = null
         var nextRefreshFailure: WithingsHttpException? = null
         var refreshCalls = 0
+        var activitySteps = 1234
+        var lateMeasure: kotlinx.serialization.json.JsonObject? = null
         var failDataRequestsWithAccessToken: String? = null
         var failuresRemaining = 0
         val emptyDataTypes = mutableSetOf<String>()
@@ -562,7 +672,7 @@ class WithingsProviderTest {
                             addMeasure(11, 62, 0)
                         }
                     }
-                ),
+                ) + listOfNotNull(lateMeasure),
             )
         }
 
@@ -582,7 +692,7 @@ class WithingsProviderTest {
                 records = listOf(
                     buildJsonObject {
                         put("date", "2026-04-01")
-                        put("steps", 1234)
+                        put("steps", activitySteps)
                     }
                 ),
             )

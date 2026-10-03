@@ -28,7 +28,6 @@ class SleepQueryService(
         suspendDbTransaction(db = database) {
             val filters = params.readFilters(
                 sortSpec = QueryParamSpecs.sortByStartAt,
-                latestSupported = true,
             )
             val (sessions, sourceMetadata) =
                 canonicalSessionRepository.listCanonicalSleepSessions(filters)
@@ -36,7 +35,7 @@ class SleepQueryService(
                 limit = filters.limit,
                 sort = filters.sort,
                 order = filters.order,
-                sortValue = { it.startAt },
+                sortValue = { it.startAt.toString() },
                 id = { it.id.toLong() },
             )
             val stagesBySession =

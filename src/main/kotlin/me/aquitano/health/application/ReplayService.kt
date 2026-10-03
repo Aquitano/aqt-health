@@ -12,6 +12,7 @@ import me.aquitano.health.api.dto.ReplayJobStartResponse
 import me.aquitano.health.api.dto.ReplayJobStatusResponse
 import me.aquitano.health.api.dto.ReplayRequest
 import me.aquitano.health.application.metric.common.MetricWriteService
+import me.aquitano.health.application.metric.common.MetricWrite
 import me.aquitano.health.domain.DerivedKind
 import me.aquitano.health.domain.ConflictException
 import me.aquitano.health.domain.NotFoundException
@@ -22,6 +23,8 @@ import me.aquitano.health.domain.ValidationIssueCodes
 import me.aquitano.health.infrastructure.logging.infoWithContext
 import me.aquitano.health.infrastructure.logging.warnWithContext
 import me.aquitano.health.infrastructure.repositories.IngestionRepository
+import me.aquitano.health.infrastructure.repositories.PendingDerivedRebuildRecord
+import me.aquitano.health.infrastructure.repositories.PendingDerivedRebuildRepository
 import me.aquitano.health.infrastructure.repositories.ProjectionWipeRepository
 import me.aquitano.health.infrastructure.repositories.ReplayJobRecord
 import me.aquitano.health.infrastructure.repositories.ReplayJobRepository
@@ -68,6 +71,7 @@ class ReplayService(
     private val metricWriteService: MetricWriteService,
     private val derivedRebuildExecutor: DerivedRebuildExecutor,
     private val derivedRebuildRegistry: DerivedRebuildModuleRegistry,
+    private val pendingDerivedRebuildRepository: PendingDerivedRebuildRepository,
     private val replayJobRepository: ReplayJobRepository,
     private val projectionWipeRepository: ProjectionWipeRepository,
     private val clock: UtcClock,
@@ -211,23 +215,49 @@ class ReplayService(
     }
 
     private suspend fun replayDay(day: LocalDate, plan: ReplayPlan): DayReplayResult {
+        repeat(3) {
+            tryReplayDay(day, plan)?.let { return it }
+        }
+        throw ConflictException("replay_source_changed", "Ingestion changed repeatedly while preparing replay for $day. Retry the replay.")
+    }
+
+    private suspend fun tryReplayDay(day: LocalDate, plan: ReplayPlan): DayReplayResult? {
         val dayStart = day.atStartOfDay(ZoneOffset.UTC).toInstant()
         val dayEnd = day.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant()
         val now = clock.now()
         val affectedBySource =
             mutableMapOf<Int, MutableMap<DerivedKind, MutableSet<LocalDate>>>()
 
-        val result = suspendDbTransaction(db = database) {
-            val rows = ingestionRepository.listRecordsForReplay(
-                dayStart = dayStart,
-                dayEnd = dayEnd,
-                recordTypes = plan.recordTypes,
-            )
-
+        val rows = suspendDbTransaction(db = database) {
+            ingestionRepository.listRecordsForReplay(dayStart, dayEnd, plan.recordTypes)
+        }
+        val prepared = if (plan.includesProjections) rows.mapNotNull { row ->
+            decodeAndMap(row)?.let { record -> row to MetricWrite(row.id, record) }
+        } else emptyList()
+        val writesBySource = prepared.groupBy { it.first.sourceInstanceId }.toSortedMap()
+        if (plan.includesDerived) {
+            rows.forEach { row ->
+                derivedRebuildRegistry.affectedDatesFor(row.recordType, row.recordStartAt, row.recordEndAt)
+                    .forEach { (kind, dates) ->
+                        affectedBySource.getOrPut(row.sourceInstanceId) { mutableMapOf() }
+                            .getOrPut(kind) { linkedSetOf() }.addAll(dates)
+                    }
+            }
+        }
+        val replayed = suspendDbTransaction(db = database) {
+            if (plan.includesProjections && plan.wipe) {
+                // Ingestion takes a write lock here before touching projections. Taking the
+                // conflicting lock first waits for commits and prevents new writes during wipe.
+                exec("LOCK TABLE ingestion_records IN SHARE ROW EXCLUSIVE MODE")
+                val recordIds = rows.mapTo(hashSetOf()) { it.id }
+                if (ingestionRepository.recordIdsForReplay(dayStart, dayEnd, plan.recordTypes) != recordIds) {
+                    return@suspendDbTransaction null
+                }
+            }
             var recordsReplayed = 0
             var metricsWritten = 0
             var duplicatesSkipped = 0
-            var mappingFailures = 0
+            val mappingFailures = if (plan.includesProjections) rows.size - prepared.size else 0
 
             if (plan.includesProjections) {
                 if (plan.wipe) {
@@ -238,54 +268,39 @@ class ReplayService(
                         recordTypes = plan.recordTypes ?: replayableRecordTypes,
                     )
                 }
-                rows.forEach { row ->
-                    val record = decodeAndMap(row)
-                    if (record == null) {
-                        mappingFailures += 1
-                        return@forEach
-                    }
-                    val writeResult = metricWriteService.write(
-                        provider = row.provider,
-                        sourceInstanceId = row.sourceInstanceId,
-                        ingestionRecordId = row.id,
-                        record = record,
+                writesBySource.forEach { (sourceId, entries) ->
+                    val writeResult = metricWriteService.writeAll(
+                        provider = entries.first().first.provider,
+                        sourceInstanceId = sourceId,
+                        writes = entries.map { it.second },
                         now = now,
                     )
-                    recordsReplayed += 1
+                    if (plan.includesDerived) {
+                        writeResult.affectedDates.forEach { (kind, dates) ->
+                            affectedBySource.getOrPut(sourceId) { mutableMapOf() }
+                                .getOrPut(kind) { linkedSetOf() }.addAll(dates)
+                        }
+                    }
+                    recordsReplayed += entries.size
                     metricsWritten += writeResult.created.counts.values.sum()
                     duplicatesSkipped += writeResult.duplicateSkipped
                 }
             }
 
-            if (plan.includesDerived) {
-                rows.forEach { row ->
-                    derivedRebuildRegistry.affectedDatesFor(
-                        row.recordType,
-                        row.recordStartAt,
-                        row.recordEndAt,
-                    ).forEach { (kind, dates) ->
-                        affectedBySource
-                            .getOrPut(row.sourceInstanceId) { mutableMapOf() }
-                            .getOrPut(kind) { linkedSetOf() }
-                            .addAll(dates)
-                    }
-                }
+            val rebuildRequests = affectedBySource.map { (sourceInstanceId, affectedDates) ->
+                DerivedRebuildRequest(sourceInstanceId, affectedDates.mapValues { it.value.toSet() })
             }
-
-            DayReplayResult(recordsReplayed, metricsWritten, duplicatesSkipped, mappingFailures)
-        }
-
-        affectedBySource.forEach { (sourceInstanceId, affectedDates) ->
-            derivedRebuildExecutor.rebuild(
-                DerivedRebuildRequest(
-                    sourceInstanceId = sourceInstanceId,
-                    affectedDates = affectedDates.mapValues { it.value.toSet() },
-                ),
-                clock.now(),
+            ReplayedDay(
+                result = DayReplayResult(recordsReplayed, metricsWritten, duplicatesSkipped, mappingFailures),
+                rebuildRequests = rebuildRequests,
+                queuedRebuilds = rebuildRequests.flatMap { pendingDerivedRebuildRepository.enqueueInTransaction(it, now) },
             )
-        }
+        } ?: return null
 
-        return result
+        derivedRebuildExecutor.rebuild(replayed.rebuildRequests, clock.now())
+        pendingDerivedRebuildRepository.deleteCompleted(replayed.queuedRebuilds)
+
+        return replayed.result
     }
 
     private fun decodeAndMap(row: ReplayRecordRow) =
@@ -394,7 +409,7 @@ class ReplayService(
 private fun ReplayPlan.idempotencyRequestHash(): String =
     idempotencyRequestHash(
         scope,
-        recordTypes?.sorted()?.idempotencyListPart(),
+        recordTypes?.idempotencyListPart(),
         fromDate?.toString(),
         toDate?.toString(),
         wipe.toString(),
@@ -419,4 +434,10 @@ private data class DayReplayResult(
     val metricsWritten: Int,
     val duplicatesSkipped: Int,
     val mappingFailures: Int,
+)
+
+private data class ReplayedDay(
+    val result: DayReplayResult,
+    val rebuildRequests: List<DerivedRebuildRequest>,
+    val queuedRebuilds: List<PendingDerivedRebuildRecord>,
 )

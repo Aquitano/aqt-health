@@ -1,5 +1,6 @@
 package me.aquitano.health.infrastructure.repositories
 
+import me.aquitano.health.domain.IngestionSnapshot
 import me.aquitano.health.domain.BatchStatus
 import me.aquitano.health.domain.HealthRecord
 import me.aquitano.health.domain.RequestValidationException
@@ -18,6 +19,7 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.greaterEq
 import org.jetbrains.exposed.v1.core.less
 import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import java.time.Instant
 import java.time.ZoneOffset
 
@@ -94,16 +96,71 @@ class IngestionRepository {
             .map(::toExistingBatch)
             .singleOrNull()
 
+    /** The latest processed batch for the window, when its snapshot still matches [contentHash]. */
+    fun reusableSyncBatchId(
+        sourceInstanceId: Int,
+        windowKey: String,
+        contentHash: String,
+    ): Int? =
+        IngestionBatchesTable
+            .select(IngestionBatchesTable.id, IngestionBatchesTable.syncContentHash)
+            .where {
+                (IngestionBatchesTable.sourceInstanceId eq sourceInstanceId) and
+                    (IngestionBatchesTable.syncWindowKey eq windowKey) and
+                    (IngestionBatchesTable.status eq "processed")
+            }
+            .orderBy(IngestionBatchesTable.id to SortOrder.DESC)
+            .limit(1)
+            .singleOrNull()
+            ?.takeIf { it[IngestionBatchesTable.syncContentHash] == contentHash }
+            ?.let { it[IngestionBatchesTable.id].value }
+            ?.takeUnless { batchId -> snapshotHasNewerValues(sourceInstanceId, batchId) }
+
+    // A record can move to another sync window and later return with its original content.
+    // A matching window hash is reusable only while its identified records still have those values.
+    private fun snapshotHasNewerValues(sourceInstanceId: Int, batchId: Int): Boolean =
+        requireNotNull(TransactionManager.current().exec(
+            """
+            SELECT EXISTS (
+                SELECT 1 FROM ingestion_records snapshot
+                JOIN LATERAL (
+                    SELECT newer.normalized_record_json
+                    FROM ingestion_records newer
+                    JOIN ingestion_batches batch ON batch.id = newer.batch_id
+                    WHERE newer.provider_record_id = snapshot.provider_record_id
+                      AND newer.record_type = snapshot.record_type
+                      AND newer.id > snapshot.id
+                      AND batch.source_instance_id = $sourceInstanceId
+                      AND batch.status = 'processed'
+                      AND ${sameScalarIdentity("newer", "snapshot")}
+                    ORDER BY newer.id DESC LIMIT 1
+                ) latest ON TRUE
+                WHERE snapshot.batch_id = $batchId
+                  AND snapshot.provider_record_id IS NOT NULL
+                  AND CASE WHEN snapshot.record_type = 'scalar'
+                      THEN snapshot.normalized_record_json - 'unit' - 'context' - 'segment'
+                      ELSE snapshot.normalized_record_json END
+                      IS DISTINCT FROM
+                      CASE WHEN snapshot.record_type = 'scalar'
+                      THEN latest.normalized_record_json - 'unit' - 'context' - 'segment'
+                      ELSE latest.normalized_record_json END
+            )
+            """.trimIndent()
+        ) { rows -> rows.next(); rows.getBoolean(1) })
+
     fun insertBatch(
         sourceInstanceId: Int,
         batchExternalId: String?,
         sourcePayloadJson: String,
         ingestedAt: Instant,
         receivedAt: Instant,
+        snapshot: IngestionSnapshot? = null,
     ): Int =
         IngestionBatchesTable.insertAndGetId {
             it[this.sourceInstanceId] = sourceInstanceId
             it[this.batchExternalId] = batchExternalId
+            it[syncWindowKey] = snapshot?.windowKey
+            it[syncContentHash] = snapshot?.contentHash
             it[this.sourcePayloadJson] = sourcePayloadJson
             it[status] = "received"
             it[this.ingestedAt] = ingestedAt.toDbTimestamp()
@@ -307,18 +364,12 @@ class IngestionRepository {
         dayEnd: Instant,
         recordTypes: Set<String>?,
     ): List<ReplayRecordRow> {
-        val conditions = mutableListOf<Op<Boolean>>(
-            IngestionBatchesTable.status eq "processed",
-            IngestionRecordsTable.recordStartAt greaterEq dayStart.toDbTimestamp(),
-            IngestionRecordsTable.recordStartAt less dayEnd.toDbTimestamp(),
-        )
-        recordTypes?.let { conditions.add(IngestionRecordsTable.recordType inList it) }
         return IngestionRecordsTable
             .innerJoin(IngestionBatchesTable)
             .innerJoin(SourceInstancesTable)
             .innerJoin(SourcesTable)
             .selectAll()
-            .where(combineConditions(conditions))
+            .where(replayConditions(dayStart, dayEnd, recordTypes))
             .orderBy(IngestionRecordsTable.id to SortOrder.ASC)
             .map {
                 ReplayRecordRow(
@@ -331,6 +382,23 @@ class IngestionRepository {
                     recordEndAt = it[IngestionRecordsTable.recordEndAt]?.toInstant(),
                 )
             }
+    }
+
+    /** Compare the prepared immutable log snapshot while ingestion writes are locked. */
+    fun recordIdsForReplay(dayStart: Instant, dayEnd: Instant, recordTypes: Set<String>?): Set<Int> =
+        IngestionRecordsTable.innerJoin(IngestionBatchesTable)
+            .select(IngestionRecordsTable.id)
+            .where(replayConditions(dayStart, dayEnd, recordTypes))
+            .mapTo(hashSetOf()) { it[IngestionRecordsTable.id].value }
+
+    private fun replayConditions(dayStart: Instant, dayEnd: Instant, recordTypes: Set<String>?): Op<Boolean> {
+        val conditions = mutableListOf<Op<Boolean>>(
+            IngestionBatchesTable.status eq "processed",
+            IngestionRecordsTable.recordStartAt greaterEq dayStart.toDbTimestamp(),
+            IngestionRecordsTable.recordStartAt less dayEnd.toDbTimestamp(),
+        )
+        recordTypes?.let { conditions.add(IngestionRecordsTable.recordType inList it) }
+        return combineConditions(conditions)
     }
 
     private fun recordCounts(batchIds: List<Int>): Map<Int, Int> {

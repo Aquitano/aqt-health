@@ -23,14 +23,13 @@ class CardiovascularQueryService(
         suspendDbTransaction(db = database) {
             val filters = params.readFilters(
                 sortSpec = QueryParamSpecs.sortByMeasuredAt,
-                latestSupported = true,
             )
             val (rows, sourceMetadata) = cardiovascularRepository.listBloodPressure(filters)
             val page = rows.keysetPage(
                 limit = filters.limit,
                 sort = filters.sort,
                 order = filters.order,
-                sortValue = { it.measuredAt },
+                sortValue = { it.measuredAt.toString() },
                 id = { it.id.toLong() },
             )
             BloodPressureMeasurementsResponse(

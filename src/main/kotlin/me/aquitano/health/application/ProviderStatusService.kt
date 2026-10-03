@@ -67,7 +67,7 @@ class ProviderStatusService(
         val connected = configured && accountStatuses.any {
             it.status == ProviderAccountLifecycleStatus.Connected
         }
-        val canSync = configured && accounts.any { it.canSync() }
+        val canSync = configured && accounts.any { it.isConnectedForSync() }
         val needsReauth = accountStatuses.any {
             it.status == ProviderAccountLifecycleStatus.NeedsReauth
         }
@@ -131,6 +131,4 @@ class ProviderStatusService(
     private fun ProviderOAuthAccount.hasStoredTokens(): Boolean =
         accessTokenCiphertext.isNotBlank() && refreshTokenCiphertext.isNotBlank()
 
-    private fun ProviderOAuthAccount.canSync(): Boolean =
-        accountStatus == ACCOUNT_STATUS_CONNECTED && hasStoredTokens()
 }

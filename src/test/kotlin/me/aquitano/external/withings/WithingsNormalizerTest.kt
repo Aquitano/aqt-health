@@ -13,6 +13,10 @@ import me.aquitano.health.api.dto.SleepSession
 import me.aquitano.health.api.dto.IngestionBatchRequest
 import me.aquitano.health.api.dto.StepInterval
 import me.aquitano.health.application.IngestionMappingService
+import me.aquitano.health.application.providersync.collapseDuplicateProviderRecordIds
+import me.aquitano.health.application.providersync.SyncWindow
+import java.time.Duration
+import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -21,9 +25,19 @@ import kotlin.test.assertTrue
 class WithingsNormalizerTest {
     private val normalizer = WithingsNormalizer()
 
+    /** Only sleep is window-sensitive, so everything else normalizes with the window wide open. */
+    private fun normalize(fetchResult: WithingsFetchResult) =
+        normalizer.normalize(fetchResult, SyncWindow(Instant.MIN, Instant.MAX))
+
+    private fun dayWindow(day: String) =
+        SyncWindow(
+            Instant.parse("${day}T00:00:00Z"),
+            Instant.parse("${day}T00:00:00Z").plus(Duration.ofDays(1)),
+        )
+
     @Test
     fun measuresConvertUnitsIntoOneScalarSamplePerMetric() {
-        val result = normalizer.normalize(
+        val result = normalize(
             fetchResult(
                 "measures",
                 buildJsonObject {
@@ -52,7 +66,7 @@ class WithingsNormalizerTest {
 
     @Test
     fun aRepeatedMeasureTypeCollapsesToOneSampleInsteadOfFailingTheBatch() {
-        val result = normalizer.normalize(
+        val result = normalize(
             fetchResult(
                 "measures",
                 buildJsonObject {
@@ -75,7 +89,7 @@ class WithingsNormalizerTest {
 
     @Test
     fun aRepeatedSegmentalZoneCollapsesToOneSample() {
-        val result = normalizer.normalize(
+        val result = normalize(
             fetchResult(
                 "measures",
                 buildJsonObject {
@@ -104,7 +118,7 @@ class WithingsNormalizerTest {
 
     @Test
     fun segmentalMeasuresCarryTheirSegmentInTheProviderRecordId() {
-        val result = normalizer.normalize(
+        val result = normalize(
             fetchResult(
                 "measures",
                 buildJsonObject {
@@ -134,8 +148,42 @@ class WithingsNormalizerTest {
     }
 
     @Test
+    fun activityFromTwoTrackingDevicesCollapsesToOneRecordPerDate() {
+        // getactivity returns an entry per tracking device, so a user with a watch and the phone
+        // tracker gets the same date twice. Both entries normalize to the same date-keyed ids; the
+        // sync pipeline collapses them the same way before ingestion, last entry winning.
+        val result = normalize(
+            fetchResult(
+                "activity",
+                buildJsonObject {
+                    put("date", "2026-04-01")
+                    put("deviceid", "watch-device")
+                    put("brand", 18)
+                    put("steps", 8000)
+                    put("calories", 420)
+                },
+                buildJsonObject {
+                    put("date", "2026-04-01")
+                    put("deviceid", "phone-tracker")
+                    put("brand", 1)
+                    put("steps", 300)
+                    put("calories", 15)
+                },
+            )
+        )
+
+        val records = result.records.collapseDuplicateProviderRecordIds()
+        assertEquals(
+            listOf("withings:activity:2026-04-01", "withings:activity:2026-04-01:summary"),
+            records.map { it.providerRecordId },
+        )
+        assertEquals(300, records.filterIsInstance<StepInterval>().single().steps)
+        assertAcceptedByIngestion(records)
+    }
+
+    @Test
     fun activityCreatesSummaryFieldsAlongsideSteps() {
-        val result = normalizer.normalize(
+        val result = normalize(
             fetchResult(
                 "activity",
                 buildJsonObject {
@@ -171,7 +219,7 @@ class WithingsNormalizerTest {
 
     @Test
     fun measurePulseWithoutBloodPressureCreatesStandaloneHeartRate() {
-        val result = normalizer.normalize(
+        val result = normalize(
             fetchResult(
                 "measures",
                 buildJsonObject {
@@ -195,7 +243,7 @@ class WithingsNormalizerTest {
     @Test
     fun bloodPressureClaimsTheHeartRateRegardlessOfMeasureOrder() {
         listOf(true, false).forEach { heartRateFirst ->
-            val result = normalizer.normalize(
+            val result = normalize(
                 fetchResult(
                     "measures",
                     buildJsonObject {
@@ -221,7 +269,7 @@ class WithingsNormalizerTest {
 
     @Test
     fun incompleteBloodPressureIsDroppedAndRawPagesAreTheOnlySourceCopy() {
-        val result = normalizer.normalize(
+        val result = normalize(
             fetchResult(
                 "measures",
                 buildJsonObject {
@@ -243,7 +291,7 @@ class WithingsNormalizerTest {
 
     @Test
     fun activityStepsCreateUtcDayInterval() {
-        val result = normalizer.normalize(
+        val result = normalize(
             fetchResult(
                 "activity",
                 buildJsonObject {
@@ -265,7 +313,7 @@ class WithingsNormalizerTest {
 
     @Test
     fun sleepSummaryDoesNotCreateSleepSession() {
-        val result = normalizer.normalize(
+        val result = normalize(
             fetchResult(
                 "sleep-summary",
                 buildJsonObject {
@@ -285,7 +333,7 @@ class WithingsNormalizerTest {
 
     @Test
     fun sleepSummaryCreatesAggregateSleepMetrics() {
-        val result = normalizer.normalize(
+        val result = normalize(
             fetchResult(
                 "sleep-summary",
                 buildJsonObject {
@@ -321,7 +369,7 @@ class WithingsNormalizerTest {
 
     @Test
     fun highFrequencySleepCreatesSleepHeartRateAndTimestampedStages() {
-        val result = normalizer.normalize(
+        val result = normalize(
             fetchResult(
                 "sleep",
                 buildJsonObject {
@@ -356,7 +404,7 @@ class WithingsNormalizerTest {
 
     @Test
     fun sleepSeriesValueUsesValueAsState() {
-        val result = normalizer.normalize(
+        val result = normalize(
             fetchResult(
                 "sleep",
                 buildJsonObject {
@@ -378,7 +426,7 @@ class WithingsNormalizerTest {
 
     @Test
     fun sleepSeriesIgnoresNestedValueObjects() {
-        val result = normalizer.normalize(
+        val result = normalize(
             fetchResult(
                 "sleep",
                 buildJsonObject {
@@ -405,7 +453,7 @@ class WithingsNormalizerTest {
 
     @Test
     fun sleepSeriesUsesStartDateAsTimestampWhenEndDateMissing() {
-        val result = normalizer.normalize(
+        val result = normalize(
             fetchResult(
                 "sleep",
                 buildJsonObject {
@@ -427,7 +475,7 @@ class WithingsNormalizerTest {
 
     @Test
     fun sleepSegmentsCreateSessionsFromStartAndEndDates() {
-        val result = normalizer.normalize(
+        val result = normalize(
             fetchResult(
                 "sleep",
                 buildJsonObject {
@@ -453,8 +501,41 @@ class WithingsNormalizerTest {
     }
 
     @Test
+    fun sleepSessionCrossingUtcMidnightBelongsToTheWindowItEndsIn() {
+        val night = fetchResult(
+            "sleep",
+            buildJsonObject {
+                put("startdate", 1775077200) // 2026-04-01T21:00:00Z
+                put("enddate", 1775088000)
+                put("state", 1)
+                put("hr", 58)
+            },
+            buildJsonObject {
+                put("startdate", 1775088000) // 2026-04-02T00:00:00Z
+                put("enddate", 1775106000)
+                put("state", 2)
+                put("hr", 56)
+            },
+        )
+
+        val nightStarted = normalizer.normalize(night, dayWindow("2026-04-01"))
+        val nightEnded = normalizer.normalize(night, dayWindow("2026-04-02"))
+
+        assertTrue(nightStarted.records.filterIsInstance<SleepSession>().isEmpty())
+        val session = nightEnded.records.filterIsInstance<SleepSession>().single()
+        assertEquals("withings:sleep:1775077200:1775106000", session.providerRecordId)
+        assertEquals("2026-04-01T21:00:00Z", session.startAt)
+        assertEquals("2026-04-02T05:00:00Z", session.endAt)
+        assertEquals(2, session.stages.size)
+        assertEquals(
+            listOf("2026-04-02T00:00:00Z"),
+            nightEnded.records.filterIsInstance<ScalarSample>().map { it.measuredAt },
+        )
+    }
+
+    @Test
     fun highFrequencySleepSplitsSessionsAcrossLargeGaps() {
-        val result = normalizer.normalize(
+        val result = normalize(
             fetchResult(
                 "sleep",
                 buildJsonObject {
@@ -488,7 +569,7 @@ class WithingsNormalizerTest {
 
     @Test
     fun invalidAndZeroValuesAreSkipped() {
-        val result = normalizer.normalize(
+        val result = normalize(
             fetchResult(
                 "activity",
                 buildJsonObject {

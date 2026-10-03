@@ -37,7 +37,7 @@ class TrendQueryService(
         val previousToDate = fromDate.minusDays(1)
         val previousFromDate = previousToDate.minusDays(periodDays.toLong() - 1)
 
-        val steps = stepsTrend(fromDate, toDate, previousFromDate, previousToDate, periodDays)
+        val steps = stepsTrend(fromDate, toDate, previousFromDate, previousToDate)
         val heartRate = heartRateTrend(fromDate, toDate, previousFromDate, previousToDate)
         val sleep = sleepTrend(fromDate, toDate, previousFromDate, previousToDate)
         val weight = weightTrend(toDate)
@@ -56,7 +56,6 @@ class TrendQueryService(
         currentTo: LocalDate,
         previousFrom: LocalDate,
         previousTo: LocalDate,
-        periodDays: Int,
     ): StepsTrend? {
         val current = stepRepository.sumCanonicalStepDailySummaries(
             dailyReadFilters(currentFrom, currentTo)
@@ -141,7 +140,7 @@ class TrendQueryService(
         } else null
 
         val sourceMetadata = scalarRepository.sourceMetadataFor(
-            setOf(current.sourceInstanceId)
+            setOfNotNull(current.sourceInstanceId, previous?.sourceInstanceId)
         )
         val currentResponse = current.toScalarResponse(sourceMetadata)
         val previousResponse = previous?.toScalarResponse(sourceMetadata)

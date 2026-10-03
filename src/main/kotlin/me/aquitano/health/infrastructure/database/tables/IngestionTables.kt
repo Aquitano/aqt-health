@@ -9,6 +9,8 @@ object IngestionBatchesTable : IntIdTable("ingestion_batches") {
     val sourceInstanceId =
         integer("source_instance_id").references(SourceInstancesTable.id)
     val batchExternalId = text("batch_external_id").nullable()
+    val syncWindowKey = text("sync_window_key").nullable()
+    val syncContentHash = text("sync_content_hash").nullable()
     val sourcePayloadJson = jsonb("source_payload_json")
     val status = text("status")
     val ingestedAt = timestampWithTimeZone("ingested_at")
@@ -24,12 +26,14 @@ object IngestionRecordsTable : IntIdTable("ingestion_records") {
     val recordType = text("record_type")
     val providerRecordId = text("provider_record_id").nullable()
     val normalizedRecordJson = jsonb("normalized_record_json")
+    val googleStepAllocationPriority = integer("google_step_allocation_priority_record_id").nullable()
     val recordStartAt = timestampWithTimeZone("record_start_at").nullable()
     val recordEndAt = timestampWithTimeZone("record_end_at").nullable()
     val createdAt = timestampWithTimeZone("created_at")
 }
 
 object PendingDerivedRebuildsTable : IntIdTable("pending_derived_rebuilds") {
+    val revision = text("revision")
     val sourceInstanceId =
         integer("source_instance_id").references(SourceInstancesTable.id)
     val derivedKind = text("derived_kind")

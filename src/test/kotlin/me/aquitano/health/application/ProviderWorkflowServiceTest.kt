@@ -1,5 +1,6 @@
 package me.aquitano.health.application
 
+import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.application.providersync.ProviderSyncProgressSink
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
@@ -16,7 +17,6 @@ import me.aquitano.health.domain.ProviderSyncSummary
 import me.aquitano.health.domain.ProviderWorkflowEndpoints
 import me.aquitano.health.domain.RequestValidationException
 import me.aquitano.health.domain.ValidationIssueCodes
-import me.aquitano.health.infrastructure.database.DatabaseFactory
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
 import me.aquitano.health.infrastructure.repositories.ProviderSyncIdempotencyRepository
 import me.aquitano.health.infrastructure.time.UtcClock
@@ -28,7 +28,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import me.aquitano.health.domain.ProviderSyncRequest as DomainProviderSyncRequest
 
-class ProviderWorkflowServiceTest {
+class ProviderWorkflowServiceTest : PostgresIntegrationTest() {
     private val now = Instant.parse("2026-05-01T10:00:00Z")
 
     // No providerInstanceId: the removed canReplaySafely gate used to skip idempotent replay for
@@ -120,7 +120,7 @@ class ProviderWorkflowServiceTest {
     }
 
     private fun serviceWith(provider: HealthProvider): ProviderWorkflowService {
-        val database = DatabaseFactory().initialize(PostgresTestDatabase.config())
+        val database = openDatabase(PostgresTestDatabase.config())
         val registry = HealthProviderRegistry(listOf(provider))
         val oAuthRepository = ProviderOAuthRepository(database)
         return ProviderWorkflowService(

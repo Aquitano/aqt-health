@@ -106,44 +106,16 @@ class ProviderWorkflowService(
             )
         }
 
-        when (providerOAuthRepository.consumeState(
-            authState,
-            provider.providerCode,
-            now
-        )) {
-            is ProviderOAuthStateConsumeResult.Consumed -> Unit
-            is ProviderOAuthStateConsumeResult.AlreadyUsed ->
-                throw RequestValidationException(
-                    listOf(
-                        ValidationIssue(
-                            field = "state",
-                            code = ValidationIssueCodes.InvalidState,
-                            message = "was already used",
-                        )
-                    )
-                )
-
-            is ProviderOAuthStateConsumeResult.Expired ->
-                throw RequestValidationException(
-                    listOf(
-                        ValidationIssue(
-                            field = "state",
-                            code = ValidationIssueCodes.InvalidState,
-                            message = "has expired",
-                        )
-                    )
-                )
-
-            ProviderOAuthStateConsumeResult.NotFound ->
-                throw RequestValidationException(
-                    listOf(
-                        ValidationIssue(
-                            field = "state",
-                            code = ValidationIssueCodes.InvalidState,
-                            message = "is invalid",
-                        )
-                    )
-                )
+        val stateError = when (providerOAuthRepository.consumeState(authState, provider.providerCode, now)) {
+            ProviderOAuthStateConsumeResult.Consumed -> null
+            ProviderOAuthStateConsumeResult.AlreadyUsed -> "was already used"
+            ProviderOAuthStateConsumeResult.Expired -> "has expired"
+            ProviderOAuthStateConsumeResult.NotFound -> "is invalid"
+        }
+        if (stateError != null) {
+            throw RequestValidationException(
+                listOf(ValidationIssue("state", ValidationIssueCodes.InvalidState, stateError))
+            )
         }
 
         val connection = provider.connect(authCode, now)

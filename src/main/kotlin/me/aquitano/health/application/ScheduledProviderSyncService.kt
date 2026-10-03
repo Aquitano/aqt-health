@@ -20,6 +20,9 @@ private val scheduledSyncLogger = KotlinLogging.logger {}
 
 class ScheduledSyncRunGuard {
     // This is intentionally process-local. Multiple scheduler processes sharing one DB need a DB-backed claim.
+    // Mutexes are never removed: dropping one between unlock() and remove() would hand a third
+    // caller a fresh mutex while a second one still holds the old one, so a config could run twice.
+    // The key space is bounded by the number of scheduled sync configs.
     private val running = ConcurrentHashMap<String, Mutex>()
 
     suspend fun <T> tryRun(key: String, block: suspend () -> T): T? {
@@ -29,7 +32,6 @@ class ScheduledSyncRunGuard {
             block()
         } finally {
             mutex.unlock()
-            running.remove(key, mutex)
         }
     }
 }
@@ -180,6 +182,7 @@ class ScheduledProviderSyncService(
                         from = from,
                         to = to,
                         dataTypes = listOf(dataType),
+                        refresh = true,
                     ),
                     now,
                 )
@@ -233,9 +236,10 @@ class ScheduledProviderSyncService(
     ): Pair<Instant, Instant> {
         val lookback = Duration.ofDays(config.lookbackDays.toLong())
         val candidateFrom = checkpoint?.checkpointAt?.minus(lookback) ?: now.minus(lookback)
-        val maxTo = candidateFrom.plus(Duration.ofDays(provider.descriptor.maxSyncRangeDays.toLong()))
-        val to = if (maxTo.isBefore(now)) maxTo else now
-        return candidateFrom to to
+        // Bound forward progress separately from overlap, so maximum lookback still advances.
+        val catchUpTo = checkpoint?.checkpointAt
+            ?.plus(Duration.ofDays(provider.descriptor.maxSyncRangeDays.toLong())) ?: now
+        return candidateFrom to minOf(catchUpTo, now)
     }
 
     private fun runKey(config: ScheduledSyncConfigRecord): String =

@@ -23,9 +23,9 @@ object PendingDerivedRebuildPolicy {
 }
 
 /**
- * Retries derived rebuilds that failed after their ingestion batch committed, so
- * projections converge without an operator noticing the staleness and running a
- * manual replay. Rows are queued by [IngestionService] and dropped once rebuilt.
+ * Completes durable derived work after failures, cancellations, and process restarts.
+ * Ingestion queues rows in its metric transaction; successful rebuilds acknowledge
+ * only the revisions they observed.
  */
 class PendingDerivedRebuildSweeper(
     private val repository: PendingDerivedRebuildRepository,
@@ -50,37 +50,27 @@ class PendingDerivedRebuildSweeper(
         val due = repository.due(now, limit)
         if (due.isEmpty()) return 0
         var rebuilt = 0
-        due.groupBy { it.sourceInstanceId }.forEach { (sourceInstanceId, rows) ->
-            val request = DerivedRebuildRequest(
-                sourceInstanceId = sourceInstanceId,
-                affectedDates = rows
-                    .groupBy({ it.derivedKind }, { it.affectedDate })
-                    .mapValues { it.value.toSet() },
-            )
+        due.groupBy { it.derivedKind to it.affectedDate }.forEach { (key, rows) ->
+            val (kind, date) = key
+            val requests = rows.map { row ->
+                DerivedRebuildRequest(row.sourceInstanceId, mapOf(kind to setOf(date)))
+            }
             try {
-                derivedRebuildExecutor.rebuild(request, clock.now())
-                repository.deleteCompleted(rows.map { it.id })
+                derivedRebuildExecutor.rebuild(requests, clock.now())
+                repository.deleteCompleted(rows)
                 rebuilt += rows.size
-                sweeperLogger.infoWithContext(
-                    "pending_derived_rebuild_repaired",
-                    "sourceInstanceId" to sourceInstanceId,
-                    "dateCount" to rows.size,
-                )
+                sweeperLogger.infoWithContext("pending_derived_rebuild_repaired", "dateCount" to rows.size)
             } catch (exception: Exception) {
                 if (exception is CancellationException) throw exception
                 repository.markAttemptFailed(
-                    ids = rows.map { it.id },
-                    nextAttemptAt = { attempts ->
-                        PendingDerivedRebuildPolicy.nextAttemptAfterFailure(now, attempts)
-                    },
+                    records = rows,
+                    nextAttemptAt = { attempts -> PendingDerivedRebuildPolicy.nextAttemptAfterFailure(now, attempts) },
                     error = exception.message ?: "Derived rebuild failed",
                     now = now,
                 )
                 sweeperLogger.warnWithContext(
                     "pending_derived_rebuild_retry_failed",
-                    "sourceInstanceId" to sourceInstanceId,
                     "dateCount" to rows.size,
-                    "maxAttempts" to (rows.maxOf { it.attempts } + 1),
                     throwable = exception,
                 )
             }

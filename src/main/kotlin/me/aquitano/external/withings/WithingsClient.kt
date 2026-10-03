@@ -268,6 +268,7 @@ class KtorWithingsClient(
             throw WithingsHttpException(
                 "withings_token_request_failed",
                 "Withings OAuth token request failed with ${status.value}",
+                httpStatus = status.value,
                 providerAction = "requesttoken",
                 providerEndpoint = config.oauthTokenUrl,
             )
@@ -418,6 +419,7 @@ class KtorWithingsClient(
             throw WithingsHttpException(
                 "withings_data_request_failed",
                 "Withings $action request failed with ${status.value}",
+                httpStatus = status.value,
                 providerAction = action,
                 providerEndpoint = endpoint,
             )
@@ -469,14 +471,10 @@ class KtorWithingsClient(
             else -> emptyList()
         }
 
-    /**
-     * Withings `startdate`/`enddate` are inclusive epoch seconds while sync windows are half-open,
-     * so the window's last second is dropped. Without it a record measured exactly at `to` is
-     * returned for this window and for the next one, which costs a redundant write on every
-     * boundary. Clamped so a sub-second window still queries at least its own start second.
-     */
+    // Withings accepts inclusive seconds. Subtract before truncating so fractional window ends
+    // retain their last included second; clamp sub-second windows to their start second.
     private fun inclusiveEndSeconds(from: Instant, to: Instant): Long =
-        maxOf(from.epochSecond, to.epochSecond - 1)
+        maxOf(from.epochSecond, to.minusNanos(1).epochSecond)
 
     private fun ymdRange(
         from: Instant,

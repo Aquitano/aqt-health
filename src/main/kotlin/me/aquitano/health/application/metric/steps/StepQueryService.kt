@@ -25,7 +25,6 @@ class StepQueryService(
         suspendDbTransaction(db = database) {
             val filters = params.readFilters(
                 sortSpec = QueryParamSpecs.sortByStartAt,
-                latestSupported = true,
             )
             val (rows, sourceMetadata) =
                 canonicalRepository.listCanonicalStepSamples(filters, CANONICAL_STEP_ALGORITHM_VERSION)
@@ -33,15 +32,15 @@ class StepQueryService(
                 limit = filters.limit,
                 sort = filters.sort,
                 order = filters.order,
-                sortValue = { it.startAt },
+                sortValue = { it.startAt.toString() },
                 id = { it.id.toLong() },
             )
             StepSamplesResponse(
                 items = page.items.map {
                     StepSampleResponse(
                         id = it.id,
-                        startAt = it.startAt,
-                        endAt = it.endAt,
+                        startAt = it.startAt.toString(),
+                        endAt = it.endAt.toString(),
                         steps = it.steps,
                         source = sourceMetadata[it.sourceInstanceId].toResponse(),
                     )

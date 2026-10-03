@@ -1,5 +1,6 @@
 package me.aquitano.external.google
 
+import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.application.providersync.RefreshedTokenSet
 import me.aquitano.health.infrastructure.time.UtcClock
 import kotlinx.coroutines.runBlocking
@@ -17,7 +18,6 @@ import me.aquitano.health.domain.ServerConfigurationException
 import me.aquitano.health.domain.UpstreamProviderException
 import me.aquitano.health.infrastructure.config.DatabaseConfig
 import me.aquitano.health.infrastructure.config.ProviderOAuthConfig
-import me.aquitano.health.infrastructure.database.DatabaseFactory
 import me.aquitano.health.infrastructure.repositories.IngestionRepository
 import me.aquitano.health.infrastructure.repositories.PendingDerivedRebuildRepository
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
@@ -30,7 +30,7 @@ import org.jetbrains.exposed.v1.jdbc.Database
 import java.time.Instant
 import kotlin.test.*
 
-class GoogleHealthProviderTest {
+class GoogleHealthProviderTest : PostgresIntegrationTest() {
     @Test
     fun oauthCallbackStoresEncryptedTokens() = runBlocking {
         val fixture = Fixture()
@@ -177,6 +177,7 @@ class GoogleHealthProviderTest {
         fixture.storeAccount(accessToken = "access-token", refreshToken = "refresh-token")
         fixture.providerRepository.markNeedsReauth(
             accountId = singleInt(fixture.dbPath, "SELECT id FROM provider_oauth_accounts"),
+            expectedRefreshTokenCiphertext = singleString(fixture.dbPath, "SELECT refresh_token_ciphertext FROM provider_oauth_accounts"),
             errorCode = "google_health_needs_reauth",
             errorMessage = "invalid refresh token",
             now = fixture.now,
@@ -327,7 +328,7 @@ class GoogleHealthProviderTest {
         assertEquals(1, second.batches.single().duplicateMetricsSkipped)
         assertEquals(2, fixture.client.fetchRequests.size)
         assertEquals(1, countRows(fixture.dbPath, "step_samples"))
-        assertEquals(1200, singleInt(fixture.dbPath, "SELECT steps FROM step_daily_summaries"))
+        assertEquals(1200, singleInt(fixture.dbPath, "SELECT SUM(value)::int FROM canonical_step_day_bucket_contributions"))
     }
 
     @Test
@@ -378,7 +379,7 @@ class GoogleHealthProviderTest {
         assertEquals(0, second.batches.single().metricsCreated[StructuralMetricKinds.STEP_SAMPLES])
         assertEquals(1, second.batches.single().duplicateMetricsSkipped)
         assertEquals(1, countRows(fixture.dbPath, "step_samples"))
-        assertEquals(20, singleInt(fixture.dbPath, "SELECT steps FROM step_daily_summaries"))
+        assertEquals(20, singleInt(fixture.dbPath, "SELECT SUM(value)::int FROM canonical_step_day_bucket_contributions"))
     }
 
     @Test
@@ -429,7 +430,7 @@ class GoogleHealthProviderTest {
         assertEquals(1, second.batches.single().metricsCreated[StructuralMetricKinds.STEP_SAMPLES])
         assertEquals(0, second.batches.single().duplicateMetricsSkipped)
         assertEquals(2, countRows(fixture.dbPath, "step_samples"))
-        assertEquals(2000, singleInt(fixture.dbPath, "SELECT steps FROM step_daily_summaries"))
+        assertEquals(2000, singleInt(fixture.dbPath, "SELECT SUM(value)::int FROM canonical_step_day_bucket_contributions"))
     }
 
     @Test
@@ -543,11 +544,11 @@ class GoogleHealthProviderTest {
         assertEquals("failed", singleString(fixture.dbPath, "SELECT status FROM provider_sync_runs"))
     }
 
-    private class Fixture(
+    private inner class Fixture(
         clientSecret: String = "client-secret",
     ) {
         val dbPath: DatabaseConfig = PostgresTestDatabase.config()
-        val database: Database = DatabaseFactory().initialize(
+        val database: Database = openDatabase(
             dbPath
         )
         val now: Instant = Instant.parse("2026-04-20T10:00:00Z")

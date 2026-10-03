@@ -31,9 +31,7 @@ import me.aquitano.health.application.metric.sleep.repository.SleepRepository
 import me.aquitano.health.application.metric.sleep.repository.SleepWriteRepository
 import me.aquitano.health.application.metric.steps.StepQueryService
 import me.aquitano.health.application.metric.steps.derived.CanonicalStepDerivationService
-import me.aquitano.health.application.metric.steps.derived.StepDailySummaryDerivation
 import me.aquitano.health.application.metric.steps.repository.CanonicalStepDerivationRepository
-import me.aquitano.health.application.metric.steps.repository.StepDailySummaryDerivationRepository
 import me.aquitano.health.application.metric.steps.repository.StepWriteRepository
 import me.aquitano.health.application.providersync.OAuthProviderSyncStore
 import me.aquitano.health.application.providersync.ProviderSyncPipeline
@@ -115,18 +113,11 @@ fun ingestionModule() = module {
     // Derived-projection rebuild
     singleOf(::PendingDerivedRebuildRepository)
     singleOf(::ProjectionWipeRepository)
-    singleOf(::StepDailySummaryDerivationRepository)
-    single { StepDailySummaryDerivation(get<StepDailySummaryDerivationRepository>()) }
     single { CanonicalStepDerivationService(get<CanonicalStepDerivationRepository>()) }
     single {
-        DerivedRebuildModuleRegistry(
-            derivedRebuildModules(
-                stepSummaryService = get(),
-                canonicalStepService = get(),
-            )
-        )
+        DerivedRebuildModuleRegistry(derivedRebuildModules(canonicalStepService = get()))
     }
-    singleOf(::TransactionalDerivedRebuildExecutor) { bind<DerivedRebuildExecutor>() }
+    singleOf(::PerDateDerivedRebuildExecutor) { bind<DerivedRebuildExecutor>() }
     single {
         PendingDerivedRebuildSweeper(
             repository = get(),
@@ -279,6 +270,7 @@ fun adminReplayModule() = module {
             metricWriteService = get(),
             derivedRebuildExecutor = get(),
             derivedRebuildRegistry = get(),
+            pendingDerivedRebuildRepository = get(),
             replayJobRepository = get(),
             projectionWipeRepository = get(),
             clock = get(),
