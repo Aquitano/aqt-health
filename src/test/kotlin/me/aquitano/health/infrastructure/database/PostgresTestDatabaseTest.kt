@@ -11,6 +11,17 @@ class PostgresTestDatabaseTest : PostgresIntegrationTest() {
     @Test
     fun droppingOneFixtureSchemaPreservesOtherFixturesAndTheirIndexes() {
         val base = PostgresTestDatabase.config()
+        val expectedExtensionSchema = PostgresTestDatabase.connection(base).use { connection ->
+            connection.createStatement().use { statement ->
+                statement.executeQuery("""
+                    SELECT n.nspname FROM pg_extension e
+                    JOIN pg_namespace n ON n.oid = e.extnamespace
+                    WHERE e.extname = 'btree_gist'
+                """.trimIndent()).use { rows ->
+                    if (rows.next()) rows.getString(1) else PostgresTestDatabase.EXTENSIONS_SCHEMA
+                }
+            }
+        }
         fun fixture(): DatabaseConfig = checkNotNull(
             PostgresTestDatabase.externalConfig(base.jdbcUrl, base.user, base.password, required = true)
         ).also { FlywayMigrator().migrate(it) }
@@ -39,7 +50,7 @@ class PostgresTestDatabaseTest : PostgresIntegrationTest() {
                         assertTrue(rows.next())
                         rows.getString(1)
                     }
-                    assertEquals(PostgresTestDatabase.EXTENSIONS_SCHEMA, extensionSchema)
+                    assertEquals(expectedExtensionSchema, extensionSchema)
                     statement.execute("REINDEX INDEX step_samples_source_instance_time_range_gist_idx")
                 }
             }
