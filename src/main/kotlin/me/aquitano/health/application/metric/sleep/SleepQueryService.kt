@@ -2,8 +2,8 @@ package me.aquitano.health.application.metric.sleep
 
 import me.aquitano.health.api.dto.SleepNightsResponse
 import me.aquitano.health.api.dto.SleepSessionsResponse
-import me.aquitano.health.application.metric.common.QueryParamSpecs
 import me.aquitano.health.application.metric.common.QueryParams
+import me.aquitano.health.application.metric.common.SortFields
 import me.aquitano.health.application.metric.common.pagedRead
 import me.aquitano.health.application.metric.common.readFilters
 import me.aquitano.health.application.metric.common.sleepNightReadFilters
@@ -19,8 +19,8 @@ class SleepQueryService(
     private val canonicalSessionRepository: CanonicalSleepSessionDerivationRepository,
 ) {
     suspend fun listSleepSessions(params: QueryParams): SleepSessionsResponse {
-        val filters = params.readFilters(sortSpec = QueryParamSpecs.sortByStartAt)
-        return pagedRead(database, filters, { it.startAt }, { it.id.toLong() }, ::SleepSessionsResponse) {
+        val filters = params.readFilters()
+        return pagedRead(database, filters, SortFields.START_AT, { it.startAt }, { it.id.toLong() }, ::SleepSessionsResponse) {
             val (sessions, sourceMetadata) = canonicalSessionRepository.listCanonicalSleepSessions(filters)
             val stagesBySession = canonicalSessionRepository.listRawStagesForSessions(sessions.mapTo(HashSet()) { it.id })
             sessions.map { it.toResponse(stagesBySession, sourceMetadata) }
@@ -33,7 +33,7 @@ class SleepQueryService(
     ): SleepNightsResponse {
         params.rejectLatest()
         val filters = params.sleepNightReadFilters(now)
-        return pagedRead(database, filters, { it.date }, { it.session.id.toLong() }, ::SleepNightsResponse) {
+        return pagedRead(database, filters, SortFields.DATE, { it.date }, { it.session.id.toLong() }, ::SleepNightsResponse) {
             val (nights, stagesBySession, sourceMetadata) = sleepRepository.listCanonicalSleepNights(filters)
             nights.map { it.toResponse(stagesBySession, sourceMetadata) }
         }

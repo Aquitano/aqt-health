@@ -533,31 +533,6 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
                     .jsonPrimitive.content,
             )
 
-            val invalidSort = authorizedGet("/api/v2/metrics/heart_rate?sort=startAt")
-            assertEquals(HttpStatusCode.BadRequest, invalidSort.status)
-            assertEquals(
-                "sort",
-                invalidSort
-                    .errorDetails()[0]
-                    .jsonObject["field"]!!
-                    .jsonPrimitive.content,
-            )
-
-            val validSleepSummarySort =
-                authorizedGet("/api/v2/sleep/summaries?sort=endAt&order=desc")
-            assertEquals(HttpStatusCode.OK, validSleepSummarySort.status)
-
-            val invalidSleepSummarySort =
-                authorizedGet("/api/v2/sleep/summaries?sort=startAt")
-            assertEquals(HttpStatusCode.BadRequest, invalidSleepSummarySort.status)
-            assertEquals(
-                "sort",
-                invalidSleepSummarySort
-                    .errorDetails()[0]
-                    .jsonObject["field"]!!
-                    .jsonPrimitive.content,
-            )
-
             val unsupportedLatest =
                 authorizedGet("/api/v2/steps/daily?latest=true")
             assertEquals(HttpStatusCode.BadRequest, unsupportedLatest.status)

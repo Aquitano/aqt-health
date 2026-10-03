@@ -25,8 +25,6 @@ internal data class EnumParamSpec(
     init {
         require(default in values) { "default '$default' must be one of $values" }
     }
-
-    val allowed: Set<String> = values.toSet()
 }
 
 internal object QueryParamSpecs {
@@ -38,11 +36,4 @@ internal object QueryParamSpecs {
     val adminLimit = LimitParamSpec("limit", default = 100, min = 1, max = 1000)
 
     val order = EnumParamSpec("order", listOf(Orders.ASC, Orders.DESC), Orders.ASC)
-
-    val sortByMeasuredAt = sortSpec(SortFields.MEASURED_AT)
-    val sortByStartAt = sortSpec(SortFields.START_AT)
-    val sortByEndAt = sortSpec(SortFields.END_AT)
-    val sortByDate = sortSpec(SortFields.DATE)
-
-    private fun sortSpec(field: String) = EnumParamSpec("sort", listOf(field), field)
 }

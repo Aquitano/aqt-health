@@ -20,14 +20,6 @@ class QueryParamSpecsTest {
     }
 
     @Test
-    fun `sort spec enforces documented enum and default`() {
-        assertEquals("measuredAt", QueryParams(emptyMap()).sort(QueryParamSpecs.sortByMeasuredAt))
-        assertFailsWith<RequestValidationException> {
-            QueryParams(mapOf("sort" to "date")).sort(QueryParamSpecs.sortByMeasuredAt)
-        }
-    }
-
-    @Test
     fun `boolean spec applies documented default`() {
         assertEquals(false, QueryParams(emptyMap()).boolean(QueryParamSpecs.includeSource))
         assertEquals(true, QueryParams(mapOf("includeSource" to "true")).boolean(QueryParamSpecs.includeSource))
@@ -36,7 +28,7 @@ class QueryParamSpecsTest {
     @Test
     fun `enum spec rejects a default outside its values`() {
         assertFailsWith<IllegalArgumentException> {
-            EnumParamSpec("sort", listOf("date"), "measuredAt")
+            EnumParamSpec("order", listOf("asc"), "desc")
         }
     }
 }

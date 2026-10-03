@@ -180,7 +180,6 @@ class TrendQueryService(
             providerInstanceId = null,
             includeSource = false,
             limit = Int.MAX_VALUE,
-            sort = "date",
             order = "asc",
         )
 
@@ -192,7 +191,6 @@ class TrendQueryService(
             providerInstanceId = null,
             includeSource = false,
             limit = 1,
-            sort = "measuredAt",
             order = "desc",
         )
 
@@ -208,7 +206,6 @@ class TrendQueryService(
             providerInstanceId = null,
             includeSource = false,
             limit = Int.MAX_VALUE,
-            sort = "measuredAt",
             order = "asc",
         )
 

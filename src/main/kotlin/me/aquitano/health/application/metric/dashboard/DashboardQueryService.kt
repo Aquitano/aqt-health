@@ -4,7 +4,6 @@ import me.aquitano.health.api.dto.DashboardStepsSummaryResponse
 import me.aquitano.health.api.dto.DashboardSummaryResponse
 import me.aquitano.health.application.metric.common.Orders
 import me.aquitano.health.application.metric.common.QueryParams
-import me.aquitano.health.application.metric.common.SortFields
 import me.aquitano.health.application.metric.common.repository.ReadFilters
 import me.aquitano.health.application.metric.common.singleSource
 import me.aquitano.health.application.metric.common.toResponse
@@ -49,7 +48,6 @@ class DashboardQueryService(
                     providerInstanceId = params.optional("providerInstanceId"),
                     includeSource = includeSource,
                     limit = 1,
-                    sort = SortFields.MEASURED_AT,
                     order = Orders.DESC,
                 )
             val sleepNightFilters =
@@ -61,7 +59,6 @@ class DashboardQueryService(
                     providerInstanceId = params.optional("providerInstanceId"),
                     includeSource = includeSource,
                     limit = 1,
-                    sort = SortFields.DATE,
                     order = Orders.ASC,
                 )
 

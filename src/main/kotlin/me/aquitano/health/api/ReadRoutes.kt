@@ -13,7 +13,6 @@ import me.aquitano.health.application.SleepSummaryReadService
 import me.aquitano.health.application.TrendQueryService
 import me.aquitano.health.application.metric.activity.ActivityQueryService
 import me.aquitano.health.application.metric.cardiovascular.CardiovascularQueryService
-import me.aquitano.health.application.metric.common.QueryParamSpecs
 import me.aquitano.health.application.metric.dashboard.DashboardQueryService
 import me.aquitano.health.application.metric.scalar.ScalarMetricQueryService
 import me.aquitano.health.application.metric.sleep.SleepQueryService
@@ -135,7 +134,6 @@ internal fun Route.readRoutes() {
         summary = "List step samples",
         descriptionText = "Returns canonical step samples filtered by timestamp range, source provider, provider instance, source metadata inclusion, item limit, and sort order. Use `latest=true` to return the latest matching sample only.",
         includeLatest = true,
-        sortSpec = QueryParamSpecs.sortByStartAt,
     )
     get("/api/v2/steps/daily") {
         call.respond<StepDailySummariesResponse>(
@@ -166,7 +164,6 @@ internal fun Route.readRoutes() {
         summary = "List sleep sessions",
         descriptionText = "Returns sleep sessions with nested stages. Use `latest=true` to return the latest matching session only.",
         includeLatest = true,
-        sortSpec = QueryParamSpecs.sortByStartAt,
     )
     get("/api/v2/sleep/nights") {
         call.respond<SleepNightsResponse>(
@@ -188,7 +185,6 @@ internal fun Route.readRoutes() {
         summary = "List sleep summaries",
         descriptionText = "Returns aggregate sleep summary records such as sleep score, efficiency, latency, wakeups, WASO, and stage-duration totals. Use `latest=true` to return the latest matching summary only.",
         includeLatest = true,
-        sortSpec = QueryParamSpecs.sortByEndAt,
     )
     get("/api/v2/blood-pressure") {
         call.respond<BloodPressureMeasurementsResponse>(
@@ -199,7 +195,6 @@ internal fun Route.readRoutes() {
         summary = "List blood pressure measurements",
         descriptionText = "Returns paired systolic/diastolic blood-pressure measurements filtered by timestamp and source. Use `latest=true` to return the latest matching measurement only.",
         includeLatest = true,
-        sortSpec = QueryParamSpecs.sortByMeasuredAt,
     )
 
     get("/api/v2/dashboard/summary") {

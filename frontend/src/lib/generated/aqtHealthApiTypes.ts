@@ -2953,15 +2953,13 @@ export interface operations {
                 providerInstanceId?: string;
                 /** @description Include source provider metadata in each item. Defaults to false. */
                 includeSource?: boolean;
-                /** @description Return the latest matching item when true. Defaults to false. Cannot be combined with limit, sort, or order. */
+                /** @description Return the latest matching item when true. Defaults to false. Cannot be combined with limit, order, or cursor. */
                 latest?: boolean;
-                /** @description Sort field for this endpoint. Each metric endpoint supports its documented default temporal or date field. */
-                sort?: "measuredAt";
                 /** @description Sort direction. Defaults to asc. Use desc for newest-first reads. */
                 order?: "asc" | "desc";
                 /** @description Maximum number of items. Defaults to 500 and cannot exceed 5000. */
                 limit?: number;
-                /** @description Opaque cursor from `meta.nextCursor` for the next page. Must be used with the same sort and order. */
+                /** @description Opaque cursor from `meta.nextCursor` for the next page. Must be used with the same order. */
                 cursor?: string;
                 /** @description Return raw stored samples instead of canonical cross-provider samples. Defaults to false. */
                 raw?: boolean;
@@ -3270,15 +3268,13 @@ export interface operations {
                 providerInstanceId?: string;
                 /** @description Include source provider metadata in each item. Defaults to false. */
                 includeSource?: boolean;
-                /** @description Return the latest matching item when true. Defaults to false. Cannot be combined with limit, sort, or order. */
+                /** @description Return the latest matching item when true. Defaults to false. Cannot be combined with limit, order, or cursor. */
                 latest?: boolean;
-                /** @description Sort field for this endpoint. Each metric endpoint supports its documented default temporal or date field. */
-                sort?: "startAt";
                 /** @description Sort direction. Defaults to asc. Use desc for newest-first reads. */
                 order?: "asc" | "desc";
                 /** @description Maximum number of items. Defaults to 500 and cannot exceed 5000. */
                 limit?: number;
-                /** @description Opaque cursor from `meta.nextCursor` for the next page. Must be used with the same sort and order. */
+                /** @description Opaque cursor from `meta.nextCursor` for the next page. Must be used with the same order. */
                 cursor?: string;
             };
             header?: never;
@@ -3342,13 +3338,11 @@ export interface operations {
                 providerInstanceId?: string;
                 /** @description Include source provider metadata in each item. Defaults to false. */
                 includeSource?: boolean;
-                /** @description Sort field. Daily endpoints support date. */
-                sort?: "date";
                 /** @description Sort direction. Defaults to asc. Use desc for newest-first reads. */
                 order?: "asc" | "desc";
                 /** @description Maximum number of items. Defaults to 500 and cannot exceed 5000. */
                 limit?: number;
-                /** @description Opaque cursor from `meta.nextCursor` for the next page. Must be used with the same sort and order. */
+                /** @description Opaque cursor from `meta.nextCursor` for the next page. Must be used with the same order. */
                 cursor?: string;
                 /** @description Exact UTC date or `today`. Cannot be combined with fromDate or toDate. */
                 date?: string;
@@ -3356,7 +3350,7 @@ export interface operations {
                 fromDate?: string;
                 /** @description Inclusive UTC date end date. */
                 toDate?: string;
-                /** @description Return the latest matching daily step summary when true. Defaults to false. Cannot be combined with limit, sort, order, or cursor. */
+                /** @description Return the latest matching daily step summary when true. Defaults to false. Cannot be combined with limit, order, or cursor. */
                 latest?: boolean;
             };
             header?: never;
@@ -3420,13 +3414,11 @@ export interface operations {
                 providerInstanceId?: string;
                 /** @description Include source provider metadata in each item. Defaults to false. */
                 includeSource?: boolean;
-                /** @description Sort field. Daily endpoints support date. */
-                sort?: "date";
                 /** @description Sort direction. Defaults to asc. Use desc for newest-first reads. */
                 order?: "asc" | "desc";
                 /** @description Maximum number of items. Defaults to 500 and cannot exceed 5000. */
                 limit?: number;
-                /** @description Opaque cursor from `meta.nextCursor` for the next page. Must be used with the same sort and order. */
+                /** @description Opaque cursor from `meta.nextCursor` for the next page. Must be used with the same order. */
                 cursor?: string;
                 /** @description Exact UTC date or `today`. Cannot be combined with fromDate or toDate. */
                 date?: string;
@@ -3434,7 +3426,7 @@ export interface operations {
                 fromDate?: string;
                 /** @description Inclusive UTC date end date. */
                 toDate?: string;
-                /** @description Return the latest matching activity summary when true. Defaults to false. Cannot be combined with limit, sort, order, or cursor. */
+                /** @description Return the latest matching activity summary when true. Defaults to false. Cannot be combined with limit, order, or cursor. */
                 latest?: boolean;
             };
             header?: never;
@@ -3502,15 +3494,13 @@ export interface operations {
                 providerInstanceId?: string;
                 /** @description Include source provider metadata in each item. Defaults to false. */
                 includeSource?: boolean;
-                /** @description Return the latest matching item when true. Defaults to false. Cannot be combined with limit, sort, or order. */
+                /** @description Return the latest matching item when true. Defaults to false. Cannot be combined with limit, order, or cursor. */
                 latest?: boolean;
-                /** @description Sort field for this endpoint. Each metric endpoint supports its documented default temporal or date field. */
-                sort?: "startAt";
                 /** @description Sort direction. Defaults to asc. Use desc for newest-first reads. */
                 order?: "asc" | "desc";
                 /** @description Maximum number of items. Defaults to 500 and cannot exceed 5000. */
                 limit?: number;
-                /** @description Opaque cursor from `meta.nextCursor` for the next page. Must be used with the same sort and order. */
+                /** @description Opaque cursor from `meta.nextCursor` for the next page. Must be used with the same order. */
                 cursor?: string;
             };
             header?: never;
@@ -3584,11 +3574,9 @@ export interface operations {
                 includeSource?: boolean;
                 /** @description Maximum number of items. Defaults to 500, cannot exceed 5000, and is ignored as 1 when date is provided. */
                 limit?: number;
-                /** @description Sort field. Sleep night reads support `date`. */
-                sort?: "date";
                 /** @description Sort direction. Defaults to asc. Use desc for most recent sleep nights first. */
                 order?: "asc" | "desc";
-                /** @description Opaque cursor from `meta.nextCursor` for the next page. Must be used with the same sort and order. */
+                /** @description Opaque cursor from `meta.nextCursor` for the next page. Must be used with the same order. */
                 cursor?: string;
             };
             header?: never;
@@ -3656,15 +3644,13 @@ export interface operations {
                 providerInstanceId?: string;
                 /** @description Include source provider metadata in each item. Defaults to false. */
                 includeSource?: boolean;
-                /** @description Return the latest matching item when true. Defaults to false. Cannot be combined with limit, sort, or order. */
+                /** @description Return the latest matching item when true. Defaults to false. Cannot be combined with limit, order, or cursor. */
                 latest?: boolean;
-                /** @description Sort field for this endpoint. Each metric endpoint supports its documented default temporal or date field. */
-                sort?: "endAt";
                 /** @description Sort direction. Defaults to asc. Use desc for newest-first reads. */
                 order?: "asc" | "desc";
                 /** @description Maximum number of items. Defaults to 500 and cannot exceed 5000. */
                 limit?: number;
-                /** @description Opaque cursor from `meta.nextCursor` for the next page. Must be used with the same sort and order. */
+                /** @description Opaque cursor from `meta.nextCursor` for the next page. Must be used with the same order. */
                 cursor?: string;
             };
             header?: never;
@@ -3732,15 +3718,13 @@ export interface operations {
                 providerInstanceId?: string;
                 /** @description Include source provider metadata in each item. Defaults to false. */
                 includeSource?: boolean;
-                /** @description Return the latest matching item when true. Defaults to false. Cannot be combined with limit, sort, or order. */
+                /** @description Return the latest matching item when true. Defaults to false. Cannot be combined with limit, order, or cursor. */
                 latest?: boolean;
-                /** @description Sort field for this endpoint. Each metric endpoint supports its documented default temporal or date field. */
-                sort?: "measuredAt";
                 /** @description Sort direction. Defaults to asc. Use desc for newest-first reads. */
                 order?: "asc" | "desc";
                 /** @description Maximum number of items. Defaults to 500 and cannot exceed 5000. */
                 limit?: number;
-                /** @description Opaque cursor from `meta.nextCursor` for the next page. Must be used with the same sort and order. */
+                /** @description Opaque cursor from `meta.nextCursor` for the next page. Must be used with the same order. */
                 cursor?: string;
             };
             header?: never;

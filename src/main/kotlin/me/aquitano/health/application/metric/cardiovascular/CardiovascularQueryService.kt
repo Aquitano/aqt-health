@@ -2,8 +2,8 @@ package me.aquitano.health.application.metric.cardiovascular
 
 import me.aquitano.health.api.dto.BloodPressureMeasurementsResponse
 import me.aquitano.health.application.metric.cardiovascular.repository.CardiovascularRepository
-import me.aquitano.health.application.metric.common.QueryParamSpecs
 import me.aquitano.health.application.metric.common.QueryParams
+import me.aquitano.health.application.metric.common.SortFields
 import me.aquitano.health.application.metric.common.pagedRead
 import me.aquitano.health.application.metric.common.readFilters
 import me.aquitano.health.application.metric.common.toResponse
@@ -18,8 +18,8 @@ class CardiovascularQueryService(
     private val cardiovascularRepository: CardiovascularRepository,
 ) {
     suspend fun listBloodPressure(params: QueryParams): BloodPressureMeasurementsResponse {
-        val filters = params.readFilters(sortSpec = QueryParamSpecs.sortByMeasuredAt)
-        return pagedRead(database, filters, { it.measuredAt }, { it.id.toLong() }, ::BloodPressureMeasurementsResponse) {
+        val filters = params.readFilters()
+        return pagedRead(database, filters, SortFields.MEASURED_AT, { it.measuredAt }, { it.id.toLong() }, ::BloodPressureMeasurementsResponse) {
             val (rows, sourceMetadata) = cardiovascularRepository.listBloodPressure(filters)
             rows.map { it.toResponse(sourceMetadata) }
         }
