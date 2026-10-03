@@ -8,12 +8,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import me.aquitano.health.api.dto.ProviderSyncRequest
-import me.aquitano.health.application.providersync.ProviderSyncProgressSink
 import me.aquitano.health.domain.HealthProvider
 import me.aquitano.health.domain.HealthProviderDescriptor
 import me.aquitano.health.domain.NotFoundException
 import me.aquitano.health.domain.ProviderAuthType
 import me.aquitano.health.domain.ProviderConnection
+import me.aquitano.health.domain.ProviderSyncProgressSink
 import me.aquitano.health.domain.ProviderSyncSummary
 import me.aquitano.health.domain.ProviderWorkflowEndpoints
 import me.aquitano.health.domain.SyncJobStatus

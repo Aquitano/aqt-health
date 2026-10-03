@@ -1,6 +1,5 @@
 package me.aquitano.health.domain
 
-import me.aquitano.health.application.providersync.ProviderSyncProgressSink
 import java.time.Instant
 
 /**
@@ -61,7 +60,6 @@ data class HealthProviderDescriptor(
     val maxSyncRangeDays: Int,
     val supportsPageSize: Boolean,
     val workflowEndpoints: ProviderWorkflowEndpoints,
-    val aliases: List<String> = emptyList(),
 )
 
 enum class ProviderAuthType {

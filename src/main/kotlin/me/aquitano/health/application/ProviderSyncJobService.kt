@@ -15,10 +15,10 @@ import me.aquitano.health.api.dto.ProviderSyncJobStartResponse
 import me.aquitano.health.api.dto.ProviderSyncJobStatusResponse
 import me.aquitano.health.api.dto.ProviderSyncRequest
 import me.aquitano.health.api.dto.ProviderSyncResponse
-import me.aquitano.health.application.providersync.ProviderSyncItem
-import me.aquitano.health.application.providersync.ProviderSyncProgressSink
 import me.aquitano.health.domain.ConflictException
 import me.aquitano.health.domain.NotFoundException
+import me.aquitano.health.domain.ProviderSyncItem
+import me.aquitano.health.domain.ProviderSyncProgressSink
 import me.aquitano.health.domain.SyncJobStatus
 import me.aquitano.health.infrastructure.logging.*
 import me.aquitano.health.infrastructure.repositories.ProviderSyncJobRecord

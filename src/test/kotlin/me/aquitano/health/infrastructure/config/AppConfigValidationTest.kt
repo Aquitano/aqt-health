@@ -27,8 +27,23 @@ class AppConfigValidationTest {
         assertTrue("32 bytes" in issues.single().message)
     }
 
+    @Test
+    fun rejectsANonPositiveIngestionBodyLimit() {
+        val config = productionConfig(maxBodyBytes = 0)
+
+        val issues =
+            runCatching { config.validateForStartup() }
+                .exceptionOrNull()
+                .let { it as? AppConfigValidationException }
+                ?.issues
+                ?: fail("expected validation to fail")
+
+        assertEquals("aqtHealth.ingestion.maxBodyBytes", issues.single().path)
+    }
+
     private fun productionConfig(
         bootstrapApiKey: String = "0123456789abcdef0123456789abcdef",
+        maxBodyBytes: Long = 33_554_432,
     ): AppConfig =
         AppConfig(
             environment = RuntimeEnvironment.PRODUCTION,
@@ -47,7 +62,7 @@ class AppConfigValidationTest {
                 ),
             googleHealth = providerConfig("https://api.aqt-health.app/api/v2/providers/google-health/oauth/callback"),
             withings = providerConfig("https://api.aqt-health.app/api/v2/providers/withings/oauth/callback"),
-            cors = CorsConfig(origins = listOf("https://app.aqt-health.app")),
+            ingestion = IngestionConfig(maxBodyBytes = maxBodyBytes),
             openObserve = OpenObserveConfig(url = "", org = "", user = "", password = ""),
         )
 

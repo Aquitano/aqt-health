@@ -73,7 +73,7 @@ class WithingsProviderTest : PostgresIntegrationTest() {
             val refreshCiphertext = singleString(fixture.dbPath, "SELECT refresh_token_ciphertext FROM provider_oauth_accounts")
             assertFalse(accessCiphertext.contains("access-from-code"))
             assertFalse(refreshCiphertext.contains("refresh-from-code"))
-            val cipher = TokenCipher(fixture.config.tokenEncryptionKey)
+            val cipher = TokenCipher(fixture.config.tokenEncryptionKey, WITHINGS_PROVIDER_CODE)
             assertEquals("access-from-code", cipher.decrypt(accessCiphertext))
             assertEquals("refresh-from-code", cipher.decrypt(refreshCiphertext))
         }
@@ -679,7 +679,7 @@ class WithingsProviderTest : PostgresIntegrationTest() {
             expiresAt: Instant = now.plusSeconds(3600),
             updatedAt: Instant = now,
         ) {
-            val cipher = TokenCipher(config.tokenEncryptionKey)
+            val cipher = TokenCipher(config.tokenEncryptionKey, WITHINGS_PROVIDER_CODE)
             providerRepository.upsertAccount(
                 providerCode = WITHINGS_PROVIDER_CODE,
                 providerUserId = providerUserId,
