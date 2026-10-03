@@ -7,13 +7,8 @@ import { DateRangeForm } from "@/components/DateRangeForm";
 import { DataSection } from "@/components/DataSection";
 import { ActivitySummariesTable } from "@/components/tables/ActivitySummariesTable";
 import { BloodPressureTable } from "@/components/tables/BloodPressureTable";
-import { BodyMeasurementsTable } from "@/components/tables/BodyMeasurementsTable";
-import { CardiovascularTable } from "@/components/tables/CardiovascularTable";
 import { DailyStepsTable } from "@/components/tables/DailyStepsTable";
-import { ExtendedBodyMeasurementsTable } from "@/components/tables/ExtendedBodyMeasurementsTable";
-import { HeartRateTable } from "@/components/tables/HeartRateTable";
-import { HrvTable } from "@/components/tables/HrvTable";
-import { RespiratoryRateTable } from "@/components/tables/RespiratoryRateTable";
+import { ScalarSamplesTable } from "@/components/tables/ScalarSamplesTable";
 import { SleepSessionsTable } from "@/components/tables/SleepSessionsTable";
 import { SleepSummariesTable } from "@/components/tables/SleepSummariesTable";
 import { aqtHealthClient as client } from "@/lib/aqtHealthClient";
@@ -23,38 +18,17 @@ import {
   parseDateRange,
   startOfDayInstant,
 } from "@/lib/dates";
+import { scalarMetricTypes } from "@/lib/metrics";
 import { serverConfig } from "@/lib/serverConfig";
-import type { ApiResult, ScalarSample } from "@/lib/types";
+import type { ApiResult } from "@/lib/types";
 
-const scalarTables = {
-  weight: BodyMeasurementsTable,
-  body_fat: BodyMeasurementsTable,
-  muscle: BodyMeasurementsTable,
-  water: BodyMeasurementsTable,
-  visceral_fat: BodyMeasurementsTable,
-  heart_rate: HeartRateTable,
-  hrv_rmssd: HrvTable,
-  respiratory_rate: RespiratoryRateTable,
-  pulse_wave_velocity: CardiovascularTable,
-  vascular_age: CardiovascularTable,
-  standing_heart_rate: CardiovascularTable,
-  fat_mass: ExtendedBodyMeasurementsTable,
-  fat_free_mass: ExtendedBodyMeasurementsTable,
-  bone_mass: ExtendedBodyMeasurementsTable,
-  intracellular_water: ExtendedBodyMeasurementsTable,
-  extracellular_water: ExtendedBodyMeasurementsTable,
-  basal_metabolic_rate: ExtendedBodyMeasurementsTable,
-  segmental_fat_mass: ExtendedBodyMeasurementsTable,
-  segmental_muscle_mass: ExtendedBodyMeasurementsTable,
-  segmental_fat_free_mass: ExtendedBodyMeasurementsTable,
-} satisfies Record<string, ComponentType<{ items: ScalarSample[] }>>;
 const datasets = [
   "steps",
   "activity",
   "sleep-sessions",
   "sleep-summaries",
   "blood-pressure",
-  ...(Object.keys(scalarTables) as (keyof typeof scalarTables)[]),
+  ...scalarMetricTypes,
 ] as const;
 type Dataset = (typeof datasets)[number];
 
@@ -167,7 +141,7 @@ export default async function RawDataPage({
             sort: "measuredAt",
             raw: true,
           }),
-          scalarTables[dataset]
+          ScalarSamplesTable
         );
     }
   }

@@ -3,13 +3,14 @@ import type { HealthChartDatum, HealthChartSeries, ChartPointDetail } from "@/co
 import type { ActivitySummariesResponse, HeartRateDailyPoint, ScalarSample, ScalarSamplesResponse, SleepNightsResponse, SleepSummariesResponse, StepDailySummariesResponse } from "./types";
 import { dateInTimeZone, isDateOnly } from "./dates";
 import { formatAxisDate, formatChartValue, formatDateTime, formatFullDate } from "./format";
+import { scalarMetricLabels } from "./metrics";
 
 const bodyMetricConfig: Record<string, { label: string; color: string }> = {
-  weight: { label: "Weight", color: "var(--hue-weight)" },
-  body_fat: { label: "Body fat", color: "var(--hue-body-fat)" },
-  muscle: { label: "Muscle", color: "var(--hue-muscle)" },
-  water: { label: "Water", color: "var(--hue-water)" },
-  visceral_fat: { label: "Visceral fat", color: "var(--hue-visceral-fat)" },
+  weight: { label: scalarMetricLabels.weight, color: "var(--hue-weight)" },
+  body_fat: { label: scalarMetricLabels.body_fat, color: "var(--hue-body-fat)" },
+  muscle: { label: scalarMetricLabels.muscle, color: "var(--hue-muscle)" },
+  water: { label: scalarMetricLabels.water, color: "var(--hue-water)" },
+  visceral_fat: { label: scalarMetricLabels.visceral_fat, color: "var(--hue-visceral-fat)" },
 };
 
 export type NormalizedChart = {
