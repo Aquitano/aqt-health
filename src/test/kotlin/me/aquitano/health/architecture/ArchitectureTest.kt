@@ -49,6 +49,21 @@ class ArchitectureTest {
         }
     }
 
+    @Test
+    fun `domain layer does not depend on outer layers`() {
+        val domainFiles =
+            production.files
+                .filter { it.packagee?.name?.startsWith("me.aquitano.health.domain") == true }
+        check(domainFiles.isNotEmpty()) { "No domain files found" }
+        val outerLayers = listOf("application", "api", "infrastructure").map { "me.aquitano.health.$it." }
+        domainFiles.assertFalse { file ->
+            val code = qualifiedCode(file.text)
+            outerLayers.any { layer ->
+                file.imports.any { it.name.startsWith(layer) } || code.contains(layer)
+            }
+        }
+    }
+
     private fun qualifiedCode(source: String): String =
         buildString {
             val lexer = KotlinLexer()

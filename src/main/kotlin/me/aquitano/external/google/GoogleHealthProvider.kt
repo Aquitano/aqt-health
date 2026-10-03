@@ -43,7 +43,6 @@ class GoogleHealthProvider(
                     reconnect = "/api/v2/providers/google-health/accounts/{providerInstanceId}/reconnect",
                     sync = "/api/v2/providers/google-health/sync-jobs",
                 ),
-            aliases = listOf(GOOGLE_HEALTH_PROVIDER_CODE),
         )
     override val defaultProviderInstanceId: String = "google-health-me"
 
@@ -108,7 +107,7 @@ class GoogleHealthProvider(
     override suspend fun sync(
         request: ProviderSyncRequest,
         now: Instant,
-        progress: me.aquitano.health.application.providersync.ProviderSyncProgressSink,
+        progress: ProviderSyncProgressSink,
     ): ProviderSyncSummary = syncPipeline.sync(syncAdapter, request, now, progress)
 
     private fun requireConfigured() = requireProviderConfigured("google_health_not_configured", configurationIssues())

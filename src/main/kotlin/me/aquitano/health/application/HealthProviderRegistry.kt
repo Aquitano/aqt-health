@@ -11,9 +11,6 @@ class HealthProviderRegistry(
             providers.forEach { provider ->
                 put(normalizeProviderCode(provider.providerCode), provider)
                 put(normalizeProviderCode(provider.descriptor.providerCode), provider)
-                provider.descriptor.aliases.forEach { alias ->
-                    put(normalizeProviderCode(alias), provider)
-                }
             }
         }
 

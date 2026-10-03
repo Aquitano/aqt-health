@@ -22,7 +22,6 @@ data class ProviderDescriptorResponse(
     val maxSyncRangeDays: Int,
     val supportsPageSize: Boolean,
     val workflowEndpoints: ProviderWorkflowEndpointsResponse,
-    val aliases: List<String> = emptyList(),
 )
 
 @Serializable
