@@ -15,6 +15,7 @@ import {
 } from "recharts";
 import { formatChartValue, formatDateTime } from "@/lib/format";
 import { useHydrated } from "@/lib/useHydrated";
+import { useTimeZone } from "@/components/TimeZoneProvider";
 import styles from "./HealthMetricChart.module.css";
 
 export type ChartPointDetail = {
@@ -75,6 +76,7 @@ export function HealthMetricChart({
 }: HealthMetricChartProps) {
   const titleId = useId();
   const isClient = useHydrated();
+  const timeZone = useTimeZone();
   const initialVisible = useMemo(
     () => new Set(defaultVisibleMetricKeys?.length ? defaultVisibleMetricKeys : series.map((item) => item.key)),
     [defaultVisibleMetricKeys, series],
@@ -150,7 +152,7 @@ export function HealthMetricChart({
                   ifOverflow="extendDomain"
                 />
               ) : null}
-              <Tooltip content={<ChartTooltip series={series} />} cursor={{ stroke: "var(--chart-cursor)" }} />
+              <Tooltip content={<ChartTooltip series={series} timeZone={timeZone} />} cursor={{ stroke: "var(--chart-cursor)" }} />
               <Legend
                 verticalAlign="bottom"
                 content={() => (
@@ -223,7 +225,12 @@ function ChartHeader({
   );
 }
 
-function ChartTooltip({ active, payload, series }: TooltipProps & { series: HealthChartSeries[] }) {
+function ChartTooltip({
+  active,
+  payload,
+  series,
+  timeZone,
+}: TooltipProps & { series: HealthChartSeries[]; timeZone: string }) {
   if (!active || !payload?.length) return null;
   const datum = payload[0]?.payload;
   if (!datum) return null;
@@ -232,7 +239,7 @@ function ChartTooltip({ active, payload, series }: TooltipProps & { series: Heal
 
   return (
     <div className={styles.tooltip}>
-      <div className={styles.tooltipTitle}>{formatDateTime(datum.timestamp)}</div>
+      <div className={styles.tooltipTitle}>{formatDateTime(datum.timestamp, timeZone)}</div>
       {visiblePayload.map((item) => {
         const metricKey = String(item.dataKey);
         const detail = datum.details[metricKey];

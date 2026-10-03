@@ -1,41 +1,34 @@
 export type DateRange = {
   fromDate: string;
   toDate: string;
-  timezone: string;
   warning?: string;
 };
 
 const dateOnlyPattern = /^\d{4}-\d{2}-\d{2}$/;
 
-export function defaultDateRange(now = new Date(), timezone = "UTC"): DateRange {
+export function defaultDateRange(timezone: string, now = new Date()): DateRange {
   const toDate = dateInputValueInTimeZone(now, timezone);
 
   return {
     fromDate: addUtcDays(toDate, -6),
     toDate,
-    timezone,
   };
 }
 
-export function parseDateRange(values: {
-  fromDate?: string | string[];
-  toDate?: string | string[];
-  timezone?: string | string[];
-}): DateRange {
-  const timezoneInput = first(values.timezone);
-  const parsedTimezone = timezoneInput == null ? "UTC" : parseTimezone(timezoneInput);
-  const timezone = parsedTimezone ?? "UTC";
-  // Resolve the default range in the requested timezone so an unset range matches the local dates
-  // the picker produces, rather than UTC "today" (off-by-one for users east/west of UTC).
-  const fallback = defaultDateRange(new Date(), timezone);
+export function parseDateRange(
+  values: {
+    fromDate?: string | string[];
+    toDate?: string | string[];
+  },
+  timezone: string,
+): DateRange {
+  // Resolve the default range in the app timezone so an unset range matches local dates
+  // rather than UTC "today" (off-by-one east/west of UTC).
+  const fallback = defaultDateRange(timezone);
   const fromDate = first(values.fromDate) ?? fallback.fromDate;
   const toDate = first(values.toDate) ?? fallback.toDate;
 
-  if (
-    !isDateOnly(fromDate) ||
-    !isDateOnly(toDate) ||
-    parsedTimezone === undefined
-  ) {
+  if (!isDateOnly(fromDate) || !isDateOnly(toDate)) {
     return {
       ...fallback,
       warning: "Invalid date query parameters were ignored.",
@@ -49,15 +42,11 @@ export function parseDateRange(values: {
     };
   }
 
-  return { fromDate, toDate, timezone };
+  return { fromDate, toDate };
 }
 
-export function dateOnlyToUtcInstant(date: string): string {
+function dateOnlyToUtcInstant(date: string): string {
   return `${date}T00:00:00.000Z`;
-}
-
-export function dayAfterDateOnlyToUtcInstant(date: string): string {
-  return dateOnlyToUtcInstant(addUtcDays(date, 1));
 }
 
 export function addUtcDays(date: string, days: number): string {
@@ -94,14 +83,6 @@ function dateInputValueInTimeZone(value: Date, timeZone: string): string {
     }).format(value);
   } catch {
     return toDateInputValue(value);
-  }
-}
-
-function parseTimezone(value: string): string | undefined {
-  try {
-    return new Intl.DateTimeFormat("en", { timeZone: value }).resolvedOptions().timeZone;
-  } catch {
-    return undefined;
   }
 }
 

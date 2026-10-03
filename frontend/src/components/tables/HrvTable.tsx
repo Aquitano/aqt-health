@@ -1,10 +1,11 @@
 import { formatDateTime, formatMeasurement } from "@/lib/format";
+import { serverConfig } from "@/lib/serverConfig";
 import type { ScalarSample } from "@/lib/types";
 import { DataTable, type Column } from "./DataTable";
 import { sourceLabel } from "./shared";
 
 const columns: Column<ScalarSample>[] = [
-  { header: "Measured", cell: (item) => formatDateTime(item.measuredAt) },
+  { header: "Measured", cell: (item) => formatDateTime(item.measuredAt, serverConfig.timeZone) },
   { header: "Metric", cell: (item) => item.metricType.toUpperCase() },
   { header: "Value", cell: (item) => formatMeasurement(item.value, item.unit) },
   { header: "Context", cell: (item) => item.context, muted: true },

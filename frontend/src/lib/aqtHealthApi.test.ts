@@ -72,7 +72,7 @@ describe("page data requests", () => {
           },
         ])
       );
-    const data = await getTrendsPageData("2026-09-01", 365);
+    const data = await getTrendsPageData("2026-09-01", 365, "UTC");
     expect(mocks.listScalarSamples).toHaveBeenLastCalledWith(
       "weight",
       expect.objectContaining({ cursor: "next-weight" })
@@ -97,7 +97,7 @@ describe("page data requests", () => {
     mocks.listScalarSamples
       .mockResolvedValueOnce(response([], "next"))
       .mockResolvedValueOnce({ ok: false, status: 503, message: "offline" });
-    expect((await getTrendsPageData("2026-09-01", 30)).weight).toEqual({
+    expect((await getTrendsPageData("2026-09-01", 30, "UTC")).weight).toEqual({
       ok: false,
       status: 503,
       message: "offline",
@@ -106,7 +106,7 @@ describe("page data requests", () => {
 
   it("stops immediately when the backend repeats the requested cursor", async () => {
     mocks.listScalarSamples.mockResolvedValue(response([], "same-page"));
-    expect((await getTrendsPageData("2026-09-01", 30)).weight).toEqual({
+    expect((await getTrendsPageData("2026-09-01", 30, "UTC")).weight).toEqual({
       ok: false,
       message: "The backend repeated a pagination cursor.",
     });
@@ -115,6 +115,19 @@ describe("page data requests", () => {
       "weight",
       expect.objectContaining({ cursor: "same-page" }),
     );
+  });
+
+  it("bounds trends by local days in the app timezone", async () => {
+    await getTrendsPageData("2026-03-08", 2, "America/New_York");
+    expect(mocks.listScalarSamples).toHaveBeenCalledWith(
+      "weight",
+      expect.objectContaining({ from: "2026-03-07T05:00:00.000Z", to: "2026-03-09T04:00:00.000Z" })
+    );
+    expect(mocks.getScalarDailySummaries).toHaveBeenCalledWith("hrv_rmssd", {
+      from: "2026-03-07T05:00:00.000Z",
+      to: "2026-03-09T04:00:00.000Z",
+      timezone: "America/New_York",
+    });
   });
 
   it("uses local-day instants consistently and leaves raw-only datasets unfetched", async () => {
@@ -133,6 +146,11 @@ describe("page data requests", () => {
     expect(mocks.getScalarDailySummaries).toHaveBeenCalledWith("heart_rate", {
       from: "2026-03-08T05:00:00.000Z",
       to: "2026-03-09T04:00:00.000Z",
+      timezone: "America/New_York",
+    });
+    expect(mocks.getDashboardSummary).toHaveBeenCalledWith({
+      fromDate: "2026-03-08",
+      toDate: "2026-03-08",
       timezone: "America/New_York",
     });
     expect(mocks.listBloodPressure).not.toHaveBeenCalled();

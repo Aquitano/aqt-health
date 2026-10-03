@@ -1,4 +1,5 @@
 import { formatDateTime, formatMeasurement } from "@/lib/format";
+import { serverConfig } from "@/lib/serverConfig";
 import type { ScalarSample } from "@/lib/types";
 import { DataTable, type Column } from "./DataTable";
 import { sourceLabel } from "./shared";
@@ -14,7 +15,7 @@ function metricLabel(metricType: string): string {
 }
 
 const columns: Column<ScalarSample>[] = [
-  { header: "Time", cell: (item) => formatDateTime(item.measuredAt) },
+  { header: "Time", cell: (item) => formatDateTime(item.measuredAt, serverConfig.timeZone) },
   { header: "Metric", cell: (item) => metricLabel(item.metricType) },
   { header: "Value", cell: (item) => formatMeasurement(item.value, item.unit) },
   { header: "Source", cell: (item) => sourceLabel(item.source), muted: true },

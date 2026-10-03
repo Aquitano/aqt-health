@@ -11,6 +11,7 @@ import type {
 } from "@/lib/types";
 import { readAcknowledgement, readOAuthStart, readScheduledSyncRun } from "@/lib/apiResponses";
 import { formatDateTime } from "@/lib/format";
+import { useTimeZone } from "../TimeZoneProvider";
 import { ErrorNotice } from "../ErrorNotice";
 import { formatStatus } from "./labels";
 import { proxyFetch } from "./proxyFetch";
@@ -28,6 +29,7 @@ export function ProviderAccountRow({
   scheduledConfig?: ScheduledSyncConfig;
 }) {
   const router = useRouter();
+  const timeZone = useTimeZone();
   const [pendingAction, setPendingAction] = useState<AccountAction | null>(
     null
   );
@@ -122,20 +124,20 @@ export function ProviderAccountRow({
           <dt>Connected</dt>
           <dd>
             {account.connectedAt
-              ? formatDateTime(account.connectedAt)
+              ? formatDateTime(account.connectedAt, timeZone)
               : "Never"}
           </dd>
         </div>
         {account.disconnectedAt ? (
           <div>
             <dt>Disconnected</dt>
-            <dd>{formatDateTime(account.disconnectedAt)}</dd>
+            <dd>{formatDateTime(account.disconnectedAt, timeZone)}</dd>
           </div>
         ) : null}
         <div>
           <dt>Last sync</dt>
           <dd>
-            {account.lastSyncAt ? formatDateTime(account.lastSyncAt) : "None"}
+            {account.lastSyncAt ? formatDateTime(account.lastSyncAt, timeZone) : "None"}
           </dd>
         </div>
         {account.lastTokenRefreshAt ? (
@@ -143,7 +145,7 @@ export function ProviderAccountRow({
             <dt>Refresh</dt>
             <dd>
               {formatStatus(account.lastTokenRefreshStatus ?? "unknown")}{" "}
-              {formatDateTime(account.lastTokenRefreshAt)}
+              {formatDateTime(account.lastTokenRefreshAt, timeZone)}
             </dd>
           </div>
         ) : null}
@@ -162,7 +164,7 @@ export function ProviderAccountRow({
               ? "Enabled"
               : "Stopped after errors"}
             {scheduledConfig?.nextRunAt
-              ? `, next ${formatDateTime(scheduledConfig.nextRunAt)}`
+              ? `, next ${formatDateTime(scheduledConfig.nextRunAt, timeZone)}`
               : ""}
           </dd>
         </div>

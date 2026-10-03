@@ -23,6 +23,7 @@ import {
   parseDateRange,
   startOfDayInstant,
 } from "@/lib/dates";
+import { serverConfig } from "@/lib/serverConfig";
 import type { ApiResult, ScalarSample } from "@/lib/types";
 
 const scalarTables = {
@@ -67,7 +68,8 @@ export default async function RawDataPage({
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = (await searchParams) ?? {};
-  const range = parseDateRange(params);
+  const timezone = serverConfig.timeZone;
+  const range = parseDateRange(params, timezone);
   const requestedDataset = first(params.dataset) ?? "steps";
   const dataset: Dataset = isDataset(requestedDataset)
     ? requestedDataset
@@ -76,12 +78,11 @@ export default async function RawDataPage({
   const query = new URLSearchParams({
     fromDate: range.fromDate,
     toDate: range.toDate,
-    timezone: range.timezone,
     dataset,
   });
   const instantQuery = {
-    from: startOfDayInstant(range.fromDate, range.timezone),
-    to: startOfDayInstant(addUtcDays(range.toDate, 1), range.timezone),
+    from: startOfDayInstant(range.fromDate, timezone),
+    to: startOfDayInstant(addUtcDays(range.toDate, 1), timezone),
     limit: 100,
     includeSource: true,
     order: "desc" as const,
@@ -193,7 +194,6 @@ export default async function RawDataPage({
       <form className={formStyles.form}>
         <input type="hidden" name="fromDate" value={range.fromDate} />
         <input type="hidden" name="toDate" value={range.toDate} />
-        <input type="hidden" name="timezone" value={range.timezone} />
         <label className={formStyles.field}>
           <span className={formStyles.fieldLabel}>Data</span>
           <select
@@ -214,7 +214,7 @@ export default async function RawDataPage({
       </form>
       {dataset === "sleep-sessions" || dataset === "sleep-summaries" ? (
         <p>
-          Sleep records are filtered by their start time in the selected timezone.
+          Sleep records are filtered by their start time in {timezone}.
           Overnight records appear on the day they began.
         </p>
       ) : null}

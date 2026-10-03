@@ -3,6 +3,7 @@ import { ErrorNotice } from "@/components/ErrorNotice";
 import { JsonDetails } from "@/components/JsonDetails";
 import { EmptyState } from "@/components/tables/shared";
 import { formatDateTime, formatNumber } from "@/lib/format";
+import { serverConfig } from "@/lib/serverConfig";
 import type { ApiResult, IngestionBatchDetailResponse } from "@/lib/types";
 import tableStyles from "./tables/tables.module.css";
 import styles from "./IngestionBatchDetail.module.css";
@@ -38,9 +39,9 @@ export function IngestionBatchDetail({ result }: IngestionBatchDetailProps) {
           <MetaItem label="Provider" value={batch.provider} />
           <MetaItem label="Provider instance" value={batch.providerInstanceId || "n/a"} />
           <MetaItem label="External batch ID" value={batch.batchExternalId ?? "n/a"} />
-          <MetaItem label="Ingested" value={formatDateTime(batch.ingestedAt)} />
-          <MetaItem label="Received" value={formatDateTime(batch.receivedAt)} />
-          <MetaItem label="Processed" value={formatDateTime(batch.processedAt)} />
+          <MetaItem label="Ingested" value={formatDateTime(batch.ingestedAt, serverConfig.timeZone)} />
+          <MetaItem label="Received" value={formatDateTime(batch.receivedAt, serverConfig.timeZone)} />
+          <MetaItem label="Processed" value={formatDateTime(batch.processedAt, serverConfig.timeZone)} />
           <MetaItem label="Records" value={formatNumber(batch.recordCount)} />
           {batch.errorMessage ? <MetaItem label="Error" value={batch.errorMessage} wide /> : null}
         </dl>
@@ -73,9 +74,9 @@ export function IngestionBatchDetail({ result }: IngestionBatchDetailProps) {
                     <td>{record.id}</td>
                     <td>{record.recordType}</td>
                     <td className={tableStyles.muted}>{record.providerRecordId ?? "n/a"}</td>
-                    <td className={tableStyles.muted}>{formatDateTime(record.recordStartAt)}</td>
-                    <td className={tableStyles.muted}>{formatDateTime(record.recordEndAt)}</td>
-                    <td className={tableStyles.muted}>{formatDateTime(record.createdAt)}</td>
+                    <td className={tableStyles.muted}>{formatDateTime(record.recordStartAt, serverConfig.timeZone)}</td>
+                    <td className={tableStyles.muted}>{formatDateTime(record.recordEndAt, serverConfig.timeZone)}</td>
+                    <td className={tableStyles.muted}>{formatDateTime(record.createdAt, serverConfig.timeZone)}</td>
                     <td>
                       {record.normalizedRecord === undefined ? (
                         <span className={tableStyles.muted}>n/a</span>
