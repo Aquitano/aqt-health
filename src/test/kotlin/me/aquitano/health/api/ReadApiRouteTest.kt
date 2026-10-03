@@ -597,6 +597,16 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
             assertFalse(emptyBody.containsKey("avgValue"))
             assertFalse(emptyBody.containsKey("latest"))
 
+            val latestSummary = authorizedGet("/api/v2/metrics/heart_rate/summary?latest=true")
+            assertEquals(HttpStatusCode.BadRequest, latestSummary.status)
+            assertEquals(
+                "latest",
+                latestSummary
+                    .errorDetails()[0]
+                    .jsonObject["field"]!!
+                    .jsonPrimitive.content,
+            )
+
             val latestWeight =
                 authorizedGet("/api/v2/metrics/weight?latest=true")
             assertEquals(HttpStatusCode.OK, latestWeight.status)

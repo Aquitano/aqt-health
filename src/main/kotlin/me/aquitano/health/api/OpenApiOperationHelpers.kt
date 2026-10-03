@@ -172,7 +172,7 @@ private fun Route.describeDailyReadOperation(
     id: String,
     operationSummary: String,
     operationDescription: String,
-    latestDescription: String,
+    latestDescription: String? = null,
 ): Route =
     describe {
         operationId = id
@@ -181,10 +181,12 @@ private fun Route.describeDailyReadOperation(
         description = operationDescription
         requiresBearerAuth()
         dailyStepQueryParameters()
-        parameters {
-            query("latest") {
-                description = latestDescription
-                schema = booleanSchema(default = false, example = true)
+        latestDescription?.let {
+            parameters {
+                query("latest") {
+                    description = it
+                    schema = booleanSchema(default = false, example = true)
+                }
             }
         }
         errorResponses()
@@ -196,8 +198,6 @@ internal fun Route.describeDailyStepReadOperation(): Route =
         operationSummary = "List daily step summaries",
         operationDescription =
             "Returns daily UTC step totals. Use `date` for one day, or `fromDate` and `toDate` for an inclusive date range.",
-        latestDescription =
-            "Return the latest matching daily step summary when true. Defaults to false. Cannot be combined with limit, order, or cursor.",
     )
 
 internal fun Route.describeActivitySummaryReadOperation(): Route =
