@@ -47,7 +47,6 @@ class AppConfigValidationTest {
                 ),
             googleHealth = providerConfig("https://api.aqt-health.app/api/v2/providers/google-health/oauth/callback"),
             withings = providerConfig("https://api.aqt-health.app/api/v2/providers/withings/oauth/callback"),
-            cors = CorsConfig(origins = listOf("https://app.aqt-health.app")),
             openObserve = OpenObserveConfig(url = "", org = "", user = "", password = ""),
         )
 

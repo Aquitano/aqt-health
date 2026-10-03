@@ -41,7 +41,6 @@ services:
       AQT_HEALTH_LOG_FORMAT: ${AQT_HEALTH_LOG_FORMAT:-text}
       # Never empty: logback falls back to its own default only when unset.
       AQT_HEALTH_LOG_APPENDER: ${AQT_HEALTH_LOG_APPENDER:-no-file}
-      AQT_HEALTH_CORS_ORIGINS: ${AQT_HEALTH_CORS_ORIGINS:-http://localhost:3000}
     depends_on:
       postgres:
         condition: service_healthy
