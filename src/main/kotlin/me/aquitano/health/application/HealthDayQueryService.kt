@@ -218,7 +218,7 @@ class HeartRateDayModule(
         val filters = context.filters()
         val (samples, sourceMetadata) =
             scalarRepository.list(
-                filters.copy(limit = Int.MAX_VALUE, sort = "measuredAt", order = "asc"),
+                filters.copy(limit = Int.MAX_VALUE, order = "asc"),
                 metricTypes,
                 canonical = true,
             )
@@ -304,7 +304,6 @@ class SleepDayModule(
                 providerInstanceId = context.providerInstanceId,
                 includeSource = context.includeSource,
                 limit = Int.MAX_VALUE,
-                sort = "date",
                 order = "asc",
             )
         val (nights, stagesBySession, sourceMetadata) =
@@ -372,7 +371,6 @@ private fun HealthDayQueryContext.filters(): ReadFilters =
         providerInstanceId = providerInstanceId,
         includeSource = includeSource,
         limit = Int.MAX_VALUE,
-        sort = "startAt",
         order = "asc",
     )
 

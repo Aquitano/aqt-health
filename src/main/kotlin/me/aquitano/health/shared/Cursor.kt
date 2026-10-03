@@ -9,8 +9,8 @@ import java.util.Base64
 
 /**
  * Opaque keyset-pagination cursor. Encodes the sort value and row id of the last item of a
- * page plus the sort/order it was produced under; decoding rejects a cursor whose sort or
- * order no longer matches the request, so clients cannot silently mix pagination schemes.
+ * page plus the order it was produced under; decoding rejects a cursor whose order no longer
+ * matches the request, so clients cannot silently mix pagination directions.
  */
 @Serializable
 data class Cursor(
@@ -19,7 +19,6 @@ data class Cursor(
     /** Row id of the last row; tie-break for equal sort values. */
     @SerialName("id") val lastId: Long,
     @SerialName("o") val order: String,
-    @SerialName("f") val field: String,
 ) {
     fun encode(): String =
         Base64
@@ -32,12 +31,10 @@ data class Cursor(
             sortValue: String,
             lastId: Long,
             order: String,
-            field: String,
-        ): String = Cursor(sortValue, lastId, order, field).encode()
+        ): String = Cursor(sortValue, lastId, order).encode()
 
         fun decode(
             value: String,
-            expectedField: String,
             expectedOrder: String,
         ): Cursor {
             val cursor =
@@ -55,15 +52,13 @@ data class Cursor(
                         ),
                     )
                 }
-            if (cursor.field != expectedField || cursor.order != expectedOrder) {
+            if (cursor.order != expectedOrder) {
                 throw RequestValidationException(
                     listOf(
                         ValidationIssue(
                             field = "cursor",
                             code = ValidationIssueCodes.InvalidState,
-                            message =
-                                "was issued for sort=${cursor.field} order=${cursor.order} " +
-                                    "and cannot be used with this request",
+                            message = "was issued for order=${cursor.order} and cannot be used with this request",
                         ),
                     ),
                 )

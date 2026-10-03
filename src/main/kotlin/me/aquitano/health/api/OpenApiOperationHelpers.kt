@@ -8,7 +8,6 @@ import io.ktor.server.routing.*
 import io.ktor.server.routing.openapi.*
 import io.ktor.utils.io.*
 import me.aquitano.health.api.dto.*
-import me.aquitano.health.application.metric.common.EnumParamSpec
 import kotlin.reflect.typeOf
 
 internal fun Operation.Builder.publicEndpoint() {
@@ -158,8 +157,6 @@ internal fun Route.describeReadOperation(
     summary: String,
     descriptionText: String,
     includeLatest: Boolean = false,
-    sortSpec: EnumParamSpec,
-    sortExample: String = sortSpec.default,
 ): Route =
     describe {
         this.operationId = operationId
@@ -167,11 +164,7 @@ internal fun Route.describeReadOperation(
         this.summary = summary
         description = descriptionText
         requiresBearerAuth()
-        readQueryParameters(
-            includeLatest = includeLatest,
-            sortSpec = sortSpec,
-            sortExample = sortExample,
-        )
+        readQueryParameters(includeLatest = includeLatest)
         errorResponses()
     }
 
@@ -204,7 +197,7 @@ internal fun Route.describeDailyStepReadOperation(): Route =
         operationDescription =
             "Returns daily UTC step totals. Use `date` for one day, or `fromDate` and `toDate` for an inclusive date range.",
         latestDescription =
-            "Return the latest matching daily step summary when true. Defaults to false. Cannot be combined with limit, sort, order, or cursor.",
+            "Return the latest matching daily step summary when true. Defaults to false. Cannot be combined with limit, order, or cursor.",
     )
 
 internal fun Route.describeActivitySummaryReadOperation(): Route =
@@ -214,7 +207,7 @@ internal fun Route.describeActivitySummaryReadOperation(): Route =
         operationDescription =
             "Returns daily activity summary metrics such as distance, calories, elevation, activity minutes, and daily heart-rate summary values.",
         latestDescription =
-            "Return the latest matching activity summary when true. Defaults to false. Cannot be combined with limit, sort, order, or cursor.",
+            "Return the latest matching activity summary when true. Defaults to false. Cannot be combined with limit, order, or cursor.",
     )
 
 internal fun Route.describeSleepNightReadOperation(): Route =

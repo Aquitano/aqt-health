@@ -4,8 +4,8 @@ import me.aquitano.health.api.dto.StepDailySummariesResponse
 import me.aquitano.health.api.dto.StepDailySummaryResponse
 import me.aquitano.health.api.dto.StepSampleResponse
 import me.aquitano.health.api.dto.StepSamplesResponse
-import me.aquitano.health.application.metric.common.QueryParamSpecs
 import me.aquitano.health.application.metric.common.QueryParams
+import me.aquitano.health.application.metric.common.SortFields
 import me.aquitano.health.application.metric.common.dailyReadFilters
 import me.aquitano.health.application.metric.common.pagedRead
 import me.aquitano.health.application.metric.common.readFilters
@@ -20,8 +20,8 @@ class StepQueryService(
     private val canonicalRepository: CanonicalStepDerivationRepository,
 ) {
     suspend fun listStepSamples(params: QueryParams): StepSamplesResponse {
-        val filters = params.readFilters(sortSpec = QueryParamSpecs.sortByStartAt)
-        return pagedRead(database, filters, { it.startAt }, { it.id.toLong() }, ::StepSamplesResponse) {
+        val filters = params.readFilters()
+        return pagedRead(database, filters, SortFields.START_AT, { it.startAt }, { it.id.toLong() }, ::StepSamplesResponse) {
             val (rows, sourceMetadata) =
                 canonicalRepository.listCanonicalStepSamples(filters, CANONICAL_STEP_ALGORITHM_VERSION)
             rows.map {
@@ -42,7 +42,7 @@ class StepQueryService(
     ): StepDailySummariesResponse {
         params.rejectLatest()
         val filters = params.dailyReadFilters(now)
-        return pagedRead(database, filters, { it.date }, { 0L }, ::StepDailySummariesResponse) {
+        return pagedRead(database, filters, SortFields.DATE, { it.date }, { 0L }, ::StepDailySummariesResponse) {
             val (rows, sourceMetadata) = canonicalRepository.listCanonicalStepDailySummaries(filters)
             rows.map {
                 StepDailySummaryResponse(

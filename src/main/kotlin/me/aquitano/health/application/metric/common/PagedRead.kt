@@ -12,6 +12,7 @@ import org.jetbrains.exposed.v1.jdbc.Database
 internal suspend fun <T, R> pagedRead(
     database: Database,
     filters: ReadFilters,
+    sortField: String,
     sortValue: (T) -> String,
     id: (T) -> Long,
     respond: (items: List<T>, meta: ReadResponseMeta) -> R,
@@ -19,14 +20,14 @@ internal suspend fun <T, R> pagedRead(
 ): R {
     val page =
         suspendDbTransaction(db = database) {
-            fetch().keysetPage(filters.limit, filters.sort, filters.order, sortValue, id)
+            fetch().keysetPage(filters.limit, filters.order, sortValue, id)
         }
     return respond(
         page.items,
         ReadResponseMeta(
             count = page.items.size,
             limit = filters.limit,
-            sort = filters.sort,
+            sort = sortField,
             order = filters.order,
             nextCursor = page.nextCursor,
         ),

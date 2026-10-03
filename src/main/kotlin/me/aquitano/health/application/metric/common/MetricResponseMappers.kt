@@ -145,7 +145,6 @@ internal fun keysetFetchLimit(limit: Int): Int = if (limit == Int.MAX_VALUE) Int
 
 internal fun <T> List<T>.keysetPage(
     limit: Int,
-    sort: String,
     order: String,
     sortValue: (T) -> String,
     id: (T) -> Long,
@@ -153,7 +152,7 @@ internal fun <T> List<T>.keysetPage(
     if (size > limit) {
         val items = take(limit)
         val last = items.last()
-        KeysetPage(items, Cursor.encode(sortValue(last), id(last), order = order, field = sort))
+        KeysetPage(items, Cursor.encode(sortValue(last), id(last), order = order))
     } else {
         KeysetPage(this, null)
     }

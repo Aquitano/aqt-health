@@ -51,8 +51,8 @@ class ScalarMetricQueryService(
     ): ScalarSamplesResponse {
         requireKnown(metricType)
         val raw = params.boolean(QueryParamSpecs.raw)
-        val filters = params.readFilters(sortSpec = QueryParamSpecs.sortByMeasuredAt)
-        return pagedRead(database, filters, { it.measuredAt }, { it.id }, ::ScalarSamplesResponse) {
+        val filters = params.readFilters()
+        return pagedRead(database, filters, SortFields.MEASURED_AT, { it.measuredAt }, { it.id }, ::ScalarSamplesResponse) {
             val (rows, sourceMetadata) = scalarRepository.list(filters, setOf(metricType), canonical = !raw)
             rows.map { it.toScalarResponse(sourceMetadata) }
         }
@@ -64,7 +64,7 @@ class ScalarMetricQueryService(
     ): ScalarSummaryResponse {
         requireKnown(metricType)
         return suspendDbTransaction(db = database) {
-            val filters = params.summaryFilters(SortFields.MEASURED_AT)
+            val filters = params.summaryFilters()
             val summary = scalarRepository.summarize(filters, setOf(metricType), canonical = true)
             val (latest, sourceMetadata) =
                 scalarRepository.latest(filters, setOf(metricType), canonical = true)
@@ -85,7 +85,7 @@ class ScalarMetricQueryService(
     ): ScalarDailySummariesResponse {
         requireKnown(metricType)
         return suspendDbTransaction(db = database) {
-            val filters = params.summaryFilters(SortFields.MEASURED_AT)
+            val filters = params.summaryFilters()
             if (filters.from == null && filters.to == null) {
                 throw RequestValidationException(
                     listOf(

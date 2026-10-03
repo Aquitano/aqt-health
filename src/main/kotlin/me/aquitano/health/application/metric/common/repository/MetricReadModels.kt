@@ -25,7 +25,6 @@ data class ReadFilters(
     val providerInstanceId: String?,
     val includeSource: Boolean,
     val limit: Int,
-    val sort: String,
     val order: String,
     val cursor: Cursor? = null,
 )

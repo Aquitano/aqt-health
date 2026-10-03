@@ -5,7 +5,6 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.config.*
 import io.ktor.server.testing.*
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.double
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
@@ -376,19 +375,6 @@ class ApplicationTest : PostgresIntegrationTest() {
             )
         }
 
-    @Test
-    fun openApiDocumentsEndpointSpecificReadSortEnums() =
-        testApplication {
-            configureTestApplication()
-
-            val paths = client.get("/openapi").jsonBody()["paths"]!!.jsonObject
-
-            assertEquals(listOf("endAt"), paths.sortEnum("/api/v2/sleep/summaries"))
-            assertEquals(listOf("startAt"), paths.sortEnum("/api/v2/sleep/sessions"))
-            assertEquals(listOf("measuredAt"), paths.sortEnum("/api/v2/metrics/{metricType}"))
-            assertEquals(listOf("date"), paths.sortEnum("/api/v2/steps/daily"))
-        }
-
     private fun ApplicationTestBuilder.configureTestApplication() {
         val dbConfig = PostgresTestDatabase.config()
         environment {
@@ -404,15 +390,4 @@ class ApplicationTest : PostgresIntegrationTest() {
     }
 
     private suspend fun HttpResponse.jsonBody() = AppJson.parseToJsonElement(bodyAsText()).jsonObject
-
-    private fun JsonObject.sortEnum(path: String): List<String> =
-        this[path]!!
-            .jsonObject["get"]!!
-            .jsonObject["parameters"]!!
-            .jsonArray
-            .first { it.jsonObject["name"]!!.jsonPrimitive.content == "sort" }
-            .jsonObject["schema"]!!
-            .jsonObject["enum"]!!
-            .jsonArray
-            .map { it.jsonPrimitive.content }
 }
