@@ -1,9 +1,11 @@
 package me.aquitano.health.application.providersync
 
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import me.aquitano.health.domain.*
 import me.aquitano.health.infrastructure.logging.*
 import me.aquitano.health.infrastructure.time.UtcClock
@@ -447,7 +449,7 @@ class ProviderSyncPipeline(
                 )
             }
 
-        requireRefreshWrite(saveRefreshedToken(adapter, account, refreshed, now))
+        requireRefreshWrite(withContext(NonCancellable) { saveRefreshedToken(adapter, account, refreshed, now) })
         return ProviderAccessToken(
             accessToken = refreshed.accessToken,
             refreshToken = refreshed.refreshToken ?: refreshToken,
@@ -456,6 +458,7 @@ class ProviderSyncPipeline(
 
     // The provider has already rotated the refresh token, so a failed write here would leave the
     // account with a revoked token. A compare-and-swap rejection (false) is final; errors are retried.
+    // Callers run it non-cancellable so cancellation can't abandon the rotated token mid-save.
     private suspend fun saveRefreshedToken(
         adapter: ProviderSyncAdapter,
         account: SyncAccount,

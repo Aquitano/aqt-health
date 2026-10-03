@@ -197,6 +197,52 @@ class ProviderSyncJobServiceTest : PostgresIntegrationTest() {
         }
 
     @Test
+    fun latestPrefersOlderRunningJobOverNewerFinishedJob() =
+        runBlocking {
+            val repository = ProviderSyncJobRepository(database())
+            val runningId = UUID.randomUUID().toString()
+            val finishedId = UUID.randomUUID().toString()
+            listOf(runningId to now, finishedId to now.plusSeconds(60)).forEach { (id, createdAt) ->
+                repository.create(
+                    id = id,
+                    providerCode = "blocking_provider",
+                    providerInstanceId = null,
+                    requestedFrom = now,
+                    requestedTo = now.plusSeconds(3600),
+                    dataTypes = null,
+                    pageSize = null,
+                    now = createdAt,
+                )
+            }
+            repository.markRunning(runningId, now)
+            repository.finish(
+                id = finishedId,
+                status = "processed",
+                batchesCount = 0,
+                emptyCount = 0,
+                errorCount = 0,
+                summaryJson = null,
+                errorMessage = null,
+                now = now.plusSeconds(120),
+            )
+
+            assertEquals(runningId, repository.latest("blocking_provider")?.id)
+
+            repository.finish(
+                id = runningId,
+                status = "failed",
+                batchesCount = 0,
+                emptyCount = 0,
+                errorCount = 1,
+                summaryJson = null,
+                errorMessage = "boom",
+                now = now.plusSeconds(180),
+            )
+
+            assertEquals(finishedId, repository.latest("blocking_provider")?.id)
+        }
+
+    @Test
     fun startResumesInterruptedJob() =
         runBlocking {
             val provider = CountingProvider()

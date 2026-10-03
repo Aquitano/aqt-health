@@ -150,14 +150,9 @@ class ScheduledProviderSyncServiceTest : PostgresIntegrationTest() {
         }
 
     @Test
-    fun needsReauthAccountParksConfigOnFirstFailure() =
+    fun needsReauthAccountParksConfigOnFirstRetryableFailure() =
         runBlocking {
-            // The ConflictException message deliberately avoids the old magic substrings;
-            // classification must come from the exception type, not the wording.
-            val provider =
-                ThrowingProvider(
-                    ConflictException("withings_needs_reauth", "token expired, reauthorize the account"),
-                )
+            val provider = ThrowingProvider(IllegalStateException("upstream timed out"))
             val database = openDatabase(PostgresTestDatabase.config())
             val now = Instant.parse("2026-05-31T10:00:00Z")
             val accounts = ProviderOAuthRepository(database)

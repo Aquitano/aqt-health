@@ -37,6 +37,7 @@ export function ProviderAccountRow({
   const base = `/providers/${encodeURIComponent(
     descriptor.providerCode
   )}/accounts/${encodeURIComponent(account.providerInstanceId)}`;
+  const autoStopped = scheduledConfig?.enabled === true && !scheduledConfig.nextRunAt;
 
   async function perform(action: AccountAction, execute: () => Promise<void>) {
     if (pendingAction) return;
@@ -178,11 +179,13 @@ export function ProviderAccountRow({
             <button
               className={styles.secondaryButton}
               disabled={pendingAction !== null}
-              onClick={() => onToggleScheduled(!scheduledConfig?.enabled)}
+              onClick={() => onToggleScheduled(autoStopped || !scheduledConfig?.enabled)}
               type="button"
             >
               {pendingAction === "scheduled"
                 ? "Saving..."
+                : autoStopped
+                ? "Resume auto"
                 : scheduledConfig?.enabled
                 ? "Pause auto"
                 : "Enable auto"}

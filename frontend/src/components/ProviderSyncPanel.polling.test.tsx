@@ -176,6 +176,31 @@ describe("ProviderSyncPanel polling", () => {
     expect(screen.getByRole("button", { name: "Start sync" })).toBeEnabled();
   });
 
+  it("adopts a running job supplied by a later refresh while idle", async () => {
+    fetchMock.mockReturnValue(new Promise(() => {}));
+    const view = render(
+      <ProviderSyncPanel catalog={catalog()} statuses={statuses()} scheduledSyncConfigs={[]} runningSyncJob={null} />,
+    );
+    expect(screen.getByRole("button", { name: "Start sync" })).toBeEnabled();
+
+    view.rerender(
+      <ProviderSyncPanel
+        catalog={catalog()}
+        statuses={statuses()}
+        scheduledSyncConfigs={[]}
+        runningSyncJob={jobStatus({ jobId: "job-2" })}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: /syncing/i })).toBeDisabled();
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/backend/providers/google-health/sync-jobs/job-2",
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
+    });
+  });
+
   it("aborts and ignores a status response after unmount", async () => {
     let finish!: (value: unknown) => void;
     fetchMock.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
@@ -205,7 +230,8 @@ describe("ProviderSyncPanel polling", () => {
     await act(async () => { finishes[1]({ json: async () => ({ ok: false, message: "second failed" }) }); });
   });
 
-  it("shows an enabled schedule without a next run as stopped", () => {
+  it("shows an enabled schedule without a next run as stopped and resumes it", async () => {
+    fetchMock.mockResolvedValue({ json: async () => ({ ok: true, data: { ok: true } }) });
     render(<ProviderSyncPanel catalog={catalog()} statuses={{ ok: true, data: { items: [{ ...status(), accounts: [
       { providerInstanceId: "me", status: "connected", tokenStatus: "valid" },
     ] }] } }} scheduledSyncConfigs={[{ ok: true, data: {
@@ -214,6 +240,13 @@ describe("ProviderSyncPanel polling", () => {
     } }]} runningSyncJob={null} />);
     expect(screen.getByText("Stopped after errors")).toBeInTheDocument();
     expect(screen.getByText("steps: account is gone")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Resume auto" }));
+
+    await waitFor(() => expect(mocks.refresh).toHaveBeenCalled());
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/backend/providers/google-health/accounts/me/scheduled-sync");
+    expect(JSON.parse(init.body)).toMatchObject({ enabled: true });
   });
 
 });

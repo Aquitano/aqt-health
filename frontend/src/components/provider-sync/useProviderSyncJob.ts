@@ -23,6 +23,16 @@ export function useProviderSyncJob(runningSyncJob: ProviderSyncJobStatusResponse
     runningSyncJob
   );
   const [isPending, startTransition] = useTransition();
+  const runningSyncJobId = runningSyncJob?.jobId ?? null;
+  const [seenRunningSyncJobId, setSeenRunningSyncJobId] = useState(runningSyncJobId);
+
+  if (runningSyncJobId !== seenRunningSyncJobId) {
+    setSeenRunningSyncJobId(runningSyncJobId);
+    if (runningSyncJob && !activeSyncJob) {
+      setActiveSyncJob(runningSyncJob);
+      setSyncJob(runningSyncJob);
+    }
+  }
 
   useEffect(() => {
     if (!activeSyncJob) return;

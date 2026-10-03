@@ -234,7 +234,7 @@ class ScheduledProviderSyncService(
             ScheduledSyncExecutionResult("processed", earliestFrom, latestTo, emptyList(), summaries)
         } else {
             val failureCount = config.failureCount + 1
-            val park = hasNonRetryableError && (failureCount >= FAILURES_BEFORE_PARKING || needsReauth(config))
+            val park = (hasNonRetryableError && failureCount >= FAILURES_BEFORE_PARKING) || needsReauth(config)
             repository.markFailure(
                 configId = config.id,
                 failureCount = failureCount,
