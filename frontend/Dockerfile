@@ -1,7 +1,7 @@
 # Build stage
 # Node runs the build; bun is only the installer. Running `next build` under
 # bun's runtime segfaults in containers (oven-sh/bun#37031, worker teardown).
-FROM node:22-alpine AS builder
+FROM node:24-alpine AS builder
 
 COPY --from=oven/bun:1.4.2-alpine /usr/local/bin/bun /usr/local/bin/
 
@@ -14,7 +14,7 @@ COPY . .
 RUN node_modules/.bin/next build
 
 # Runtime stage
-FROM node:22-alpine
+FROM node:24-alpine
 
 RUN addgroup -S appgroup \
     && adduser -S appuser -G appgroup

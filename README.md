@@ -193,6 +193,10 @@ For production, either keep direct OpenObserve delivery enabled with deployment 
 
 The Next.js frontend includes API routes under `frontend/app/api/**` that proxy privileged provider actions to the backend with `AQT_HEALTH_API_KEY`.
 
+The frontend uses TypeScript 7 for `tsc`. Its `typescript` dependency aliases Microsoft's TypeScript 6 compatibility package because ESLint and OpenAPI generation still require the compiler API. This follows the [supported side-by-side setup](https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/#running-side-by-side-with-typescript-6.0).
+
+ESLint remains on 9.39.5 because Next.js's React plugin uses APIs removed in ESLint 10. Dependabot ignores that major version until the plugin supports it.
+
 Set these variables in the frontend runtime:
 
 - `AQT_HEALTH_API_BASE_URL`: backend API URL
