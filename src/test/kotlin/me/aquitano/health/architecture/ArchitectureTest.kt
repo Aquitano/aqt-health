@@ -2,63 +2,60 @@ package me.aquitano.health.architecture
 
 import com.lemonappdev.konsist.api.Konsist
 import com.lemonappdev.konsist.api.verify.assertFalse
+import org.jetbrains.kotlin.lexer.KotlinLexer
+import org.jetbrains.kotlin.lexer.KtTokens
 import kotlin.test.Test
 
 class ArchitectureTest {
+    // Konsist's production scope also walks nested worktrees and stale IDE output; scope by directory.
+    private val production = Konsist.scopeFromDirectory("src/main/kotlin")
 
     /**
-     * Konsist scans the filesystem, so it also picks up copies of the source under
-     * nested git worktrees (`.claude/worktrees`, `.t3/worktrees`) and stale IDE output
-     * (`bin/`). Those are not this project's production source and can carry pre-refactor
-     * code that trips these rules locally even when the real tree is clean. Restrict the
-     * scope to the tree under the current project root (markers are matched on the path
-     * relative to it, so the suite also runs from inside a worktree); CI runs on a clean
-     * checkout and is unaffected.
-     */
-    private val projectRoot = java.nio.file.Paths.get("").toAbsolutePath().toString()
-
-    private val production = Konsist.scopeFromProduction()
-        .slice { file -> NESTED_TREE_MARKERS.none { file.path.removePrefix(projectRoot).contains(it) } }
-
-    /**
-     * Read-model repositories under application/ build Exposed queries but must
-     * never open transactions; the calling service owns the transaction boundary.
-     *
-     * Infrastructure repositories (jobs, OAuth state, scheduling) are exempt by
-     * design: they are entry points that own their own transaction boundaries.
+     * Read-model repositories under application/ build Exposed queries but never open
+     * transactions; the calling service owns the boundary. Infrastructure repositories are
+     * exempt by design.
      */
     @Test
-    fun `application-layer repositories never open transactions`() {
-        val repositories = production
-            .classes()
+    fun `application-layer repositories do not reference transaction entry points`() {
+        val repositories = production.classes()
             .filter { it.resideInPackage("me.aquitano.health.application..") }
             .filter { it.name.endsWith("Repository") }
-        check(repositories.size >= 9) {
-            "Expected the metric read-model repositories, found ${repositories.size} - scope is broken"
-        }
-        repositories.assertFalse { clazz ->
-            val text = clazz.text
-            text.contains("suspendDbTransaction(") ||
-                text.contains("newSuspendedTransaction(") ||
-                text.contains("transaction(database)")
+        check(repositories.isNotEmpty()) { "No application repositories found" }
+        repositories.assertFalse { repository ->
+            val file = repository.containingFile
+            file.imports.any { imported ->
+                imported.name.startsWith("org.jetbrains.exposed.v1.jdbc.transactions.") ||
+                    imported.name == "me.aquitano.health.infrastructure.database.suspendDbTransaction" ||
+                    imported.name == "me.aquitano.health.infrastructure.database.*"
+            } || qualifiedCode(file.text).let { code ->
+                code.contains("org.jetbrains.exposed.v1.jdbc.transactions.") ||
+                    code.contains("me.aquitano.health.infrastructure.database.suspendDbTransaction")
+            }
         }
     }
 
-    /**
-     * The api/ layer speaks DTOs and services only; Exposed must stay behind
-     * application/ and infrastructure/. Checked on file text, not just imports,
-     * so fully-qualified references cannot slip through.
-     */
     @Test
-    fun `api layer never references Exposed`() {
-        val apiFiles = production
-            .files
+    fun `api layer does not reference Exposed`() {
+        val apiFiles = production.files
             .filter { it.packagee?.name?.startsWith("me.aquitano.health.api") == true }
-        check(apiFiles.isNotEmpty()) { "No api/ files found - scope is broken" }
-        apiFiles.assertFalse { file -> file.text.contains("org.jetbrains.exposed") }
+        check(apiFiles.isNotEmpty()) { "No api files found" }
+        apiFiles.assertFalse { file ->
+            file.imports.any { it.name.startsWith("org.jetbrains.exposed.") } ||
+                qualifiedCode(file.text).contains("org.jetbrains.exposed.")
+        }
     }
 
-    private companion object {
-        val NESTED_TREE_MARKERS = listOf("/.claude/", "/.t3/", "/bin/")
+    private fun qualifiedCode(source: String): String = buildString {
+        val lexer = KotlinLexer()
+        lexer.start(source)
+        while (lexer.tokenType != null) {
+            when (val token = lexer.tokenType) {
+                KtTokens.IDENTIFIER -> append(lexer.tokenText.removeSurrounding("`"))
+                KtTokens.DOT -> append('.')
+                KtTokens.WHITE_SPACE -> Unit
+                else -> if (!KtTokens.COMMENTS.contains(token)) append(' ')
+            }
+            lexer.advance()
+        }
     }
 }

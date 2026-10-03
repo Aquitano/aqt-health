@@ -1,5 +1,6 @@
 package me.aquitano.health.api
 
+import me.aquitano.health.test.PostgresIntegrationTest
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -19,7 +20,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import me.aquitano.health.domain.BodyMetricTypes
 
-class ReadApiRouteTest {
+class ReadApiRouteTest : PostgresIntegrationTest() {
     @Test
     fun readEndpointsReturnPersistedMetrics() = testApplication {
         configureTestApplication()

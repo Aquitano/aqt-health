@@ -11,6 +11,7 @@ class DatabaseFactory(
     private val migrator: FlywayMigrator = FlywayMigrator(),
 ) : AutoCloseable {
     private var dataSource: HikariDataSource? = null
+    private var database: Database? = null
 
     fun initialize(config: AppDatabaseConfig): Database {
         Class.forName(config.driver)
@@ -31,12 +32,15 @@ class DatabaseFactory(
         val dbConfig = DatabaseConfig {
             sqlLogger = Slf4jSqlLogger
         }
-        val database = Database.connect(newDataSource, databaseConfig = dbConfig)
-        DatabaseDispatchers.register(database, config.maxPoolSize)
-        return database
+        return Database.connect(newDataSource, databaseConfig = dbConfig).also {
+            database = it
+            DatabaseDispatchers.register(it, config.maxPoolSize)
+        }
     }
 
     override fun close() {
+        database?.let(DatabaseDispatchers::unregister)
+        database = null
         dataSource?.close()
         dataSource = null
     }

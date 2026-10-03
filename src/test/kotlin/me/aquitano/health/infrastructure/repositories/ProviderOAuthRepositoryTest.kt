@@ -1,7 +1,7 @@
 package me.aquitano.health.infrastructure.repositories
 
+import me.aquitano.health.test.PostgresIntegrationTest
 import kotlinx.coroutines.runBlocking
-import me.aquitano.health.infrastructure.database.DatabaseFactory
 import me.aquitano.health.infrastructure.config.DatabaseConfig
 import me.aquitano.health.test.PostgresTestDatabase
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -10,7 +10,7 @@ import java.time.Instant
 import java.time.OffsetDateTime
 import kotlin.test.*
 
-class ProviderOAuthRepositoryTest {
+class ProviderOAuthRepositoryTest : PostgresIntegrationTest() {
     private val now = Instant.parse("2026-05-15T10:00:00Z")
     private val later = Instant.parse("2026-05-15T11:00:00Z")
 
@@ -515,6 +515,6 @@ class ProviderOAuthRepositoryTest {
 
     private fun freshDatabase(): Database {
         val config = PostgresTestDatabase.config()
-        return DatabaseFactory().initialize(config)
+        return openDatabase(config)
     }
 }

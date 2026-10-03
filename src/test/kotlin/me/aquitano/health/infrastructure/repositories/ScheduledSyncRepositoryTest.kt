@@ -1,18 +1,18 @@
 package me.aquitano.health.infrastructure.repositories
 
+import me.aquitano.health.test.PostgresIntegrationTest
 import kotlinx.coroutines.runBlocking
 import me.aquitano.health.infrastructure.config.DatabaseConfig
-import me.aquitano.health.infrastructure.database.DatabaseFactory
 import me.aquitano.health.test.PostgresTestDatabase
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 
-class ScheduledSyncRepositoryTest {
+class ScheduledSyncRepositoryTest : PostgresIntegrationTest() {
     @Test
     fun configAndCheckpointsArePersisted() = runBlocking {
-        val database = DatabaseFactory().initialize(tempDatabaseConfig())
+        val database = openDatabase(tempDatabaseConfig())
         val repository = ScheduledSyncRepository(database)
         val now = Instant.parse("2026-05-31T10:00:00Z")
 

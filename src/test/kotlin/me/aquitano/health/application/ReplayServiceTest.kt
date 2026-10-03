@@ -1,5 +1,6 @@
 package me.aquitano.health.application
 
+import me.aquitano.health.test.PostgresIntegrationTest
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -17,7 +18,6 @@ import me.aquitano.health.domain.DerivedKind
 import me.aquitano.health.domain.RecordTypes
 import me.aquitano.health.domain.RequestValidationException
 import me.aquitano.health.infrastructure.config.DatabaseConfig
-import me.aquitano.health.infrastructure.database.DatabaseFactory
 import me.aquitano.health.infrastructure.repositories.IngestionRepository
 import me.aquitano.health.infrastructure.repositories.PendingDerivedRebuildRepository
 import me.aquitano.health.infrastructure.repositories.ProjectionWipeRepository
@@ -34,7 +34,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
-class ReplayServiceTest {
+class ReplayServiceTest : PostgresIntegrationTest() {
     @Test
     fun replayRestoresWipedProjectionsAndDerivedTables() = runBlocking {
         val fixture = Fixture()
@@ -214,9 +214,9 @@ class ReplayServiceTest {
         }
     }
 
-    private class Fixture {
+    private inner class Fixture {
         val dbConfig: DatabaseConfig = PostgresTestDatabase.config()
-        val database: Database = DatabaseFactory().initialize(dbConfig)
+        val database: Database = openDatabase(dbConfig)
         val clock = UtcClock()
         private val mappingService = IngestionMappingService()
         private val metricWriteService = metricWriteService()

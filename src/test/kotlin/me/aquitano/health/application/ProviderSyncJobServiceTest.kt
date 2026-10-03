@@ -1,5 +1,6 @@
 package me.aquitano.health.application
 
+import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.application.providersync.ProviderSyncProgressSink
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
@@ -16,7 +17,6 @@ import me.aquitano.health.domain.ProviderConnection
 import me.aquitano.health.domain.ProviderSyncSummary
 import me.aquitano.health.domain.ProviderWorkflowEndpoints
 import me.aquitano.health.domain.SyncJobStatus
-import me.aquitano.health.infrastructure.database.DatabaseFactory
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
 import me.aquitano.health.infrastructure.repositories.ProviderSyncIdempotencyRepository
 import me.aquitano.health.infrastructure.repositories.ProviderSyncJobRepository
@@ -33,7 +33,7 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 import me.aquitano.health.domain.ProviderSyncRequest as DomainProviderSyncRequest
 
-class ProviderSyncJobServiceTest {
+class ProviderSyncJobServiceTest : PostgresIntegrationTest() {
     private val now = Instant.parse("2026-05-01T10:00:00Z")
     private val request = ProviderSyncRequest(
         from = "2026-05-01T00:00:00Z",
@@ -219,7 +219,7 @@ class ProviderSyncJobServiceTest {
         assertEquals(1, provider.syncCalls.get())
     }
 
-    private fun database(): Database = DatabaseFactory().initialize(PostgresTestDatabase.config())
+    private fun database(): Database = openDatabase(PostgresTestDatabase.config())
 
     private inner class Fixture(provider: HealthProvider) {
         val database = database()

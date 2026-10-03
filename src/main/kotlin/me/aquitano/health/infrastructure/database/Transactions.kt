@@ -20,6 +20,10 @@ object DatabaseDispatchers {
         dispatchers[database] = Dispatchers.IO.limitedParallelism(poolSize)
     }
 
+    fun unregister(database: Database) {
+        dispatchers.remove(database)
+    }
+
     fun forDatabase(database: Database): CoroutineDispatcher =
         dispatchers[database] ?: Dispatchers.IO
 }

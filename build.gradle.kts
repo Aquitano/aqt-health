@@ -86,30 +86,8 @@ dependencies {
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit:$kotlin_version")
     testImplementation("org.testcontainers:postgresql:$testcontainers_version")
     testImplementation("com.lemonappdev:konsist:$konsist_version")
+    testCompileOnly("org.jetbrains.kotlin:kotlin-compiler-embeddable:2.0.21") // Supplied at runtime by Konsist.
 }
-
-val integrationTestClasses = listOf(
-    "**/ApplicationTest.class",
-    "**/GoogleHealthProviderTest.class",
-    "**/GoogleHealthProviderRouteTest.class",
-    "**/IngestionRouteTest.class",
-    "**/PendingDerivedRebuildSweeperTest.class",
-    "**/ProviderStatusRouteTest.class",
-    "**/ReadApiRouteTest.class",
-    "**/ReplayServiceTest.class",
-    "**/ProviderSyncJobServiceTest.class",
-    "**/ProviderWorkflowServiceTest.class",
-    "**/IdempotencyKeyRouteTest.class",
-    "**/CanonicalScalarSamplesViewTest.class",
-    "**/CanonicalStructuralViewsTest.class",
-    "**/ScheduledProviderSyncServiceTest.class",
-    "**/WithingsProviderTest.class",
-    "**/WithingsProviderRouteTest.class",
-    "**/DatabaseFactoryTest.class",
-    "**/LegacyScalarRecordMigrationTest.class",
-    "**/SupportRepositoryTest.class",
-    "**/ScheduledSyncRepositoryTest.class",
-)
 
 fun dockerIsAvailable(): Boolean =
     listOf(
@@ -148,8 +126,9 @@ tasks.shadowJar {
 
 tasks.test {
     description = "Runs fast unit tests that do not require PostgreSQL."
-    exclude(integrationTestClasses)
-    exclude("**/OpenApiExportTest.class")
+    useJUnit {
+        excludeCategories("me.aquitano.health.test.PostgresIntegration")
+    }
 }
 
 tasks.register<Test>("integrationTest") {
@@ -158,7 +137,10 @@ tasks.register<Test>("integrationTest") {
     testClassesDirs = sourceSets.test.get().output.classesDirs
     classpath = sourceSets.test.get().runtimeClasspath
     shouldRunAfter(tasks.test)
-    include(integrationTestClasses)
+    useJUnit {
+        includeCategories("me.aquitano.health.test.PostgresIntegration")
+    }
+    exclude("**/OpenApiExportTest.class")
     doFirst {
         requirePostgresIntegrationDatabase()
     }

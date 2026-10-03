@@ -1,5 +1,6 @@
 package me.aquitano.external.google
 
+import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.application.providersync.RefreshedTokenSet
 import me.aquitano.health.infrastructure.time.UtcClock
 import kotlinx.coroutines.runBlocking
@@ -17,7 +18,6 @@ import me.aquitano.health.domain.ServerConfigurationException
 import me.aquitano.health.domain.UpstreamProviderException
 import me.aquitano.health.infrastructure.config.DatabaseConfig
 import me.aquitano.health.infrastructure.config.ProviderOAuthConfig
-import me.aquitano.health.infrastructure.database.DatabaseFactory
 import me.aquitano.health.infrastructure.repositories.IngestionRepository
 import me.aquitano.health.infrastructure.repositories.PendingDerivedRebuildRepository
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
@@ -30,7 +30,7 @@ import org.jetbrains.exposed.v1.jdbc.Database
 import java.time.Instant
 import kotlin.test.*
 
-class GoogleHealthProviderTest {
+class GoogleHealthProviderTest : PostgresIntegrationTest() {
     @Test
     fun oauthCallbackStoresEncryptedTokens() = runBlocking {
         val fixture = Fixture()
@@ -543,11 +543,11 @@ class GoogleHealthProviderTest {
         assertEquals("failed", singleString(fixture.dbPath, "SELECT status FROM provider_sync_runs"))
     }
 
-    private class Fixture(
+    private inner class Fixture(
         clientSecret: String = "client-secret",
     ) {
         val dbPath: DatabaseConfig = PostgresTestDatabase.config()
-        val database: Database = DatabaseFactory().initialize(
+        val database: Database = openDatabase(
             dbPath
         )
         val now: Instant = Instant.parse("2026-04-20T10:00:00Z")
