@@ -26,7 +26,7 @@ Start PostgreSQL:
 docker compose up -d postgres
 ```
 
-The compose file uses `AQT_HEALTH_DB_USER`, `AQT_HEALTH_DB_PASSWORD`, and `POSTGRES_DB` from the environment when set. Postgres is not published to the host; the app reaches it over the compose network at `postgres:5432`. To run the app outside compose against that database, publish the port yourself with a local `compose.override.yml`.
+The compose file uses `AQT_HEALTH_DB_USER`, `AQT_HEALTH_DB_PASSWORD`, and `POSTGRES_DB` from the environment when set. Postgres is not published to the host; the app reaches it over the compose network at `postgres:5432`. To run the app outside compose against that database, publish the port with a local override: `cp docker-compose.override.example.yml docker-compose.override.yml`, then `docker compose up -d postgres`. The override file is ignored by git.
 
 Bash:
 
