@@ -61,7 +61,7 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
                 )
             assertFalse(accessCiphertext.contains("access-from-code"))
             assertFalse(refreshCiphertext.contains("refresh-from-code"))
-            val cipher = TokenCipher(fixture.config.tokenEncryptionKey)
+            val cipher = TokenCipher(fixture.config.tokenEncryptionKey, GOOGLE_HEALTH_PROVIDER_CODE)
             assertEquals("access-from-code", cipher.decrypt(accessCiphertext))
             assertEquals("refresh-from-code", cipher.decrypt(refreshCiphertext))
         }
@@ -560,7 +560,7 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
                     fixture.dbPath,
                     "SELECT access_token_ciphertext FROM provider_oauth_accounts",
                 )
-            assertEquals("fresh-access", TokenCipher(fixture.config.tokenEncryptionKey).decrypt(accessCiphertext))
+            assertEquals("fresh-access", TokenCipher(fixture.config.tokenEncryptionKey, GOOGLE_HEALTH_PROVIDER_CODE).decrypt(accessCiphertext))
         }
 
     @Test
@@ -655,7 +655,7 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
             refreshToken: String,
             expiresAt: Instant = now.plusSeconds(3600),
         ) {
-            val cipher = TokenCipher(config.tokenEncryptionKey)
+            val cipher = TokenCipher(config.tokenEncryptionKey, GOOGLE_HEALTH_PROVIDER_CODE)
             providerRepository.upsertAccount(
                 providerCode = GOOGLE_HEALTH_PROVIDER_CODE,
                 providerUserId = providerInstanceId,

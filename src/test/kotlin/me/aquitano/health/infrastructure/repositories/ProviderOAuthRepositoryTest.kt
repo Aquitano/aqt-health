@@ -17,7 +17,7 @@ class ProviderOAuthRepositoryTest : PostgresIntegrationTest() {
             val repo = ProviderOAuthRepository(freshDatabase())
             val cipher =
                 me.aquitano.health.infrastructure.security
-                    .TokenCipher("test-key")
+                    .TokenCipher("test-key", "google_health")
 
             suspend fun connect() =
                 repo.upsertAccount(

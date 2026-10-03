@@ -9,8 +9,9 @@ import javax.crypto.spec.SecretKeySpec
 
 class TokenCipher(
     secret: String,
+    providerCode: String,
 ) {
-    private val key = SecretKeySpec(deriveKey(secret), "AES")
+    private val key = SecretKeySpec(deriveKey(secret, providerCode), "AES")
     private val random = SecureRandom()
 
     fun encrypt(plaintext: String): String {
@@ -36,9 +37,12 @@ class TokenCipher(
         return cipher.doFinal(encrypted).toString(Charsets.UTF_8)
     }
 
-    private fun deriveKey(secret: String): ByteArray {
+    private fun deriveKey(
+        secret: String,
+        providerCode: String,
+    ): ByteArray {
         require(secret.isNotBlank()) {
-            "AQT_HEALTH_GOOGLE_TOKEN_ENCRYPTION_KEY is required for Google Health OAuth"
+            "Token encryption key for provider '$providerCode' is required"
         }
         return MessageDigest
             .getInstance("SHA-256")

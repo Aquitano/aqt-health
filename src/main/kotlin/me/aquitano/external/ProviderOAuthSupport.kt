@@ -50,7 +50,7 @@ suspend fun persistOAuthConnection(
     scopeDelimiter: String,
     now: Instant,
 ): ProviderConnection {
-    val cipher = TokenCipher(config.tokenEncryptionKey)
+    val cipher = TokenCipher(config.tokenEncryptionKey, providerCode)
     repository.upsertAccount(
         providerCode = providerCode,
         providerUserId = providerUserId,
