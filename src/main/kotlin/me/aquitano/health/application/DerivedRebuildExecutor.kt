@@ -1,7 +1,6 @@
 package me.aquitano.health.application
 
 import me.aquitano.health.application.metric.steps.derived.CanonicalStepDerivationService
-import me.aquitano.health.domain.DerivedKind
 import me.aquitano.health.domain.RecordTypes
 import me.aquitano.health.shared.utcDate
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -17,10 +16,8 @@ interface DerivedRebuildExecutor {
 
 data class DerivedRebuildRequest(
     val sourceInstanceId: Int,
-    val affectedDates: Map<DerivedKind, Set<LocalDate>> = emptyMap(),
-) {
-    operator fun get(kind: DerivedKind): Set<LocalDate> = affectedDates[kind] ?: emptySet()
-}
+    val affectedStepDates: Set<LocalDate> = emptySet(),
+)
 
 fun interface DerivedRebuildAction {
     suspend fun rebuild(
@@ -41,50 +38,29 @@ fun interface AffectedDatesResolver {
 }
 
 class DerivedRebuildModule(
-    val kind: DerivedKind,
     val affectedDates: AffectedDatesResolver,
     val action: DerivedRebuildAction,
 )
 
-/**
- * Ordered registry of derived rebuilds, mirroring HealthDayModuleRegistry. Every DerivedKind
- * must be covered so a new kind cannot silently skip its rebuild.
- */
+/** Ordered registry of derived rebuilds; order is the execution order. */
 class DerivedRebuildModuleRegistry(
     val modules: List<DerivedRebuildModule>,
 ) {
-    init {
-        val kinds = modules.map { it.kind }
-        require(kinds.size == kinds.toSet().size) {
-            "Duplicate DerivedRebuildModule kinds: ${kinds.groupBy { it }.filterValues { it.size > 1 }.keys}"
-        }
-        val missing = DerivedKind.entries.toSet() - kinds.toSet()
-        require(missing.isEmpty()) { "Missing DerivedRebuildModule for: $missing" }
-    }
-
     /**
      * The single record-to-rebuild-dates mapping shared by the ingestion write path and replay,
-     * so a new derived kind cannot be wired into one and silently skipped by the other.
+     * so a rebuild cannot be wired into one and silently skipped by the other.
      */
     fun affectedDatesFor(
         recordType: String,
         startAt: Instant,
         endAt: Instant?,
-    ): Map<DerivedKind, Set<LocalDate>> =
-        modules
-            .mapNotNull { module ->
-                module.affectedDates
-                    .affectedDates(recordType, startAt, endAt)
-                    .takeIf { it.isNotEmpty() }
-                    ?.let { module.kind to it }
-            }.toMap()
+    ): Set<LocalDate> = modules.flatMapTo(linkedSetOf()) { it.affectedDates.affectedDates(recordType, startAt, endAt) }
 }
 
 /** The canonical post-ingestion rebuild wiring; order is the execution order. */
 fun derivedRebuildModules(canonicalStepService: CanonicalStepDerivationService): List<DerivedRebuildModule> =
     listOf(
         DerivedRebuildModule(
-            kind = DerivedKind.STEP_SUMMARY,
             affectedDates = { recordType, startAt, endAt ->
                 if (recordType == RecordTypes.STEP_INTERVAL) {
                     // Replay rows may carry a null end; treat them as an instant-wide interval.
@@ -122,7 +98,7 @@ class PerDateDerivedRebuildExecutor(
         registry.modules.forEach { module ->
             val sourcesByDate = mutableMapOf<LocalDate, MutableSet<Int>>()
             requests.forEach { request ->
-                request[module.kind].forEach { date ->
+                request.affectedStepDates.forEach { date ->
                     sourcesByDate.getOrPut(date) { linkedSetOf() }.add(request.sourceInstanceId)
                 }
             }

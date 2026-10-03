@@ -1,7 +1,6 @@
 package me.aquitano.health.application
 
 import kotlinx.coroutines.runBlocking
-import me.aquitano.health.domain.DerivedKind
 import me.aquitano.health.infrastructure.database.suspendDbTransaction
 import me.aquitano.health.infrastructure.repositories.PendingDerivedRebuildRepository
 import me.aquitano.health.infrastructure.repositories.SupportRepository
@@ -31,12 +30,12 @@ class PendingDerivedRebuildSweeperTest : PostgresIntegrationTest() {
                             support.resolveOrCreateSourceInstanceInTransaction("health_connect", instance, now).id
                         }.also { sourceIds ->
                             repository.enqueueInTransaction(
-                                DerivedRebuildRequest(sourceIds.first(), mapOf(DerivedKind.STEP_SUMMARY to setOf(failingDate))),
+                                DerivedRebuildRequest(sourceIds.first(), setOf(failingDate)),
                                 now = now.minusSeconds(1),
                             )
                             sourceIds.forEach { sourceId ->
                                 repository.enqueueInTransaction(
-                                    DerivedRebuildRequest(sourceId, mapOf(DerivedKind.STEP_SUMMARY to setOf(healthyDate))),
+                                    DerivedRebuildRequest(sourceId, setOf(healthyDate)),
                                     now = now,
                                 )
                             }
@@ -49,7 +48,7 @@ class PendingDerivedRebuildSweeperTest : PostgresIntegrationTest() {
                         requests: List<DerivedRebuildRequest>,
                         computedAt: Instant,
                     ) {
-                        check(requests.none { failingDate in it[DerivedKind.STEP_SUMMARY] }) { "Date cannot be rebuilt" }
+                        check(requests.none { failingDate in it.affectedStepDates }) { "Date cannot be rebuilt" }
                         rebuilt += requests
                     }
                 }
@@ -57,7 +56,7 @@ class PendingDerivedRebuildSweeperTest : PostgresIntegrationTest() {
 
             assertEquals(2, sweeper.sweep(now))
             assertEquals(sources.toSet(), rebuilt.map { it.sourceInstanceId }.toSet())
-            assertEquals(setOf(healthyDate), rebuilt.flatMap { it[DerivedKind.STEP_SUMMARY] }.toSet())
+            assertEquals(setOf(healthyDate), rebuilt.flatMap { it.affectedStepDates }.toSet())
             val remaining = repository.due(now.plusSeconds(60), 10).single()
             assertEquals(failingDate, remaining.affectedDate)
             assertEquals(1, remaining.attempts)
@@ -73,7 +72,7 @@ class PendingDerivedRebuildSweeperTest : PostgresIntegrationTest() {
                 suspendDbTransaction(db = database) {
                     SupportRepository(database).resolveOrCreateSourceInstanceInTransaction("health_connect", "revisions", now).id
                 }
-            val request = DerivedRebuildRequest(source, mapOf(DerivedKind.STEP_SUMMARY to setOf(LocalDate.parse("2026-06-01"))))
+            val request = DerivedRebuildRequest(source, setOf(LocalDate.parse("2026-06-01")))
             val old = suspendDbTransaction(db = database) { repository.enqueueInTransaction(request, now = now) }
             val fresh = suspendDbTransaction(db = database) { repository.enqueueInTransaction(request, now = now) }
             repository.deleteCompleted(old)
@@ -110,7 +109,7 @@ class PendingDerivedRebuildSweeperTest : PostgresIntegrationTest() {
                     repository.enqueueInTransaction(
                         DerivedRebuildRequest(
                             sourceInstanceId = sourceInstance.id,
-                            affectedDates = mapOf(DerivedKind.STEP_SUMMARY to setOf(date)),
+                            affectedStepDates = setOf(date),
                         ),
                         now = now,
                     )
@@ -135,8 +134,8 @@ class PendingDerivedRebuildSweeperTest : PostgresIntegrationTest() {
             assertEquals(2, executor.calls.get())
             assertEquals(0, repository.due(afterBackoff.plusSeconds(3_600), limit = 10).size)
             assertEquals(
-                mapOf(DerivedKind.STEP_SUMMARY to setOf(date)),
-                executor.lastRequest?.affectedDates,
+                setOf(date),
+                executor.lastRequest?.affectedStepDates,
             )
         }
 

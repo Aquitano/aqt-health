@@ -57,11 +57,10 @@ class PendingDerivedRebuildSweeper(
         val due = repository.due(now, limit)
         if (due.isEmpty()) return 0
         var rebuilt = 0
-        due.groupBy { it.derivedKind to it.affectedDate }.forEach { (key, rows) ->
-            val (kind, date) = key
+        due.groupBy { it.affectedDate }.forEach { (date, rows) ->
             val requests =
                 rows.map { row ->
-                    DerivedRebuildRequest(row.sourceInstanceId, mapOf(kind to setOf(date)))
+                    DerivedRebuildRequest(row.sourceInstanceId, setOf(date))
                 }
             try {
                 derivedRebuildExecutor.rebuild(requests, clock.now())
