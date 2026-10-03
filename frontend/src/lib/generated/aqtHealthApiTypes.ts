@@ -288,26 +288,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/providers/{providerCode}/sync": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Synchronize provider data
-         * @description Fetches data from the selected provider for the requested range/data types, normalizes records, ingests resulting batches, and returns per-data-type batch, empty-result, and error details. Provider sync can return partial errors while still storing successful data types. Repeating a completed request with the same Idempotency-Key returns the stored response without syncing again; failed requests are not stored, so retrying them re-runs the sync.
-         */
-        post: operations["syncProvider"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v2/providers/{providerCode}/sync-jobs": {
         parameters: {
             query?: never;
@@ -357,7 +337,7 @@ export interface paths {
         };
         /**
          * Get provider sync job progress
-         * @description Returns progress counters, the current provider-safe window, and the final sync summary when the background job has finished.
+         * @description Returns progress counters, the current provider-safe window, and the final sync summary when the background job has finished. `terminal` turns true once the job reached a final status. A job that belongs to another provider returns 404.
          */
         get: operations["getProviderSyncJob"];
         put?: never;
@@ -1194,6 +1174,7 @@ export interface components {
             dataTypes?: string[] | null;
             /** @enum {string} */
             status: "queued" | "running" | "processed" | "partial_failed" | "failed";
+            terminal: boolean;
             totalItems: number;
             completedItems: number;
             currentItem?: components["schemas"]["ProviderSyncJobItemResponse"];
@@ -2657,99 +2638,6 @@ export interface operations {
             };
             /** @description Unexpected server error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Error response */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    syncProvider: {
-        parameters: {
-            query?: never;
-            header?: {
-                /** @description Optional client-generated key that makes the request idempotent. Repeating a request with the same key returns the result of the first request instead of performing the work again. */
-                "Idempotency-Key"?: string;
-            };
-            path: {
-                /** @description Provider code. Current examples are `google-health` and `withings`. */
-                providerCode: "google-health" | "withings";
-            };
-            cookie?: never;
-        };
-        /** @description Provider sync request. Historical ranges up to 1095 days (3 years) are accepted for backfill; providers split work into safe internal windows and may enforce page-size constraints advertised by the provider catalog. Longer histories need several requests. */
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProviderSyncRequest"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderSyncResponse"];
-                };
-            };
-            /** @description Request validation failed */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Missing or invalid API key */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Resource not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Request conflicts with current state */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Unexpected server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Upstream provider request failed */
-            502: {
                 headers: {
                     [name: string]: unknown;
                 };

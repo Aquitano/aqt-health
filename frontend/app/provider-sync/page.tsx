@@ -18,6 +18,7 @@ export default async function ProviderSyncPage() {
         catalog={data.providerCatalog}
         statuses={data.providerStatuses}
         scheduledSyncConfigs={data.scheduledSyncConfigs}
+        runningSyncJob={data.runningSyncJob}
       />
     </>
   );

@@ -105,6 +105,7 @@ export type ProviderSyncPageData = HealthStatusData & {
   providerCatalog: ApiResult<ProviderCatalogResponse>;
   providerStatuses: ApiResult<ProviderStatusCatalogResponse>;
   scheduledSyncConfigs: ApiResult<ScheduledSyncConfig>[];
+  runningSyncJob: ProviderSyncJobStatusResponse | null;
 };
 
 export type IngestionsPageData = HealthStatusData & {
