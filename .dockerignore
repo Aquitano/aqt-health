@@ -9,7 +9,6 @@
 build
 frontend
 docs
-graphify-out
 data
 *.md
 .env
