@@ -5,9 +5,10 @@ export type DateRange = {
 };
 
 const dateOnlyPattern = /^\d{4}-\d{2}-\d{2}$/;
+const maxRangeDays = 366;
 
 export function defaultDateRange(timezone: string, now = new Date()): DateRange {
-  const toDate = dateInputValueInTimeZone(now, timezone);
+  const toDate = dateInTimeZone(now, timezone);
 
   return {
     fromDate: addUtcDays(toDate, -6),
@@ -42,7 +43,20 @@ export function parseDateRange(
     };
   }
 
+  if (rangeDays(fromDate, toDate) > maxRangeDays) {
+    return {
+      fromDate: addUtcDays(toDate, -(maxRangeDays - 1)),
+      toDate,
+      warning: `Ranges are limited to ${maxRangeDays} days, so this shows the ${maxRangeDays} days ending ${toDate}.`,
+    };
+  }
+
   return { fromDate, toDate };
+}
+
+/** Number of calendar days in an inclusive date-only range. */
+export function rangeDays(fromDate: string, toDate: string): number {
+  return (Date.parse(toDate) - Date.parse(fromDate)) / 86_400_000 + 1;
 }
 
 function dateOnlyToUtcInstant(date: string): string {
@@ -62,7 +76,7 @@ export function first(value?: string | string[]): string | undefined {
   return value;
 }
 
-function isDateOnly(value: string): boolean {
+export function isDateOnly(value: string): boolean {
   if (!dateOnlyPattern.test(value)) return false;
   const parsed = new Date(`${value}T00:00:00Z`);
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
@@ -72,26 +86,27 @@ function toDateInputValue(value: Date): string {
   return value.toISOString().slice(0, 10);
 }
 
-function dateInputValueInTimeZone(value: Date, timeZone: string): string {
-  // "en-CA" formats as YYYY-MM-DD, and the timeZone option yields the calendar date in that zone.
-  try {
-    return new Intl.DateTimeFormat("en-CA", {
-      timeZone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(value);
-  } catch {
-    return toDateInputValue(value);
-  }
+const dayFormatters = new Map<string, Intl.DateTimeFormat>();
+
+// "en-CA" formats as YYYY-MM-DD, and the timeZone option yields the calendar date in that zone.
+function dayFormatter(timeZone: string): Intl.DateTimeFormat {
+  const cached = dayFormatters.get(timeZone);
+  if (cached) return cached;
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone, year: "numeric", month: "2-digit", day: "2-digit",
+  });
+  dayFormatters.set(timeZone, formatter);
+  return formatter;
+}
+
+export function dateInTimeZone(value: Date | number, timeZone: string): string {
+  return dayFormatter(timeZone).format(value);
 }
 
 /** First instant of the calendar date, including days with a midnight DST change. */
 export function startOfDayInstant(date: string, timezone: string): string {
   if (timezone === "UTC") return dateOnlyToUtcInstant(date);
-  const formatter = new Intl.DateTimeFormat("en-CA", {
-    timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit",
-  });
+  const formatter = dayFormatter(timezone);
   const center = Date.parse(dateOnlyToUtcInstant(date));
   let low = center - 36 * 3_600_000;
   let high = center + 36 * 3_600_000;

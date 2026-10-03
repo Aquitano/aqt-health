@@ -8,8 +8,7 @@ import {
   HealthMetricChart,
   type ChartPointDetail,
 } from "@/components/charts/HealthMetricChart";
-import { formatChartValue, formatDateTime } from "@/lib/format";
-import { useTimeZone } from "@/components/TimeZoneProvider";
+import { formatChartValue } from "@/lib/format";
 import styles from "./ExpandedChartModal.module.css";
 
 export type ChartSummary = {
@@ -39,7 +38,6 @@ export function ExpandedChartModal({
   onClose,
 }: ExpandedChartModalProps) {
   const titleId = useId();
-  const timeZone = useTimeZone();
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -111,7 +109,7 @@ export function ExpandedChartModal({
               <tbody>
                 {details.map((detail) => (
                   <tr key={detail.id}>
-                    <td>{formatDateTime(detail.at, timeZone)}</td>
+                    <td>{detail.atLabel}</td>
                     <td>{detail.label}</td>
                     <td>{formatChartValue(detail.value, detail.unit)}</td>
                     <td>{detail.source ?? "n/a"}</td>

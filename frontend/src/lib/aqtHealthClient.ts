@@ -10,6 +10,7 @@ import type {
   ScheduledSyncRunResponse,
 } from "./types";
 import type { paths } from "./generated/aqtHealthApiTypes";
+import { serverConfig } from "./serverConfig";
 
 type ClientResponse<T> = {
   data?: T;
@@ -48,7 +49,6 @@ export function toProviderCode(value: string): ProviderCode | null {
 
 const bodyMetricTypes = ["weight", "body_fat", "muscle", "water", "visceral_fat"];
 const defaultBaseUrl = "http://localhost:8080";
-const backendRequestTimeoutMs = 8_000;
 const longRunningBackendRequestTimeoutMs = 300_000;
 
 function apiBaseUrlFromEnv(): string {
@@ -390,7 +390,7 @@ async function mergedScalarMetrics(
 async function fetchWithTimeout(
   input: RequestInfo | URL,
   init?: RequestInit,
-  timeoutMs = backendRequestTimeoutMs,
+  timeoutMs = serverConfig.backendRequestTimeoutMs,
 ): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
