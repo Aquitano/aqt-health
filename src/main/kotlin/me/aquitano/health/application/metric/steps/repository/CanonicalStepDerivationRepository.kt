@@ -1,17 +1,17 @@
 package me.aquitano.health.application.metric.steps.repository
 
-import me.aquitano.health.application.metric.steps.derived.CANONICAL_STEP_ALGORITHM_VERSION
 import me.aquitano.health.application.metric.common.keysetFetchLimit
+import me.aquitano.health.application.metric.common.repository.BaseMetricReadRepository
+import me.aquitano.health.application.metric.common.repository.DailyReadFilters
 import me.aquitano.health.application.metric.common.repository.ReadFilters
 import me.aquitano.health.application.metric.common.repository.SourceMetadata
-import me.aquitano.health.application.metric.common.repository.DailyReadFilters
+import me.aquitano.health.application.metric.common.repository.TimeFilterMode
+import me.aquitano.health.application.metric.steps.derived.CANONICAL_STEP_ALGORITHM_VERSION
 import me.aquitano.health.infrastructure.database.tables.CanonicalStepDayBucketContributionsTable
 import me.aquitano.health.infrastructure.database.tables.CanonicalStepSamplesTable
-import me.aquitano.health.infrastructure.database.tables.StepSamplesTable
 import me.aquitano.health.infrastructure.database.tables.IngestionRecordsTable
+import me.aquitano.health.infrastructure.database.tables.StepSamplesTable
 import me.aquitano.health.infrastructure.database.toDbTimestamp
-import me.aquitano.health.application.metric.common.repository.BaseMetricReadRepository
-import me.aquitano.health.application.metric.common.repository.TimeFilterMode
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
 import java.time.Instant
@@ -44,8 +44,6 @@ data class CanonicalStepOutput(
     val bucketContributions: List<CanonicalStepBucketContributionOutput>,
 )
 
-
-
 data class StepBucketContributionRow(
     val bucketStartAt: Instant,
     val bucketEndAt: Instant,
@@ -59,21 +57,29 @@ data class CanonicalDashboardStepsSummary(
 )
 
 class CanonicalStepDerivationRepository : BaseMetricReadRepository() {
-    fun listRawSamplesForDay(dayStart: Instant, dayEnd: Instant): List<StepSampleRow> =
-        StepSamplesTable.leftJoin(IngestionRecordsTable, { ingestionRecordId }, { IngestionRecordsTable.id })
+    fun listRawSamplesForDay(
+        dayStart: Instant,
+        dayEnd: Instant,
+    ): List<StepSampleRow> =
+        StepSamplesTable
+            .leftJoin(IngestionRecordsTable, { ingestionRecordId }, { IngestionRecordsTable.id })
             .select(StepSamplesTable.columns + IngestionRecordsTable.googleStepAllocationPriority)
             .where {
                 (StepSamplesTable.startAt less dayEnd.toDbTimestamp()) and
                     (StepSamplesTable.endAt greater dayStart.toDbTimestamp())
-            }
-            .orderBy(StepSamplesTable.startAt to SortOrder.ASC, StepSamplesTable.id to SortOrder.ASC)
+            }.orderBy(StepSamplesTable.startAt to SortOrder.ASC, StepSamplesTable.id to SortOrder.ASC)
             .map(::toStepSampleRow)
 
-    fun rawSampleIdsForDay(dayStart: Instant, dayEnd: Instant): Set<Int> =
-        StepSamplesTable.select(StepSamplesTable.id).where {
-            (StepSamplesTable.startAt less dayEnd.toDbTimestamp()) and
-                (StepSamplesTable.endAt greater dayStart.toDbTimestamp())
-        }.mapTo(hashSetOf()) { it[StepSamplesTable.id].value }
+    fun rawSampleIdsForDay(
+        dayStart: Instant,
+        dayEnd: Instant,
+    ): Set<Int> =
+        StepSamplesTable
+            .select(StepSamplesTable.id)
+            .where {
+                (StepSamplesTable.startAt less dayEnd.toDbTimestamp()) and
+                    (StepSamplesTable.endAt greater dayStart.toDbTimestamp())
+            }.mapTo(hashSetOf()) { it[StepSamplesTable.id].value }
 
     fun persistCanonicalOutput(output: CanonicalStepOutput) {
         CanonicalStepDayBucketContributionsTable.deleteWhere {
@@ -111,33 +117,34 @@ class CanonicalStepDerivationRepository : BaseMetricReadRepository() {
         algorithmVersion: Int,
         overlapsWindow: Boolean = false,
     ): Pair<List<StepSampleRow>, Map<Int, SourceMetadata>> {
-        val where = timestampConditions(
-            filters = filters,
-            sourceInstanceIdColumn = CanonicalStepSamplesTable.sourceInstanceId,
-            fromColumn = CanonicalStepSamplesTable.startAt,
-            toColumn = CanonicalStepSamplesTable.endAt,
-            mode = if (overlapsWindow) TimeFilterMode.OVERLAPS_WINDOW else TimeFilterMode.START_AT_IN_RANGE,
-        ).whereOrNull() ?: return emptyReadResult()
+        val where =
+            timestampConditions(
+                filters = filters,
+                sourceInstanceIdColumn = CanonicalStepSamplesTable.sourceInstanceId,
+                fromColumn = CanonicalStepSamplesTable.startAt,
+                toColumn = CanonicalStepSamplesTable.endAt,
+                mode = if (overlapsWindow) TimeFilterMode.OVERLAPS_WINDOW else TimeFilterMode.START_AT_IN_RANGE,
+            ).whereOrNull() ?: return emptyReadResult()
 
-        val keyset = timestampKeyset(
-            filters.cursor,
-            filters.order,
-            CanonicalStepSamplesTable.startAt,
-            StepSamplesTable.id,
-        )
-        val rows = CanonicalStepSamplesTable
-            .innerJoin(StepSamplesTable, { stepSampleId }, { StepSamplesTable.id })
-            .selectAll()
-            .where(
-                where and (CanonicalStepSamplesTable.algorithmVersion eq algorithmVersion) and
-                    firstDateForSample(algorithmVersion) and (keyset ?: Op.TRUE)
+        val keyset =
+            timestampKeyset(
+                filters.cursor,
+                filters.order,
+                CanonicalStepSamplesTable.startAt,
+                StepSamplesTable.id,
             )
-            .orderBy(
-                CanonicalStepSamplesTable.startAt to filters.sortOrder(),
-                StepSamplesTable.id to filters.sortOrder(),
-            )
-            .limit(keysetFetchLimit(filters.limit))
-            .map(::toStepSampleRow)
+        val rows =
+            CanonicalStepSamplesTable
+                .innerJoin(StepSamplesTable, { stepSampleId }, { StepSamplesTable.id })
+                .selectAll()
+                .where(
+                    where and (CanonicalStepSamplesTable.algorithmVersion eq algorithmVersion) and
+                        firstDateForSample(algorithmVersion) and (keyset ?: Op.TRUE),
+                ).orderBy(
+                    CanonicalStepSamplesTable.startAt to filters.sortOrder(),
+                    StepSamplesTable.id to filters.sortOrder(),
+                ).limit(keysetFetchLimit(filters.limit))
+                .map(::toStepSampleRow)
         return rows to sourceMetadata(rows.map { it.sourceInstanceId }.toSet(), filters.includeSource)
     }
 
@@ -155,20 +162,23 @@ class CanonicalStepDerivationRepository : BaseMetricReadRepository() {
                     (earlier[CanonicalStepSamplesTable.stepSampleId] eq CanonicalStepSamplesTable.stepSampleId) and
                         (earlier[CanonicalStepSamplesTable.algorithmVersion] eq algorithmVersion) and
                         (earlier[CanonicalStepSamplesTable.date] less CanonicalStepSamplesTable.date)
-                }
+                },
         )
     }
 
     /** All canonical totals use the same allocated bucket contributions. */
     fun sumCanonicalStepDailySummaries(filters: DailyReadFilters): DashboardStepsSummaryRow {
         val table = CanonicalStepDayBucketContributionsTable
-        val where = dateConditions(filters, table.sourceInstanceId, table.date).whereOrNull()
-            ?: return DashboardStepsSummaryRow(steps = 0, dayCount = 0)
+        val where =
+            dateConditions(filters, table.sourceInstanceId, table.date).whereOrNull()
+                ?: return DashboardStepsSummaryRow(steps = 0, dayCount = 0)
         val total = table.value.sum()
         val days = table.date.countDistinct()
-        val row = table.select(total, days)
-            .where(where and (table.algorithmVersion eq CANONICAL_STEP_ALGORITHM_VERSION))
-            .single()
+        val row =
+            table
+                .select(total, days)
+                .where(where and (table.algorithmVersion eq CANONICAL_STEP_ALGORITHM_VERSION))
+                .single()
         return DashboardStepsSummaryRow(
             steps = (row[total] ?: 0.0).roundToInt(),
             dayCount = row[days].toInt(),
@@ -179,28 +189,31 @@ class CanonicalStepDerivationRepository : BaseMetricReadRepository() {
         filters: DailyReadFilters,
     ): Pair<List<StepDailySummaryRow>, Map<Int, SourceMetadata>> {
         val table = CanonicalStepDayBucketContributionsTable
-        val where = dateConditions(filters, table.sourceInstanceId, table.date).whereOrNull()
-            ?: return emptyReadResult()
+        val where =
+            dateConditions(filters, table.sourceInstanceId, table.date).whereOrNull()
+                ?: return emptyReadResult()
         // One row per date means the date alone determines the cursor position.
         val keyset = dateKeyset(filters.cursor, filters.order, table.date, intLiteral(0))
         val total = table.value.sum()
         val samples = table.stepSampleId.countDistinct()
         val sources = table.sourceInstanceId.countDistinct()
         val source = table.sourceInstanceId.min()
-        val rows = table.select(table.date, total, samples, sources, source)
-            .where(where and (table.algorithmVersion eq CANONICAL_STEP_ALGORITHM_VERSION) and (keyset ?: Op.TRUE))
-            .groupBy(table.date)
-            .orderBy(table.date to filters.sortOrder())
-            .limit(keysetFetchLimit(filters.limit))
-            .map {
-                StepDailySummaryRow(
-                    id = 0,
-                    sourceInstanceId = if (it[sources] == 1L) it[source] else null,
-                    date = it[table.date].toString(),
-                    steps = (it[total] ?: 0.0).roundToInt(),
-                    sampleCount = it[samples].toInt(),
-                )
-            }
+        val rows =
+            table
+                .select(table.date, total, samples, sources, source)
+                .where(where and (table.algorithmVersion eq CANONICAL_STEP_ALGORITHM_VERSION) and (keyset ?: Op.TRUE))
+                .groupBy(table.date)
+                .orderBy(table.date to filters.sortOrder())
+                .limit(keysetFetchLimit(filters.limit))
+                .map {
+                    StepDailySummaryRow(
+                        id = 0,
+                        sourceInstanceId = if (it[sources] == 1L) it[source] else null,
+                        date = it[table.date].toString(),
+                        steps = (it[total] ?: 0.0).roundToInt(),
+                        sampleCount = it[samples].toInt(),
+                    )
+                }
         return rows to sourceMetadata(rows.mapNotNull { it.sourceInstanceId }.toSet(), filters.includeSource)
     }
 
@@ -208,13 +221,15 @@ class CanonicalStepDerivationRepository : BaseMetricReadRepository() {
         filters: ReadFilters,
         algorithmVersion: Int,
     ): List<StepBucketContributionRow> {
-        val where = timestampConditions(
-            filters = filters,
-            sourceInstanceIdColumn = CanonicalStepDayBucketContributionsTable.sourceInstanceId,
-            fromColumn = CanonicalStepDayBucketContributionsTable.bucketStartAt,
-        ).whereOrNull() ?: return emptyList()
+        val where =
+            timestampConditions(
+                filters = filters,
+                sourceInstanceIdColumn = CanonicalStepDayBucketContributionsTable.sourceInstanceId,
+                fromColumn = CanonicalStepDayBucketContributionsTable.bucketStartAt,
+            ).whereOrNull() ?: return emptyList()
 
-        return CanonicalStepDayBucketContributionsTable.selectAll()
+        return CanonicalStepDayBucketContributionsTable
+            .selectAll()
             .where(where and (CanonicalStepDayBucketContributionsTable.algorithmVersion eq algorithmVersion))
             .orderBy(CanonicalStepDayBucketContributionsTable.bucketStartAt to SortOrder.ASC)
             .map {
@@ -230,42 +245,47 @@ class CanonicalStepDerivationRepository : BaseMetricReadRepository() {
         filters: DailyReadFilters,
         algorithmVersion: Int,
     ): Pair<CanonicalDashboardStepsSummary, Map<Int, SourceMetadata>> {
-        val contributionWhere = dateConditions(
-            filters = filters,
-            sourceInstanceIdColumn = CanonicalStepDayBucketContributionsTable.sourceInstanceId,
-            dateColumn = CanonicalStepDayBucketContributionsTable.date,
-        ).whereOrNull() ?: return emptyDashboardStepSummary(filters.includeSource)
-        val sampleWhere = dateConditions(
-            filters = filters,
-            sourceInstanceIdColumn = CanonicalStepSamplesTable.sourceInstanceId,
-            dateColumn = CanonicalStepSamplesTable.date,
-        ).whereOrNull() ?: return emptyDashboardStepSummary(filters.includeSource)
+        val contributionWhere =
+            dateConditions(
+                filters = filters,
+                sourceInstanceIdColumn = CanonicalStepDayBucketContributionsTable.sourceInstanceId,
+                dateColumn = CanonicalStepDayBucketContributionsTable.date,
+            ).whereOrNull() ?: return emptyDashboardStepSummary(filters.includeSource)
+        val sampleWhere =
+            dateConditions(
+                filters = filters,
+                sourceInstanceIdColumn = CanonicalStepSamplesTable.sourceInstanceId,
+                dateColumn = CanonicalStepSamplesTable.date,
+            ).whereOrNull() ?: return emptyDashboardStepSummary(filters.includeSource)
 
         val valueExpression = CanonicalStepDayBucketContributionsTable.value.sum()
-        val stepsBySource = CanonicalStepDayBucketContributionsTable
-            .select(CanonicalStepDayBucketContributionsTable.sourceInstanceId, valueExpression)
-            .where(contributionWhere and (CanonicalStepDayBucketContributionsTable.algorithmVersion eq algorithmVersion))
-            .groupBy(CanonicalStepDayBucketContributionsTable.sourceInstanceId)
-            .associate {
-                it[CanonicalStepDayBucketContributionsTable.sourceInstanceId] to
-                    (it[valueExpression] ?: 0.0)
-            }
+        val stepsBySource =
+            CanonicalStepDayBucketContributionsTable
+                .select(CanonicalStepDayBucketContributionsTable.sourceInstanceId, valueExpression)
+                .where(contributionWhere and (CanonicalStepDayBucketContributionsTable.algorithmVersion eq algorithmVersion))
+                .groupBy(CanonicalStepDayBucketContributionsTable.sourceInstanceId)
+                .associate {
+                    it[CanonicalStepDayBucketContributionsTable.sourceInstanceId] to
+                        (it[valueExpression] ?: 0.0)
+                }
 
         val countExpression = CanonicalStepSamplesTable.stepSampleId.countDistinct()
-        val sampleCountsBySource = CanonicalStepSamplesTable
-            .select(CanonicalStepSamplesTable.sourceInstanceId, countExpression)
-            .where(sampleWhere and (CanonicalStepSamplesTable.algorithmVersion eq algorithmVersion))
-            .groupBy(CanonicalStepSamplesTable.sourceInstanceId)
-            .associate {
-                it[CanonicalStepSamplesTable.sourceInstanceId] to it[countExpression].toInt()
-            }
+        val sampleCountsBySource =
+            CanonicalStepSamplesTable
+                .select(CanonicalStepSamplesTable.sourceInstanceId, countExpression)
+                .where(sampleWhere and (CanonicalStepSamplesTable.algorithmVersion eq algorithmVersion))
+                .groupBy(CanonicalStepSamplesTable.sourceInstanceId)
+                .associate {
+                    it[CanonicalStepSamplesTable.sourceInstanceId] to it[countExpression].toInt()
+                }
 
         val sourceIds = stepsBySource.keys + sampleCountsBySource.keys
-        val summary = CanonicalDashboardStepsSummary(
-            steps = stepsBySource.values.sum().roundToInt(),
-            sampleCount = sampleCountsBySource.values.sum(),
-            sourceInstanceIds = sourceIds,
-        )
+        val summary =
+            CanonicalDashboardStepsSummary(
+                steps = stepsBySource.values.sum().roundToInt(),
+                sampleCount = sampleCountsBySource.values.sum(),
+                sourceInstanceIds = sourceIds,
+            )
         return summary to sourceMetadata(sourceIds, filters.includeSource)
     }
 
@@ -277,5 +297,4 @@ class CanonicalStepDerivationRepository : BaseMetricReadRepository() {
             sampleCount = 0,
             sourceInstanceIds = emptySet(),
         ) to sourceMetadata(emptySet(), includeSource)
-
 }

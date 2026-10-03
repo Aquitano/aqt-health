@@ -44,9 +44,9 @@ export function DateRangeForm({ fromDate, toDate }: DateRangeFormProps) {
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const from = String(form.get("fromDate") ?? fromDate);
-    const to = String(form.get("toDate") ?? toDate);
-    navigate(from, to);
+    const from = form.get("fromDate");
+    const to = form.get("toDate");
+    navigate(typeof from === "string" ? from : fromDate, typeof to === "string" ? to : toDate);
   }
 
   return (

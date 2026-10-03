@@ -35,15 +35,26 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
 
-      - name: Set up JDK 21
-        uses: actions/setup-java@v5
+      - name: Set up JDK 25
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
-          java-version: "21"
+          java-version: "25"
           cache: gradle
 
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
 
       - name: Run tests
-        run: ./gradlew check --continue
+        run: ./gradlew check generateOpenApi --continue
+      - name: Set up Bun for contract generation
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.2"
+
+      - name: Verify generated frontend contract
+        working-directory: frontend
+        run: |
+          bun install --frozen-lockfile
+          bun run generate:api
+          git diff --exit-code -- src/lib/generated/aqtHealthApiTypes.ts

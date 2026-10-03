@@ -136,4 +136,3 @@ data class BloodPressureRecord(
     override val recordStartAt: Instant = measuredAt
     override val recordEndAt: Instant? = null
 }
-

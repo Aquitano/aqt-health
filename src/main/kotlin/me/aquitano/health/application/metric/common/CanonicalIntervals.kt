@@ -21,18 +21,21 @@ fun <T> canonicalIntervalRows(
             intervals.pruneEndedAtOrBefore(row.startAt)
             intervals.isEmpty()
         }
-        val overlapping = activeBySource.asSequence()
-            .filter { (sourceInstanceId, _) -> sourceInstanceId != row.sourceInstanceId }
-            .flatMap { (_, intervalsByEnd) -> intervalsByEnd.values.asSequence().flatMap { it.asSequence() } }
-            .filter { it.startAt.isBefore(row.endAt) && row.startAt.isBefore(it.endAt) }
-            .toList()
+        val overlapping =
+            activeBySource
+                .asSequence()
+                .filter { (sourceInstanceId, _) -> sourceInstanceId != row.sourceInstanceId }
+                .flatMap { (_, intervalsByEnd) -> intervalsByEnd.values.asSequence().flatMap { it.asSequence() } }
+                .filter { it.startAt.isBefore(row.endAt) && row.startAt.isBefore(it.endAt) }
+                .toList()
         if (overlapping.isEmpty()) {
             selected.add(row)
             activeBySource.add(row)
         } else {
-            val candidateWinsAll = overlapping.all { existing ->
-                choosePreferred(existing, row) == row
-            }
+            val candidateWinsAll =
+                overlapping.all { existing ->
+                    choosePreferred(existing, row) == row
+                }
             if (candidateWinsAll) {
                 overlapping.forEach {
                     selected.remove(it)

@@ -16,22 +16,22 @@ import java.time.LocalDate
  * null (or nothing) for invalid input so the caller can keep collecting issues.
  */
 
-internal fun IngestionRecord.toNormalizedJsonObject(): JsonObject =
-    AppJson.encodeToJsonElement(IngestionRecord.serializer(), this).jsonObject
+internal fun IngestionRecord.toNormalizedJsonObject(): JsonObject = AppJson.encodeToJsonElement(IngestionRecord.serializer(), this).jsonObject
 
 internal fun normalizeProvider(
     value: String?,
-    issues: MutableList<ValidationIssue>
+    issues: MutableList<ValidationIssue>,
 ): String? {
-    val normalized = requiredNonBlank(value, "provider", issues)
-        ?.let(::normalizeProviderCode)
+    val normalized =
+        requiredNonBlank(value, "provider", issues)
+            ?.let(::normalizeProviderCode)
     if (normalized != null && !normalized.matches(Regex("[a-z0-9_]+"))) {
         issues.add(
             ValidationIssue(
                 field = "provider",
                 code = ValidationIssueCodes.InvalidFormat,
                 message = "must contain only lowercase letters, numbers, or underscores",
-            )
+            ),
         )
     }
     return normalized
@@ -40,7 +40,7 @@ internal fun normalizeProvider(
 internal fun requiredNonBlank(
     value: String?,
     field: String,
-    issues: MutableList<ValidationIssue>
+    issues: MutableList<ValidationIssue>,
 ): String? {
     if (value == null) {
         issues.add(ValidationIssue(field))
@@ -52,7 +52,7 @@ internal fun requiredNonBlank(
                 field = field,
                 code = ValidationIssueCodes.InvalidFormat,
                 message = "must not be blank",
-            )
+            ),
         )
         return null
     }
@@ -62,7 +62,7 @@ internal fun requiredNonBlank(
 internal fun optionalNonBlank(
     value: String?,
     field: String,
-    issues: MutableList<ValidationIssue>
+    issues: MutableList<ValidationIssue>,
 ): String? {
     if (value == null) return null
     if (value.isBlank()) {
@@ -71,7 +71,7 @@ internal fun optionalNonBlank(
                 field = field,
                 code = ValidationIssueCodes.InvalidFormat,
                 message = "must not be blank when present",
-            )
+            ),
         )
         return null
     }
@@ -81,7 +81,7 @@ internal fun optionalNonBlank(
 internal fun parseInstant(
     value: String?,
     field: String,
-    issues: MutableList<ValidationIssue>
+    issues: MutableList<ValidationIssue>,
 ): Instant? {
     if (value == null) {
         issues.add(ValidationIssue(field))
@@ -93,7 +93,7 @@ internal fun parseInstant(
                 field = field,
                 code = ValidationIssueCodes.InvalidFormat,
                 message = "must be an ISO-8601 instant",
-            )
+            ),
         )
         null
     }
@@ -102,7 +102,7 @@ internal fun parseInstant(
 internal fun parseDate(
     value: String?,
     field: String,
-    issues: MutableList<ValidationIssue>
+    issues: MutableList<ValidationIssue>,
 ): LocalDate? {
     if (value == null) {
         issues.add(ValidationIssue(field))
@@ -114,7 +114,7 @@ internal fun parseDate(
                 field = field,
                 code = ValidationIssueCodes.InvalidFormat,
                 message = "must be an ISO-8601 date",
-            )
+            ),
         )
         null
     }
@@ -123,7 +123,7 @@ internal fun parseDate(
 internal fun validateNonNegativeInt(
     value: Int?,
     field: String,
-    issues: MutableList<ValidationIssue>
+    issues: MutableList<ValidationIssue>,
 ) {
     if (value != null && value < 0) {
         issues.add(
@@ -131,7 +131,7 @@ internal fun validateNonNegativeInt(
                 field = field,
                 code = ValidationIssueCodes.OutOfRange,
                 message = "must be greater than or equal to 0",
-            )
+            ),
         )
     }
 }
@@ -139,7 +139,7 @@ internal fun validateNonNegativeInt(
 internal fun validateNonNegativeLong(
     value: Long?,
     field: String,
-    issues: MutableList<ValidationIssue>
+    issues: MutableList<ValidationIssue>,
 ) {
     if (value != null && value < 0) {
         issues.add(
@@ -147,7 +147,7 @@ internal fun validateNonNegativeLong(
                 field = field,
                 code = ValidationIssueCodes.OutOfRange,
                 message = "must be greater than or equal to 0",
-            )
+            ),
         )
     }
 }
@@ -155,7 +155,7 @@ internal fun validateNonNegativeLong(
 internal fun validateNonNegativeDouble(
     value: Double?,
     field: String,
-    issues: MutableList<ValidationIssue>
+    issues: MutableList<ValidationIssue>,
 ) {
     if (value != null && value < 0.0) {
         issues.add(
@@ -163,7 +163,7 @@ internal fun validateNonNegativeDouble(
                 field = field,
                 code = ValidationIssueCodes.OutOfRange,
                 message = "must be greater than or equal to 0",
-            )
+            ),
         )
     }
 }
@@ -171,7 +171,7 @@ internal fun validateNonNegativeDouble(
 internal fun validateOptionalHeartRate(
     value: Int?,
     field: String,
-    issues: MutableList<ValidationIssue>
+    issues: MutableList<ValidationIssue>,
 ) {
     if (value != null && value !in 25..250) {
         issues.add(
@@ -179,7 +179,7 @@ internal fun validateOptionalHeartRate(
                 field = field,
                 code = ValidationIssueCodes.OutOfRange,
                 message = "must be between 25 and 250",
-            )
+            ),
         )
     }
 }

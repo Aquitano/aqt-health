@@ -3,7 +3,7 @@
 # bun's runtime segfaults in containers (oven-sh/bun#37031, worker teardown).
 FROM node:22-alpine AS builder
 
-COPY --from=oven/bun:1-alpine /usr/local/bin/bun /usr/local/bin/
+COPY --from=oven/bun:1.4.2-alpine /usr/local/bin/bun /usr/local/bin/
 
 WORKDIR /app
 
@@ -33,6 +33,6 @@ ENV NODE_ENV=production \
     PORT=3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD wget -qO- http://localhost:3000/api/health || exit 1
+  CMD wget -qO- http://127.0.0.1:3000/api/health || exit 1
 
 ENTRYPOINT ["node", "server.js"]

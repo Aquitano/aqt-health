@@ -1,11 +1,11 @@
 package me.aquitano.health.infrastructure.database
 
-import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.api.dto.IngestionRecord
 import me.aquitano.health.api.dto.ScalarSample
 import me.aquitano.health.application.IngestionMappingService
 import me.aquitano.health.infrastructure.config.DatabaseConfig
 import me.aquitano.health.shared.AppJson
+import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.test.PostgresTestDatabase
 import org.flywaydb.core.Flyway
 import org.flywaydb.core.api.MigrationVersion
@@ -38,15 +38,16 @@ class LegacyScalarRecordMigrationTest : PostgresIntegrationTest() {
         )
 
         val mappingService = IngestionMappingService()
-        val samplesByMetricType = records.associate { row ->
-            val dto = AppJson.decodeFromString(IngestionRecord.serializer(), row.normalizedRecordJson)
-            val scalar = assertNotNull(dto as? ScalarSample, "record ${row.id} is not a scalar sample")
-            assertNotNull(
-                mappingService.mapRecord(dto),
-                "converted record ${row.id} (${scalar.metricType}) no longer maps",
-            )
-            scalar.metricType to (scalar to row)
-        }
+        val samplesByMetricType =
+            records.associate { row ->
+                val dto = AppJson.decodeFromString(IngestionRecord.serializer(), row.normalizedRecordJson)
+                val scalar = assertNotNull(dto as? ScalarSample, "record ${row.id} is not a scalar sample")
+                assertNotNull(
+                    mappingService.mapRecord(dto),
+                    "converted record ${row.id} (${scalar.metricType}) no longer maps",
+                )
+                scalar.metricType to (scalar to row)
+            }
 
         assertEquals(
             setOf("heart_rate", "hrv_rmssd", "weight", "muscle", "body_fat", "visceral_fat"),
@@ -105,8 +106,12 @@ class LegacyScalarRecordMigrationTest : PostgresIntegrationTest() {
         )
     }
 
-    private fun migrate(config: DatabaseConfig, target: MigrationVersion) {
-        Flyway.configure()
+    private fun migrate(
+        config: DatabaseConfig,
+        target: MigrationVersion,
+    ) {
+        Flyway
+            .configure()
             .dataSource(config.jdbcUrl, config.user, config.password)
             .locations("classpath:db/migration")
             .target(target)
@@ -204,7 +209,10 @@ class LegacyScalarRecordMigrationTest : PostgresIntegrationTest() {
             }
         }
 
-    private fun execute(config: DatabaseConfig, sql: String) {
+    private fun execute(
+        config: DatabaseConfig,
+        sql: String,
+    ) {
         PostgresTestDatabase.connection(config).use { connection ->
             connection.createStatement().use { statement ->
                 statement.execute(sql)

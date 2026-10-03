@@ -9,12 +9,8 @@ import me.aquitano.health.application.metric.common.meta
 import me.aquitano.health.application.metric.common.readFilters
 import me.aquitano.health.application.metric.common.sleepNightReadFilters
 import me.aquitano.health.application.metric.common.toResponse
-import me.aquitano.health.application.metric.sleep.repository.SleepRepository
-import me.aquitano.health.application.metric.sleep.repository.SleepSessionRow
 import me.aquitano.health.application.metric.sleep.repository.CanonicalSleepSessionDerivationRepository
-import me.aquitano.health.application.metric.sleep.repository.SleepNightRow
-import me.aquitano.health.application.metric.sleep.repository.SleepStageRow
-import me.aquitano.health.application.metric.common.repository.SourceMetadata
+import me.aquitano.health.application.metric.sleep.repository.SleepRepository
 import me.aquitano.health.infrastructure.database.suspendDbTransaction
 import org.jetbrains.exposed.v1.jdbc.Database
 import java.time.Instant
@@ -26,24 +22,27 @@ class SleepQueryService(
 ) {
     suspend fun listSleepSessions(params: QueryParams): SleepSessionsResponse =
         suspendDbTransaction(db = database) {
-            val filters = params.readFilters(
-                sortSpec = QueryParamSpecs.sortByStartAt,
-            )
+            val filters =
+                params.readFilters(
+                    sortSpec = QueryParamSpecs.sortByStartAt,
+                )
             val (sessions, sourceMetadata) =
                 canonicalSessionRepository.listCanonicalSleepSessions(filters)
-            val page = sessions.keysetPage(
-                limit = filters.limit,
-                sort = filters.sort,
-                order = filters.order,
-                sortValue = { it.startAt.toString() },
-                id = { it.id.toLong() },
-            )
+            val page =
+                sessions.keysetPage(
+                    limit = filters.limit,
+                    sort = filters.sort,
+                    order = filters.order,
+                    sortValue = { it.startAt.toString() },
+                    id = { it.id.toLong() },
+                )
             val stagesBySession =
                 canonicalSessionRepository.listRawStagesForSessions(page.items.map { it.id }.toSet())
             SleepSessionsResponse(
-                items = page.items.map { session ->
-                    session.toResponse(stagesBySession, sourceMetadata)
-                },
+                items =
+                    page.items.map { session ->
+                        session.toResponse(stagesBySession, sourceMetadata)
+                    },
                 meta = page.items.meta(filters, page.nextCursor),
             )
         }
@@ -57,17 +56,19 @@ class SleepQueryService(
             val filters = params.sleepNightReadFilters(now)
             val (nights, stagesBySession, sourceMetadata) =
                 sleepRepository.listCanonicalSleepNights(filters)
-            val page = nights.keysetPage(
-                limit = filters.limit,
-                sort = filters.sort,
-                order = filters.order,
-                sortValue = { it.date },
-                id = { it.id.toLong() },
-            )
+            val page =
+                nights.keysetPage(
+                    limit = filters.limit,
+                    sort = filters.sort,
+                    order = filters.order,
+                    sortValue = { it.date },
+                    id = { it.id.toLong() },
+                )
             SleepNightsResponse(
-                items = page.items.map { night ->
-                    night.toResponse(stagesBySession, sourceMetadata)
-                },
+                items =
+                    page.items.map { night ->
+                        night.toResponse(stagesBySession, sourceMetadata)
+                    },
                 meta = page.items.meta(filters, page.nextCursor),
             )
         }

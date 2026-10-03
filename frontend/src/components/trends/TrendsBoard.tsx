@@ -2,6 +2,7 @@
 
 import { ArrowDownRight, ArrowRight, ArrowUpRight } from "lucide-react";
 import { useState } from "react";
+import type { CustomPropertyStyle } from "@/lib/styles";
 import type { TrendChange, TrendStat } from "@/lib/trends";
 import { insightSentence } from "@/lib/trends";
 import { ValueSparkline } from "./ValueSparkline";
@@ -61,6 +62,7 @@ export function TrendsBoard({ stats }: TrendsBoardProps) {
       <div className={styles.cards}>
         {stats.map((stat) => {
           const active = stat.key === selected.key;
+          const accent: CustomPropertyStyle = { "--card-accent": stat.color };
           return (
             <button
               key={stat.key}
@@ -68,7 +70,7 @@ export function TrendsBoard({ stats }: TrendsBoardProps) {
               className={active ? styles.cardActive : styles.card}
               onClick={() => setSelectedKey(stat.key)}
               aria-pressed={active}
-              style={{ "--card-accent": stat.color } as React.CSSProperties}
+              style={accent}
             >
               <span className={styles.cardLabel}>{stat.label}</span>
               <span className={styles.cardValue}>

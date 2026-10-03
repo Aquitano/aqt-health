@@ -59,7 +59,10 @@ import org.koin.dsl.module
  * the shared HTTP client, and the startup bootstrap helpers. Seeds are the [database] and [config]
  * from the bootstrap context; every other module resolves the [Database] as a bean.
  */
-fun coreModule(database: Database, config: AppConfig) = module {
+fun coreModule(
+    database: Database,
+    config: AppConfig,
+) = module {
     single<Database> { database }
     single { UtcClock() }
     singleOf(::ApiKeyHasher)
@@ -99,181 +102,187 @@ fun coreModule(database: Database, config: AppConfig) = module {
  * Ingestion write path: raw-batch storage, metric write repositories, the derived-projection
  * rebuild machinery, and the services that turn a normalized batch into stored metrics.
  */
-fun ingestionModule() = module {
-    singleOf(::IngestionRepository)
-    singleOf(::IngestionMappingService)
+fun ingestionModule() =
+    module {
+        singleOf(::IngestionRepository)
+        singleOf(::IngestionMappingService)
 
-    // Metric write repositories
-    singleOf(::ActivitySummaryWriteRepository)
-    singleOf(::CardiovascularWriteRepository)
-    singleOf(::ScalarSampleWriteRepository)
-    singleOf(::SleepWriteRepository)
-    singleOf(::StepWriteRepository)
+        // Metric write repositories
+        singleOf(::ActivitySummaryWriteRepository)
+        singleOf(::CardiovascularWriteRepository)
+        singleOf(::ScalarSampleWriteRepository)
+        singleOf(::SleepWriteRepository)
+        singleOf(::StepWriteRepository)
 
-    // Derived-projection rebuild
-    singleOf(::PendingDerivedRebuildRepository)
-    singleOf(::ProjectionWipeRepository)
-    single { CanonicalStepDerivationService(get<CanonicalStepDerivationRepository>()) }
-    single {
-        DerivedRebuildModuleRegistry(derivedRebuildModules(canonicalStepService = get()))
+        // Derived-projection rebuild
+        singleOf(::PendingDerivedRebuildRepository)
+        singleOf(::ProjectionWipeRepository)
+        single { CanonicalStepDerivationService(get<CanonicalStepDerivationRepository>()) }
+        single {
+            DerivedRebuildModuleRegistry(derivedRebuildModules(canonicalStepService = get()))
+        }
+        singleOf(::PerDateDerivedRebuildExecutor) { bind<DerivedRebuildExecutor>() }
+        single {
+            PendingDerivedRebuildSweeper(
+                repository = get(),
+                derivedRebuildExecutor = get(),
+                clock = get(),
+            )
+        }
+
+        singleOf(::MetricWriteService)
+        singleOf(::IngestionService)
     }
-    singleOf(::PerDateDerivedRebuildExecutor) { bind<DerivedRebuildExecutor>() }
-    single {
-        PendingDerivedRebuildSweeper(
-            repository = get(),
-            derivedRebuildExecutor = get(),
-            clock = get(),
-        )
-    }
-
-    singleOf(::MetricWriteService)
-    singleOf(::IngestionService)
-}
 
 /**
  * Read side: read repositories, the health-day module registry, and the query services that back
  * the metric, structural, dashboard, and trend read routes.
  */
-fun metricsReadModule() = module {
-    // Read repositories
-    singleOf(::CanonicalActivitySummaryDerivationRepository)
-    singleOf(::CardiovascularRepository)
-    singleOf(::ScalarSampleReadRepository)
-    singleOf(::SleepRepository)
-    singleOf(::CanonicalStepDerivationRepository)
-    singleOf(::CanonicalSleepSessionDerivationRepository)
-    singleOf(::CanonicalSleepSummaryDerivationRepository)
+fun metricsReadModule() =
+    module {
+        // Read repositories
+        singleOf(::CanonicalActivitySummaryDerivationRepository)
+        singleOf(::CardiovascularRepository)
+        singleOf(::ScalarSampleReadRepository)
+        singleOf(::SleepRepository)
+        singleOf(::CanonicalStepDerivationRepository)
+        singleOf(::CanonicalSleepSessionDerivationRepository)
+        singleOf(::CanonicalSleepSummaryDerivationRepository)
 
-    single {
-        HealthDayModuleRegistry(
-            listOf(
-                StepsDayModule(get()),
-                HeartRateDayModule(get()),
-                WeightDayModule(get()),
-                SleepDayModule(get()),
+        single {
+            HealthDayModuleRegistry(
+                listOf(
+                    StepsDayModule(get()),
+                    HeartRateDayModule(get()),
+                    WeightDayModule(get()),
+                    SleepDayModule(get()),
+                ),
             )
-        )
-    }
+        }
 
-    // Query services
-    singleOf(::ActivityQueryService)
-    singleOf(::CardiovascularQueryService)
-    singleOf(::ScalarMetricQueryService)
-    singleOf(::SleepQueryService)
-    singleOf(::StepQueryService)
-    singleOf(::DashboardQueryService)
-    singleOf(::SleepSummaryReadService)
-    singleOf(::HealthDayQueryService)
-    singleOf(::TrendQueryService)
-}
+        // Query services
+        singleOf(::ActivityQueryService)
+        singleOf(::CardiovascularQueryService)
+        singleOf(::ScalarMetricQueryService)
+        singleOf(::SleepQueryService)
+        singleOf(::StepQueryService)
+        singleOf(::DashboardQueryService)
+        singleOf(::SleepSummaryReadService)
+        singleOf(::HealthDayQueryService)
+        singleOf(::TrendQueryService)
+    }
 
 /**
  * External health providers: OAuth/sync persistence, provider HTTP clients, the shared sync
  * pipeline, and the provider-facing discovery, status, workflow, and scheduling services.
  */
-fun providersModule(config: AppConfig) = module {
-    // OAuth + sync persistence
-    singleOf(::ProviderOAuthRepository)
-    singleOf(::ProviderSyncJobRepository)
-    singleOf(::ProviderSyncIdempotencyRepository)
-    singleOf(::ScheduledSyncRepository)
-    singleOf(::ScheduledSyncRunGuard)
+fun providersModule(config: AppConfig) =
+    module {
+        // OAuth + sync persistence
+        singleOf(::ProviderOAuthRepository)
+        singleOf(::ProviderSyncJobRepository)
+        singleOf(::ProviderSyncIdempotencyRepository)
+        singleOf(::ScheduledSyncRepository)
+        singleOf(::ScheduledSyncRunGuard)
 
-    // External provider HTTP clients
-    single<GoogleHealthOAuthClient> {
-        KtorGoogleHealthOAuthClient(get(), config.googleHealth)
-    }
-    single {
-        GeneratedGoogleHealthClient(
-            oauthClient = get(),
-            dataPointsServiceFactory = GoogleHealthDataPointsServiceFactory(
-                config.googleHealth.apiBaseUrl
-            ),
-        )
-    }
-    single { KtorWithingsClient(get(), config.withings) }
-
-    // Provider sync pipeline. One store and one pipeline serve every provider; the store picks
-    // the token cipher per provider code from the configured encryption keys.
-    single<ProviderSyncStore> {
-        OAuthProviderSyncStore(
-            repository = get(),
-            ingestionService = get(),
-            tokenEncryptionKeys = mapOf(
-                GOOGLE_HEALTH_PROVIDER_CODE to config.googleHealth.tokenEncryptionKey,
-                WITHINGS_PROVIDER_CODE to config.withings.tokenEncryptionKey,
-            ),
-        )
-    }
-    single { ProviderSyncPipeline(store = get()) }
-
-    // Providers
-    single {
-        GoogleHealthProvider(
-            config = config.googleHealth,
-            repository = get(),
-            client = get<GeneratedGoogleHealthClient>(),
-            normalizer = GoogleHealthNormalizer(),
-            syncPipeline = get(),
-        )
-    }
-    single {
-        WithingsProvider(
-            config = config.withings,
-            repository = get(),
-            client = get<KtorWithingsClient>(),
-            normalizer = WithingsNormalizer(),
-            syncPipeline = get(),
-        )
-    }
-    single {
-        HealthProviderRegistry(
-            listOf(
-                get<GoogleHealthProvider>(),
-                get<WithingsProvider>(),
+        // External provider HTTP clients
+        single<GoogleHealthOAuthClient> {
+            KtorGoogleHealthOAuthClient(get(), config.googleHealth)
+        }
+        single {
+            GeneratedGoogleHealthClient(
+                oauthClient = get(),
+                dataPointsServiceFactory =
+                    GoogleHealthDataPointsServiceFactory(
+                        config.googleHealth.apiBaseUrl,
+                    ),
             )
-        )
-    }
+        }
+        single { KtorWithingsClient(get(), config.withings) }
 
-    // Provider-facing services
-    singleOf(::ProviderStatusService)
-    singleOf(::ProviderDiscoveryService)
-    singleOf(::ProviderWorkflowService)
-    single {
-        ProviderSyncJobService(
-            providerRegistry = get(),
-            workflowService = get(),
-            repository = get(),
-            clock = get(),
-        )
+        // Provider sync pipeline. One store and one pipeline serve every provider; the store picks
+        // the token cipher per provider code from the configured encryption keys.
+        single<ProviderSyncStore> {
+            OAuthProviderSyncStore(
+                repository = get(),
+                ingestionService = get(),
+                tokenEncryptionKeys =
+                    mapOf(
+                        GOOGLE_HEALTH_PROVIDER_CODE to config.googleHealth.tokenEncryptionKey,
+                        WITHINGS_PROVIDER_CODE to config.withings.tokenEncryptionKey,
+                    ),
+            )
+        }
+        single { ProviderSyncPipeline(store = get()) }
+
+        // Providers
+        single {
+            GoogleHealthProvider(
+                config = config.googleHealth,
+                repository = get(),
+                client = get<GeneratedGoogleHealthClient>(),
+                normalizer = GoogleHealthNormalizer(),
+                syncPipeline = get(),
+            )
+        }
+        single {
+            WithingsProvider(
+                config = config.withings,
+                repository = get(),
+                client = get<KtorWithingsClient>(),
+                normalizer = WithingsNormalizer(),
+                syncPipeline = get(),
+            )
+        }
+        single {
+            HealthProviderRegistry(
+                listOf(
+                    get<GoogleHealthProvider>(),
+                    get<WithingsProvider>(),
+                ),
+            )
+        }
+
+        // Provider-facing services
+        singleOf(::ProviderStatusService)
+        singleOf(::ProviderDiscoveryService)
+        singleOf(::ProviderWorkflowService)
+        single {
+            ProviderSyncJobService(
+                providerRegistry = get(),
+                workflowService = get(),
+                repository = get(),
+                clock = get(),
+            )
+        }
+        singleOf(::ScheduledProviderSyncService)
+        single {
+            ScheduledProviderSyncScheduler(
+                service = get(),
+                clock = get(),
+            )
+        }
     }
-    singleOf(::ScheduledProviderSyncService)
-    single {
-        ScheduledProviderSyncScheduler(
-            service = get(),
-            clock = get(),
-        )
-    }
-}
 
 /**
  * Replay and admin: ingestion-batch inspection plus the projection/derived replay job runner.
  */
-fun adminReplayModule() = module {
-    singleOf(::ReplayJobRepository)
-    singleOf(::AdminService)
-    single {
-        ReplayService(
-            database = get(),
-            ingestionRepository = get(),
-            mappingService = get(),
-            metricWriteService = get(),
-            derivedRebuildExecutor = get(),
-            derivedRebuildRegistry = get(),
-            pendingDerivedRebuildRepository = get(),
-            replayJobRepository = get(),
-            projectionWipeRepository = get(),
-            clock = get(),
-        )
+fun adminReplayModule() =
+    module {
+        singleOf(::ReplayJobRepository)
+        singleOf(::AdminService)
+        single {
+            ReplayService(
+                database = get(),
+                ingestionRepository = get(),
+                mappingService = get(),
+                metricWriteService = get(),
+                derivedRebuildExecutor = get(),
+                derivedRebuildRegistry = get(),
+                pendingDerivedRebuildRepository = get(),
+                replayJobRepository = get(),
+                projectionWipeRepository = get(),
+                clock = get(),
+            )
+        }
     }
-}

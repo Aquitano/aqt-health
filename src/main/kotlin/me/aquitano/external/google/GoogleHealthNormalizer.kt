@@ -3,44 +3,46 @@ package me.aquitano.external.google
 import kotlinx.serialization.json.*
 import me.aquitano.health.api.dto.*
 import me.aquitano.health.application.providersync.NormalizedProviderBatch
+import me.aquitano.health.domain.BodyMetricTypes
+import me.aquitano.health.domain.ScalarMetricTypes
 import me.aquitano.health.shared.AppJson
 import me.aquitano.health.shared.doubleOrNull
 import me.aquitano.health.shared.longOrNull
 import me.aquitano.health.shared.objOrNull
 import me.aquitano.health.shared.stringOrNull
-import me.aquitano.health.domain.BodyMetricTypes
-import me.aquitano.health.domain.ScalarMetricTypes
 import java.security.MessageDigest
 import java.util.*
 
 class GoogleHealthNormalizer {
     fun normalize(fetchResult: GoogleHealthFetchResult): NormalizedProviderBatch {
-        val records = fetchResult.dataPoints.mapNotNull {
-            normalizeDataPoint(
-                fetchResult.dataType,
-                it
-            )
-        }
-        val sourcePayload = buildJsonObject {
-            put("dataType", fetchResult.dataType)
-            put(
-                "pages",
-                JsonArray(
-                    fetchResult.pages.map {
-                        buildJsonObject {
-                            put("pageIndex", it.pageIndex)
-                            put("payload", it.payload)
-                        }
-                    }
+        val records =
+            fetchResult.dataPoints.mapNotNull {
+                normalizeDataPoint(
+                    fetchResult.dataType,
+                    it,
                 )
-            )
-        }
+            }
+        val sourcePayload =
+            buildJsonObject {
+                put("dataType", fetchResult.dataType)
+                put(
+                    "pages",
+                    JsonArray(
+                        fetchResult.pages.map {
+                            buildJsonObject {
+                                put("pageIndex", it.pageIndex)
+                                put("payload", it.payload)
+                            }
+                        },
+                    ),
+                )
+            }
         return NormalizedProviderBatch(sourcePayload, records)
     }
 
     private fun normalizeDataPoint(
         dataType: String,
-        dataPoint: JsonObject
+        dataPoint: JsonObject,
     ): IngestionRecord? {
         val point = (dataPoint["dataPoint"] as? JsonObject) ?: dataPoint
         return when (dataType) {
@@ -55,7 +57,7 @@ class GoogleHealthNormalizer {
 
     private fun normalizeSteps(
         dataType: String,
-        point: JsonObject
+        point: JsonObject,
     ): StepInterval? {
         val steps = point.objOrNull("steps") ?: return null
         val interval = steps.objOrNull("interval") ?: return null
@@ -64,82 +66,90 @@ class GoogleHealthNormalizer {
         val count = steps.longOrNull("count") ?: return null
         if (count <= 0) return null
         return StepInterval(
-            providerRecordId = providerRecordId(
-                dataType,
-                point,
-                startAt,
-                endAt
-            ),
+            providerRecordId =
+                providerRecordId(
+                    dataType,
+                    point,
+                    startAt,
+                    endAt,
+                ),
             startAt = startAt,
             endAt = endAt,
-            steps = count.toInt()
+            steps = count.toInt(),
         )
     }
 
     private fun normalizeSleep(
         dataType: String,
-        point: JsonObject
+        point: JsonObject,
     ): SleepSession? {
         val sleep = point.objOrNull("sleep") ?: return null
         val interval = sleep.objOrNull("interval") ?: return null
         val startAt = interval.stringOrNull("startTime") ?: return null
         val endAt = interval.stringOrNull("endTime") ?: return null
-        val stages = sleep["stages"]?.jsonArray?.mapNotNull { element ->
-            val stage = element as? JsonObject ?: return@mapNotNull null
-            val mapped =
-                mapSleepStage(stage.stringOrNull("type")) ?: return@mapNotNull null
-            val stageStart = stage.stringOrNull("startTime") ?: return@mapNotNull null
-            val stageEnd = stage.stringOrNull("endTime") ?: return@mapNotNull null
-            SleepStage(
-                stage = mapped,
-                startAt = stageStart,
-                endAt = stageEnd
-            )
-        }.orEmpty()
+        val stages =
+            sleep["stages"]
+                ?.jsonArray
+                ?.mapNotNull { element ->
+                    val stage = element as? JsonObject ?: return@mapNotNull null
+                    val mapped =
+                        mapSleepStage(stage.stringOrNull("type")) ?: return@mapNotNull null
+                    val stageStart = stage.stringOrNull("startTime") ?: return@mapNotNull null
+                    val stageEnd = stage.stringOrNull("endTime") ?: return@mapNotNull null
+                    SleepStage(
+                        stage = mapped,
+                        startAt = stageStart,
+                        endAt = stageEnd,
+                    )
+                }.orEmpty()
 
         return SleepSession(
-            providerRecordId = providerRecordId(
-                dataType,
-                point,
-                startAt,
-                endAt
-            ),
+            providerRecordId =
+                providerRecordId(
+                    dataType,
+                    point,
+                    startAt,
+                    endAt,
+                ),
             startAt = startAt,
             endAt = endAt,
-            stages = stages
+            stages = stages,
         )
     }
 
     private fun normalizeHeartRate(
         dataType: String,
-        point: JsonObject
+        point: JsonObject,
     ): ScalarSample? {
         val heartRate =
             point.objOrNull("heartRate") ?: point.objOrNull("heart_rate") ?: return null
         val sampleTime = heartRate.objOrNull("sampleTime") ?: return null
         val measuredAt = sampleTime.stringOrNull("physicalTime") ?: return null
-        val bpm = heartRate.longOrNull("beatsPerMinute") ?: heartRate.longOrNull("bpm")
-        ?: return null
+        val bpm =
+            heartRate.longOrNull("beatsPerMinute") ?: heartRate.longOrNull("bpm")
+                ?: return null
         if (bpm !in 25..250) return null
         return ScalarSample(
-            providerRecordId = providerRecordId(
-                dataType,
-                point,
-                measuredAt,
-                null
-            ),
+            providerRecordId =
+                providerRecordId(
+                    dataType,
+                    point,
+                    measuredAt,
+                    null,
+                ),
             measuredAt = measuredAt,
             metricType = ScalarMetricTypes.HEART_RATE,
             value = bpm.toDouble(),
-            context = mapHeartRateContext(
-                heartRate.objOrNull("metadata")?.stringOrNull("motionContext")
-            )
+            context =
+                mapHeartRateContext(
+                    heartRate.objOrNull("metadata")?.stringOrNull("motionContext"),
+                ),
         )
     }
 
     private fun normalizeWeight(
         dataType: String,
-        point: JsonObject
+        point: JsonObject,
     ): ScalarSample? {
         val weight = point.objOrNull("weight") ?: return null
         val sampleTime = weight.objOrNull("sampleTime") ?: return null
@@ -147,12 +157,13 @@ class GoogleHealthNormalizer {
         val grams = weight.doubleOrNull("weightGrams") ?: return null
         if (grams <= 0.0) return null
         return ScalarSample(
-            providerRecordId = providerRecordId(
-                dataType,
-                point,
-                measuredAt,
-                null
-            ),
+            providerRecordId =
+                providerRecordId(
+                    dataType,
+                    point,
+                    measuredAt,
+                    null,
+                ),
             measuredAt = measuredAt,
             metricType = BodyMetricTypes.WEIGHT,
             value = grams / 1000.0,
@@ -161,7 +172,7 @@ class GoogleHealthNormalizer {
 
     private fun normalizeBodyFat(
         dataType: String,
-        point: JsonObject
+        point: JsonObject,
     ): ScalarSample? {
         val bodyFat =
             point.objOrNull("bodyFat") ?: point.objOrNull("body_fat") ?: return null
@@ -170,12 +181,13 @@ class GoogleHealthNormalizer {
         val percentage = bodyFat.doubleOrNull("percentage") ?: return null
         if (percentage !in 0.0..100.0) return null
         return ScalarSample(
-            providerRecordId = providerRecordId(
-                dataType,
-                point,
-                measuredAt,
-                null
-            ),
+            providerRecordId =
+                providerRecordId(
+                    dataType,
+                    point,
+                    measuredAt,
+                    null,
+                ),
             measuredAt = measuredAt,
             metricType = BodyMetricTypes.BODY_FAT,
             value = percentage,
@@ -210,8 +222,10 @@ class GoogleHealthNormalizer {
         }
 
     private fun JsonObject.sha256(): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-            .digest(AppJson.encodeToString(this).toByteArray(Charsets.UTF_8))
+        val digest =
+            MessageDigest
+                .getInstance("SHA-256")
+                .digest(AppJson.encodeToString(this).toByteArray(Charsets.UTF_8))
         return HexFormat.of().formatHex(digest)
     }
 }

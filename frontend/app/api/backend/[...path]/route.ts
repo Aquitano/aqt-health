@@ -1,11 +1,8 @@
 import { NextResponse } from "next/server";
 import { aqtHealthClient, toProviderCode } from "@/lib/aqtHealthClient";
 import type { ProviderCode } from "@/lib/aqtHealthClient";
-import type {
-  ApiResult,
-  ProviderSyncRequest,
-  ScheduledSyncConfigUpdateRequest,
-} from "@/lib/types";
+import type { ApiResult } from "@/lib/types";
+import { readProviderSyncRequest, readScheduledSyncConfigUpdate } from "@/lib/syncRequests";
 
 // Single server-side proxy for the browser-triggered provider actions. It keeps
 // AQT_HEALTH_API_KEY out of the client and only forwards the allowlisted paths below.
@@ -43,8 +40,9 @@ const routes: ProxyRoute[] = [
     pattern: /^providers\/([^/]+)\/sync-jobs$/,
     successStatus: 202,
     handle: async (providerCode, _rest, request) => {
-      const body = await readBody(request);
-      return aqtHealthClient.startProviderSyncJob(providerCode, normalizeSyncPayload(body));
+      const body = await readProviderSyncRequest(request);
+      if (!body.ok) return body;
+      return aqtHealthClient.startProviderSyncJob(providerCode, body.data);
     },
   },
   {
@@ -74,11 +72,12 @@ const routes: ProxyRoute[] = [
     method: "PUT",
     pattern: /^providers\/([^/]+)\/accounts\/([^/]+)\/scheduled-sync$/,
     handle: async (providerCode, [providerInstanceId], request) => {
-      const body = await readBody(request);
+      const body = await readScheduledSyncConfigUpdate(request);
+      if (!body.ok) return body;
       return aqtHealthClient.updateScheduledSyncConfig(
         providerCode,
         providerInstanceId,
-        normalizeScheduledSyncPayload(body),
+        body.data,
       );
     },
   },
@@ -137,15 +136,10 @@ async function dispatch(
       return proxyError(404, `Unknown provider '${match[1]}'.`);
     }
 
-    try {
-      const result = await route.handle(providerCode, match.slice(2), request);
-      return NextResponse.json(result, {
-        status: result.ok ? route.successStatus ?? 200 : result.status ?? 500,
-      });
-    } catch (error) {
-      if (error instanceof InvalidPayloadError) return proxyError(400, error.message);
-      throw error;
-    }
+    const result = await route.handle(providerCode, match.slice(2), request);
+    return NextResponse.json(result, {
+      status: result.ok ? route.successStatus ?? 200 : result.status ?? 500,
+    });
   }
 
   return proxyError(404, "Unknown backend proxy path.");
@@ -165,72 +159,4 @@ export function POST(request: Request, context: RouteContext) {
 
 export function PUT(request: Request, context: RouteContext) {
   return dispatch("PUT", request, context);
-}
-
-class InvalidPayloadError extends Error {}
-
-async function readBody(request: Request): Promise<Record<string, unknown>> {
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    throw new InvalidPayloadError("Request body must be valid JSON.");
-  }
-  if (typeof body !== "object" || body === null || Array.isArray(body)) {
-    throw new InvalidPayloadError("Request body must be a JSON object.");
-  }
-  return body as Record<string, unknown>;
-}
-
-function normalizeSyncPayload(body: Record<string, unknown>): ProviderSyncRequest {
-  return {
-    from: nonEmpty(body.from, "from"),
-    to: nonEmpty(body.to, "to"),
-    dataTypes: dataTypes(body.dataTypes),
-    pageSize: positiveInteger(body.pageSize, "pageSize"),
-  };
-}
-
-function normalizeScheduledSyncPayload(
-  body: Record<string, unknown>,
-): ScheduledSyncConfigUpdateRequest {
-  if (body.enabled != null && typeof body.enabled !== "boolean") {
-    throw new InvalidPayloadError("enabled must be a boolean.");
-  }
-  const selectedDataTypes = dataTypes(body.dataTypes);
-  if (Array.isArray(body.dataTypes) && selectedDataTypes === undefined) {
-    throw new InvalidPayloadError("dataTypes must include at least one data type.");
-  }
-  return {
-    enabled: body.enabled ?? undefined,
-    dataTypes: selectedDataTypes,
-    cadenceMinutes: positiveInteger(body.cadenceMinutes, "cadenceMinutes"),
-    lookbackDays: positiveInteger(body.lookbackDays, "lookbackDays"),
-  };
-}
-
-function dataTypes(value: unknown): string[] | undefined {
-  if (value == null) return undefined;
-  if (
-    !Array.isArray(value) ||
-    !value.every((item): item is string => typeof item === "string")
-  ) {
-    throw new InvalidPayloadError("dataTypes must be an array of strings.");
-  }
-  const items = value.map((item) => item.trim()).filter(Boolean);
-  return items.length ? items : undefined;
-}
-
-function nonEmpty(value: unknown, field: string): string | undefined {
-  if (value == null) return undefined;
-  if (typeof value !== "string") throw new InvalidPayloadError(`${field} must be a string.`);
-  return value.trim() || undefined;
-}
-
-function positiveInteger(value: unknown, field: string): number | undefined {
-  if (value == null) return undefined;
-  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
-    throw new InvalidPayloadError(`${field} must be a positive integer.`);
-  }
-  return value;
 }

@@ -9,5 +9,4 @@ import java.util.Locale
  * stored in `sources.code`, `provider_ranks`, and the sync tables uses underscores. Every boundary
  * that turns a caller-supplied or descriptor code into a stored one goes through this.
  */
-fun normalizeProviderCode(code: String): String =
-    code.trim().lowercase(Locale.US).replace('-', '_')
+fun normalizeProviderCode(code: String): String = code.trim().lowercase(Locale.US).replace('-', '_')

@@ -2,9 +2,9 @@ package me.aquitano.health.application.metric.sleep.repository
 
 import me.aquitano.health.application.metric.common.keysetFetchLimit
 import me.aquitano.health.application.metric.common.repository.*
-import me.aquitano.health.infrastructure.database.tables.*
 import me.aquitano.health.application.metric.common.repository.BaseMetricReadRepository
 import me.aquitano.health.application.metric.common.repository.LocalDayOf
+import me.aquitano.health.infrastructure.database.tables.*
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.jdbc.*
@@ -31,29 +31,30 @@ class SleepRepository : BaseMetricReadRepository() {
             CanonicalSleepSessionsTable.id,
         )?.let { conditions.add(it) }
 
-        val nights = CanonicalSleepSessionsTable
-            .innerJoin(SleepSessionsTable)
-            .select(SleepSessionsTable.columns + nightDate)
-            .where { combineConditions(conditions) }
-            .orderBy(
-                nightDate to filters.sortOrder(),
-                CanonicalSleepSessionsTable.id to filters.sortOrder(),
-            )
-            .limit(keysetFetchLimit(filters.limit))
-            .map {
-                val session = toSleepSessionRow(it)
-                SleepNightRow(
-                    id = session.id,
-                    date = it[nightDate].toString(),
-                    timezone = filters.timezone.id,
-                    session = session,
-                )
-            }
+        val nights =
+            CanonicalSleepSessionsTable
+                .innerJoin(SleepSessionsTable)
+                .select(SleepSessionsTable.columns + nightDate)
+                .where { combineConditions(conditions) }
+                .orderBy(
+                    nightDate to filters.sortOrder(),
+                    CanonicalSleepSessionsTable.id to filters.sortOrder(),
+                ).limit(keysetFetchLimit(filters.limit))
+                .map {
+                    val session = toSleepSessionRow(it)
+                    SleepNightRow(
+                        id = session.id,
+                        date = it[nightDate].toString(),
+                        timezone = filters.timezone.id,
+                        session = session,
+                    )
+                }
         val stagesBySession = sleepStagesBySession(nights.map { it.session.id })
-        val metadata = sourceMetadata(
-            nights.map { it.session.sourceInstanceId }.toSet(),
-            filters.includeSource
-        )
+        val metadata =
+            sourceMetadata(
+                nights.map { it.session.sourceInstanceId }.toSet(),
+                filters.includeSource,
+            )
         return Triple(nights, stagesBySession, metadata)
     }
 
@@ -67,7 +68,8 @@ class SleepRepository : BaseMetricReadRepository() {
 
     private fun sleepStagesBySession(sessionIds: List<Int>): Map<Int, List<SleepStageRow>> {
         if (sessionIds.isEmpty()) return emptyMap()
-        return SleepStagesTable.selectAll()
+        return SleepStagesTable
+            .selectAll()
             .where { SleepStagesTable.sleepSessionId inList sessionIds }
             .orderBy(SleepStagesTable.startAt to SortOrder.ASC)
             .groupBy(

@@ -9,7 +9,10 @@ import java.time.Instant
 import java.time.LocalDate
 
 interface DerivedRebuildExecutor {
-    suspend fun rebuild(requests: List<DerivedRebuildRequest>, computedAt: Instant)
+    suspend fun rebuild(
+        requests: List<DerivedRebuildRequest>,
+        computedAt: Instant,
+    )
 }
 
 data class DerivedRebuildRequest(
@@ -20,12 +23,21 @@ data class DerivedRebuildRequest(
 }
 
 fun interface DerivedRebuildAction {
-    suspend fun rebuild(database: Database, sourceInstanceIds: Set<Int>, dates: Set<LocalDate>, computedAt: Instant)
+    suspend fun rebuild(
+        database: Database,
+        sourceInstanceIds: Set<Int>,
+        dates: Set<LocalDate>,
+        computedAt: Instant,
+    )
 }
 
 /** Maps one raw record's time span to the dates whose derived data it invalidates. */
 fun interface AffectedDatesResolver {
-    fun affectedDates(recordType: String, startAt: Instant, endAt: Instant?): Set<LocalDate>
+    fun affectedDates(
+        recordType: String,
+        startAt: Instant,
+        endAt: Instant?,
+    ): Set<LocalDate>
 }
 
 class DerivedRebuildModule(
@@ -38,7 +50,9 @@ class DerivedRebuildModule(
  * Ordered registry of derived rebuilds, mirroring HealthDayModuleRegistry. Every DerivedKind
  * must be covered so a new kind cannot silently skip its rebuild.
  */
-class DerivedRebuildModuleRegistry(val modules: List<DerivedRebuildModule>) {
+class DerivedRebuildModuleRegistry(
+    val modules: List<DerivedRebuildModule>,
+) {
     init {
         val kinds = modules.map { it.kind }
         require(kinds.size == kinds.toSet().size) {
@@ -52,12 +66,18 @@ class DerivedRebuildModuleRegistry(val modules: List<DerivedRebuildModule>) {
      * The single record-to-rebuild-dates mapping shared by the ingestion write path and replay,
      * so a new derived kind cannot be wired into one and silently skipped by the other.
      */
-    fun affectedDatesFor(recordType: String, startAt: Instant, endAt: Instant?): Map<DerivedKind, Set<LocalDate>> =
-        modules.mapNotNull { module ->
-            module.affectedDates.affectedDates(recordType, startAt, endAt)
-                .takeIf { it.isNotEmpty() }
-                ?.let { module.kind to it }
-        }.toMap()
+    fun affectedDatesFor(
+        recordType: String,
+        startAt: Instant,
+        endAt: Instant?,
+    ): Map<DerivedKind, Set<LocalDate>> =
+        modules
+            .mapNotNull { module ->
+                module.affectedDates
+                    .affectedDates(recordType, startAt, endAt)
+                    .takeIf { it.isNotEmpty() }
+                    ?.let { module.kind to it }
+            }.toMap()
 }
 
 /** The canonical post-ingestion rebuild wiring; order is the execution order. */
@@ -74,7 +94,7 @@ fun derivedRebuildModules(canonicalStepService: CanonicalStepDerivationService):
                 }
             },
             action = { database, _, dates, computedAt -> canonicalStepService.recompute(database, dates, computedAt) },
-        )
+        ),
     )
 
 internal fun affectedUtcDates(
@@ -95,7 +115,10 @@ class PerDateDerivedRebuildExecutor(
     private val database: Database,
     private val registry: DerivedRebuildModuleRegistry,
 ) : DerivedRebuildExecutor {
-    override suspend fun rebuild(requests: List<DerivedRebuildRequest>, computedAt: Instant) {
+    override suspend fun rebuild(
+        requests: List<DerivedRebuildRequest>,
+        computedAt: Instant,
+    ) {
         registry.modules.forEach { module ->
             val sourcesByDate = mutableMapOf<LocalDate, MutableSet<Int>>()
             requests.forEach { request ->

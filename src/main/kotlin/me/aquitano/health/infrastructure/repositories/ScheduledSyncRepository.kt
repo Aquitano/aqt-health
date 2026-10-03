@@ -1,11 +1,11 @@
 package me.aquitano.health.infrastructure.repositories
 
+import me.aquitano.health.infrastructure.database.suspendDbTransaction
 import me.aquitano.health.infrastructure.database.tables.ProviderScheduledSyncCheckpointsTable
 import me.aquitano.health.infrastructure.database.tables.ProviderScheduledSyncConfigsTable
 import me.aquitano.health.infrastructure.database.toDbTimestamp
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.*
-import me.aquitano.health.infrastructure.database.suspendDbTransaction
 import java.time.Instant
 
 data class ScheduledSyncConfigRecord(
@@ -38,12 +38,13 @@ data class ScheduledSyncCheckpointRecord(
     val updatedAt: Instant,
 )
 
-class ScheduledSyncRepository(private val database: Database) {
+class ScheduledSyncRepository(
+    private val database: Database,
+) {
     suspend fun getConfig(
         providerCode: String,
         providerInstanceId: String,
-    ): ScheduledSyncConfigRecord? =
-        suspendDbTransaction(db = database) { configBy(providerCode, providerInstanceId) }
+    ): ScheduledSyncConfigRecord? = suspendDbTransaction(db = database) { configBy(providerCode, providerInstanceId) }
 
     suspend fun upsertConfig(
         providerCode: String,
@@ -62,15 +63,16 @@ class ScheduledSyncRepository(private val database: Database) {
             ProviderScheduledSyncConfigsTable.upsert(
                 ProviderScheduledSyncConfigsTable.providerCode,
                 ProviderScheduledSyncConfigsTable.providerInstanceId,
-                onUpdateExclude = listOf(
-                    ProviderScheduledSyncConfigsTable.lastSuccessfulFrom,
-                    ProviderScheduledSyncConfigsTable.lastSuccessfulTo,
-                    ProviderScheduledSyncConfigsTable.lastSuccessAt,
-                    ProviderScheduledSyncConfigsTable.lastAttemptedAt,
-                    ProviderScheduledSyncConfigsTable.failureCount,
-                    ProviderScheduledSyncConfigsTable.lastErrorMessage,
-                    ProviderScheduledSyncConfigsTable.createdAt,
-                ),
+                onUpdateExclude =
+                    listOf(
+                        ProviderScheduledSyncConfigsTable.lastSuccessfulFrom,
+                        ProviderScheduledSyncConfigsTable.lastSuccessfulTo,
+                        ProviderScheduledSyncConfigsTable.lastSuccessAt,
+                        ProviderScheduledSyncConfigsTable.lastAttemptedAt,
+                        ProviderScheduledSyncConfigsTable.failureCount,
+                        ProviderScheduledSyncConfigsTable.lastErrorMessage,
+                        ProviderScheduledSyncConfigsTable.createdAt,
+                    ),
             ) {
                 it[this.providerCode] = providerCode
                 it[this.providerInstanceId] = providerInstanceId
@@ -88,8 +90,9 @@ class ScheduledSyncRepository(private val database: Database) {
                 it[createdAt] = nowTimestamp
                 it[updatedAt] = nowTimestamp
             }
-            val config = configBy(providerCode, providerInstanceId)
-                ?: error("Scheduled sync config was not persisted")
+            val config =
+                configBy(providerCode, providerInstanceId)
+                    ?: error("Scheduled sync config was not persisted")
             syncCheckpointRows(config.id, dataTypes, now)
             config
         }
@@ -103,9 +106,8 @@ class ScheduledSyncRepository(private val database: Database) {
                 .selectAll()
                 .where {
                     (ProviderScheduledSyncConfigsTable.enabled eq true) and
-                            (ProviderScheduledSyncConfigsTable.nextRunAt lessEq now.toDbTimestamp())
-                }
-                .orderBy(ProviderScheduledSyncConfigsTable.nextRunAt to SortOrder.ASC)
+                        (ProviderScheduledSyncConfigsTable.nextRunAt lessEq now.toDbTimestamp())
+                }.orderBy(ProviderScheduledSyncConfigsTable.nextRunAt to SortOrder.ASC)
                 .limit(limit)
                 .map { it.toConfig() }
         }
@@ -119,7 +121,10 @@ class ScheduledSyncRepository(private val database: Database) {
                 .map { it.toCheckpoint() }
         }
 
-    suspend fun markAttempt(configId: Int, attemptedAt: Instant) {
+    suspend fun markAttempt(
+        configId: Int,
+        attemptedAt: Instant,
+    ) {
         suspendDbTransaction(db = database) {
             ProviderScheduledSyncConfigsTable.update({ ProviderScheduledSyncConfigsTable.id eq configId }) {
                 it[lastAttemptedAt] = attemptedAt.toDbTimestamp()
@@ -198,7 +203,7 @@ class ScheduledSyncRepository(private val database: Database) {
         val nowTimestamp = now.toDbTimestamp()
         ProviderScheduledSyncCheckpointsTable.deleteWhere {
             (ProviderScheduledSyncCheckpointsTable.configId eq configId) and
-                    (ProviderScheduledSyncCheckpointsTable.dataType notInList dataTypes)
+                (ProviderScheduledSyncCheckpointsTable.dataType notInList dataTypes)
         }
         // Newly selected data types start without a checkpoint; existing ones keep theirs.
         dataTypes.forEach { dataType ->
@@ -222,9 +227,8 @@ class ScheduledSyncRepository(private val database: Database) {
             .selectAll()
             .where {
                 (ProviderScheduledSyncConfigsTable.providerCode eq providerCode) and
-                        (ProviderScheduledSyncConfigsTable.providerInstanceId eq providerInstanceId)
-            }
-            .limit(1)
+                    (ProviderScheduledSyncConfigsTable.providerInstanceId eq providerInstanceId)
+            }.limit(1)
             .map { it.toConfig() }
             .singleOrNull()
 

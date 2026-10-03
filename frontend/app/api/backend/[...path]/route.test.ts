@@ -173,7 +173,19 @@ describe("backend proxy route", () => {
 });
 
 describe("proxy request validation", () => {
-  it.each(["null", "[]", "false", "42", "{invalid", '{"pageSize":0}', '{"dataTypes":[42]}'])
+  it("uses sync defaults only when the body is absent", async () => {
+    mocks.startProviderSyncJob.mockResolvedValue({ ok: true, data: { jobId: "job-1" } });
+    const response = await POST(
+      new Request("http://frontend.test/api/backend/providers/withings/sync-jobs", { method: "POST" }),
+      context("providers", "withings", "sync-jobs"),
+    );
+    expect(response.status).toBe(202);
+    expect(mocks.startProviderSyncJob).toHaveBeenCalledWith("withings", {
+      from: undefined, to: undefined, dataTypes: undefined, pageSize: undefined,
+    });
+  });
+
+  it.each(["null", "[]", "false", "42", "{invalid", '{"pageSize":0}', '{"pageSize":1.5}', '{"pageSize":9007199254740992}', '{"dataTypes":[42]}'])
     ("rejects invalid sync payload %s before creating a job", async (body) => {
       mocks.startProviderSyncJob.mockClear();
       const response = await POST(
@@ -184,7 +196,7 @@ describe("proxy request validation", () => {
       expect(mocks.startProviderSyncJob).not.toHaveBeenCalled();
     });
 
-  it.each(["null", "{invalid", '{"enabled":"true"}', '{"cadenceMinutes":0}', '{"dataTypes":[]}', '{"dataTypes":[" "]}'])
+  it.each(["null", "[]", "{invalid", '{"enabled":"true"}', '{"cadenceMinutes":0}', '{"lookbackDays":1.5}', '{"dataTypes":[]}', '{"dataTypes":[" "]}'])
     ("rejects invalid scheduled updates %s", async (body) => {
       mocks.updateScheduledSyncConfig.mockClear();
       const response = await PUT(

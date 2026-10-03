@@ -15,7 +15,6 @@ import me.aquitano.health.api.dto.*
 import me.aquitano.health.application.IngestionService
 import me.aquitano.health.application.ProviderWorkflowService
 import me.aquitano.health.application.metric.common.QueryParams
-import me.aquitano.health.domain.NotFoundException
 import me.aquitano.health.domain.RequestValidationException
 import me.aquitano.health.domain.ValidationIssue
 import me.aquitano.health.domain.ValidationIssueCodes
@@ -41,7 +40,7 @@ fun Application.configureRoutes(appConfig: AppConfig) {
                 val doc = openApiSource.read(application, openApiBaseDoc)
                 call.respondText(
                     stripInferredAuthorizationParameters(doc.content),
-                    doc.contentType
+                    doc.contentType,
                 )
             }.hide()
             swaggerUI(path = "swagger") {
@@ -57,8 +56,8 @@ fun Application.configureRoutes(appConfig: AppConfig) {
                 HealthResponse(
                     status = "ok",
                     service = "aqt-health",
-                    time = clock.now().toString()
-                )
+                    time = clock.now().toString(),
+                ),
             )
         }.describe {
             operationId = "getHealth"
@@ -93,7 +92,7 @@ fun Application.configureRoutes(appConfig: AppConfig) {
                     state = call.request.queryParameters["state"],
                     error = call.request.queryParameters["error"],
                     now = clock.now(),
-                )
+                ),
             )
         }.describe {
             operationId = "completeProviderOAuth"
@@ -120,15 +119,16 @@ fun Application.configureRoutes(appConfig: AppConfig) {
             errorResponses(
                 unauthorized = false,
                 notFound = true,
-                upstream = true
+                upstream = true,
             )
         }
         authenticate(ApiKeyAuthProviderName) {
             post("/api/v2/ingestion/batches") {
-                val response = ingestionService.ingestBatch(
-                    request = call.receive<IngestionBatchRequest>(),
-                    now = clock.now(),
-                )
+                val response =
+                    ingestionService.ingestBatch(
+                        request = call.receive<IngestionBatchRequest>(),
+                        now = clock.now(),
+                    )
                 val status =
                     if (response.duplicateBatch) HttpStatusCode.OK else HttpStatusCode.Created
                 call.respond(status, response)
@@ -160,7 +160,7 @@ fun Application.configureRoutes(appConfig: AppConfig) {
                             schema = buildSchema(typeOf<IngestionSummaryResponse>())
                             example(
                                 "duplicate",
-                                ingestionSummaryExample(duplicate = true)
+                                ingestionSummaryExample(duplicate = true),
                             )
                         }
                     }
@@ -183,8 +183,10 @@ data class HealthResponse(
 
 internal fun ApplicationCall.queryParams(): QueryParams =
     QueryParams(
-        request.queryParameters.entries()
-            .associate { it.key to it.value.firstOrNull() })
+        request.queryParameters
+            .entries()
+            .associate { it.key to it.value.firstOrNull() },
+    )
 
 internal fun ApplicationCall.metricTypePath(): String =
     requiredPathParam(
@@ -201,14 +203,13 @@ internal fun ApplicationCall.requiredPathParam(
     val value = parameters[name]
     if (value.isNullOrBlank()) {
         throw RequestValidationException(
-            listOf(ValidationIssue(field = name, code = code, message = message))
+            listOf(ValidationIssue(field = name, code = code, message = message)),
         )
     }
     return value
 }
 
-internal fun ApplicationCall.idempotencyKey(): String? =
-    request.headers["Idempotency-Key"]?.trim()?.takeIf { it.isNotEmpty() }
+internal fun ApplicationCall.idempotencyKey(): String? = request.headers["Idempotency-Key"]?.trim()?.takeIf { it.isNotEmpty() }
 
 internal fun ApplicationCall.providerCode(): String =
     requiredPathParam(

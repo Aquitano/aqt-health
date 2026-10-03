@@ -1,7 +1,7 @@
 package me.aquitano.health.application.metric.steps.repository
 
-import me.aquitano.health.infrastructure.database.tables.StepSamplesTable
 import me.aquitano.health.infrastructure.database.tables.IngestionRecordsTable
+import me.aquitano.health.infrastructure.database.tables.StepSamplesTable
 import org.jetbrains.exposed.v1.core.ResultRow
 import java.time.Instant
 
@@ -21,8 +21,9 @@ internal fun toStepSampleRow(row: ResultRow): StepSampleRow =
         startAt = row[StepSamplesTable.startAt].toInstant(),
         endAt = row[StepSamplesTable.endAt].toInstant(),
         steps = row[StepSamplesTable.steps],
-        allocationPriority = row.getOrNull(IngestionRecordsTable.googleStepAllocationPriority)
-            ?: row[StepSamplesTable.ingestionRecordId],
+        allocationPriority =
+            row.getOrNull(IngestionRecordsTable.googleStepAllocationPriority)
+                ?: row[StepSamplesTable.ingestionRecordId],
     )
 
 data class StepDailySummaryRow(
@@ -30,7 +31,7 @@ data class StepDailySummaryRow(
     val sourceInstanceId: Int?,
     val date: String,
     val steps: Int,
-    val sampleCount: Int
+    val sampleCount: Int,
 )
 
 data class DashboardStepsSummaryRow(

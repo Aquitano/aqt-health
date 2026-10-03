@@ -1,5 +1,5 @@
 # Build stage
-FROM eclipse-temurin:21-jdk-alpine AS builder
+FROM eclipse-temurin:25-jdk-alpine AS builder
 
 WORKDIR /app
 
@@ -20,7 +20,7 @@ RUN ./gradlew shadowJar \
     --no-daemon
 
 # Runtime stage
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:25-jre-alpine
 
 RUN apk add --no-cache curl \
     && addgroup -S appgroup \
@@ -43,6 +43,6 @@ ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0" \
     AQT_HEALTH_LOG_FILE_ROLLOVER="/app/logs/aqt-health.%d{yyyy-MM-dd}.%i.jsonl.gz"
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-  CMD curl -fsS http://localhost:8080/api/v2/admin/health || exit 1
+  CMD curl -fsS http://127.0.0.1:8080/api/v2/admin/health || exit 1
 
 ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar app.jar"]

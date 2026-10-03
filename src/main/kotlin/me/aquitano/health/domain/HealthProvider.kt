@@ -36,7 +36,10 @@ interface HealthProvider {
     /**
      * Exchanges an authorization code and stores the resulting provider account.
      */
-    suspend fun connect(code: String, now: Instant): ProviderConnection
+    suspend fun connect(
+        code: String,
+        now: Instant,
+    ): ProviderConnection
 
     /**
      * Synchronizes health data for a specific account and time range.

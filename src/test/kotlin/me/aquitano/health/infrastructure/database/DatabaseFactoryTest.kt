@@ -1,12 +1,12 @@
 package me.aquitano.health.infrastructure.database
 
-import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.application.ApiClientBootstrapService
 import me.aquitano.health.infrastructure.config.AuthConfig
 import me.aquitano.health.infrastructure.config.DatabaseConfig
 import me.aquitano.health.infrastructure.repositories.SupportRepository
 import me.aquitano.health.infrastructure.security.ApiKeyHasher
 import me.aquitano.health.infrastructure.time.UtcClock
+import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.test.PostgresTestDatabase
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -21,15 +21,16 @@ class DatabaseFactoryTest : PostgresIntegrationTest() {
     fun migrationsCreateExpectedTables() {
         val database = openDatabase(tempDatabaseConfig())
 
-        val tableNames = transaction(database) {
-            val names = mutableSetOf<String>()
-            exec("SELECT tablename FROM pg_tables WHERE schemaname = current_schema()") { resultSet ->
-                while (resultSet.next()) {
-                    names.add(resultSet.getString("tablename"))
+        val tableNames =
+            transaction(database) {
+                val names = mutableSetOf<String>()
+                exec("SELECT tablename FROM pg_tables WHERE schemaname = current_schema()") { resultSet ->
+                    while (resultSet.next()) {
+                        names.add(resultSet.getString("tablename"))
+                    }
                 }
+                names
             }
-            names
-        }
 
         assertContains(tableNames, "sources")
         assertContains(tableNames, "source_instances")
@@ -46,15 +47,16 @@ class DatabaseFactoryTest : PostgresIntegrationTest() {
         assertContains(tableNames, "provider_oauth_states")
         assertContains(tableNames, "provider_sync_runs")
 
-        val viewNames = transaction(database) {
-            val names = mutableSetOf<String>()
-            exec("SELECT viewname FROM pg_views WHERE schemaname = current_schema()") { resultSet ->
-                while (resultSet.next()) {
-                    names.add(resultSet.getString("viewname"))
+        val viewNames =
+            transaction(database) {
+                val names = mutableSetOf<String>()
+                exec("SELECT viewname FROM pg_views WHERE schemaname = current_schema()") { resultSet ->
+                    while (resultSet.next()) {
+                        names.add(resultSet.getString("viewname"))
+                    }
                 }
+                names
             }
-            names
-        }
 
         assertContains(viewNames, "canonical_scalar_samples")
         assertContains(viewNames, "canonical_activity_summaries")
@@ -67,22 +69,24 @@ class DatabaseFactoryTest : PostgresIntegrationTest() {
         val database = openDatabase(tempDatabaseConfig())
         val hasher = ApiKeyHasher()
         ApiClientBootstrapService(
-            authConfig = AuthConfig(
-                bootstrapClientName = "test-client",
-                bootstrapApiKey = "plain-test-key"
-            ),
+            authConfig =
+                AuthConfig(
+                    bootstrapClientName = "test-client",
+                    bootstrapApiKey = "plain-test-key",
+                ),
             supportRepository = SupportRepository(database),
             apiKeyHasher = hasher,
             clock = UtcClock.fixed(Instant.parse("2026-04-19T10:00:00Z")),
         ).bootstrap()
 
-        val stored = transaction(database) {
-            var hash: String? = null
-            exec("SELECT api_key_hash FROM api_clients WHERE name = 'test-client'") { resultSet ->
-                if (resultSet.next()) hash = resultSet.getString("api_key_hash")
+        val stored =
+            transaction(database) {
+                var hash: String? = null
+                exec("SELECT api_key_hash FROM api_clients WHERE name = 'test-client'") { resultSet ->
+                    if (resultSet.next()) hash = resultSet.getString("api_key_hash")
+                }
+                hash
             }
-            hash
-        }
 
         assertEquals(hasher.hash("plain-test-key"), stored)
     }
@@ -109,7 +113,7 @@ class DatabaseFactoryTest : PostgresIntegrationTest() {
                         '2026-04-19T10:00:00Z',
                         '2026-04-19T10:00:00Z'
                     )
-                    """.trimIndent()
+                    """.trimIndent(),
                 )
             }
         }
@@ -152,7 +156,7 @@ class DatabaseFactoryTest : PostgresIntegrationTest() {
                     28800,
                     '2026-04-19T10:00:00Z'
                 )
-                """.trimIndent()
+                """.trimIndent(),
             )
             exec(
                 """
@@ -170,7 +174,7 @@ class DatabaseFactoryTest : PostgresIntegrationTest() {
                     '2026-04-19T06:00:00Z',
                     28800
                 )
-                """.trimIndent()
+                """.trimIndent(),
             )
 
             exec("DELETE FROM sleep_sessions WHERE id = 1")
@@ -213,7 +217,7 @@ class DatabaseFactoryTest : PostgresIntegrationTest() {
                         '2026-04-19T10:00:00Z',
                         '2026-04-19T10:00:00Z'
                     )
-                    """.trimIndent()
+                    """.trimIndent(),
                 )
             }
 
@@ -238,7 +242,7 @@ class DatabaseFactoryTest : PostgresIntegrationTest() {
                         1200,
                         '2026-04-19T10:00:00Z'
                     )
-                    """.trimIndent()
+                    """.trimIndent(),
                 )
             }
 
@@ -268,7 +272,7 @@ class DatabaseFactoryTest : PostgresIntegrationTest() {
                         NULL,
                         '2026-04-19T10:00:00Z'
                     )
-                    """.trimIndent()
+                    """.trimIndent(),
                 )
             }
         }
@@ -299,7 +303,7 @@ class DatabaseFactoryTest : PostgresIntegrationTest() {
             """
             INSERT INTO sources (id, code, display_name, created_at)
             VALUES (1, 'health_connect', NULL, '2026-04-19T10:00:00Z')
-            """.trimIndent()
+            """.trimIndent(),
         )
         TransactionManager.current().exec(
             """
@@ -319,7 +323,7 @@ class DatabaseFactoryTest : PostgresIntegrationTest() {
                 '2026-04-19T10:00:00Z',
                 '2026-04-19T10:00:00Z'
             )
-            """.trimIndent()
+            """.trimIndent(),
         )
     }
 }

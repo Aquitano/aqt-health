@@ -1,17 +1,17 @@
 package me.aquitano.health.infrastructure.repositories
 
 import me.aquitano.health.infrastructure.database.dao.ApiClientDao
-import me.aquitano.health.infrastructure.database.toDbTimestamp
+import me.aquitano.health.infrastructure.database.suspendDbTransaction
 import me.aquitano.health.infrastructure.database.tables.ApiClientsTable
 import me.aquitano.health.infrastructure.database.tables.SourceInstancesTable
 import me.aquitano.health.infrastructure.database.tables.SourcesTable
+import me.aquitano.health.infrastructure.database.toDbTimestamp
 import me.aquitano.health.shared.normalizeProviderCode
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insertIgnoreAndGetId
 import org.jetbrains.exposed.v1.jdbc.select
-import me.aquitano.health.infrastructure.database.suspendDbTransaction
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.time.Instant
 import java.time.OffsetDateTime
@@ -46,7 +46,7 @@ class SupportRepository(
     fun upsertBootstrapApiClient(
         name: String,
         apiKeyHash: String,
-        now: Instant
+        now: Instant,
     ): BootstrapApiClientOutcome =
         transaction(database) {
             val existing =
@@ -74,13 +74,14 @@ class SupportRepository(
 
     suspend fun findEnabledApiClientByHash(
         apiKeyHash: String,
-        now: Instant
+        now: Instant,
     ): ApiClientRef? =
         suspendDbTransaction(db = database) {
-            val client = ApiClientDao
-                .find { (ApiClientsTable.apiKeyHash eq apiKeyHash) and (ApiClientsTable.enabled eq true) }
-                .firstOrNull()
-                ?: return@suspendDbTransaction null
+            val client =
+                ApiClientDao
+                    .find { (ApiClientsTable.apiKeyHash eq apiKeyHash) and (ApiClientsTable.enabled eq true) }
+                    .firstOrNull()
+                    ?: return@suspendDbTransaction null
             if (shouldUpdateLastUsedAt(client.lastUsedAt, now)) {
                 client.lastUsedAt = now.toDbTimestamp()
             }
@@ -94,33 +95,38 @@ class SupportRepository(
     fun resolveOrCreateSourceInstanceInTransaction(
         provider: String,
         providerInstanceId: String,
-        now: Instant
+        now: Instant,
     ): SourceInstanceRef {
         val providerCode = normalizeProviderCode(provider)
-        val sourceId = SourcesTable.insertIgnoreAndGetId {
-            it[code] = providerCode
-            it[displayName] = null
-            it[createdAt] = now.toDbTimestamp()
-        }?.value ?: SourcesTable
-            .select(SourcesTable.id)
-            .where { SourcesTable.code eq providerCode }
-            .limit(1)
-            .single()[SourcesTable.id].value
+        val sourceId =
+            SourcesTable
+                .insertIgnoreAndGetId {
+                    it[code] = providerCode
+                    it[displayName] = null
+                    it[createdAt] = now.toDbTimestamp()
+                }?.value ?: SourcesTable
+                .select(SourcesTable.id)
+                .where { SourcesTable.code eq providerCode }
+                .limit(1)
+                .single()[SourcesTable.id]
+                .value
 
-        val instanceId = SourceInstancesTable.insertIgnoreAndGetId {
-            it[this.sourceId] = sourceId
-            it[this.providerInstanceId] = providerInstanceId
-            it[displayName] = null
-            it[createdAt] = now.toDbTimestamp()
-            it[updatedAt] = now.toDbTimestamp()
-        }?.value ?: SourceInstancesTable
-            .select(SourceInstancesTable.id)
-            .where {
-                (SourceInstancesTable.sourceId eq sourceId) and
+        val instanceId =
+            SourceInstancesTable
+                .insertIgnoreAndGetId {
+                    it[this.sourceId] = sourceId
+                    it[this.providerInstanceId] = providerInstanceId
+                    it[displayName] = null
+                    it[createdAt] = now.toDbTimestamp()
+                    it[updatedAt] = now.toDbTimestamp()
+                }?.value ?: SourceInstancesTable
+                .select(SourceInstancesTable.id)
+                .where {
+                    (SourceInstancesTable.sourceId eq sourceId) and
                         (SourceInstancesTable.providerInstanceId eq providerInstanceId)
-            }
-            .limit(1)
-            .single()[SourceInstancesTable.id].value
+                }.limit(1)
+                .single()[SourceInstancesTable.id]
+                .value
 
         return SourceInstanceRef(
             id = instanceId,
@@ -129,14 +135,14 @@ class SupportRepository(
         )
     }
 
-
     private fun shouldUpdateLastUsedAt(
         current: OffsetDateTime?,
-        now: Instant
+        now: Instant,
     ): Boolean {
         if (current == null) return true
-        return current.toInstant() <= now.minusSeconds(
-            API_CLIENT_LAST_USED_UPDATE_INTERVAL_SECONDS
-        )
+        return current.toInstant() <=
+            now.minusSeconds(
+                API_CLIENT_LAST_USED_UPDATE_INTERVAL_SECONDS,
+            )
     }
 }

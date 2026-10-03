@@ -1,16 +1,16 @@
 package me.aquitano.health.application.providersync
 
-import me.aquitano.health.infrastructure.time.UtcClock
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
-import kotlinx.serialization.json.buildJsonObject
-import me.aquitano.health.api.dto.IngestionRecord
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import me.aquitano.health.api.dto.IngestionRecord
 import me.aquitano.health.api.dto.StepInterval
 import me.aquitano.health.domain.*
+import me.aquitano.health.infrastructure.time.UtcClock
 import java.time.Duration
 import java.time.Instant
 import kotlin.test.Test
@@ -21,302 +21,374 @@ import kotlin.test.assertTrue
 
 class ProviderSyncPipelineTest {
     private val now: Instant = Instant.parse("2026-04-20T10:00:00Z")
-    private val request = ProviderSyncRequest(
-        from = Instant.parse("2026-04-01T00:00:00Z"),
-        to = Instant.parse("2026-04-02T00:00:00Z"),
-        dataTypes = listOf("steps"),
-    )
+    private val request =
+        ProviderSyncRequest(
+            from = Instant.parse("2026-04-01T00:00:00Z"),
+            to = Instant.parse("2026-04-02T00:00:00Z"),
+            dataTypes = listOf("steps"),
+        )
 
     @Test
-    fun processedBatchCacheSkipsProviderFetch() = runBlocking {
-        val store = FakeStore(
-            existingBatch = ExistingProviderBatch(id = 42, status = BatchStatus.Processed),
-        )
-        val adapter = FakeAdapter()
-        val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+    fun processedBatchCacheSkipsProviderFetch() =
+        runBlocking {
+            val store =
+                FakeStore(
+                    existingBatch = ExistingProviderBatch(id = 42, status = BatchStatus.Processed),
+                )
+            val adapter = FakeAdapter()
+            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
 
-        val summary = pipeline.sync(adapter, request, now)
+            val summary = pipeline.sync(adapter, request, now)
 
-        assertEquals(0, adapter.fetchCalls)
-        assertEquals(1, summary.batches.size)
-        assertEquals(true, summary.batches.single().duplicateBatch)
-        assertEquals(42, summary.batches.single().batchId)
-    }
-
-    @Test
-    fun invalidRefreshTokenMarksAccountNeedsReauthBeforeStartingRun() = runBlocking {
-        val store = FakeStore(
-            account = syncAccount(expiresAt = now.minusSeconds(1)),
-        )
-        val adapter = FakeAdapter(
-            refreshFailure = InvalidRefreshToken(),
-        )
-        val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
-
-        val error = assertFailsWith<ConflictException> {
-            pipeline.sync(adapter, request, now)
+            assertEquals(0, adapter.fetchCalls)
+            assertEquals(1, summary.batches.size)
+            assertEquals(true, summary.batches.single().duplicateBatch)
+            assertEquals(42, summary.batches.single().batchId)
         }
 
-        assertEquals("fake_needs_reauth", error.code)
-        assertEquals("fake_needs_reauth", store.needsReauthCode)
-        assertEquals(0, store.runsStarted)
-    }
-
     @Test
-    fun unauthorizedFetchRefreshesTokenAndRetriesOnce() = runBlocking {
-        val store = FakeStore()
-        val adapter = FakeAdapter(throwUnauthorizedOnce = true)
-        val pipeline = ProviderSyncPipeline(
-            store,
-            clock = UtcClock.fixed(now),
-        )
+    fun invalidRefreshTokenMarksAccountNeedsReauthBeforeStartingRun() =
+        runBlocking {
+            val store =
+                FakeStore(
+                    account = syncAccount(expiresAt = now.minusSeconds(1)),
+                )
+            val adapter =
+                FakeAdapter(
+                    refreshFailure = InvalidRefreshToken(),
+                )
+            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
 
-        val summary = pipeline.sync(adapter, request, now)
+            val error =
+                assertFailsWith<ConflictException> {
+                    pipeline.sync(adapter, request, now)
+                }
 
-        assertEquals(2, adapter.fetchCalls)
-        assertEquals(1, adapter.refreshCalls)
-        assertEquals("fresh-access", store.savedAccessToken)
-        assertEquals(1, store.ingested.size)
-        assertEquals("processed", summary.status)
-    }
-
-    @Test
-    fun providerFetchesAreThrottledBetweenUncachedItems() = runBlocking {
-        val delays = mutableListOf<Duration>()
-        val adapter = FakeAdapter(
-            itemCount = 2,
-            providerRequestInterval = Duration.ofSeconds(5),
-        )
-        val pipeline = ProviderSyncPipeline(
-            FakeStore(),
-            throttleDelay = { delays += it },
-            clock = UtcClock.fixed(now),
-        )
-
-        val summary = pipeline.sync(adapter, request, now)
-
-        assertEquals(2, adapter.fetchCalls)
-        assertEquals(2, summary.batches.size)
-        assertEquals(1, delays.size)
-        assertTrue(delays.single() > Duration.ZERO)
-    }
-
-    @Test
-    fun reReadUnderLockSkipsRefreshWhenTokenAlreadyRotated() = runBlocking {
-        // The first account read sees an expired token; the re-read inside the per-account lock sees
-        // a fresh one (as if a concurrent run already refreshed and rotated the refresh token). This
-        // run must NOT refresh again with the stale token — doing so is what bricks rotating-token
-        // (Google) accounts into needs_reauth.
-        val store = StaleThenFreshStore(
-            staleAccount = syncAccount(expiresAt = now.minusSeconds(1)),
-            freshAccount = syncAccount(expiresAt = now.plusSeconds(3600)),
-        )
-        val adapter = FakeAdapter()
-        val pipeline = ProviderSyncPipeline(
-            store,
-            clock = UtcClock.fixed(now),
-        )
-
-        val summary = pipeline.sync(adapter, request, now)
-
-        assertEquals(0, adapter.refreshCalls)
-        assertEquals(0, store.saveCount)
-        assertEquals("processed", summary.status)
-    }
-
-    @Test
-    fun emptyWindowIsIngestedSoTheNextRunDedupesInsteadOfRefetching() = runBlocking {
-        val store = FakeStore()
-        val adapter = FakeAdapter(emptyFetch = true)
-        val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
-
-        val summary = pipeline.sync(adapter, request, now)
-
-        // The empty processed batch is what marks the window done for the next run.
-        assertEquals(1, store.ingested.size)
-        assertTrue(store.ingested.single().records.isEmpty())
-        assertEquals(1, summary.batches.size)
-        assertEquals(listOf("steps"), summary.emptyDataTypes.map { it.dataType })
-    }
-
-    @Test
-    fun refreshRefetchesEmptyWindowsAndStoresLateProviderData() = runBlocking {
-        val store = FakeStore(existingBatch = ExistingProviderBatch(42, BatchStatus.Processed))
-        val adapter = FakeAdapter(emptyFetch = true)
-        val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
-        val refresh = request.copy(refresh = true)
-
-        repeat(2) { pipeline.sync(adapter, refresh, now) }
-        assertEquals(1, store.ingested.size)
-        assertTrue(store.ingested.single().records.isEmpty())
-
-        adapter.emptyFetch = false
-        pipeline.sync(adapter, refresh, now)
-        assertEquals(3, adapter.fetchCalls)
-        assertEquals(2, store.ingested.size)
-        assertEquals(1200, (store.ingested.last().records.single() as StepInterval).steps)
-    }
-
-    @Test
-    fun windowWhoseRecordsWereAllNormalizedAwayIsNotMarkedDone() = runBlocking {
-        // Marking it done would make the window a permanent cache hit, so a provider correction or
-        // a normalizer fix could never bring the dropped records back.
-        val store = FakeStore()
-        val adapter = FakeAdapter(normalizedAwayFetch = true)
-        val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
-
-        val summary = pipeline.sync(adapter, request, now)
-
-        assertTrue(store.ingested.isEmpty())
-        assertTrue(summary.batches.isEmpty())
-        assertEquals(listOf(1), summary.emptyDataTypes.map { it.sourceRecordsReceived })
-    }
-
-    @Test
-    fun duplicateProviderRecordIdsCollapseBeforeIngestion() = runBlocking {
-        // Ingestion rejects the whole batch over one repeated id, non-retryably, which parks the
-        // sync schedule. Providers do repeat records inside a window, so the pipeline collapses
-        // them instead, last one winning.
-        val store = FakeStore()
-        val adapter = FakeAdapter(
-            records = listOf(
-                stepInterval(steps = 1200),
-                stepInterval(steps = 1500),
-            ),
-        )
-        val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
-
-        pipeline.sync(adapter, request, now)
-
-        val stored = store.ingested.single().records
-        assertEquals(1, stored.size)
-        assertEquals(1500, (stored.single() as StepInterval).steps)
-    }
-
-    @Test
-    fun refreshIngestsWhenDuplicateOrderChangesTheWinningRecord() = runBlocking {
-        val store = FakeStore()
-        val first = stepInterval(steps = 1200)
-        val last = stepInterval(steps = 1500)
-        val adapter = FakeAdapter(records = listOf(first, last))
-        val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
-        val refresh = request.copy(refresh = true)
-
-        pipeline.sync(adapter, refresh, now)
-        adapter.records = listOf(last, first)
-        pipeline.sync(adapter, refresh, now)
-        pipeline.sync(adapter, refresh, now)
-
-        assertEquals(listOf(1500, 1200), store.ingested.map {
-            (it.records.single() as StepInterval).steps
-        })
-    }
-
-    @Test
-    fun syncFailureSurfacesSafeMessageNotRawExceptionText() = runBlocking {
-        // The raw exception text can carry internal/upstream detail (DB errors, provider response
-        // bodies). It must stay in the logs; the client-facing message is the adapter's safe default.
-        val secret = "jdbc:postgresql://internal-db:5432 connection refused for user aqt_admin"
-        val adapter = FakeAdapter(fetchFailure = IllegalStateException(secret))
-        val pipeline = ProviderSyncPipeline(
-            FakeStore(),
-            clock = UtcClock.fixed(now),
-        )
-
-        val error = assertFailsWith<UpstreamProviderException> {
-            pipeline.sync(adapter, request, now)
+            assertEquals("fake_needs_reauth", error.code)
+            assertEquals("fake_needs_reauth", store.needsReauthCode)
+            assertEquals(0, store.runsStarted)
         }
 
-        assertEquals("Fake sync failed", error.message)
-        assertFalse(error.message!!.contains(secret))
-    }
+    @Test
+    fun unauthorizedFetchRefreshesTokenAndRetriesOnce() =
+        runBlocking {
+            val store = FakeStore()
+            val adapter = FakeAdapter(throwUnauthorizedOnce = true)
+            val pipeline =
+                ProviderSyncPipeline(
+                    store,
+                    clock = UtcClock.fixed(now),
+                )
+
+            val summary = pipeline.sync(adapter, request, now)
+
+            assertEquals(2, adapter.fetchCalls)
+            assertEquals(1, adapter.refreshCalls)
+            assertEquals("fresh-access", store.savedAccessToken)
+            assertEquals(1, store.ingested.size)
+            assertEquals("processed", summary.status)
+        }
 
     @Test
-    fun refreshFetchesCompletedWindowsButSkipsUnchangedContent() = runBlocking {
-        val store = FakeStore(existingBatch = ExistingProviderBatch(42, BatchStatus.Processed))
-        val adapter = FakeAdapter()
-        val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
-        repeat(2) { pipeline.sync(adapter, request.copy(refresh = true), now) }
-        assertEquals(2, adapter.fetchCalls)
-        assertEquals(1, store.ingested.size)
-    }
+    fun providerFetchesAreThrottledBetweenUncachedItems() =
+        runBlocking {
+            val delays = mutableListOf<Duration>()
+            val adapter =
+                FakeAdapter(
+                    itemCount = 2,
+                    providerRequestInterval = Duration.ofSeconds(5),
+                )
+            val pipeline =
+                ProviderSyncPipeline(
+                    FakeStore(),
+                    throttleDelay = { delays += it },
+                    clock = UtcClock.fixed(now),
+                )
+
+            val summary = pipeline.sync(adapter, request, now)
+
+            assertEquals(2, adapter.fetchCalls)
+            assertEquals(2, summary.batches.size)
+            assertEquals(1, delays.size)
+            assertTrue(delays.single() > Duration.ZERO)
+        }
 
     @Test
-    fun openDayRefreshReusesTheSnapshotAsThePollEndAdvances() = runBlocking {
-        val store = FakeStore()
-        val adapter = FakeAdapter()
-        val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
-        val morning = request.copy(to = Instant.parse("2026-04-01T10:00:00Z"), refresh = true)
-        pipeline.sync(adapter, morning, now)
-        val later = pipeline.sync(adapter, morning.copy(to = Instant.parse("2026-04-01T10:15:00Z")), now)
-        assertEquals(1, store.ingested.size)
-        assertTrue(later.batches.single().duplicateBatch)
-        adapter.steps = 2400
-        pipeline.sync(adapter, morning.copy(to = Instant.parse("2026-04-02T00:00:00Z")), now)
-        assertEquals(2, store.ingested.size)
-    }
+    fun reReadUnderLockSkipsRefreshWhenTokenAlreadyRotated() =
+        runBlocking {
+            // The first account read sees an expired token; the re-read inside the per-account lock sees
+            // a fresh one (as if a concurrent run already refreshed and rotated the refresh token). This
+            // run must NOT refresh again with the stale token — doing so is what bricks rotating-token
+            // (Google) accounts into needs_reauth.
+            val store =
+                StaleThenFreshStore(
+                    staleAccount = syncAccount(expiresAt = now.minusSeconds(1)),
+                    freshAccount = syncAccount(expiresAt = now.plusSeconds(3600)),
+                )
+            val adapter = FakeAdapter()
+            val pipeline =
+                ProviderSyncPipeline(
+                    store,
+                    clock = UtcClock.fixed(now),
+                )
+
+            val summary = pipeline.sync(adapter, request, now)
+
+            assertEquals(0, adapter.refreshCalls)
+            assertEquals(0, store.saveCount)
+            assertEquals("processed", summary.status)
+        }
 
     @Test
-    fun sourceRecordChangesArePreservedWithoutEnvelopeNoise() = runBlocking {
-        val store = FakeStore()
-        val adapter = FakeAdapter()
-        val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
-        val refresh = request.copy(refresh = true)
-        adapter.sourceRecords = listOf(buildJsonObject { put("quality", 1); put("device", "scale") })
-        pipeline.sync(adapter, refresh, now)
-        adapter.sourceRecords = listOf(buildJsonObject { put("device", "scale"); put("quality", 1) })
-        pipeline.sync(adapter, refresh, now)
-        assertEquals(1, store.ingested.size)
-        adapter.sourceRecords = listOf(buildJsonObject { put("quality", 2); put("device", "scale") })
-        pipeline.sync(adapter, refresh, now)
-        assertEquals(2, store.ingested.size)
-    }
+    fun emptyWindowIsIngestedSoTheNextRunDedupesInsteadOfRefetching() =
+        runBlocking {
+            val store = FakeStore()
+            val adapter = FakeAdapter(emptyFetch = true)
+            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+
+            val summary = pipeline.sync(adapter, request, now)
+
+            // The empty processed batch is what marks the window done for the next run.
+            assertEquals(1, store.ingested.size)
+            assertTrue(
+                store.ingested
+                    .single()
+                    .records
+                    .isEmpty(),
+            )
+            assertEquals(1, summary.batches.size)
+            assertEquals(listOf("steps"), summary.emptyDataTypes.map { it.dataType })
+        }
 
     @Test
-    fun concurrentSyncsRotateExpiredTokenOnlyOnce() = runBlocking {
-        val refreshStarted = CompletableDeferred<Unit>()
-        val releaseRefresh = CompletableDeferred<Unit>()
-        val adapter = BlockingRefreshAdapter(refreshStarted, releaseRefresh)
-        val store = FakeStore(account = syncAccount(now.minusSeconds(1)))
-        val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
-        val first = async { pipeline.sync(adapter, request, now) }
-        refreshStarted.await()
-        val second = async(start = CoroutineStart.UNDISPATCHED) { pipeline.sync(adapter, request, now) }
-        releaseRefresh.complete(Unit)
-        first.await()
-        second.await()
-        assertEquals(1, adapter.refreshCalls)
-        assertEquals(1, store.saveCount)
-        assertEquals(2, adapter.fetchCalls)
-    }
+    fun refreshRefetchesEmptyWindowsAndStoresLateProviderData() =
+        runBlocking {
+            val store = FakeStore(existingBatch = ExistingProviderBatch(42, BatchStatus.Processed))
+            val adapter = FakeAdapter(emptyFetch = true)
+            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+            val refresh = request.copy(refresh = true)
+
+            repeat(2) { pipeline.sync(adapter, refresh, now) }
+            assertEquals(1, store.ingested.size)
+            assertTrue(
+                store.ingested
+                    .single()
+                    .records
+                    .isEmpty(),
+            )
+
+            adapter.emptyFetch = false
+            pipeline.sync(adapter, refresh, now)
+            assertEquals(3, adapter.fetchCalls)
+            assertEquals(2, store.ingested.size)
+            assertEquals(
+                1200,
+                (
+                    store.ingested
+                        .last()
+                        .records
+                        .single() as StepInterval
+                ).steps,
+            )
+        }
 
     @Test
-    fun rejectedTokenSaveStopsBeforeProviderFetch() = runBlocking {
-        val store = RejectingSaveStore(syncAccount(now.minusSeconds(1)))
-        val adapter = FakeAdapter()
-        val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
-        val error = assertFailsWith<UpstreamProviderException> { pipeline.sync(adapter, request, now) }
-        assertEquals("provider_account_changed", error.code)
-        assertEquals(0, adapter.fetchCalls)
-        assertEquals(0, store.runsStarted)
-    }
+    fun windowWhoseRecordsWereAllNormalizedAwayIsNotMarkedDone() =
+        runBlocking {
+            // Marking it done would make the window a permanent cache hit, so a provider correction or
+            // a normalizer fix could never bring the dropped records back.
+            val store = FakeStore()
+            val adapter = FakeAdapter(normalizedAwayFetch = true)
+            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+
+            val summary = pipeline.sync(adapter, request, now)
+
+            assertTrue(store.ingested.isEmpty())
+            assertTrue(summary.batches.isEmpty())
+            assertEquals(listOf(1), summary.emptyDataTypes.map { it.sourceRecordsReceived })
+        }
 
     @Test
-    fun refreshFailureDoesNotExposeExceptionDetails() = runBlocking {
-        val adapter = FakeAdapter(refreshFailure = IllegalStateException("secret upstream credentials"))
-        val store = FakeStore(account = syncAccount(now.minusSeconds(1)))
-        val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
-        val error = assertFailsWith<UpstreamProviderException> { pipeline.sync(adapter, request, now) }
-        assertEquals("Fake refresh failed", error.message)
-        assertEquals("Fake refresh failed", store.refreshFailureMessage)
-    }
+    fun duplicateProviderRecordIdsCollapseBeforeIngestion() =
+        runBlocking {
+            // Ingestion rejects the whole batch over one repeated id, non-retryably, which parks the
+            // sync schedule. Providers do repeat records inside a window, so the pipeline collapses
+            // them instead, last one winning.
+            val store = FakeStore()
+            val adapter =
+                FakeAdapter(
+                    records =
+                        listOf(
+                            stepInterval(steps = 1200),
+                            stepInterval(steps = 1500),
+                        ),
+                )
+            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+
+            pipeline.sync(adapter, request, now)
+
+            val stored = store.ingested.single().records
+            assertEquals(1, stored.size)
+            assertEquals(1500, (stored.single() as StepInterval).steps)
+        }
+
+    @Test
+    fun refreshIngestsWhenDuplicateOrderChangesTheWinningRecord() =
+        runBlocking {
+            val store = FakeStore()
+            val first = stepInterval(steps = 1200)
+            val last = stepInterval(steps = 1500)
+            val adapter = FakeAdapter(records = listOf(first, last))
+            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+            val refresh = request.copy(refresh = true)
+
+            pipeline.sync(adapter, refresh, now)
+            adapter.records = listOf(last, first)
+            pipeline.sync(adapter, refresh, now)
+            pipeline.sync(adapter, refresh, now)
+
+            assertEquals(
+                listOf(1500, 1200),
+                store.ingested.map {
+                    (it.records.single() as StepInterval).steps
+                },
+            )
+        }
+
+    @Test
+    fun syncFailureSurfacesSafeMessageNotRawExceptionText() =
+        runBlocking {
+            // The raw exception text can carry internal/upstream detail (DB errors, provider response
+            // bodies). It must stay in the logs; the client-facing message is the adapter's safe default.
+            val secret = "jdbc:postgresql://internal-db:5432 connection refused for user aqt_admin"
+            val adapter = FakeAdapter(fetchFailure = IllegalStateException(secret))
+            val pipeline =
+                ProviderSyncPipeline(
+                    FakeStore(),
+                    clock = UtcClock.fixed(now),
+                )
+
+            val error =
+                assertFailsWith<UpstreamProviderException> {
+                    pipeline.sync(adapter, request, now)
+                }
+
+            assertEquals("Fake sync failed", error.message)
+            assertFalse(error.message!!.contains(secret))
+        }
+
+    @Test
+    fun refreshFetchesCompletedWindowsButSkipsUnchangedContent() =
+        runBlocking {
+            val store = FakeStore(existingBatch = ExistingProviderBatch(42, BatchStatus.Processed))
+            val adapter = FakeAdapter()
+            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+            repeat(2) { pipeline.sync(adapter, request.copy(refresh = true), now) }
+            assertEquals(2, adapter.fetchCalls)
+            assertEquals(1, store.ingested.size)
+        }
+
+    @Test
+    fun openDayRefreshReusesTheSnapshotAsThePollEndAdvances() =
+        runBlocking {
+            val store = FakeStore()
+            val adapter = FakeAdapter()
+            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+            val morning = request.copy(to = Instant.parse("2026-04-01T10:00:00Z"), refresh = true)
+            pipeline.sync(adapter, morning, now)
+            val later = pipeline.sync(adapter, morning.copy(to = Instant.parse("2026-04-01T10:15:00Z")), now)
+            assertEquals(1, store.ingested.size)
+            assertTrue(later.batches.single().duplicateBatch)
+            adapter.steps = 2400
+            pipeline.sync(adapter, morning.copy(to = Instant.parse("2026-04-02T00:00:00Z")), now)
+            assertEquals(2, store.ingested.size)
+        }
+
+    @Test
+    fun sourceRecordChangesArePreservedWithoutEnvelopeNoise() =
+        runBlocking {
+            val store = FakeStore()
+            val adapter = FakeAdapter()
+            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+            val refresh = request.copy(refresh = true)
+            adapter.sourceRecords =
+                listOf(
+                    buildJsonObject {
+                        put("quality", 1)
+                        put("device", "scale")
+                    },
+                )
+            pipeline.sync(adapter, refresh, now)
+            adapter.sourceRecords =
+                listOf(
+                    buildJsonObject {
+                        put("device", "scale")
+                        put("quality", 1)
+                    },
+                )
+            pipeline.sync(adapter, refresh, now)
+            assertEquals(1, store.ingested.size)
+            adapter.sourceRecords =
+                listOf(
+                    buildJsonObject {
+                        put("quality", 2)
+                        put("device", "scale")
+                    },
+                )
+            pipeline.sync(adapter, refresh, now)
+            assertEquals(2, store.ingested.size)
+        }
+
+    @Test
+    fun concurrentSyncsRotateExpiredTokenOnlyOnce() =
+        runBlocking {
+            val refreshStarted = CompletableDeferred<Unit>()
+            val releaseRefresh = CompletableDeferred<Unit>()
+            val adapter = BlockingRefreshAdapter(refreshStarted, releaseRefresh)
+            val store = FakeStore(account = syncAccount(now.minusSeconds(1)))
+            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+            val first = async { pipeline.sync(adapter, request, now) }
+            refreshStarted.await()
+            val second = async(start = CoroutineStart.UNDISPATCHED) { pipeline.sync(adapter, request, now) }
+            releaseRefresh.complete(Unit)
+            first.await()
+            second.await()
+            assertEquals(1, adapter.refreshCalls)
+            assertEquals(1, store.saveCount)
+            assertEquals(2, adapter.fetchCalls)
+        }
+
+    @Test
+    fun rejectedTokenSaveStopsBeforeProviderFetch() =
+        runBlocking {
+            val store = RejectingSaveStore(syncAccount(now.minusSeconds(1)))
+            val adapter = FakeAdapter()
+            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+            val error = assertFailsWith<UpstreamProviderException> { pipeline.sync(adapter, request, now) }
+            assertEquals("provider_account_changed", error.code)
+            assertEquals(0, adapter.fetchCalls)
+            assertEquals(0, store.runsStarted)
+        }
+
+    @Test
+    fun refreshFailureDoesNotExposeExceptionDetails() =
+        runBlocking {
+            val adapter = FakeAdapter(refreshFailure = IllegalStateException("secret upstream credentials"))
+            val store = FakeStore(account = syncAccount(now.minusSeconds(1)))
+            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+            val error = assertFailsWith<UpstreamProviderException> { pipeline.sync(adapter, request, now) }
+            assertEquals("Fake refresh failed", error.message)
+            assertEquals("Fake refresh failed", store.refreshFailureMessage)
+        }
 
     private class BlockingRefreshAdapter(
         private val started: CompletableDeferred<Unit>,
         private val release: CompletableDeferred<Unit>,
     ) : FakeAdapter() {
         override suspend fun refreshAccessToken(
-            refreshToken: String, account: SyncAccount, now: Instant,
+            refreshToken: String,
+            account: SyncAccount,
+            now: Instant,
         ): RefreshedTokenSet {
             started.complete(Unit)
             release.await()
@@ -324,9 +396,13 @@ class ProviderSyncPipelineTest {
         }
     }
 
-    private class RejectingSaveStore(account: SyncAccount) : FakeStore(account = account) {
+    private class RejectingSaveStore(
+        account: SyncAccount,
+    ) : FakeStore(account = account) {
         override suspend fun saveRefreshedToken(
-            account: SyncAccount, tokens: RefreshedTokenSet, now: Instant,
+            account: SyncAccount,
+            tokens: RefreshedTokenSet,
+            now: Instant,
         ): Boolean = false
     }
 
@@ -359,13 +435,14 @@ class ProviderSyncPipelineTest {
                 providerInstanceId = request.providerInstanceId,
                 requestedFrom = request.from,
                 requestedTo = request.to,
-                items = (1..itemCount).map { index ->
-                    ProviderSyncItem(
-                        dataType = "steps",
-                        from = request.from.plusSeconds((index - 1).toLong()),
-                        to = request.to.plusSeconds((index - 1).toLong()),
-                    )
-                },
+                items =
+                    (1..itemCount).map { index ->
+                        ProviderSyncItem(
+                            dataType = "steps",
+                            from = request.from.plusSeconds((index - 1).toLong()),
+                            to = request.to.plusSeconds((index - 1).toLong()),
+                        )
+                    },
             )
 
         override fun accountUnavailable(
@@ -407,19 +484,18 @@ class ProviderSyncPipelineTest {
                 sourceRecordsReceived = if (emptyFetch) 0 else 1,
                 sourcePayload = buildJsonObject { put("requestId", fetchCalls) },
                 sourceRecords = sourceRecords,
-                records = if (emptyFetch || normalizedAwayFetch) {
-                    emptyList()
-                } else {
-                    records ?: listOf(stepInterval(steps = steps))
-                },
+                records =
+                    if (emptyFetch || normalizedAwayFetch) {
+                        emptyList()
+                    } else {
+                        records ?: listOf(stepInterval(steps = steps))
+                    },
             )
         }
 
-        override fun isUnauthorized(error: Throwable): Boolean =
-            error is UnauthorizedFetch
+        override fun isUnauthorized(error: Throwable): Boolean = error is UnauthorizedFetch
 
-        override fun isInvalidRefreshToken(error: Throwable): Boolean =
-            error is InvalidRefreshToken
+        override fun isInvalidRefreshToken(error: Throwable): Boolean = error is InvalidRefreshToken
 
         override fun batchExternalId(
             providerInstanceId: String,
@@ -462,11 +538,12 @@ class ProviderSyncPipelineTest {
         ): Boolean {
             saveCount += 1
             savedAccessToken = tokens.accessToken
-            this.account = account.copy(
-                encryptedAccessToken = tokens.accessToken,
-                encryptedRefreshToken = tokens.refreshToken ?: account.encryptedRefreshToken,
-                expiresAt = tokens.expiresAt,
-            )
+            this.account =
+                account.copy(
+                    encryptedAccessToken = tokens.accessToken,
+                    encryptedRefreshToken = tokens.refreshToken ?: account.encryptedRefreshToken,
+                    expiresAt = tokens.expiresAt,
+                )
             return true
         }
 
@@ -521,10 +598,15 @@ class ProviderSyncPipelineTest {
             windowKey: String,
             contentHash: String,
             now: Instant,
-        ): Int? = ingested.withIndex().lastOrNull {
-            it.value.providerCode == providerCode && it.value.providerInstanceId == providerInstanceId &&
-                it.value.snapshot.windowKey == windowKey
-        }?.takeIf { it.value.snapshot.contentHash == contentHash }?.let { it.index + 1 }
+        ): Int? =
+            ingested
+                .withIndex()
+                .lastOrNull {
+                    it.value.providerCode == providerCode &&
+                        it.value.providerInstanceId == providerInstanceId &&
+                        it.value.snapshot.windowKey == windowKey
+                }?.takeIf { it.value.snapshot.contentHash == contentHash }
+                ?.let { it.index + 1 }
 
         override suspend fun ingest(
             command: ProviderIngestionCommand,

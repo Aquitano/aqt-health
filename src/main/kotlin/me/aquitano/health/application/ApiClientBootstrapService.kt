@@ -1,12 +1,12 @@
 package me.aquitano.health.application
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import me.aquitano.health.infrastructure.config.AuthConfig
+import me.aquitano.health.infrastructure.logging.*
 import me.aquitano.health.infrastructure.repositories.BootstrapApiClientOutcome
 import me.aquitano.health.infrastructure.repositories.SupportRepository
 import me.aquitano.health.infrastructure.security.ApiKeyHasher
 import me.aquitano.health.infrastructure.time.UtcClock
-import io.github.oshai.kotlinlogging.KotlinLogging
-import me.aquitano.health.infrastructure.logging.*
 
 private val logger = KotlinLogging.logger {}
 
@@ -26,11 +26,12 @@ class ApiClientBootstrapService(
             return
         }
 
-        val outcome = supportRepository.upsertBootstrapApiClient(
-            name = authConfig.bootstrapClientName,
-            apiKeyHash = apiKeyHasher.hash(bootstrapApiKey),
-            now = clock.now(),
-        )
+        val outcome =
+            supportRepository.upsertBootstrapApiClient(
+                name = authConfig.bootstrapClientName,
+                apiKeyHash = apiKeyHasher.hash(bootstrapApiKey),
+                now = clock.now(),
+            )
         logger.infoWithContext(
             when (outcome) {
                 BootstrapApiClientOutcome.CREATED -> "api_client_bootstrap_created"

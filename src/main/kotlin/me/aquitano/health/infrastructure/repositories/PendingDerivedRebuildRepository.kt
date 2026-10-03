@@ -27,43 +27,55 @@ data class PendingDerivedRebuildRecord(
  * retried by [me.aquitano.health.application.PendingDerivedRebuildSweeper] and deleted
  * once the rebuild succeeds.
  */
-class PendingDerivedRebuildRepository(private val database: Database) {
+class PendingDerivedRebuildRepository(
+    private val database: Database,
+) {
     /**
      * Enqueue with the metric writes. Each revision identifies exactly the work observed by
      * a worker, so its completion cannot erase a newer ingestion for the same source and date.
      */
-    fun enqueueInTransaction(request: DerivedRebuildRequest, now: Instant): List<PendingDerivedRebuildRecord> {
+    fun enqueueInTransaction(
+        request: DerivedRebuildRequest,
+        now: Instant,
+    ): List<PendingDerivedRebuildRecord> {
         val queued = mutableListOf<PendingDerivedRebuildRecord>()
         val nowTimestamp = now.toDbTimestamp()
         request.affectedDates.forEach { (kind, dates) ->
             // Concurrent batches upsert the same unique keys; a fixed order cannot deadlock.
             dates.sorted().forEach { date ->
-                queued += PendingDerivedRebuildsTable.upsertReturning(
-                    PendingDerivedRebuildsTable.sourceInstanceId,
-                    PendingDerivedRebuildsTable.derivedKind,
-                    PendingDerivedRebuildsTable.affectedDate,
-                    onUpdateExclude = listOf(
-                        PendingDerivedRebuildsTable.attempts,
-                        PendingDerivedRebuildsTable.nextAttemptAt,
-                        PendingDerivedRebuildsTable.createdAt,
-                    ),
-                ) {
-                    it[sourceInstanceId] = request.sourceInstanceId
-                    it[derivedKind] = kind.name
-                    it[affectedDate] = date
-                    it[attempts] = 0
-                    it[nextAttemptAt] = nowTimestamp
-                    it[lastErrorMessage] = null
-                    it[revision] = UUID.randomUUID().toString()
-                    it[createdAt] = nowTimestamp
-                    it[updatedAt] = nowTimestamp
-                }.single().toRecord()
+                queued +=
+                    PendingDerivedRebuildsTable
+                        .upsertReturning(
+                            PendingDerivedRebuildsTable.sourceInstanceId,
+                            PendingDerivedRebuildsTable.derivedKind,
+                            PendingDerivedRebuildsTable.affectedDate,
+                            onUpdateExclude =
+                                listOf(
+                                    PendingDerivedRebuildsTable.attempts,
+                                    PendingDerivedRebuildsTable.nextAttemptAt,
+                                    PendingDerivedRebuildsTable.createdAt,
+                                ),
+                        ) {
+                            it[sourceInstanceId] = request.sourceInstanceId
+                            it[derivedKind] = kind.name
+                            it[affectedDate] = date
+                            it[attempts] = 0
+                            it[nextAttemptAt] = nowTimestamp
+                            it[lastErrorMessage] = null
+                            it[revision] = UUID.randomUUID().toString()
+                            it[createdAt] = nowTimestamp
+                            it[updatedAt] = nowTimestamp
+                        }.single()
+                        .toRecord()
             }
         }
         return queued
     }
 
-    suspend fun due(now: Instant, limit: Int): List<PendingDerivedRebuildRecord> =
+    suspend fun due(
+        now: Instant,
+        limit: Int,
+    ): List<PendingDerivedRebuildRecord> =
         suspendDbTransaction(db = database) {
             PendingDerivedRebuildsTable
                 .selectAll()
@@ -104,14 +116,15 @@ class PendingDerivedRebuildRepository(private val database: Database) {
         }
     }
 
-    private fun ResultRow.toRecord() = PendingDerivedRebuildRecord(
-        id = this[PendingDerivedRebuildsTable.id].value,
-        revision = this[PendingDerivedRebuildsTable.revision],
-        sourceInstanceId = this[PendingDerivedRebuildsTable.sourceInstanceId],
-        derivedKind = DerivedKind.valueOf(this[PendingDerivedRebuildsTable.derivedKind]),
-        affectedDate = this[PendingDerivedRebuildsTable.affectedDate],
-        attempts = this[PendingDerivedRebuildsTable.attempts],
-        nextAttemptAt = this[PendingDerivedRebuildsTable.nextAttemptAt].toInstant(),
-        lastErrorMessage = this[PendingDerivedRebuildsTable.lastErrorMessage],
-    )
+    private fun ResultRow.toRecord() =
+        PendingDerivedRebuildRecord(
+            id = this[PendingDerivedRebuildsTable.id].value,
+            revision = this[PendingDerivedRebuildsTable.revision],
+            sourceInstanceId = this[PendingDerivedRebuildsTable.sourceInstanceId],
+            derivedKind = DerivedKind.valueOf(this[PendingDerivedRebuildsTable.derivedKind]),
+            affectedDate = this[PendingDerivedRebuildsTable.affectedDate],
+            attempts = this[PendingDerivedRebuildsTable.attempts],
+            nextAttemptAt = this[PendingDerivedRebuildsTable.nextAttemptAt].toInstant(),
+            lastErrorMessage = this[PendingDerivedRebuildsTable.lastErrorMessage],
+        )
 }

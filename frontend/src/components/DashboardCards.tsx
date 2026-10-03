@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { revealStyle } from "@/lib/styles";
 import { AnimatedNumber } from "@/components/motion/AnimatedNumber";
 import { formatDuration, formatMeasurement, formatNumber } from "@/lib/format";
 import type { DashboardSummaryResponse, DashboardTrendsResponse } from "@/lib/types";
@@ -100,7 +100,7 @@ export function DashboardCards({ summary, trends }: DashboardCardsProps) {
           key={card.label}
           data-kind={card.kind}
           data-reveal
-          style={{ "--reveal-i": index } as CSSProperties}
+          style={revealStyle(index)}
         >
           <div className={styles.top}>
             <span className={styles.label}>{card.label}</span>

@@ -1,5 +1,6 @@
 package me.aquitano.health.application
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -12,19 +13,18 @@ import me.aquitano.health.api.dto.ProviderSyncJobStartResponse
 import me.aquitano.health.api.dto.ProviderSyncJobStatusResponse
 import me.aquitano.health.api.dto.ProviderSyncRequest
 import me.aquitano.health.api.dto.ProviderSyncResponse
-import me.aquitano.health.domain.SyncJobStatus
 import me.aquitano.health.application.providersync.ProviderSyncItem
 import me.aquitano.health.application.providersync.ProviderSyncProgressSink
 import me.aquitano.health.domain.ConflictException
 import me.aquitano.health.domain.NotFoundException
-import me.aquitano.health.domain.ProviderSyncRequest as DomainProviderSyncRequest
+import me.aquitano.health.domain.SyncJobStatus
+import me.aquitano.health.infrastructure.logging.*
 import me.aquitano.health.infrastructure.repositories.ProviderSyncJobRecord
 import me.aquitano.health.infrastructure.repositories.ProviderSyncJobRepository
 import me.aquitano.health.shared.AppJson
-import io.github.oshai.kotlinlogging.KotlinLogging
-import me.aquitano.health.infrastructure.logging.*
 import java.time.Instant
 import java.util.UUID
+import me.aquitano.health.domain.ProviderSyncRequest as DomainProviderSyncRequest
 
 private val providerSyncJobLogger = KotlinLogging.logger {}
 
@@ -75,12 +75,14 @@ class ProviderSyncJobService(
         now: Instant,
         idempotencyKey: String? = null,
     ): ProviderSyncJobStartResponse {
-        val provider = providerRegistry.getProvider(providerCode)
-            ?: throw NotFoundException("Provider '$providerCode' not found")
+        val provider =
+            providerRegistry.getProvider(providerCode)
+                ?: throw NotFoundException("Provider '$providerCode' not found")
         val domainRequest = request.toDomain(now)
         val requestHash = syncRequestHash(request)
         if (idempotencyKey != null) {
-            repository.findByIdempotencyKey(provider.providerCode, idempotencyKey)
+            repository
+                .findByIdempotencyKey(provider.providerCode, idempotencyKey)
                 ?.let { existing ->
                     existing.requireMatchingIdempotencyRequest(requestHash)
                     providerSyncJobLogger.infoWithContext(
@@ -91,18 +93,19 @@ class ProviderSyncJobService(
                     return existing.toStartDto()
                 }
         }
-        val result = repository.create(
-            id = UUID.randomUUID().toString(),
-            providerCode = provider.providerCode,
-            providerInstanceId = domainRequest.providerInstanceId,
-            requestedFrom = domainRequest.from,
-            requestedTo = domainRequest.to,
-            dataTypes = domainRequest.dataTypes,
-            pageSize = domainRequest.pageSize,
-            now = now,
-            idempotencyKey = idempotencyKey,
-            idempotencyRequestHash = idempotencyKey?.let { requestHash },
-        )
+        val result =
+            repository.create(
+                id = UUID.randomUUID().toString(),
+                providerCode = provider.providerCode,
+                providerInstanceId = domainRequest.providerInstanceId,
+                requestedFrom = domainRequest.from,
+                requestedTo = domainRequest.to,
+                dataTypes = domainRequest.dataTypes,
+                pageSize = domainRequest.pageSize,
+                now = now,
+                idempotencyKey = idempotencyKey,
+                idempotencyRequestHash = idempotencyKey?.let { requestHash },
+            )
         val job = result.record
         if (idempotencyKey != null) {
             job.requireMatchingIdempotencyRequest(requestHash)
@@ -127,9 +130,10 @@ class ProviderSyncJobService(
             ?: throw NotFoundException("Provider sync job '$jobId' not found")
 
     suspend fun latest(providerCode: String?): ProviderSyncJobStatusResponse? {
-        val canonicalProviderCode = providerCode
-            ?.let { providerRegistry.getProvider(it)?.providerCode }
-            ?: providerCode
+        val canonicalProviderCode =
+            providerCode
+                ?.let { providerRegistry.getProvider(it)?.providerCode }
+                ?: providerCode
         return repository.latest(canonicalProviderCode)?.toDto()
     }
 
@@ -146,12 +150,13 @@ class ProviderSyncJobService(
         )
 
         try {
-            val summary = workflowService.sync(
-                providerCode = providerCode,
-                request = request,
-                now = clock.now(),
-                progress = JobProgressSink(jobId, repository, clock),
-            )
+            val summary =
+                workflowService.sync(
+                    providerCode = providerCode,
+                    request = request,
+                    now = clock.now(),
+                    progress = JobProgressSink(jobId, repository, clock),
+                )
             repository.finish(
                 id = jobId,
                 status = summary.status.stored,
@@ -159,8 +164,10 @@ class ProviderSyncJobService(
                 emptyCount = summary.emptyDataTypes.size,
                 errorCount = summary.errors.size,
                 summaryJson = AppJson.encodeToString(summary),
-                errorMessage = summary.errors.joinToString("; ") { "${it.dataType}: ${it.message}" }
-                    .ifBlank { null },
+                errorMessage =
+                    summary.errors
+                        .joinToString("; ") { "${it.dataType}: ${it.message}" }
+                        .ifBlank { null },
                 now = clock.now(),
             )
             providerSyncJobLogger.infoWithContext(
@@ -194,7 +201,10 @@ class ProviderSyncJobService(
         private val repository: ProviderSyncJobRepository,
         private val clock: me.aquitano.health.infrastructure.time.UtcClock,
     ) : ProviderSyncProgressSink {
-        override suspend fun started(totalItems: Int, providerInstanceId: String) {
+        override suspend fun started(
+            totalItems: Int,
+            providerInstanceId: String,
+        ) {
             repository.markStarted(jobId, providerInstanceId, totalItems, clock.now())
         }
 
@@ -226,8 +236,7 @@ class ProviderSyncJobService(
      * provider_sync_jobs stores the internal provider code so it correlates with scheduled_syncs
      * and provider_sync_runs; API responses keep returning the hyphenated wire code.
      */
-    private fun wireProviderCode(providerCode: String): String =
-        providerRegistry.getProvider(providerCode)?.descriptor?.providerCode ?: providerCode
+    private fun wireProviderCode(providerCode: String): String = providerRegistry.getProvider(providerCode)?.descriptor?.providerCode ?: providerCode
 
     private fun ProviderSyncJobRecord.toDto(): ProviderSyncJobStatusResponse =
         ProviderSyncJobStatusResponse(
@@ -251,9 +260,10 @@ class ProviderSyncJobService(
             startedAt = startedAt?.toString(),
             updatedAt = updatedAt.toString(),
             finishedAt = finishedAt?.toString(),
-            summary = summaryJson?.let {
-                runCatching { AppJson.decodeFromString<ProviderSyncResponse>(it) }.getOrNull()
-            },
+            summary =
+                summaryJson?.let {
+                    runCatching { AppJson.decodeFromString<ProviderSyncResponse>(it) }.getOrNull()
+                },
         )
 
     private fun itemDto(
@@ -278,4 +288,3 @@ private fun ProviderSyncJobRecord.toDomainRequest(): DomainProviderSyncRequest =
         dataTypes = dataTypes,
         pageSize = pageSize,
     )
-
