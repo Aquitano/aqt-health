@@ -5,14 +5,27 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    groups:
+      kotlin:
+        patterns:
+          - "jvm"
+          - "org.jetbrains.kotlin*"
 
-  # Frontend is on bun; Dependabot reads package.json under the npm ecosystem.
-  # bun.lock parsing is recent — verify PRs appear, or move the frontend to Renovate if not.
   - package-ecosystem: npm
     directory: "/frontend"
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    groups:
+      next:
+        patterns:
+          - "next"
+          - "eslint-config-next"
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react*"
 
   - package-ecosystem: github-actions
     directory: "/"

@@ -13,11 +13,11 @@ val kotlin_logging_version: String by project
 val konsist_version: String by project
 
 plugins {
-    kotlin("jvm") version "2.3.0"
-    id("io.ktor.plugin") version "3.5.0"
-    id("org.jetbrains.kotlin.plugin.serialization") version "2.3.0"
+    kotlin("jvm") version "2.4.10"
+    id("io.ktor.plugin") version "3.5.2"
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.4.10"
 
-    id("com.github.ben-manes.versions") version "0.61.0"
+    id("com.github.ben-manes.versions") version "0.64.0"
 }
 
 group = "me.aquitano"
@@ -28,7 +28,7 @@ application {
 }
 
 kotlin {
-    jvmToolchain(21)
+    jvmToolchain(25)
 }
 
 ktor {
@@ -50,7 +50,7 @@ dependencies {
     implementation("io.ktor:ktor-server-core")
     implementation("io.ktor:ktor-server-content-negotiation")
     implementation("io.ktor:ktor-server-metrics-micrometer")
-    implementation("io.micrometer:micrometer-registry-prometheus:1.17.0")
+    implementation("io.micrometer:micrometer-registry-prometheus:1.17.1")
     implementation("org.xerial.snappy:snappy-java:1.1.10.8")
     implementation("io.ktor:ktor-server-netty")
     implementation("io.ktor:ktor-server-openapi")
@@ -79,7 +79,7 @@ dependencies {
     implementation("org.flywaydb:flyway-core:$flyway_version")
     implementation("org.flywaydb:flyway-database-postgresql:$flyway_version")
 
-    implementation("com.google.cloud:google-cloud-health:0.4.0")
+    implementation("com.google.cloud:google-cloud-health:0.7.0")
 
     testImplementation("io.ktor:ktor-server-test-host")
     testImplementation("io.ktor:ktor-client-mock")

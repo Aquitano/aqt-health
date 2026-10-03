@@ -32,6 +32,12 @@ class OpenApiExportTest : PostgresIntegrationTest() {
             .jsonObject["schemas"]!!
             .jsonObject
 
+        assertEquals(
+            setOf("ErrorResponse", "ErrorBody", "ErrorDetail"),
+            schemas.keys.filter { it.startsWith("Error") }.toSet(),
+            "Reusable error schemas must not be duplicated by OpenAPI inference",
+        )
+
         val scalarSampleProperties = schemas["ScalarSampleResponse"]!!
             .jsonObject["properties"]!!
             .jsonObject

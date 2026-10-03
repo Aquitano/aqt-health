@@ -240,18 +240,14 @@ class ApplicationTest : PostgresIntegrationTest() {
                 .jsonArray.map { it.jsonPrimitive.content }.toSet(),
         )
 
-        val recordSchemaRefs = setOf(
-            "#/components/schemas/step_interval",
-            "#/components/schemas/sleep_session",
-            "#/components/schemas/activity_summary",
-            "#/components/schemas/sleep_summary",
-            "#/components/schemas/blood_pressure",
-            "#/components/schemas/scalar",
+        val recordTypes = setOf(
+            "step_interval",
+            "sleep_session",
+            "activity_summary",
+            "sleep_summary",
+            "blood_pressure",
+            "scalar",
         )
-        recordSchemaRefs.forEach { ref ->
-            val schemaName = ref.substringAfterLast('/')
-            assertNotNull(schemas[schemaName], "Missing OpenAPI component schema $schemaName")
-        }
 
         val requestSchema = paths["/api/v2/ingestion/batches"]!!.jsonObject["post"]!!.jsonObject["requestBody"]!!
             .jsonObject["content"]!!.jsonObject["application/json"]!!.jsonObject["schema"]!!.jsonObject
@@ -271,17 +267,24 @@ class ApplicationTest : PostgresIntegrationTest() {
         val recordRefs = recordSchema["oneOf"]!!
             .jsonArray.map { it.jsonObject["\$ref"]!!.jsonPrimitive.content }
             .toSet()
-        assertEquals(recordSchemaRefs, recordRefs)
+        assertEquals(recordTypes.size, recordRefs.size)
 
         val discriminator = recordSchema["discriminator"]!!.jsonObject
         assertEquals("type", discriminator["propertyName"]!!.jsonPrimitive.content)
         val mapping = discriminator["mapping"]!!.jsonObject
         assertEquals(
-            recordSchemaRefs,
+            recordRefs,
             mapping.values.map { it.jsonPrimitive.content }.toSet(),
         )
+        assertEquals(recordTypes, mapping.keys)
         mapping.forEach { (typeValue, ref) ->
-            assertEquals("#/components/schemas/$typeValue", ref.jsonPrimitive.content)
+            val schemaName = ref.jsonPrimitive.content.removePrefix("#/components/schemas/")
+            val schema = assertNotNull(schemas[schemaName], "Missing OpenAPI component schema $schemaName")
+            assertEquals(
+                listOf(typeValue),
+                schema.jsonObject["properties"]!!.jsonObject["type"]!!.jsonObject["enum"]!!
+                    .jsonArray.map { it.jsonPrimitive.content },
+            )
         }
     }
 
