@@ -21,7 +21,6 @@ import me.aquitano.health.domain.ScalarMetricTypes
 import me.aquitano.health.infrastructure.database.suspendDbTransaction
 import org.jetbrains.exposed.v1.jdbc.Database
 import java.time.Instant
-import java.time.ZoneOffset
 
 class DashboardQueryService(
     private val database: Database,
@@ -37,8 +36,9 @@ class DashboardQueryService(
         val toDate = params.requiredDate("toDate")
         validateDateRange(fromDate, toDate)
         val includeSource = params.boolean("includeSource", default = false)
-        val fromInstant = fromDate.atStartOfDay().toInstant(ZoneOffset.UTC)
-        val toInstant = toDate.plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC)
+        val timezone = params.timezone()
+        val fromInstant = fromDate.atStartOfDay(timezone).toInstant()
+        val toInstant = toDate.plusDays(1).atStartOfDay(timezone).toInstant()
 
         return suspendDbTransaction(db = database) {
             val dailyFilters =
@@ -56,7 +56,7 @@ class DashboardQueryService(
                 SleepNightReadFilters(
                     fromDate = toDate,
                     toDate = toDate,
-                    timezone = params.timezone(),
+                    timezone = timezone,
                     provider = params.optional("provider"),
                     providerInstanceId = params.optional("providerInstanceId"),
                     includeSource = includeSource,
