@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getHealthDataPageSources, getTrendsPageData } from "./aqtHealthApi";
+import { getHealthDataPageSources, getIngestionsPageData, getTrendsPageData } from "./aqtHealthApi";
 import { buildTrendStats } from "./trends";
 
 const mocks = vi.hoisted(() => {
@@ -21,6 +21,8 @@ const mocks = vi.hoisted(() => {
     "getLatestActivitySummary",
     "getLatestSleepSummary",
     "getLatestBloodPressure",
+    "listIngestionBatches",
+    "listIngestionFailures",
   ] as const;
   return Object.fromEntries(names.map((name) => [name, vi.fn()])) as Record<
     (typeof names)[number],
@@ -128,6 +130,11 @@ describe("page data requests", () => {
       to: "2026-03-09T04:00:00.000Z",
       timezone: "America/New_York",
     });
+  });
+
+  it("filters ingestion batches by the received status", async () => {
+    await getIngestionsPageData({ status: "received" });
+    expect(mocks.listIngestionBatches).toHaveBeenCalledWith({ limit: 25, status: "received" });
   });
 
   it("uses local-day instants consistently and leaves raw-only datasets unfetched", async () => {
