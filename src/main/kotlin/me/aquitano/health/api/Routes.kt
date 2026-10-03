@@ -169,7 +169,7 @@ fun Application.configureRoutes(appConfig: AppConfig) {
                                 )
                             }
                         }
-                        commonErrors(conflict = true)
+                        commonErrors(conflict = true, payloadTooLarge = true)
                     }
                 }
             }

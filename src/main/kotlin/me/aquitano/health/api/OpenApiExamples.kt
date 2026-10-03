@@ -195,6 +195,8 @@ internal fun conflictErrorExample(): ExampleObject =
         "Batch '$ExampleBatchExternalId' already exists with status 'accepted'",
     )
 
+internal fun payloadTooLargeErrorExample(): ExampleObject = errorExample("Payload too large", "payload_too_large", "Request body exceeds the configured size limit")
+
 internal fun upstreamErrorExample(): ExampleObject = errorExample("Upstream provider failure", "upstream_unavailable", "Provider request failed")
 
 internal fun internalErrorExample(): ExampleObject = errorExample("Internal server error", "internal_error", "Unexpected server error")
