@@ -13,7 +13,9 @@ export type StepDailySummariesResponse = ApiSchema<"StepDailySummariesResponse">
 // All scalar metrics (heart rate, HRV, respiratory rate, body, cardiovascular) share one
 // wire shape; components take ScalarSample(sResponse) directly rather than per-metric aliases.
 export type ScalarSample = ApiSchema<"ScalarSampleResponse">;
+export type ScalarDailySummariesResponse = ApiSchema<"ScalarDailySummariesResponse">;
 export type ScalarSamplesResponse = ApiSchema<"ScalarSamplesResponse">;
+export type BodyMeasurementsResponse = ScalarSamplesResponse & { truncated: boolean };
 export type ActivitySummary = ApiSchema<"ActivitySummaryResponse">;
 export type ActivitySummariesResponse = ApiSchema<"ActivitySummariesResponse">;
 export type SleepSession = ApiSchema<"SleepSessionResponse">;
@@ -63,8 +65,7 @@ export type HealthDataPageData = HealthStatusData & {
   healthDay: ApiResult<HealthDayResponse>;
   dailySteps: ApiResult<StepDailySummariesResponse>;
   activitySummaries: ApiResult<ActivitySummariesResponse>;
-  bodyMeasurements: ApiResult<ScalarSamplesResponse>;
-  latestHeartRate: ApiResult<ScalarSamplesResponse>;
+  bodyMeasurements: ApiResult<BodyMeasurementsResponse>;
   heartRateDaily: HeartRateDailyPoint[];
   sleepNights: ApiResult<SleepNightsResponse>;
   sleepSummaries: ApiResult<SleepSummariesResponse>;
@@ -74,10 +75,7 @@ export type HealthDataPageData = HealthStatusData & {
   latestSleepSummary: ApiResult<SleepSummariesResponse>;
   latestRespiratoryRate: ApiResult<ScalarSamplesResponse>;
   latestHrv: ApiResult<ScalarSamplesResponse>;
-  bloodPressure: ApiResult<BloodPressureMeasurementsResponse>;
   latestBloodPressure: ApiResult<BloodPressureMeasurementsResponse>;
-  cardiovascular: ApiResult<ScalarSamplesResponse>;
-  extendedBodyMeasurements: ApiResult<ScalarSamplesResponse>;
 };
 
 /**
@@ -97,9 +95,9 @@ export type TrendsPageData = HealthStatusData & {
   weight: ApiResult<ScalarSamplesResponse>;
   steps: ApiResult<StepDailySummariesResponse>;
   sleep: ApiResult<SleepSummariesResponse>;
-  hrv: ApiResult<ScalarSamplesResponse>;
+  hrv: ApiResult<ScalarDailySummariesResponse>;
   activity: ApiResult<ActivitySummariesResponse>;
-  respiratory: ApiResult<ScalarSamplesResponse>;
+  respiratory: ApiResult<ScalarDailySummariesResponse>;
 };
 
 export type ProviderSyncPageData = HealthStatusData & {

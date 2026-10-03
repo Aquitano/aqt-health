@@ -43,7 +43,7 @@ const routes: ProxyRoute[] = [
     pattern: /^providers\/([^/]+)\/sync-jobs$/,
     successStatus: 202,
     handle: async (providerCode, _rest, request) => {
-      const body = (await request.json().catch(() => ({}))) as ProviderSyncRequest;
+      const body = await readBody(request);
       return aqtHealthClient.startProviderSyncJob(providerCode, normalizeSyncPayload(body));
     },
   },
@@ -74,7 +74,7 @@ const routes: ProxyRoute[] = [
     method: "PUT",
     pattern: /^providers\/([^/]+)\/accounts\/([^/]+)\/scheduled-sync$/,
     handle: async (providerCode, [providerInstanceId], request) => {
-      const body = (await request.json().catch(() => ({}))) as ScheduledSyncConfigUpdateRequest;
+      const body = await readBody(request);
       return aqtHealthClient.updateScheduledSyncConfig(
         providerCode,
         providerInstanceId,
@@ -137,10 +137,15 @@ async function dispatch(
       return proxyError(404, `Unknown provider '${match[1]}'.`);
     }
 
-    const result = await route.handle(providerCode, match.slice(2), request);
-    return NextResponse.json(result, {
-      status: result.ok ? route.successStatus ?? 200 : result.status ?? 500,
-    });
+    try {
+      const result = await route.handle(providerCode, match.slice(2), request);
+      return NextResponse.json(result, {
+        status: result.ok ? route.successStatus ?? 200 : result.status ?? 500,
+      });
+    } catch (error) {
+      if (error instanceof InvalidPayloadError) return proxyError(400, error.message);
+      throw error;
+    }
   }
 
   return proxyError(404, "Unknown backend proxy path.");
@@ -162,41 +167,70 @@ export function PUT(request: Request, context: RouteContext) {
   return dispatch("PUT", request, context);
 }
 
-function normalizeSyncPayload(body: ProviderSyncRequest): ProviderSyncRequest {
-  const dataTypes = Array.isArray(body.dataTypes)
-    ? body.dataTypes.filter((dataType) => typeof dataType === "string" && dataType.trim())
-    : undefined;
-  const pageSize =
-    typeof body.pageSize === "number" && Number.isInteger(body.pageSize) && body.pageSize > 0
-      ? body.pageSize
-      : undefined;
+class InvalidPayloadError extends Error {}
 
+async function readBody(request: Request): Promise<Record<string, unknown>> {
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    throw new InvalidPayloadError("Request body must be valid JSON.");
+  }
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    throw new InvalidPayloadError("Request body must be a JSON object.");
+  }
+  return body as Record<string, unknown>;
+}
+
+function normalizeSyncPayload(body: Record<string, unknown>): ProviderSyncRequest {
   return {
-    from: nonEmpty(body.from),
-    to: nonEmpty(body.to),
-    dataTypes: dataTypes && dataTypes.length > 0 ? dataTypes : undefined,
-    pageSize,
+    from: nonEmpty(body.from, "from"),
+    to: nonEmpty(body.to, "to"),
+    dataTypes: dataTypes(body.dataTypes),
+    pageSize: positiveInteger(body.pageSize, "pageSize"),
   };
 }
 
 function normalizeScheduledSyncPayload(
-  body: ScheduledSyncConfigUpdateRequest,
+  body: Record<string, unknown>,
 ): ScheduledSyncConfigUpdateRequest {
-  const dataTypes = Array.isArray(body.dataTypes)
-    ? body.dataTypes.filter((dataType) => typeof dataType === "string" && dataType.trim())
-    : undefined;
+  if (body.enabled != null && typeof body.enabled !== "boolean") {
+    throw new InvalidPayloadError("enabled must be a boolean.");
+  }
+  const selectedDataTypes = dataTypes(body.dataTypes);
+  if (Array.isArray(body.dataTypes) && selectedDataTypes === undefined) {
+    throw new InvalidPayloadError("dataTypes must include at least one data type.");
+  }
   return {
-    enabled: typeof body.enabled === "boolean" ? body.enabled : undefined,
-    dataTypes: dataTypes && dataTypes.length > 0 ? dataTypes : undefined,
-    cadenceMinutes: positiveInteger(body.cadenceMinutes),
-    lookbackDays: positiveInteger(body.lookbackDays),
+    enabled: body.enabled ?? undefined,
+    dataTypes: selectedDataTypes,
+    cadenceMinutes: positiveInteger(body.cadenceMinutes, "cadenceMinutes"),
+    lookbackDays: positiveInteger(body.lookbackDays, "lookbackDays"),
   };
 }
 
-function nonEmpty(value?: string | null): string | undefined {
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+function dataTypes(value: unknown): string[] | undefined {
+  if (value == null) return undefined;
+  if (
+    !Array.isArray(value) ||
+    !value.every((item): item is string => typeof item === "string")
+  ) {
+    throw new InvalidPayloadError("dataTypes must be an array of strings.");
+  }
+  const items = value.map((item) => item.trim()).filter(Boolean);
+  return items.length ? items : undefined;
 }
 
-function positiveInteger(value?: number | null): number | undefined {
-  return Number.isInteger(value) && value && value > 0 ? value : undefined;
+function nonEmpty(value: unknown, field: string): string | undefined {
+  if (value == null) return undefined;
+  if (typeof value !== "string") throw new InvalidPayloadError(`${field} must be a string.`);
+  return value.trim() || undefined;
+}
+
+function positiveInteger(value: unknown, field: string): number | undefined {
+  if (value == null) return undefined;
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
+    throw new InvalidPayloadError(`${field} must be a positive integer.`);
+  }
+  return value;
 }

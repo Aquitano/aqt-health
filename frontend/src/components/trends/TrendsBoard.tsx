@@ -112,7 +112,8 @@ function ChangeChip({
   stat: TrendStat;
   window: string;
 }) {
-  if (!change || Math.abs(change.abs) < 1e-6) {
+  if (!change) return <span className={styles.chip}>Unavailable{window ? ` (${window})` : ""}</span>;
+  if (Math.abs(change.abs) < 1e-6) {
     return (
       <span className={`${styles.chip} ${styles.chipFlat}`}>
         <ArrowRight size={13} aria-hidden="true" />

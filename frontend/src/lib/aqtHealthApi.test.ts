@@ -1,0 +1,141 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { getHealthDataPageSources, getTrendsPageData } from "./aqtHealthApi";
+import { buildTrendStats } from "./trends";
+
+const mocks = vi.hoisted(() => {
+  const names = [
+    "getHealth",
+    "listScalarSamples",
+    "listDailyStepSummaries",
+    "listSleepSummaries",
+    "getScalarDailySummaries",
+    "listActivitySummaries",
+    "getDashboardSummary",
+    "getDashboardTrends",
+    "getHealthDay",
+    "listBodyMeasurements",
+    "listBloodPressure",
+    "listSleepNights",
+    "listRespiratoryRateSamples",
+    "listHrvSamples",
+    "getLatestActivitySummary",
+    "getLatestSleepSummary",
+    "getLatestBloodPressure",
+  ] as const;
+  return Object.fromEntries(names.map((name) => [name, vi.fn()])) as Record<
+    (typeof names)[number],
+    ReturnType<typeof vi.fn>
+  >;
+});
+vi.mock("./aqtHealthClient", () => ({
+  toProviderCode: (value: string) => value,
+  aqtHealthClient: { apiBaseUrl: "http://test", ...mocks },
+}));
+function response(items: unknown[] = [], nextCursor?: string) {
+  return {
+    ok: true,
+    data: {
+      items,
+      meta: {
+        count: items.length,
+        limit: 5000,
+        order: "asc",
+        sort: "measuredAt",
+        nextCursor,
+      },
+    },
+  };
+}
+beforeEach(() => {
+  for (const fn of Object.values(mocks)) fn.mockReset().mockResolvedValue(response());
+});
+
+describe("page data requests", () => {
+  it("loads weight beyond the first 5,000 samples and aggregates high-volume metrics on the backend", async () => {
+    const firstPage = Array.from({ length: 5000 }, (_, id) => ({
+      id,
+      measuredAt: "2026-01-01T12:00:00Z",
+      metricType: "weight",
+      value: 80,
+      unit: "kg",
+    }));
+    mocks.listScalarSamples
+      .mockResolvedValueOnce(response(firstPage, "next-weight"))
+      .mockResolvedValueOnce(
+        response([
+          {
+            id: 5001,
+            measuredAt: "2026-09-01T12:00:00Z",
+            metricType: "weight",
+            value: 75,
+            unit: "kg",
+          },
+        ])
+      );
+    const data = await getTrendsPageData("2026-09-01", 365);
+    expect(mocks.listScalarSamples).toHaveBeenLastCalledWith(
+      "weight",
+      expect.objectContaining({ cursor: "next-weight" })
+    );
+    expect(
+      buildTrendStats({
+        weight: data.weight.ok ? data.weight.data : undefined,
+      })[0].latest
+    ).toBe(75);
+    expect(mocks.getScalarDailySummaries).toHaveBeenCalledWith(
+      "hrv_rmssd",
+      expect.any(Object)
+    );
+    expect(mocks.getScalarDailySummaries).toHaveBeenCalledWith(
+      "respiratory_rate",
+      expect.any(Object)
+    );
+    expect(mocks.listBodyMeasurements).not.toHaveBeenCalled();
+  });
+
+  it("propagates a later page failure instead of displaying partial data as complete", async () => {
+    mocks.listScalarSamples
+      .mockResolvedValueOnce(response([], "next"))
+      .mockResolvedValueOnce({ ok: false, status: 503, message: "offline" });
+    expect((await getTrendsPageData("2026-09-01", 30)).weight).toEqual({
+      ok: false,
+      status: 503,
+      message: "offline",
+    });
+  });
+
+  it("stops immediately when the backend repeats the requested cursor", async () => {
+    mocks.listScalarSamples.mockResolvedValue(response([], "same-page"));
+    expect((await getTrendsPageData("2026-09-01", 30)).weight).toEqual({
+      ok: false,
+      message: "The backend repeated a pagination cursor.",
+    });
+    expect(mocks.listScalarSamples).toHaveBeenCalledTimes(2);
+    expect(mocks.listScalarSamples).toHaveBeenLastCalledWith(
+      "weight",
+      expect.objectContaining({ cursor: "same-page" }),
+    );
+  });
+
+  it("uses local-day instants consistently and leaves raw-only datasets unfetched", async () => {
+    const sources = getHealthDataPageSources(
+      "2026-03-08",
+      "2026-03-08",
+      "America/New_York"
+    );
+    await Promise.all(Object.values(sources));
+    expect(mocks.listBodyMeasurements).toHaveBeenCalledWith(
+      expect.objectContaining({
+        from: "2026-03-08T05:00:00.000Z",
+        to: "2026-03-09T04:00:00.000Z",
+      })
+    );
+    expect(mocks.getScalarDailySummaries).toHaveBeenCalledWith("heart_rate", {
+      from: "2026-03-08T05:00:00.000Z",
+      to: "2026-03-09T04:00:00.000Z",
+      timezone: "America/New_York",
+    });
+    expect(mocks.listBloodPressure).not.toHaveBeenCalled();
+    expect(mocks.listScalarSamples).not.toHaveBeenCalled();
+  });
+});

@@ -48,7 +48,7 @@ describe("backend proxy route", () => {
           body: JSON.stringify({
             enabled: true,
             dataTypes: ["activity", " "],
-            cadenceMinutes: 0,
+            cadenceMinutes: 60,
             lookbackDays: 3,
           }),
         },
@@ -60,7 +60,7 @@ describe("backend proxy route", () => {
     expect(mocks.updateScheduledSyncConfig).toHaveBeenCalledWith("withings", "withings-me", {
       enabled: true,
       dataTypes: ["activity"],
-      cadenceMinutes: undefined,
+      cadenceMinutes: 60,
       lookbackDays: 3,
     });
   });
@@ -169,5 +169,47 @@ describe("backend proxy route", () => {
     );
 
     expect(response.status).toBe(404);
+  });
+});
+
+describe("proxy request validation", () => {
+  it.each(["null", "[]", "false", "42", "{invalid", '{"pageSize":0}', '{"dataTypes":[42]}'])
+    ("rejects invalid sync payload %s before creating a job", async (body) => {
+      mocks.startProviderSyncJob.mockClear();
+      const response = await POST(
+        new Request("http://frontend.test/api/backend/providers/withings/sync-jobs", { method: "POST", body }),
+        context("providers", "withings", "sync-jobs"),
+      );
+      expect(response.status).toBe(400);
+      expect(mocks.startProviderSyncJob).not.toHaveBeenCalled();
+    });
+
+  it.each(["null", "{invalid", '{"enabled":"true"}', '{"cadenceMinutes":0}', '{"dataTypes":[]}', '{"dataTypes":[" "]}'])
+    ("rejects invalid scheduled updates %s", async (body) => {
+      mocks.updateScheduledSyncConfig.mockClear();
+      const response = await PUT(
+        new Request("http://frontend.test/api/backend/providers/withings/accounts/me/scheduled-sync", { method: "PUT", body }),
+        context("providers", "withings", "accounts", "me", "scheduled-sync"),
+      );
+      expect(response.status).toBe(400);
+      expect(mocks.updateScheduledSyncConfig).not.toHaveBeenCalled();
+    });
+
+  it("preserves existing scheduled data types when they are omitted", async () => {
+    mocks.updateScheduledSyncConfig.mockResolvedValue({ ok: true, data: { enabled: false } });
+    const response = await PUT(
+      new Request("http://frontend.test/api/backend/providers/withings/accounts/me/scheduled-sync", {
+        method: "PUT",
+        body: JSON.stringify({ enabled: false }),
+      }),
+      context("providers", "withings", "accounts", "me", "scheduled-sync"),
+    );
+    expect(response.status).toBe(200);
+    expect(mocks.updateScheduledSyncConfig).toHaveBeenLastCalledWith("withings", "me", {
+      enabled: false,
+      dataTypes: undefined,
+      cadenceMinutes: undefined,
+      lookbackDays: undefined,
+    });
   });
 });
