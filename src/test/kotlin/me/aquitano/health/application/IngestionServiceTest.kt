@@ -237,10 +237,6 @@ class IngestionServiceTest : PostgresIntegrationTest() {
             // The failed rebuild must be queued for the sweeper, not just marked on the batch.
             assertEquals(1, singleInt(dbConfig, "SELECT COUNT(*) FROM pending_derived_rebuilds"))
             assertEquals(
-                "STEP_SUMMARY",
-                singleString(dbConfig, "SELECT derived_kind FROM pending_derived_rebuilds"),
-            )
-            assertEquals(
                 "2026-04-19",
                 singleString(dbConfig, "SELECT affected_date::text FROM pending_derived_rebuilds"),
             )

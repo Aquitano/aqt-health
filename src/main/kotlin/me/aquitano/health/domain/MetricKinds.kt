@@ -13,11 +13,3 @@ object StructuralMetricKinds {
     const val ACTIVITY_SUMMARIES = "activity_summaries"
     const val BLOOD_PRESSURE_MEASUREMENTS = "blood_pressure_measurements"
 }
-
-/**
- * One entry per derived projection that is rebuilt for affected dates after ingestion.
- * Every entry must have a registered DerivedRebuildModule; the registry enforces coverage.
- */
-enum class DerivedKind {
-    STEP_SUMMARY,
-}

@@ -1,7 +1,6 @@
 package me.aquitano.health.infrastructure.repositories
 
 import me.aquitano.health.application.DerivedRebuildRequest
-import me.aquitano.health.domain.DerivedKind
 import me.aquitano.health.infrastructure.database.suspendDbTransaction
 import me.aquitano.health.infrastructure.database.tables.PendingDerivedRebuildsTable
 import me.aquitano.health.infrastructure.database.toDbTimestamp
@@ -15,7 +14,6 @@ data class PendingDerivedRebuildRecord(
     val id: Int,
     val revision: String,
     val sourceInstanceId: Int,
-    val derivedKind: DerivedKind,
     val affectedDate: LocalDate,
     val attempts: Int,
     val nextAttemptAt: Instant,
@@ -40,34 +38,30 @@ class PendingDerivedRebuildRepository(
     ): List<PendingDerivedRebuildRecord> {
         val queued = mutableListOf<PendingDerivedRebuildRecord>()
         val nowTimestamp = now.toDbTimestamp()
-        request.affectedDates.forEach { (kind, dates) ->
-            // Concurrent batches upsert the same unique keys; a fixed order cannot deadlock.
-            dates.sorted().forEach { date ->
-                queued +=
-                    PendingDerivedRebuildsTable
-                        .upsertReturning(
-                            PendingDerivedRebuildsTable.sourceInstanceId,
-                            PendingDerivedRebuildsTable.derivedKind,
-                            PendingDerivedRebuildsTable.affectedDate,
-                            onUpdateExclude =
-                                listOf(
-                                    PendingDerivedRebuildsTable.attempts,
-                                    PendingDerivedRebuildsTable.nextAttemptAt,
-                                    PendingDerivedRebuildsTable.createdAt,
-                                ),
-                        ) {
-                            it[sourceInstanceId] = request.sourceInstanceId
-                            it[derivedKind] = kind.name
-                            it[affectedDate] = date
-                            it[attempts] = 0
-                            it[nextAttemptAt] = nowTimestamp
-                            it[lastErrorMessage] = null
-                            it[revision] = UUID.randomUUID().toString()
-                            it[createdAt] = nowTimestamp
-                            it[updatedAt] = nowTimestamp
-                        }.single()
-                        .toRecord()
-            }
+        // Concurrent batches upsert the same unique keys; a fixed order cannot deadlock.
+        request.affectedStepDates.sorted().forEach { date ->
+            queued +=
+                PendingDerivedRebuildsTable
+                    .upsertReturning(
+                        PendingDerivedRebuildsTable.sourceInstanceId,
+                        PendingDerivedRebuildsTable.affectedDate,
+                        onUpdateExclude =
+                            listOf(
+                                PendingDerivedRebuildsTable.attempts,
+                                PendingDerivedRebuildsTable.nextAttemptAt,
+                                PendingDerivedRebuildsTable.createdAt,
+                            ),
+                    ) {
+                        it[sourceInstanceId] = request.sourceInstanceId
+                        it[affectedDate] = date
+                        it[attempts] = 0
+                        it[nextAttemptAt] = nowTimestamp
+                        it[lastErrorMessage] = null
+                        it[revision] = UUID.randomUUID().toString()
+                        it[createdAt] = nowTimestamp
+                        it[updatedAt] = nowTimestamp
+                    }.single()
+                    .toRecord()
         }
         return queued
     }
@@ -121,7 +115,6 @@ class PendingDerivedRebuildRepository(
             id = this[PendingDerivedRebuildsTable.id].value,
             revision = this[PendingDerivedRebuildsTable.revision],
             sourceInstanceId = this[PendingDerivedRebuildsTable.sourceInstanceId],
-            derivedKind = DerivedKind.valueOf(this[PendingDerivedRebuildsTable.derivedKind]),
             affectedDate = this[PendingDerivedRebuildsTable.affectedDate],
             attempts = this[PendingDerivedRebuildsTable.attempts],
             nextAttemptAt = this[PendingDerivedRebuildsTable.nextAttemptAt].toInstant(),
