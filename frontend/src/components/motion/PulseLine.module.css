@@ -1,0 +1,16 @@
+/* 1.8s sweep plus a 0.15s pause per cycle; 92% = 1.8 / 1.95. */
+@media (prefers-reduced-motion: no-preference) {
+  .comet {
+    animation: pulse-sweep 1.95s linear infinite;
+  }
+}
+
+@keyframes pulse-sweep {
+  from {
+    stroke-dashoffset: 1.16;
+  }
+  92%,
+  to {
+    stroke-dashoffset: -1.16;
+  }
+}
