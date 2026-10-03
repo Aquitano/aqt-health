@@ -1,5 +1,6 @@
 package me.aquitano.health.infrastructure.database
 
+import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.api.dto.IngestionRecord
 import me.aquitano.health.api.dto.ScalarSample
 import me.aquitano.health.application.IngestionMappingService
@@ -18,7 +19,7 @@ import kotlin.test.assertTrue
  * record type. Migrates a database to V20, seeds it with legacy records and the scalar
  * samples they produced, then finishes migrating and checks the log is still replayable.
  */
-class LegacyScalarRecordMigrationTest {
+class LegacyScalarRecordMigrationTest : PostgresIntegrationTest() {
     @Test
     fun legacyRecordsBecomeReplayableScalarRecords() {
         val config = PostgresTestDatabase.config()

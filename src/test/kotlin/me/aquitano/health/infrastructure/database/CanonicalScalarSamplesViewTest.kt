@@ -1,5 +1,6 @@
 package me.aquitano.health.infrastructure.database
 
+import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.infrastructure.config.DatabaseConfig
 import me.aquitano.health.test.PostgresTestDatabase
 import kotlin.test.Test
@@ -12,7 +13,7 @@ import kotlin.test.assertEquals
  * context='sleep' rank by the sleep family (withings first) instead of heart_rate
  * (google_health first).
  */
-class CanonicalScalarSamplesViewTest {
+class CanonicalScalarSamplesViewTest : PostgresIntegrationTest() {
     @Test
     fun crossProviderCollisionKeepsOnlyTopRankedProvider() {
         val fixture = Fixture()
@@ -77,11 +78,11 @@ class CanonicalScalarSamplesViewTest {
         assertEquals(listOf(3.2, 3.4), fixture.canonicalValues("segmental_muscle_mass"))
     }
 
-    private class Fixture {
+    private inner class Fixture {
         val dbConfig: DatabaseConfig = PostgresTestDatabase.config()
 
         init {
-            DatabaseFactory().initialize(dbConfig)
+            openDatabase(dbConfig)
             execute(
                 """
                 INSERT INTO sources (id, code, display_name, created_at)

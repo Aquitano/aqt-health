@@ -11,9 +11,7 @@ import java.time.LocalDate
 
 internal fun QueryParams.readFilters(
     sortSpec: EnumParamSpec,
-    latestSupported: Boolean,
 ): ReadFilters {
-    if (!latestSupported) rejectLatest()
     val latest = boolean(QueryParamSpecs.latest)
     if (latest) {
         rejectLatestOverrides()

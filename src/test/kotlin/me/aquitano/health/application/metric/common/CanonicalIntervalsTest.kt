@@ -17,7 +17,6 @@ class CanonicalIntervalsTest {
 
         val result = canonicalIntervalRows(
             rows = candidates,
-            overlaps = { left, right -> left.startAt.isBefore(right.endAt) && right.startAt.isBefore(left.endAt) },
             choosePreferred = { _, _ -> throw IllegalStateException("Should not conflict") }
         )
 
@@ -33,7 +32,6 @@ class CanonicalIntervalsTest {
 
         val result = canonicalIntervalRows(
             rows = candidates,
-            overlaps = { left, right -> left.startAt.isBefore(right.endAt) && right.startAt.isBefore(left.endAt) },
             choosePreferred = { left, right -> if (left.row.id == "B") left else right }
         )
 
@@ -49,7 +47,6 @@ class CanonicalIntervalsTest {
 
         val result = canonicalIntervalRows(
             rows = candidates,
-            overlaps = { left, right -> left.startAt.isBefore(right.endAt) && right.startAt.isBefore(left.endAt) },
             choosePreferred = { _, _ -> throw IllegalStateException("Should not conflict") }
         )
 

@@ -37,8 +37,11 @@ data class HealthDayQueryContext(
 )
 
 interface HealthDayModule<T> {
-    val name: String
+    val name: HealthDayModuleName
     suspend fun read(context: HealthDayQueryContext): T
+    fun apply(response: HealthDayResponse, result: T): HealthDayResponse
+    suspend fun appendTo(context: HealthDayQueryContext, response: HealthDayResponse): HealthDayResponse =
+        apply(response, read(context))
 }
 
 class HealthDayModuleRegistry(
@@ -46,9 +49,12 @@ class HealthDayModuleRegistry(
 ) {
     private val byName = modules.associateBy { it.name }
 
-    // Callers pass wire names already validated against HealthDayModuleName, and the
-    // registry is constructed with exactly those modules.
-    fun resolve(names: List<String>): List<HealthDayModule<*>> =
+    init {
+        require(byName.size == modules.size) { "Duplicate health-day modules" }
+        require(byName.keys == HealthDayModuleName.entries.toSet()) { "Missing health-day modules" }
+    }
+
+    fun resolve(names: List<HealthDayModuleName>): List<HealthDayModule<*>> =
         names.map { byName.getValue(it) }
 }
 
@@ -69,8 +75,7 @@ class HealthDayQueryService(
                 )
             )
         val moduleNames = parseModules(params.required("modules"))
-        val moduleKeys = moduleNames.map { it.wireName }
-        val modules = registry.resolve(moduleKeys)
+        val modules = registry.resolve(moduleNames)
         val from = date.atStartOfDay(timezone).toInstant()
         val to = date.plusDays(1).atStartOfDay(timezone).toInstant()
         val context = HealthDayQueryContext(
@@ -85,18 +90,19 @@ class HealthDayQueryService(
         )
 
         return suspendDbTransaction(db = database) {
-            val results = modules.associate { it.name to it.read(context) }
-            HealthDayResponse(
+            var response = HealthDayResponse(
                 date = date.toString(),
                 timezone = timezone.id,
                 from = from.toString(),
                 to = to.toString(),
                 modules = moduleNames,
-                steps = results["steps"] as? HealthDayStepsResponse,
-                heartRate = results["heartRate"] as? HealthDayHeartRateResponse,
-                weight = results["weight"] as? HealthDayWeightResponse,
-                sleep = results["sleep"] as? HealthDaySleepResponse,
+                steps = null,
+                heartRate = null,
+                weight = null,
+                sleep = null,
             )
+            modules.forEach { response = it.appendTo(context, response) }
+            response
         }
     }
 
@@ -133,7 +139,9 @@ class HealthDayQueryService(
 class StepsDayModule(
     private val canonicalRepository: CanonicalStepDerivationRepository,
 ) : HealthDayModule<HealthDayStepsResponse> {
-    override val name = "steps"
+    override val name = HealthDayModuleName.Steps
+
+    override fun apply(response: HealthDayResponse, result: HealthDayStepsResponse) = response.copy(steps = result)
 
     override suspend fun read(context: HealthDayQueryContext): HealthDayStepsResponse {
         val filters = context.filters()
@@ -149,7 +157,7 @@ class StepsDayModule(
         val byStart = buckets.mapIndexed { index, bucket -> bucket.first to index }.toMap()
         canonicalRepository.listBucketContributions(filters, CANONICAL_STEP_ALGORITHM_VERSION)
             .forEach { contribution ->
-                val index = byStart[Instant.parse(contribution.bucketStartAt)]
+                val index = byStart[contribution.bucketStartAt]
                 if (index != null) {
                     values[index] += contribution.value
                     counts[index] += 1
@@ -157,7 +165,7 @@ class StepsDayModule(
             }
 
         return HealthDayStepsResponse(
-            total = values.sum().toInt(),
+            total = values.sum().roundToInt(),
             sampleCount = rows.size,
             buckets = buckets.mapIndexed { index, (start, end) ->
                 HealthDayBucketResponse(
@@ -175,7 +183,9 @@ class StepsDayModule(
 class HeartRateDayModule(
     private val scalarRepository: ScalarSampleReadRepository,
 ) : HealthDayModule<HealthDayHeartRateResponse> {
-    override val name = "heartRate"
+    override val name = HealthDayModuleName.HeartRate
+
+    override fun apply(response: HealthDayResponse, result: HealthDayHeartRateResponse) = response.copy(heartRate = result)
 
     private val metricTypes = setOf(ScalarMetricTypes.HEART_RATE)
 
@@ -221,7 +231,9 @@ class HeartRateDayModule(
 class WeightDayModule(
     private val scalarRepository: ScalarSampleReadRepository,
 ) : HealthDayModule<HealthDayWeightResponse> {
-    override val name = "weight"
+    override val name = HealthDayModuleName.Weight
+
+    override fun apply(response: HealthDayResponse, result: HealthDayWeightResponse) = response.copy(weight = result)
 
     private val metricTypes = setOf(BodyMetricTypes.WEIGHT)
 
@@ -245,7 +257,9 @@ class WeightDayModule(
 class SleepDayModule(
     private val sleepRepository: SleepRepository,
 ) : HealthDayModule<HealthDaySleepResponse> {
-    override val name = "sleep"
+    override val name = HealthDayModuleName.Sleep
+
+    override fun apply(response: HealthDayResponse, result: HealthDaySleepResponse) = response.copy(sleep = result)
 
     override suspend fun read(context: HealthDayQueryContext): HealthDaySleepResponse {
         val filters = SleepNightReadFilters(
@@ -263,8 +277,8 @@ class SleepDayModule(
             sleepRepository.listCanonicalSleepNights(filters)
         val sessions = nights
             .filter { night ->
-                Instant.parse(night.session.startAt).isBefore(context.to) &&
-                    Instant.parse(night.session.endAt).isAfter(context.from)
+                night.session.startAt.isBefore(context.to) &&
+                    night.session.endAt.isAfter(context.from)
             }
             .groupBy { it.date }
             .flatMap { (_, nightsForDate) ->
@@ -276,28 +290,17 @@ class SleepDayModule(
                 nightsForDate.filter { it.session.sourceInstanceId == winningSource }
             }
             .map { it.session }
-        val timeline = sessions.flatMap { session ->
+        val segments = sessions.flatMap { session ->
             stagesBySession[session.id].orEmpty().mapNotNull { stage ->
-                val start = maxOf(Instant.parse(stage.startAt), context.from)
-                val end = minOf(Instant.parse(stage.endAt), context.to)
-                if (!start.isBefore(end)) {
-                    null
-                } else {
-                    HealthDaySleepStageSegmentResponse(
-                        stage = stage.stage,
-                        startAt = start.toString(),
-                        endAt = end.toString(),
-                    )
-                }
+                val start = maxOf(stage.startAt, context.from)
+                val end = minOf(stage.endAt, context.to)
+                if (start.isBefore(end)) SleepStageSegment(stage.stage, start, end) else null
             }
         }.sortedBy { it.startAt }
-        val stageTotals = timeline
+        val stageTotals = segments
             .groupingBy { it.stage }
             .fold(0L) { total, segment ->
-                total + Duration.between(
-                    Instant.parse(segment.startAt),
-                    Instant.parse(segment.endAt)
-                ).seconds
+                total + Duration.between(segment.startAt, segment.endAt).seconds
             }
             .map { (stage, duration) ->
                 HealthDaySleepStageTotalResponse(stage, duration)
@@ -308,10 +311,23 @@ class SleepDayModule(
             totalDurationSeconds = stageTotals.sumOf { it.durationSeconds },
             sessions = sessions.map { it.toResponse(stagesBySession, sourceMetadata) },
             stageTotals = stageTotals,
-            timeline = timeline,
+            timeline = segments.map {
+                HealthDaySleepStageSegmentResponse(
+                    stage = it.stage,
+                    startAt = it.startAt.toString(),
+                    endAt = it.endAt.toString(),
+                )
+            },
         )
     }
 }
+
+/** A sleep stage clipped to the requested day, before it is formatted for the response. */
+private data class SleepStageSegment(
+    val stage: String,
+    val startAt: Instant,
+    val endAt: Instant,
+)
 
 private fun HealthDayQueryContext.filters(): ReadFilters =
     ReadFilters(

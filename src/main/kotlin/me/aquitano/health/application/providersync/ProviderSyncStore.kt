@@ -36,21 +36,21 @@ interface ProviderSyncStore {
         account: SyncAccount,
         tokens: RefreshedTokenSet,
         now: Instant,
-    )
+    ): Boolean
 
     suspend fun markNeedsReauth(
-        accountId: Int,
+        account: SyncAccount,
         code: String,
         message: String,
         now: Instant,
-    )
+    ): Boolean
 
     suspend fun markTokenRefreshFailed(
-        accountId: Int,
+        account: SyncAccount,
         code: String,
         message: String,
         now: Instant,
-    )
+    ): Boolean
 
     suspend fun startRun(
         providerCode: String,
@@ -73,6 +73,15 @@ interface ProviderSyncStore {
         batchExternalId: String,
         now: Instant,
     ): ExistingProviderBatch?
+
+    /** The processed batch whose snapshot still matches [contentHash] for this window, if any. */
+    suspend fun reusableBatchId(
+        providerCode: String,
+        providerInstanceId: String,
+        windowKey: String,
+        contentHash: String,
+        now: Instant,
+    ): Int?
 
     suspend fun ingest(
         command: ProviderIngestionCommand,
@@ -131,10 +140,11 @@ class OAuthProviderSyncStore(
         account: SyncAccount,
         tokens: RefreshedTokenSet,
         now: Instant,
-    ) {
+    ): Boolean {
         val cipher = cipherFor(account.providerCode)
-        repository.updateAccessToken(
+        return repository.updateAccessToken(
             accountId = account.id,
+            expectedRefreshTokenCiphertext = account.encryptedRefreshToken,
             accessTokenCiphertext = cipher.encrypt(tokens.accessToken),
             refreshTokenCiphertext = tokens.refreshToken?.let(cipher::encrypt),
             tokenType = tokens.tokenType,
@@ -145,22 +155,18 @@ class OAuthProviderSyncStore(
     }
 
     override suspend fun markNeedsReauth(
-        accountId: Int,
+        account: SyncAccount,
         code: String,
         message: String,
         now: Instant,
-    ) {
-        repository.markNeedsReauth(accountId, code, message, now)
-    }
+    ): Boolean = repository.markNeedsReauth(account.id, account.encryptedRefreshToken, code, message, now)
 
     override suspend fun markTokenRefreshFailed(
-        accountId: Int,
+        account: SyncAccount,
         code: String,
         message: String,
         now: Instant,
-    ) {
-        repository.markTokenRefreshFailed(accountId, code, message, now)
-    }
+    ): Boolean = repository.markTokenRefreshFailed(account.id, account.encryptedRefreshToken, code, message, now)
 
     override suspend fun startRun(
         providerCode: String,
@@ -201,6 +207,14 @@ class OAuthProviderSyncStore(
             batch.status?.let { ExistingProviderBatch(batch.id, it) }
         }
 
+    override suspend fun reusableBatchId(
+        providerCode: String,
+        providerInstanceId: String,
+        windowKey: String,
+        contentHash: String,
+        now: Instant,
+    ): Int? = ingestionService.reusableSyncBatchId(providerCode, providerInstanceId, windowKey, contentHash, now)
+
     override suspend fun ingest(
         command: ProviderIngestionCommand,
         now: Instant,
@@ -215,6 +229,7 @@ class OAuthProviderSyncStore(
                 records = command.records,
             ),
             now = now,
+            snapshot = command.snapshot,
         )
         return ProviderSyncBatch(
             dataType = command.dataType,

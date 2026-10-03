@@ -1,6 +1,7 @@
 package me.aquitano.external.withings
 
 import me.aquitano.health.application.providersync.NormalizedProviderBatch
+import me.aquitano.health.application.providersync.SyncWindow
 import me.aquitano.health.shared.doubleOrNull
 import me.aquitano.health.shared.longOrNull
 import me.aquitano.health.shared.primitiveOrNull
@@ -20,12 +21,20 @@ import kotlin.math.pow
 class WithingsNormalizer {
     private val sleepSessionGap = Duration.ofHours(2)
 
-    fun normalize(fetchResult: WithingsFetchResult): NormalizedProviderBatch {
+    /**
+     * [window] is the sync window the batch belongs to. Only `sleep` uses it: it is fetched with a
+     * lookbehind (see [WITHINGS_SLEEP_LOOKBEHIND]), so the records reach further back than the
+     * window and everything outside it belongs to a neighbouring batch.
+     */
+    fun normalize(
+        fetchResult: WithingsFetchResult,
+        window: SyncWindow,
+    ): NormalizedProviderBatch {
         val records = when (fetchResult.dataType) {
             "activity" -> normalizeActivity(fetchResult.records)
             "measures" -> normalizeMeasures(fetchResult.records)
             "sleep-summary" -> normalizeSleepSummary(fetchResult.records)
-            "sleep" -> normalizeSleep(fetchResult.records)
+            "sleep" -> normalizeSleep(fetchResult.records, window)
             else -> emptyList()
         }
         val sourcePayload = buildJsonObject {
@@ -255,7 +264,10 @@ class WithingsNormalizer {
             }
         }
 
-    private fun normalizeSleep(records: List<JsonObject>): List<IngestionRecord> {
+    private fun normalizeSleep(
+        records: List<JsonObject>,
+        window: SyncWindow,
+    ): List<IngestionRecord> {
         val segments = records.mapNotNull { record ->
             val start =
                 record.sleepInstant("startdate") ?: return@mapNotNull null
@@ -269,9 +281,7 @@ class WithingsNormalizer {
         val heartRates = records.mapNotNull { record ->
             val bpm = record.sleepHeartRate() ?: return@mapNotNull null
             if (bpm !in 25..250) return@mapNotNull null
-            val instant = record.sleepInstant("timestamp")
-                ?: record.sleepInstant("startdate")
-                ?: return@mapNotNull null
+            val instant = record.sleepSampleInstant(window) ?: return@mapNotNull null
             ScalarSample(
                 providerRecordId = "withings:sleep:hr:${instant.epochSecond}",
                 measuredAt = instant.toString(),
@@ -284,9 +294,7 @@ class WithingsNormalizer {
         val respiratoryRates = records.mapNotNull { record ->
             val breathsPerMinute = record.sleepRespiratoryRate() ?: return@mapNotNull null
             if (breathsPerMinute !in 5..80) return@mapNotNull null
-            val instant = record.sleepInstant("timestamp")
-                ?: record.sleepInstant("startdate")
-                ?: return@mapNotNull null
+            val instant = record.sleepSampleInstant(window) ?: return@mapNotNull null
             ScalarSample(
                 providerRecordId = "withings:sleep:rr:${instant.epochSecond}",
                 measuredAt = instant.toString(),
@@ -299,9 +307,7 @@ class WithingsNormalizer {
         val hrv = records.mapNotNull { record ->
             val rmssd = record.sleepRmssd() ?: return@mapNotNull null
             if (rmssd <= 0.0 || rmssd > 500.0) return@mapNotNull null
-            val instant = record.sleepInstant("timestamp")
-                ?: record.sleepInstant("startdate")
-                ?: return@mapNotNull null
+            val instant = record.sleepSampleInstant(window) ?: return@mapNotNull null
             ScalarSample(
                 providerRecordId = "withings:sleep:rmssd:${instant.epochSecond}",
                 measuredAt = instant.toString(),
@@ -317,6 +323,7 @@ class WithingsNormalizer {
                     val start = sessionSegments.first().start
                     val end = sessionSegments.last().end
                     if (!start.isBefore(end)) return@mapNotNull null
+                    if (!window.contains(end)) return@mapNotNull null
                     SleepSession(
                         providerRecordId = "withings:sleep:${start.epochSecond}:${end.epochSecond}",
                         startAt = start.toString(),
@@ -355,6 +362,7 @@ class WithingsNormalizer {
             val start = sessionRecords.first().first
             val end = sessionRecords.last().first
             if (!start.isBefore(end)) return@mapNotNull null
+            if (!window.contains(end)) return@mapNotNull null
             SleepSession(
                 providerRecordId = "withings:sleep:${start.epochSecond}:${end.epochSecond}",
                 startAt = start.toString(),
@@ -513,6 +521,14 @@ class WithingsNormalizer {
 
     private fun JsonObject.sleepInstant(key: String): Instant? =
         instant(key) ?: (this["data"] as? JsonObject)?.instant(key)
+
+    /** Sleep samples stay with the window they were measured in; the lookbehind ones are dropped. */
+    private fun JsonObject.sleepSampleInstant(window: SyncWindow): Instant? =
+        (sleepInstant("timestamp") ?: sleepInstant("startdate"))
+            ?.takeIf { window.contains(it) }
+
+    private fun SyncWindow.contains(instant: Instant): Boolean =
+        !instant.isBefore(from) && instant.isBefore(to)
 
     private fun JsonObject.nonNegativeInt(key: String): Int? =
         int(key)?.takeIf { it >= 0 }

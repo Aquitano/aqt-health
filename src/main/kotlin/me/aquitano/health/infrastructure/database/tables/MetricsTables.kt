@@ -19,19 +19,6 @@ object StepSamplesTable : IntIdTable("step_samples") {
     val createdAt = timestampWithTimeZone("created_at")
 }
 
-object StepDailySummariesTable : IntIdTable("step_daily_summaries") {
-    val date = date("date")
-    val sourceInstanceId =
-        integer("source_instance_id").references(SourceInstancesTable.id)
-    val steps = integer("steps")
-    val sampleCount = integer("sample_count")
-    val computedAt = timestampWithTimeZone("computed_at")
-
-    init {
-        uniqueIndex(date, sourceInstanceId)
-    }
-}
-
 object SleepSessionsTable : IntIdTable("sleep_sessions") {
     val sourceInstanceId =
         integer("source_instance_id").references(SourceInstancesTable.id)
@@ -79,16 +66,6 @@ object CanonicalStepSamplesTable : IntIdTable("canonical_step_samples") {
     init {
         uniqueIndex(date, stepSampleId, algorithmVersion)
     }
-}
-
-/** Read-only mapping of the canonical_step_daily_summaries view (see V15). */
-object CanonicalStepDailySummariesTable : Table("canonical_step_daily_summaries") {
-    val id = integer("id")
-    val date = date("date")
-    val sourceInstanceId = integer("source_instance_id")
-    val stepDailySummaryId =
-        integer("step_daily_summary_id").references(StepDailySummariesTable.id)
-    val steps = integer("steps")
 }
 
 object CanonicalStepDayBucketContributionsTable : IntIdTable("canonical_step_day_bucket_contributions") {

@@ -1,5 +1,6 @@
 package me.aquitano.health.api
 
+import me.aquitano.health.test.PostgresIntegrationTest
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -21,7 +22,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-class WithingsProviderRouteTest {
+class WithingsProviderRouteTest : PostgresIntegrationTest() {
     @Test
     fun oauthStartReturnsAuthorizationUrlWithDefaultScopes() = testApplication {
         configureTestApplication()

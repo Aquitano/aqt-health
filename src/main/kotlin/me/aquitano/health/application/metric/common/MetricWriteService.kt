@@ -1,6 +1,7 @@
 package me.aquitano.health.application.metric.common
 
 import me.aquitano.health.application.DerivedRebuildModuleRegistry
+import me.aquitano.health.application.metric.common.repository.ProviderRecordCorrections
 import me.aquitano.health.application.metric.activity.repository.ActivitySummaryWriteRepository
 import me.aquitano.health.application.metric.cardiovascular.repository.CardiovascularWriteRepository
 import me.aquitano.health.application.metric.scalar.ScalarSampleWrite
@@ -34,6 +35,8 @@ class MetricWriteService(
     private val scalarSampleWriteRepository: ScalarSampleWriteRepository,
     private val derivedRebuildRegistry: DerivedRebuildModuleRegistry,
 ) {
+    private val corrections = ProviderRecordCorrections()
+
     /**
      * Writes a whole batch, bulk-inserting scalar samples in chunked multi-row statements
      * instead of one round trip per sample. Structural records (sleep, steps, ...) keep the
@@ -45,17 +48,31 @@ class MetricWriteService(
         writes: List<MetricWrite>,
         now: Instant,
     ): MetricWriteResult {
+        val prepared = corrections.prepare(provider, sourceInstanceId, writes)
         var created = MetricCreatedCounts()
-        var duplicateSkipped = 0
+        var duplicateSkipped = writes.size - prepared.writes.size
         val affectedDates = mutableMapOf<DerivedKind, MutableSet<LocalDate>>()
+        prepared.replacedSpans.forEach { previous ->
+            derivedRebuildRegistry.affectedDatesFor(previous.recordType, previous.startAt, previous.endAt)
+                .forEach { (kind, dates) -> affectedDates.getOrPut(kind) { linkedSetOf() }.addAll(dates) }
+        }
         val scalarWrites = mutableListOf<ScalarSampleWrite>()
+        val googleStepDecisions = prepared.googleStepDecisions.toMutableMap()
 
-        writes.forEach { entry ->
+        prepared.writes.forEach { entry ->
             if (entry.record is ScalarSampleRecord) {
                 scalarWrites += ScalarSampleWrite(entry.ingestionRecordId, entry.record)
                 return@forEach
             }
-            val result = write(provider, sourceInstanceId, entry.ingestionRecordId, entry.record, now)
+            val result = writePrepared(
+                provider, sourceInstanceId, entry.ingestionRecordId, entry.record, now,
+                preserveAcceptance = entry.ingestionRecordId in prepared.acceptedGoogleStepIds,
+            )
+            if (entry.ingestionRecordId in prepared.googleStepRecordIds) {
+                googleStepDecisions[entry.ingestionRecordId] =
+                    entry.ingestionRecordId in prepared.acceptedGoogleStepIds ||
+                        result.created.counts[StructuralMetricKinds.STEP_SAMPLES] == 1
+            }
             created += result.created
             duplicateSkipped += result.duplicateSkipped
             result.affectedDates.forEach { (kind, dates) ->
@@ -78,6 +95,7 @@ class MetricWriteService(
             duplicateSkipped += scalarWrites.size - insertedTypes.size
         }
 
+        corrections.recordGoogleStepDecisions(googleStepDecisions, prepared.googleStepPriorities)
         return MetricWriteResult(
             created = created,
             duplicateSkipped = duplicateSkipped,
@@ -85,12 +103,13 @@ class MetricWriteService(
         )
     }
 
-    fun write(
+    private fun writePrepared(
         provider: String,
         sourceInstanceId: Int,
         ingestionRecordId: Int,
         record: HealthRecord,
         now: Instant,
+        preserveAcceptance: Boolean,
     ): MetricWriteResult =
         when (record) {
             is StepIntervalRecord -> writeStepInterval(
@@ -99,6 +118,7 @@ class MetricWriteService(
                 ingestionRecordId,
                 record,
                 now,
+                preserveAcceptance,
             )
 
             is SleepSessionRecord -> writeSleepSession(
@@ -143,6 +163,7 @@ class MetricWriteService(
         ingestionRecordId: Int,
         record: StepIntervalRecord,
         now: Instant,
+        preserveAcceptance: Boolean,
     ): MetricWriteResult {
         val inserted = stepWriteRepository.insertStepSample(
             provider,
@@ -150,6 +171,7 @@ class MetricWriteService(
             ingestionRecordId,
             record,
             now,
+            preserveAcceptance,
         )
         return if (inserted) {
             MetricWriteResult(

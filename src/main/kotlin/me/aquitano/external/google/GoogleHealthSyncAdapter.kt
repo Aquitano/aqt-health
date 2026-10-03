@@ -109,6 +109,7 @@ class GoogleHealthSyncAdapter(
             sourceRecordsReceived = result.dataPoints.size,
             sourcePayload = normalized.sourcePayload,
             records = normalized.records,
+            sourceRecords = result.dataPoints,
         )
     }
 

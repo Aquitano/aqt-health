@@ -1,7 +1,7 @@
 package me.aquitano.health.infrastructure.repositories
 
+import me.aquitano.health.test.PostgresIntegrationTest
 import kotlinx.coroutines.runBlocking
-import me.aquitano.health.infrastructure.database.DatabaseFactory
 import me.aquitano.health.infrastructure.config.DatabaseConfig
 import me.aquitano.health.infrastructure.security.ApiKeyHasher
 import me.aquitano.health.test.PostgresTestDatabase
@@ -13,10 +13,10 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
-class SupportRepositoryTest {
+class SupportRepositoryTest : PostgresIntegrationTest() {
     @Test
     fun apiClientLastUsedAtIsThrottled() = runBlocking {
-        val database = DatabaseFactory().initialize(tempDatabaseConfig())
+        val database = openDatabase(tempDatabaseConfig())
         val repository = SupportRepository(database)
         val hasher = ApiKeyHasher()
         val apiKeyHash = hasher.hash("test-key")
@@ -48,7 +48,7 @@ class SupportRepositoryTest {
 
     @Test
     fun bootstrapClientHashIsRewrittenWhenTheConfiguredKeyRotates() = runBlocking {
-        val database = DatabaseFactory().initialize(tempDatabaseConfig())
+        val database = openDatabase(tempDatabaseConfig())
         val repository = SupportRepository(database)
         val hasher = ApiKeyHasher()
         val now = Instant.parse("2026-05-15T09:00:00Z")

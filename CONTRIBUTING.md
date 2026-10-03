@@ -67,12 +67,17 @@ Here are examples of how to apply this policy for typical tasks:
 
 Before submitting a Pull Request or closing an issue:
 
-1. **Run All Tests**: Ensure the test suite passes locally:
-   - Bash: `./gradlew test`
-   - PowerShell: `.\gradlew.bat test`
+1. **Run All Tests**: Run both unit and PostgreSQL integration tests:
+   - Bash: `./gradlew check`
+   - PowerShell: `.\gradlew.bat check`
 2. **Document Testing**: In your pull request description or issue closeout notes, you **must** explicitly mention the tests that were run (both automated tests and manual verification steps).
 
 Example PR/Closeout Note:
 > **Verification Run:**
-> - Ran `./gradlew test` successfully (all 42 tests passed).
+> - Ran `./gradlew check` successfully.
 > - Manually verified sleep night routing with local timezone `Europe/Berlin` using `curl` against local dev server.
+
+Use `./gradlew test` for unit tests without a database. PostgreSQL tests extend
+`PostgresIntegrationTest`, which assigns their JUnit category and closes pools
+opened with `openDatabase` after each test. The `integrationTest` task selects
+that category automatically. Ktor test applications close their own pools.

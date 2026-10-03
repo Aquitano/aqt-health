@@ -1,5 +1,6 @@
 package me.aquitano.health.api
 
+import me.aquitano.health.test.PostgresIntegrationTest
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -14,7 +15,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-class GoogleHealthProviderRouteTest {
+class GoogleHealthProviderRouteTest : PostgresIntegrationTest() {
     @Test
     fun oauthStartReturnsAuthorizationUrlWithReadonlyScopes() = testApplication {
         configureTestApplication()

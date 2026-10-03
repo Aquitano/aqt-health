@@ -115,61 +115,63 @@ class AdminService(
             params.boolean("includeSourcePayload", default = false)
         val includeNormalizedPayload =
             params.boolean("includeNormalizedPayload", default = false)
-        return suspendDbTransaction(db = database) {
+        val (batch, records) = suspendDbTransaction(db = database) {
             val batch = ingestionRepository.findBatchDetail(batchId)
                 ?: throw NotFoundException("Ingestion batch not found")
             val records = ingestionRepository.listRecordsForBatch(batchId)
-            IngestionBatchDetailResponse(
-                id = batch.id,
-                provider = batch.provider,
-                providerInstanceId = batch.providerInstanceId,
-                batchExternalId = batch.batchExternalId,
-                status = BatchStatus.fromStored(batch.status),
-                ingestedAt = batch.ingestedAt,
-                receivedAt = batch.receivedAt,
-                processedAt = batch.processedAt,
-                errorMessage = batch.errorMessage,
-                recordCount = records.size,
-                records = records.map {
-                    IngestionRecordAdminResponse(
-                        id = it.id,
-                        recordType = it.recordType,
-                        providerRecordId = it.providerRecordId,
-                        recordStartAt = it.recordStartAt,
-                        recordEndAt = it.recordEndAt,
-                        createdAt = it.createdAt,
-                        normalizedRecord = if (includeNormalizedPayload) {
-                            AppJson.parseToJsonElement(it.normalizedRecordJson)
-                        } else {
-                            null
-                        },
-                    )
-                },
-                sourcePayload = if (includeSourcePayload) {
-                    AppJson.parseToJsonElement(batch.sourcePayloadJson)
-                } else {
-                    null
-                },
-                // Rebuilt from the records rather than stored: the batch-level copy was a
-                // duplicate of the per-record normalized JSON.
-                normalizedPayload = if (includeNormalizedPayload) {
-                    buildJsonObject {
-                        put("provider", batch.provider)
-                        put("providerInstanceId", batch.providerInstanceId)
-                        batch.batchExternalId?.let { put("batchExternalId", it) }
-                        put("ingestedAt", batch.ingestedAt)
-                        put(
-                            "records",
-                            JsonArray(
-                                records.map { AppJson.parseToJsonElement(it.normalizedRecordJson) }
-                            )
-                        )
-                    }
-                } else {
-                    null
-                },
-            )
+            batch to records
         }
+        val parsedRecords = if (includeNormalizedPayload) {
+            records.map { AppJson.parseToJsonElement(it.normalizedRecordJson) }
+        } else emptyList()
+        return IngestionBatchDetailResponse(
+            id = batch.id,
+            provider = batch.provider,
+            providerInstanceId = batch.providerInstanceId,
+            batchExternalId = batch.batchExternalId,
+            status = BatchStatus.fromStored(batch.status),
+            ingestedAt = batch.ingestedAt,
+            receivedAt = batch.receivedAt,
+            processedAt = batch.processedAt,
+            errorMessage = batch.errorMessage,
+            recordCount = records.size,
+            records = records.mapIndexed { index, it ->
+                IngestionRecordAdminResponse(
+                    id = it.id,
+                    recordType = it.recordType,
+                    providerRecordId = it.providerRecordId,
+                    recordStartAt = it.recordStartAt,
+                    recordEndAt = it.recordEndAt,
+                    createdAt = it.createdAt,
+                    normalizedRecord = if (includeNormalizedPayload) {
+                        parsedRecords[index]
+                    } else {
+                        null
+                    },
+                )
+            },
+            sourcePayload = if (includeSourcePayload) {
+                AppJson.parseToJsonElement(batch.sourcePayloadJson)
+            } else {
+                null
+            },
+            // Rebuilt from the records rather than stored: the batch-level copy was a
+            // duplicate of the per-record normalized JSON.
+            normalizedPayload = if (includeNormalizedPayload) {
+                buildJsonObject {
+                    put("provider", batch.provider)
+                    put("providerInstanceId", batch.providerInstanceId)
+                    batch.batchExternalId?.let { put("batchExternalId", it) }
+                    put("ingestedAt", batch.ingestedAt)
+                    put(
+                        "records",
+                        JsonArray(parsedRecords)
+                    )
+                }
+            } else {
+                null
+            },
+        )
     }
 
 }

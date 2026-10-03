@@ -1,5 +1,6 @@
 package me.aquitano.health.api
 
+import me.aquitano.health.test.PostgresIntegrationTest
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -16,7 +17,7 @@ import me.aquitano.health.test.PostgresTestDatabase
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-class IngestionRouteTest {
+class IngestionRouteTest : PostgresIntegrationTest() {
     @Test
     fun ingestionRequiresBearerToken() = testApplication {
         val dbPath = configureTestApplication()
@@ -96,12 +97,11 @@ class IngestionRouteTest {
         assertEquals(1, countRows(dbPath, "ingestion_batches"))
         assertEquals(9, countRows(dbPath, "ingestion_records"))
         assertEquals(1, countRows(dbPath, "step_samples"))
-        assertEquals(1, countRows(dbPath, "step_daily_summaries"))
         assertEquals(1, countRows(dbPath, "canonical_step_samples"))
         assertEquals(4, countRows(dbPath, "canonical_step_day_bucket_contributions"))
         assertEquals(
             1200,
-            singleInt(dbPath, "SELECT steps FROM step_daily_summaries")
+            singleInt(dbPath, "SELECT SUM(value)::int FROM canonical_step_day_bucket_contributions")
         )
         assertEquals(1, countRows(dbPath, "sleep_sessions"))
         assertEquals(2, countRows(dbPath, "sleep_stages"))
@@ -155,7 +155,7 @@ class IngestionRouteTest {
         assertEquals(1, countRows(dbPath, "step_samples"))
         assertEquals(
             1200,
-            singleInt(dbPath, "SELECT steps FROM step_daily_summaries")
+            singleInt(dbPath, "SELECT SUM(value)::int FROM canonical_step_day_bucket_contributions")
         )
     }
 
@@ -214,7 +214,7 @@ class IngestionRouteTest {
             assertEquals(1, countRows(dbPath, "step_samples"))
             assertEquals(
                 1200,
-                singleInt(dbPath, "SELECT steps FROM step_daily_summaries")
+                singleInt(dbPath, "SELECT SUM(value)::int FROM canonical_step_day_bucket_contributions")
             )
         }
 
@@ -257,7 +257,7 @@ class IngestionRouteTest {
             assertEquals(2, countRows(dbPath, "step_samples"))
             assertEquals(
                 2000,
-                singleInt(dbPath, "SELECT steps FROM step_daily_summaries")
+                singleInt(dbPath, "SELECT SUM(value)::int FROM canonical_step_day_bucket_contributions")
             )
         }
 
@@ -327,19 +327,19 @@ class IngestionRouteTest {
                 2,
                 response.jsonBody()["affectedStepSummaryDates"]!!.jsonArray.size
             )
-            assertEquals(2, countRows(dbPath, "step_daily_summaries"))
+            assertEquals(2, singleInt(dbPath, "SELECT COUNT(DISTINCT date) FROM canonical_step_day_bucket_contributions"))
             assertEquals(
                 60,
                 singleInt(
                     dbPath,
-                    "SELECT steps FROM step_daily_summaries WHERE date = '2026-04-19'"
+                    "SELECT SUM(value)::int FROM canonical_step_day_bucket_contributions WHERE date = '2026-04-19'"
                 )
             )
             assertEquals(
                 60,
                 singleInt(
                     dbPath,
-                    "SELECT steps FROM step_daily_summaries WHERE date = '2026-04-20'"
+                    "SELECT SUM(value)::int FROM canonical_step_day_bucket_contributions WHERE date = '2026-04-20'"
                 )
             )
 

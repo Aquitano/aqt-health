@@ -59,8 +59,8 @@ internal fun SleepSummaryRow.toResponse(
 ): SleepSummaryResponse =
     SleepSummaryResponse(
         id = id,
-        startAt = startAt,
-        endAt = endAt,
+        startAt = startAt.toString(),
+        endAt = endAt.toString(),
         timeInBedSeconds = timeInBedSeconds,
         totalSleepSeconds = totalSleepSeconds,
         lightSleepSeconds = lightSleepSeconds,
@@ -97,7 +97,7 @@ internal fun BloodPressureMeasurementRow.toResponse(
 ): BloodPressureMeasurementResponse =
     BloodPressureMeasurementResponse(
         id = id,
-        measuredAt = measuredAt,
+        measuredAt = measuredAt.toString(),
         systolicMmhg = systolicMmhg,
         diastolicMmhg = diastolicMmhg,
         heartRateBpm = heartRateBpm,
@@ -110,14 +110,14 @@ internal fun SleepSessionRow.toResponse(
 ): SleepSessionResponse =
     SleepSessionResponse(
         id = id,
-        startAt = startAt,
-        endAt = endAt,
+        startAt = startAt.toString(),
+        endAt = endAt.toString(),
         durationSeconds = durationSeconds,
         stages = stagesBySession[id].orEmpty().map {
             SleepStageResponse(
                 stage = it.stage,
-                startAt = it.startAt,
-                endAt = it.endAt,
+                startAt = it.startAt.toString(),
+                endAt = it.endAt.toString(),
                 durationSeconds = it.durationSeconds,
             )
         },

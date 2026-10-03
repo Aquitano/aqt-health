@@ -22,10 +22,10 @@ import styles from "./HealthDataVisualizations.module.css";
 
 const bodyMetricConfig: Record<string, { label: string; color: string }> = {
   weight: { label: "Weight", color: "var(--hue-weight)" },
-  body_fat: { label: "Body fat", color: "#eab265" },
-  muscle: { label: "Muscle", color: "#8b9dff" },
-  water: { label: "Water", color: "#5ec9e8" },
-  visceral_fat: { label: "Visceral fat", color: "#f2786d" },
+  body_fat: { label: "Body fat", color: "var(--hue-body-fat)" },
+  muscle: { label: "Muscle", color: "var(--hue-muscle)" },
+  water: { label: "Water", color: "var(--hue-water)" },
+  visceral_fat: { label: "Visceral fat", color: "var(--hue-visceral-fat)" },
 };
 
 const bodyMetricOrder = ["weight", "body_fat", "muscle", "water", "visceral_fat"];
