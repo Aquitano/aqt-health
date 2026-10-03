@@ -1,4 +1,5 @@
 import { formatDateTime } from "@/lib/format";
+import { serverConfig } from "@/lib/serverConfig";
 import type { ApiResult, HealthResponse } from "@/lib/types";
 import styles from "./StatusBar.module.css";
 
@@ -11,7 +12,7 @@ type StatusBarProps = {
 
 export function StatusBar({ apiBaseUrl, health, fromDate, toDate }: StatusBarProps) {
   const status = health.ok ? health.data.status : "offline";
-  const serviceTime = health.ok ? formatDateTime(health.data.time) : "n/a";
+  const serviceTime = health.ok ? formatDateTime(health.data.time, serverConfig.timeZone) : "n/a";
 
   return (
     <section className={styles.bar} aria-label="Backend status" data-reveal>

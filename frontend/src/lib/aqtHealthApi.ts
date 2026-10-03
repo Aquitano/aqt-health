@@ -13,13 +13,7 @@ import type {
 } from "./types";
 import { aqtHealthClient, toProviderCode } from "./aqtHealthClient";
 import { toPositiveInteger } from "./format";
-import {
-  addUtcDays,
-  dateOnlyToUtcInstant,
-  dayAfterDateOnlyToUtcInstant,
-  first,
-  startOfDayInstant,
-} from "./dates";
+import { addUtcDays, first, startOfDayInstant } from "./dates";
 
 export async function getHealthStatus(): Promise<HealthStatusData> {
   return {
@@ -41,7 +35,7 @@ export function getHealthDataPageSources(
   return {
     apiBaseUrl: client.apiBaseUrl,
     health: client.getHealth(),
-    summary: client.getDashboardSummary({ fromDate, toDate }),
+    summary: client.getDashboardSummary({ fromDate, toDate, timezone }),
     trends: client.getDashboardTrends({ periodDays: 7, toDate }),
     healthDay: getHealthDay({
       date: toDate,
@@ -103,11 +97,12 @@ export function getHealthDataPageSources(
 export async function getTrendsPageData(
   toDate: string,
   days: number,
+  timezone: string,
 ): Promise<TrendsPageData> {
   const client = aqtHealthClient;
   const fromDate = addUtcDays(toDate, -(days - 1));
-  const from = dateOnlyToUtcInstant(fromDate);
-  const to = dayAfterDateOnlyToUtcInstant(toDate);
+  const from = startOfDayInstant(fromDate, timezone);
+  const to = startOfDayInstant(addUtcDays(toDate, 1), timezone);
   const sampleQuery = {
     from,
     to,
@@ -130,7 +125,7 @@ export async function getTrendsPageData(
       order: "asc",
       limit: 5000,
     })),
-    client.getScalarDailySummaries("hrv_rmssd", { from, to }),
+    client.getScalarDailySummaries("hrv_rmssd", { from, to, timezone }),
     readAllPages((cursor) => client.listActivitySummaries({
       cursor,
       fromDate,
@@ -140,7 +135,7 @@ export async function getTrendsPageData(
       order: "asc",
       limit: 5000,
     })),
-    client.getScalarDailySummaries("respiratory_rate", { from, to }),
+    client.getScalarDailySummaries("respiratory_rate", { from, to, timezone }),
   ]);
 
   return {

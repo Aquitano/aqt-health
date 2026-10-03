@@ -66,6 +66,7 @@ services:
     environment:
       AQT_HEALTH_API_BASE_URL: ${AQT_HEALTH_API_BASE_URL:-http://app:8080}
       AQT_HEALTH_API_KEY: ${AQT_HEALTH_API_KEY:-}
+      AQT_HEALTH_TIMEZONE: ${AQT_HEALTH_TIMEZONE:-UTC}
     depends_on:
       app:
         condition: service_healthy

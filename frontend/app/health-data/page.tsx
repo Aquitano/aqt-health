@@ -10,6 +10,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { StatusBar } from "@/components/StatusBar";
 import { getHealthDataPageSources } from "@/lib/aqtHealthApi";
 import { addUtcDays, parseDateRange, startOfDayInstant } from "@/lib/dates";
+import { serverConfig } from "@/lib/serverConfig";
 import type { HealthDataPageSources, ScalarSample } from "@/lib/types";
 import { Suspense } from "react";
 
@@ -19,13 +20,10 @@ type PageProps = {
 
 export default async function HealthDataPage({ searchParams }: PageProps) {
   const params = (await searchParams) ?? {};
-  const range = parseDateRange({
-    fromDate: params.fromDate,
-    toDate: params.toDate,
-    timezone: params.timezone,
-  });
+  const timezone = serverConfig.timeZone;
+  const range = parseDateRange(params, timezone);
 
-  const sources = getHealthDataPageSources(range.fromDate, range.toDate, range.timezone);
+  const sources = getHealthDataPageSources(range.fromDate, range.toDate, timezone);
 
   return (
     <>
@@ -47,7 +45,7 @@ export default async function HealthDataPage({ searchParams }: PageProps) {
           sources={sources}
           fromDate={range.fromDate}
           toDate={range.toDate}
-          timezone={range.timezone}
+          timezone={timezone}
         />
       </Suspense>
 
@@ -56,11 +54,11 @@ export default async function HealthDataPage({ searchParams }: PageProps) {
           sources={sources}
           fromDate={range.fromDate}
           toDate={range.toDate}
-          timezone={range.timezone}
+          timezone={timezone}
         />
       </Suspense>
 
-      <p><Link href={`/health-data/raw?${new URLSearchParams({ fromDate: range.fromDate, toDate: range.toDate, timezone: range.timezone })}`} prefetch={false}>Browse raw data</Link></p>
+      <p><Link href={`/health-data/raw?${new URLSearchParams({ fromDate: range.fromDate, toDate: range.toDate })}`} prefetch={false}>Browse raw data</Link></p>
     </>
   );
 }

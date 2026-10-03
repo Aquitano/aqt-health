@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono, Space_Grotesk } from "next/font/google";
 import { AppShell } from "@/components/AppShell";
+import { TimeZoneProvider } from "@/components/TimeZoneProvider";
+import { serverConfig } from "@/lib/serverConfig";
 import "./globals.css";
 
 const inter = Inter({
@@ -37,7 +39,9 @@ export default function RootLayout({
         <meta name="theme-color" content="#07090e" />
       </head>
       <body>
-        <AppShell>{children}</AppShell>
+        <TimeZoneProvider timeZone={serverConfig.timeZone}>
+          <AppShell>{children}</AppShell>
+        </TimeZoneProvider>
       </body>
     </html>
   );

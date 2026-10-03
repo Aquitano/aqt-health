@@ -1,6 +1,7 @@
 import { revealStyle } from "@/lib/styles";
 import { AnimatedNumber } from "@/components/motion/AnimatedNumber";
-import { formatDuration, formatMeasurement, formatNumber } from "@/lib/format";
+import { formatDateTime, formatDuration, formatMeasurement, formatNumber } from "@/lib/format";
+import { serverConfig } from "@/lib/serverConfig";
 import type { DashboardSummaryResponse, DashboardTrendsResponse } from "@/lib/types";
 import styles from "./DashboardCards.module.css";
 
@@ -70,7 +71,7 @@ export function DashboardCards({ summary, trends }: DashboardCardsProps) {
       kind: "weight" as const,
       label: "Latest weight",
       value: formatMeasurement(summary?.latestWeight?.value, summary?.latestWeight?.unit),
-      detail: summary?.latestWeight?.measuredAt ?? "No data",
+      detail: summary?.latestWeight ? formatDateTime(summary.latestWeight.measuredAt, serverConfig.timeZone) : "No data",
       trend: trends?.weight?.percentChange,
       icon: <WeightIcon />,
     },
@@ -86,7 +87,7 @@ export function DashboardCards({ summary, trends }: DashboardCardsProps) {
       kind: "sleep" as const,
       label: "Last sleep",
       value: formatDuration(summary?.lastSleepSession?.durationSeconds),
-      detail: summary?.lastSleepSession?.startAt ?? "No data",
+      detail: summary?.lastSleepSession ? formatDateTime(summary.lastSleepSession.startAt, serverConfig.timeZone) : "No data",
       trend: trends?.sleep?.percentChange,
       icon: <SleepIcon />,
     },

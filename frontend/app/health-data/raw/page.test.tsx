@@ -19,6 +19,7 @@ vi.mock("@/lib/aqtHealthClient", () => ({
   },
 }));
 vi.mock("@/components/DateRangeForm", () => ({ DateRangeForm: () => null }));
+vi.mock("@/lib/serverConfig", () => ({ serverConfig: { timeZone: "America/New_York" } }));
 
 beforeEach(() => {
   for (const mock of Object.values(mocks)) {
@@ -38,7 +39,6 @@ it("fetches only the selected raw metric and forwards its cursor and local-day b
       cursor: "page-two",
       fromDate: "2026-03-08",
       toDate: "2026-03-08",
-      timezone: "America/New_York",
     }),
   });
   expect(mocks.scalar).toHaveBeenCalledExactlyOnceWith("heart_rate", {
@@ -65,7 +65,6 @@ it.each([
       cursor: "older-records",
       fromDate: "2026-03-08",
       toDate: "2026-03-08",
-      timezone: "America/New_York",
     }),
   });
   expect(request).toHaveBeenCalledExactlyOnceWith({

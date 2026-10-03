@@ -1,5 +1,6 @@
 import { revealStyle } from "@/lib/styles";
 import { formatDateTime, formatDuration, formatMeasurement, formatNumber } from "@/lib/format";
+import { serverConfig } from "@/lib/serverConfig";
 import type {
   ActivitySummariesResponse,
   BloodPressureMeasurementsResponse,
@@ -34,7 +35,7 @@ export function MetricHighlights({
       label: "Blood pressure",
       value: bp ? `${bp.systolicMmhg}/${bp.diastolicMmhg} mmHg` : "n/a",
       detail: bp
-        ? `${bp.heartRateBpm ? bp.heartRateBpm + " bpm · " : ""}${formatDateTime(bp.measuredAt)}`
+        ? `${bp.heartRateBpm ? bp.heartRateBpm + " bpm · " : ""}${formatDateTime(bp.measuredAt, serverConfig.timeZone)}`
         : "No blood pressure reading",
     },
     {
@@ -60,7 +61,7 @@ export function MetricHighlights({
       label: "Respiratory rate",
       value: respiratoryRate ? formatMeasurement(respiratoryRate.value, respiratoryRate.unit) : "n/a",
       detail: respiratoryRate
-        ? `${respiratoryRate.context} - ${formatDateTime(respiratoryRate.measuredAt)}`
+        ? `${respiratoryRate.context} - ${formatDateTime(respiratoryRate.measuredAt, serverConfig.timeZone)}`
         : "No respiratory-rate sample",
     },
     {
@@ -68,7 +69,7 @@ export function MetricHighlights({
       label: "HRV",
       value: hrv ? formatMeasurement(hrv.value, hrv.unit) : "n/a",
       detail: hrv
-        ? `${hrv.metricType.toUpperCase()} - ${hrv.context} - ${formatDateTime(hrv.measuredAt)}`
+        ? `${hrv.metricType.toUpperCase()} - ${hrv.context} - ${formatDateTime(hrv.measuredAt, serverConfig.timeZone)}`
         : "No HRV sample",
     },
   ];

@@ -201,6 +201,7 @@ Set these variables in the frontend runtime:
 
 - `AQT_HEALTH_API_BASE_URL`: backend API URL
 - `AQT_HEALTH_API_KEY`: backend API key used only by the frontend server
+- `AQT_HEALTH_TIMEZONE`: IANA zone, such as `Europe/Berlin`, that defines calendar days and rendered timestamps on every page; default `UTC`. An unknown zone fails server rendering with a configuration error.
 
 In production the frontend refuses to start a request path without `AQT_HEALTH_API_BASE_URL`; there is no silent localhost fallback outside dev and build.
 
@@ -217,6 +218,7 @@ Compose variables:
 - `AQT_HEALTH_FRONTEND_PORT`: loopback host port, default `3000`
 - `AQT_HEALTH_API_BASE_URL`: defaults to `http://app:8080` (container-to-container)
 - `AQT_HEALTH_API_KEY`: backend API key for the frontend proxy, typically the bootstrap key
+- `AQT_HEALTH_TIMEZONE`: app timezone, default `UTC`
 
 The container exposes `GET /api/health` as an unauthenticated liveness probe. The frontend has no authentication of its own; deploy it behind an authenticating reverse proxy. Compose binds both the frontend and the backend port to `127.0.0.1` so neither is reachable without that proxy.
 
