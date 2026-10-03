@@ -298,14 +298,15 @@ internal fun Route.providerRoutes() {
         errorResponses(notFound = true)
     }
     get("/api/v2/providers/{providerCode}/sync-jobs/{jobId}") {
+        val code = call.providerCode()
         val jobId = call.requiredPathParam("jobId")
-        call.respond(HttpStatusCode.OK, providerSyncJobService.get(jobId))
+        call.respond(HttpStatusCode.OK, providerSyncJobService.get(code, jobId))
     }.describe {
         operationId = "getProviderSyncJob"
         tag("Providers")
         summary = "Get provider sync job progress"
         description =
-            "Returns progress counters, the current provider-safe window, and the final sync summary when the background job has finished."
+            "Returns progress counters, the current provider-safe window, and the final sync summary when the background job has finished. `terminal` turns true once the job reached a final status. A job that belongs to another provider returns 404."
         requiresBearerAuth()
         providerCodePath()
         parameters {

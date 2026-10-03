@@ -126,9 +126,17 @@ class ProviderSyncJobService(
         return job.toStartDto()
     }
 
-    suspend fun get(jobId: String): ProviderSyncJobStatusResponse =
-        repository.get(jobId)?.toDto()
+    suspend fun get(
+        providerCode: String,
+        jobId: String,
+    ): ProviderSyncJobStatusResponse {
+        val canonicalProviderCode = providerRegistry.getProvider(providerCode)?.providerCode
+        return repository
+            .get(jobId)
+            ?.takeIf { it.providerCode == canonicalProviderCode }
+            ?.toDto()
             ?: throw NotFoundException("Provider sync job '$jobId' not found")
+    }
 
     suspend fun latest(providerCode: String?): ProviderSyncJobStatusResponse? {
         val canonicalProviderCode =
@@ -240,15 +248,17 @@ class ProviderSyncJobService(
      */
     private fun wireProviderCode(providerCode: String): String = providerRegistry.getProvider(providerCode)?.descriptor?.providerCode ?: providerCode
 
-    private fun ProviderSyncJobRecord.toDto(): ProviderSyncJobStatusResponse =
-        ProviderSyncJobStatusResponse(
+    private fun ProviderSyncJobRecord.toDto(): ProviderSyncJobStatusResponse {
+        val jobStatus = SyncJobStatus.fromStored(status)
+        return ProviderSyncJobStatusResponse(
             jobId = id,
             providerCode = wireProviderCode(providerCode),
             providerInstanceId = providerInstanceId,
             requestedFrom = requestedFrom.toString(),
             requestedTo = requestedTo.toString(),
             dataTypes = dataTypes,
-            status = SyncJobStatus.fromStored(status),
+            status = jobStatus,
+            terminal = jobStatus.terminal,
             totalItems = totalItems,
             completedItems = completedItems,
             currentItem = itemDto(currentDataType, currentFrom, currentTo),
@@ -267,6 +277,7 @@ class ProviderSyncJobService(
                     runCatching { AppJson.decodeFromString<ProviderSyncResponse>(it) }.getOrNull()
                 },
         )
+    }
 
     private fun itemDto(
         dataType: String?,
