@@ -10,7 +10,15 @@ import me.aquitano.health.domain.*
  * and IngestionScalarRecordMappers; shared field validation in IngestionMappingSupport.
  */
 class IngestionMappingService {
-    fun validateAndMap(request: IngestionBatchRequest): ValidatedIngestionBatch {
+    /**
+     * [allowEmptyRecords] is for provider sync only: an upstream window that returned nothing is
+     * still stored as an empty processed batch so the window dedupes on the next run. The public
+     * ingestion API keeps rejecting empty batches.
+     */
+    fun validateAndMap(
+        request: IngestionBatchRequest,
+        allowEmptyRecords: Boolean = false,
+    ): ValidatedIngestionBatch {
         val issues = mutableListOf<ValidationIssue>()
         val provider = normalizeProvider(request.provider, issues)
         val providerInstanceId = requiredNonBlank(
@@ -27,7 +35,7 @@ class IngestionMappingService {
         val inputRecords = request.records
         if (inputRecords == null) {
             issues.add(ValidationIssue("records"))
-        } else if (inputRecords.isEmpty()) {
+        } else if (inputRecords.isEmpty() && !allowEmptyRecords) {
             issues.add(
                 ValidationIssue(
                     field = "records",

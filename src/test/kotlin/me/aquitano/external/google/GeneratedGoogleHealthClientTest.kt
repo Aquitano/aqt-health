@@ -7,10 +7,16 @@ import com.google.devicesandservices.health.v4.DataPoint
 import com.google.devicesandservices.health.v4.ListDataPointsRequest
 import com.google.devicesandservices.health.v4.ListDataPointsResponse
 import com.google.protobuf.util.JsonFormat
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.jsonPrimitive
 import java.net.URI
 import java.time.Instant
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -124,6 +130,80 @@ class GeneratedGoogleHealthClientTest {
     }
 
     @Test
+    fun transportIsSharedAcrossFetchesAndRebuiltOnlyForANewToken() = runBlocking {
+        val fixture = Fixture()
+        repeat(3) {
+            fixture.service.responses += ListDataPointsResponse.newBuilder().build()
+        }
+
+        fixture.client.fetchDataPoints("token-1", "steps", fixture.from, fixture.to, 1000)
+        fixture.client.fetchDataPoints("token-1", "sleep", fixture.from, fixture.to, 1000)
+        assertEquals(listOf("token-1"), fixture.createdTokens)
+
+        // A refreshed token replaces the transport, and the retired one is closed.
+        fixture.client.fetchDataPoints("token-2", "steps", fixture.from, fixture.to, 1000)
+        assertEquals(listOf("token-1", "token-2"), fixture.createdTokens)
+        assertEquals(1, fixture.service.closes)
+
+        fixture.client.close()
+        assertEquals(2, fixture.service.closes)
+    }
+
+    @Test
+    fun replacedTransportStaysOpenUntilItsInflightFetchCompletes() = runBlocking {
+        val started = CompletableDeferred<Unit>()
+        val release = CountDownLatch(1)
+        val oldCloses = AtomicInteger()
+        val oldService = object : GoogleHealthDataPointsService {
+            override fun listDataPoints(request: ListDataPointsRequest): ListDataPointsResponse {
+                started.complete(Unit)
+                check(release.await(10, TimeUnit.SECONDS))
+                return ListDataPointsResponse.getDefaultInstance()
+            }
+
+            override fun close() { oldCloses.incrementAndGet() }
+        }
+        val newService = FakeDataPointsService().apply {
+            responses += ListDataPointsResponse.getDefaultInstance()
+        }
+        val client = GeneratedGoogleHealthClient(
+            FakeOAuthClient(),
+            object : GoogleHealthDataPointsServiceFactory() {
+                override fun create(accessToken: String) = if (accessToken == "old") oldService else newService
+            },
+        )
+        val from = Instant.parse("2026-04-01T00:00:00Z")
+        val to = from.plusSeconds(86400)
+        val first = async { client.fetchDataPoints("old", "steps", from, to, 1000) }
+        try {
+            withTimeout(10_000) { started.await() }
+            client.fetchDataPoints("new", "steps", from, to, 1000)
+            client.close()
+            assertEquals(0, oldCloses.get())
+            assertEquals(1, newService.closes)
+        } finally {
+            release.countDown()
+            client.close()
+        }
+        first.await()
+        assertEquals(1, oldCloses.get())
+        assertEquals(1, newService.closes)
+    }
+
+    @Test
+    fun fetchAfterCloseIsRejectedInsteadOfBuildingAnUnclosableTransport() = runBlocking {
+        val fixture = Fixture()
+        fixture.client.close()
+
+        val error = assertFailsWith<GoogleHealthHttpException> {
+            fixture.client.fetchDataPoints("token-1", "steps", fixture.from, fixture.to, 1000)
+        }
+
+        assertEquals("google_health_client_closed", error.code)
+        assertTrue(fixture.createdTokens.isEmpty())
+    }
+
+    @Test
     fun fetchDataPointsRejectsUnsupportedDataType() = runBlocking {
         val fixture = Fixture()
 
@@ -139,10 +219,14 @@ class GeneratedGoogleHealthClientTest {
         val from: Instant = Instant.parse("2026-04-01T00:00:00Z")
         val to: Instant = Instant.parse("2026-04-02T00:00:00Z")
         val service = FakeDataPointsService()
+        val createdTokens = mutableListOf<String>()
         val client = GeneratedGoogleHealthClient(
             oauthClient = FakeOAuthClient(),
             dataPointsServiceFactory = object : GoogleHealthDataPointsServiceFactory() {
-                override fun create(accessToken: String): GoogleHealthDataPointsService = service
+                override fun create(accessToken: String): GoogleHealthDataPointsService {
+                    createdTokens.add(accessToken)
+                    return service
+                }
             },
             maxPages = maxPages,
         )
@@ -152,6 +236,7 @@ class GeneratedGoogleHealthClientTest {
         val requests = mutableListOf<ListDataPointsRequest>()
         val responses = ArrayDeque<ListDataPointsResponse>()
         var nextFailure: ApiException? = null
+        var closes = 0
 
         override fun listDataPoints(request: ListDataPointsRequest): ListDataPointsResponse {
             requests.add(request)
@@ -162,7 +247,9 @@ class GeneratedGoogleHealthClientTest {
             return responses.removeFirst()
         }
 
-        override fun close() = Unit
+        override fun close() {
+            closes += 1
+        }
     }
 
     private class FakeOAuthClient : GoogleHealthClient {

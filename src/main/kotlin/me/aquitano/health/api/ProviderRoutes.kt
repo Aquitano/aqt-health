@@ -267,7 +267,7 @@ internal fun Route.providerRoutes() {
         providerCodePath()
         idempotencyKeyHeader()
         jsonRequest<ProviderSyncRequest>(
-            "Provider sync request. Long historical ranges are accepted for backfill; providers split work into safe internal windows and may enforce page-size constraints advertised by the provider catalog.",
+            "Provider sync request. Historical ranges up to 1095 days (3 years) are accepted for backfill; providers split work into safe internal windows and may enforce page-size constraints advertised by the provider catalog. Longer histories need several requests.",
             "syncRequest",
             providerSyncRequestExample()
         )
@@ -294,7 +294,7 @@ internal fun Route.providerRoutes() {
         providerCodePath()
         idempotencyKeyHeader()
         jsonRequest<ProviderSyncRequest>(
-            "Provider sync request. Long historical ranges are accepted for backfill and processed by the backend job worker.",
+            "Provider sync request. Historical ranges up to 1095 days (3 years) are accepted for backfill and processed by the backend job worker; longer histories need several jobs.",
             "syncJobRequest",
             providerSyncRequestExample()
         )

@@ -125,6 +125,54 @@ class ProviderSyncPipelineTest {
     }
 
     @Test
+    fun emptyWindowIsIngestedSoTheNextRunDedupesInsteadOfRefetching() = runBlocking {
+        val store = FakeStore()
+        val adapter = FakeAdapter(emptyFetch = true)
+        val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+
+        val summary = pipeline.sync(adapter, request, now)
+
+        // The empty processed batch is what marks the window done for the next run.
+        assertEquals(1, store.ingested.size)
+        assertTrue(store.ingested.single().records.isEmpty())
+        assertEquals(1, summary.batches.size)
+        assertEquals(listOf("steps"), summary.emptyDataTypes.map { it.dataType })
+    }
+
+    @Test
+    fun refreshRefetchesEmptyWindowsAndStoresLateProviderData() = runBlocking {
+        val store = FakeStore(existingBatch = ExistingProviderBatch(42, BatchStatus.Processed))
+        val adapter = FakeAdapter(emptyFetch = true)
+        val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+        val refresh = request.copy(refresh = true)
+
+        repeat(2) { pipeline.sync(adapter, refresh, now) }
+        assertEquals(1, store.ingested.size)
+        assertTrue(store.ingested.single().records.isEmpty())
+
+        adapter.emptyFetch = false
+        pipeline.sync(adapter, refresh, now)
+        assertEquals(3, adapter.fetchCalls)
+        assertEquals(2, store.ingested.size)
+        assertEquals(1200, (store.ingested.last().records.single() as StepInterval).steps)
+    }
+
+    @Test
+    fun windowWhoseRecordsWereAllNormalizedAwayIsNotMarkedDone() = runBlocking {
+        // Marking it done would make the window a permanent cache hit, so a provider correction or
+        // a normalizer fix could never bring the dropped records back.
+        val store = FakeStore()
+        val adapter = FakeAdapter(normalizedAwayFetch = true)
+        val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+
+        val summary = pipeline.sync(adapter, request, now)
+
+        assertTrue(store.ingested.isEmpty())
+        assertTrue(summary.batches.isEmpty())
+        assertEquals(listOf(1), summary.emptyDataTypes.map { it.sourceRecordsReceived })
+    }
+
+    @Test
     fun duplicateProviderRecordIdsCollapseBeforeIngestion() = runBlocking {
         // Ingestion rejects the whole batch over one repeated id, non-retryably, which parks the
         // sync schedule. Providers do repeat records inside a window, so the pipeline collapses
@@ -287,9 +335,13 @@ class ProviderSyncPipelineTest {
         private var throwUnauthorizedOnce: Boolean = false,
         private val itemCount: Int = 1,
         private val fetchFailure: RuntimeException? = null,
+        var emptyFetch: Boolean = false,
+        private val normalizedAwayFetch: Boolean = false,
         var records: List<IngestionRecord>? = null,
         override val providerRequestInterval: Duration = Duration.ZERO,
     ) : ProviderSyncAdapter {
+        override val recordEmptyDataTypes: Boolean = true
+
         var fetchCalls = 0
         var refreshCalls = 0
         var steps = 1200
@@ -352,10 +404,14 @@ class ProviderSyncPipelineTest {
             return ProviderFetchedBatch(
                 dataType = item.dataType,
                 pagesFetched = 1,
-                sourceRecordsReceived = 1,
+                sourceRecordsReceived = if (emptyFetch) 0 else 1,
                 sourcePayload = buildJsonObject { put("requestId", fetchCalls) },
                 sourceRecords = sourceRecords,
-                records = records ?: listOf(stepInterval(steps = steps)),
+                records = if (emptyFetch || normalizedAwayFetch) {
+                    emptyList()
+                } else {
+                    records ?: listOf(stepInterval(steps = steps))
+                },
             )
         }
 

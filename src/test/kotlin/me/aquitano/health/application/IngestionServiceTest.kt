@@ -8,6 +8,8 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.buildJsonObject
 import me.aquitano.health.domain.BatchStatus
 import me.aquitano.health.domain.ConflictException
+import me.aquitano.health.domain.IngestionSnapshot
+import me.aquitano.health.domain.RequestValidationException
 import me.aquitano.health.api.dto.IngestionBatchRequest
 import me.aquitano.health.api.dto.ScalarSample
 import me.aquitano.health.api.dto.StepInterval
@@ -27,6 +29,31 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class IngestionServiceTest : PostgresIntegrationTest() {
+    @Test
+    fun emptyProviderSnapshotPersistsWhileDirectIngestionStaysStrict() = runBlocking {
+        val database = openDatabase(PostgresTestDatabase.config())
+        val service = IngestionService(
+            database, IngestionMappingService(), SupportRepository(database), IngestionRepository(),
+            metricWriteService(), NoOpDerivedRebuildExecutor, PendingDerivedRebuildRepository(database),
+        )
+        val now = Instant.parse("2026-04-19T10:00:00Z")
+        val request = IngestionBatchRequest(
+            provider = "withings", providerInstanceId = "empty-account", batchExternalId = "empty",
+            ingestedAt = now.toString(), sourcePayload = buildJsonObject {}, records = emptyList(),
+        )
+        assertFailsWith<RequestValidationException> { service.ingestBatch(request, now) }
+        val stored = service.ingestBatch(request, now, IngestionSnapshot("window", "empty"), allowEmptyRecords = true)
+        assertEquals(BatchStatus.Processed, stored.status)
+        assertEquals(0, stored.ingestionRecordsStored)
+        assertEquals(stored.batchId, service.reusableSyncBatchId("withings", "empty-account", "window", "empty", now))
+
+        val record = StepInterval("duplicate", "2026-04-19T08:00:00Z", "2026-04-19T09:00:00Z", 100)
+        assertFailsWith<RequestValidationException> {
+            service.ingestBatch(request.copy(batchExternalId = "duplicates", records = listOf(record, record)), now)
+        }
+        Unit
+    }
+
     @Test
     fun ingestionCommittedAfterCanonicalSnapshotConvergesToTheNewerTotal() = runBlocking {
         val config = PostgresTestDatabase.config().copy(maxPoolSize = 3)

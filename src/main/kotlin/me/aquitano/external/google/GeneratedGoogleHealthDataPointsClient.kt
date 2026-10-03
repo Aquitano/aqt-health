@@ -7,6 +7,8 @@ import com.google.auth.oauth2.AccessToken
 import com.google.auth.oauth2.GoogleCredentials
 import com.google.devicesandservices.health.v4.*
 import com.google.protobuf.util.JsonFormat
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
 import me.aquitano.health.shared.AppJson
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -17,9 +19,11 @@ private val generatedClientLogger = KotlinLogging.logger {}
 
 class GeneratedGoogleHealthClient(
     private val oauthClient: GoogleHealthOAuthClient,
-    private val dataPointsServiceFactory: GoogleHealthDataPointsServiceFactory = GoogleHealthDataPointsServiceFactory(),
+    dataPointsServiceFactory: GoogleHealthDataPointsServiceFactory = GoogleHealthDataPointsServiceFactory(),
     private val maxPages: Int = MAX_GOOGLE_HEALTH_PAGES,
-) : GoogleHealthClient, GoogleHealthOAuthClient by oauthClient {
+) : GoogleHealthClient, GoogleHealthOAuthClient by oauthClient, AutoCloseable {
+    private val services = DataPointsServiceCache(dataPointsServiceFactory)
+
     override suspend fun fetchDataPoints(
         accessToken: String,
         dataType: String,
@@ -28,9 +32,17 @@ class GeneratedGoogleHealthClient(
         pageSize: Int,
     ): GoogleHealthFetchResult {
         validateSupportedDataType(dataType)
-        dataPointsServiceFactory.create(accessToken).use { service ->
-            return fetchDataPoints(service, dataType, from, to, pageSize)
+        // gax calls block the calling thread, so they stay off the Ktor worker threads.
+        return withContext(Dispatchers.IO) {
+            services.use(accessToken) { service ->
+                fetchDataPoints(service, dataType, from, to, pageSize)
+            }
         }
+    }
+
+    /** Releases the shared transport; the client is unusable afterwards. */
+    override fun close() {
+        services.close()
     }
 
     private fun fetchDataPoints(
@@ -160,6 +172,79 @@ class GeneratedGoogleHealthClient(
         private val PROTO_JSON_PRINTER: JsonFormat.Printer =
             JsonFormat.printer()
                 .omittingInsignificantWhitespace()
+    }
+}
+
+/**
+ * Keeps one transport client alive across fetches instead of building and tearing one down per
+ * call: a month-long, five-data-type sync is 155 fetches but needs a single connection pool.
+ *
+ * The access token is baked into the transport's credentials, so a refreshed token replaces the
+ * cached service. Replaced services are reference counted and closed once their last in-flight
+ * fetch returns, because a concurrent sync may still be paginating on one.
+ */
+private class DataPointsServiceCache(
+    private val factory: GoogleHealthDataPointsServiceFactory,
+) : AutoCloseable {
+    private class Entry(val service: GoogleHealthDataPointsService) {
+        var users: Int = 0
+        var retired: Boolean = false
+    }
+
+    private val lock = Any()
+    private var currentToken: String? = null
+    private var current: Entry? = null
+    private var closed = false
+
+    fun <T> use(accessToken: String, block: (GoogleHealthDataPointsService) -> T): T {
+        val entry = acquire(accessToken)
+        try {
+            return block(entry.service)
+        } finally {
+            release(entry)
+        }
+    }
+
+    private fun acquire(accessToken: String): Entry = synchronized(lock) {
+        // Shutdown closes the cache before the sync producers have necessarily stopped. Without
+        // this, a fetch that starts after close() would build a replacement transport that nothing
+        // ever closes.
+        if (closed) {
+            throw GoogleHealthHttpException(
+                "google_health_client_closed",
+                "Google Health client is shutting down",
+            )
+        }
+        current
+            ?.takeIf { currentToken == accessToken && !it.retired }
+            ?.let {
+                it.users += 1
+                return it
+            }
+        retireCurrent()
+        val entry = Entry(factory.create(accessToken))
+        entry.users = 1
+        current = entry
+        currentToken = accessToken
+        entry
+    }
+
+    private fun release(entry: Entry) = synchronized(lock) {
+        entry.users -= 1
+        if (entry.retired && entry.users == 0) entry.service.close()
+    }
+
+    private fun retireCurrent() {
+        val entry = current ?: return
+        entry.retired = true
+        if (entry.users == 0) entry.service.close()
+        current = null
+        currentToken = null
+    }
+
+    override fun close() = synchronized(lock) {
+        closed = true
+        retireCurrent()
     }
 }
 
