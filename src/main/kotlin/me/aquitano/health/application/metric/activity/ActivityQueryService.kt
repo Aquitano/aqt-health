@@ -22,6 +22,6 @@ class ActivityQueryService(
         val filters = if (latest) params.dailyLatestReadFilters(now) else params.dailyReadFilters(now)
         return pagedRead(database, filters, SortFields.DATE, { it.date }, { it.id.toLong() }, ::ActivitySummariesResponse) {
             canonicalRepository.listCanonicalActivitySummaries(filters)
-        }.let { if (latest) it.copy(meta = it.meta.copy(nextCursor = null)) else it }
+        }
     }
 }

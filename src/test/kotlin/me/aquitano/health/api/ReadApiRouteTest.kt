@@ -519,6 +519,7 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
             )
             assertEquals("desc", latestSteps.meta()["order"]!!.jsonPrimitive.content)
             assertEquals(1, latestSteps.meta()["limit"]!!.jsonPrimitive.int)
+            assertFalse(latestSteps.meta().containsKey("nextCursor"))
 
             val invalidLimit = authorizedGet("/api/v2/metrics/heart_rate?limit=0")
             assertEquals(HttpStatusCode.BadRequest, invalidLimit.status)
