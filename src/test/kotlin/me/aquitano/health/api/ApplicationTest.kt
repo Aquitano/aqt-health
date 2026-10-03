@@ -222,7 +222,7 @@ class ApplicationTest : PostgresIntegrationTest() {
             assertTrue("date" in dailyStepParamNames)
             assertTrue("fromDate" in dailyStepParamNames)
             assertTrue("toDate" in dailyStepParamNames)
-            assertTrue("latest" in dailyStepParamNames)
+            assertFalse("latest" in dailyStepParamNames)
             assertTrue("cursor" in dailyStepParamNames)
             assertFalse("canonical" in dailyStepParamNames)
             assertFalse("from" in dailyStepParamNames)

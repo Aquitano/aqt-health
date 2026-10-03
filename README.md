@@ -558,7 +558,7 @@ Metric list responses include an `items` array plus a `meta` object:
 
 Cursor pagination is exposed through the `cursor` query parameter. When `meta.nextCursor` is present, pass it back with the same `order` value to fetch the next page. `meta.sort` names the field each endpoint orders by.
 
-`latest=true` is supported on timestamp-based list endpoints, scalar metric reads, activity summaries, sleep summaries, and blood pressure. It cannot be combined with `limit`, `order`, or `cursor`; unsupported combinations return `400 validation_failed` with field-level details. Daily step summaries and sleep nights do not support `latest=true`; use `date` or descending `order` where appropriate.
+`latest=true` is supported on timestamp-based list endpoints, scalar metric reads, activity summaries, sleep summaries, and blood pressure. It cannot be combined with `limit`, `order`, or `cursor`; unsupported combinations return `400 validation_failed` with field-level details. Daily step summaries, sleep nights and the scalar `/summary` and `/daily` aggregates reject `latest=true`; use `date` or descending `order` where appropriate.
 
 Sleep reads have two modes:
 

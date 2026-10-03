@@ -30,6 +30,7 @@ internal fun QueryParams.readFilters(): ReadFilters {
 }
 
 internal fun QueryParams.summaryFilters(): ReadFilters {
+    rejectLatest()
     val from = instant("from")
     val to = instant("to")
     validateRange(from, to, "from", "to")
