@@ -38,3 +38,25 @@ jobs:
 
       - name: Build
         run: bun run build
+
+      - name: Build container
+        run: docker build --tag aqt-health-frontend:test .
+
+      - name: Check container startup
+        run: |
+          trap 'docker rm --force health-frontend-test' EXIT
+          docker run --detach --name health-frontend-test \
+            --health-interval 2s --health-start-period 0s --health-retries 15 \
+            aqt-health-frontend:test
+          for attempt in {1..30}; do
+            status=$(docker inspect --format '{{.State.Health.Status}}' health-frontend-test)
+            if [ "$status" = healthy ]; then
+              exit 0
+            fi
+            if [ "$status" = unhealthy ]; then
+              break
+            fi
+            sleep 2
+          done
+          docker logs health-frontend-test
+          exit 1
