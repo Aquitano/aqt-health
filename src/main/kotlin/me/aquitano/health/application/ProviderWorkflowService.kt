@@ -3,8 +3,8 @@ package me.aquitano.health.application
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.aquitano.health.api.dto.*
 import me.aquitano.health.api.dto.ProviderSyncRequest
-import me.aquitano.health.application.providersync.ProviderSyncProgressSink
 import me.aquitano.health.domain.*
+import me.aquitano.health.domain.ProviderSyncProgressSink
 import me.aquitano.health.infrastructure.logging.*
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthStateConsumeResult

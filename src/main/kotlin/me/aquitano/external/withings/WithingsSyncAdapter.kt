@@ -3,13 +3,13 @@ package me.aquitano.external.withings
 import me.aquitano.health.application.providersync.PROVIDER_REQUEST_INTERVAL
 import me.aquitano.health.application.providersync.ProviderFetchedBatch
 import me.aquitano.health.application.providersync.ProviderSyncAdapter
-import me.aquitano.health.application.providersync.ProviderSyncItem
 import me.aquitano.health.application.providersync.ProviderSyncPlan
 import me.aquitano.health.application.providersync.RefreshedTokenSet
 import me.aquitano.health.application.providersync.SyncAccount
 import me.aquitano.health.application.providersync.SyncWindow
 import me.aquitano.health.application.providersync.dailySyncWindows
 import me.aquitano.health.domain.ConflictException
+import me.aquitano.health.domain.ProviderSyncItem
 import me.aquitano.health.domain.ProviderSyncRequest
 import me.aquitano.health.domain.RequestValidationException
 import me.aquitano.health.domain.UpstreamProviderException
