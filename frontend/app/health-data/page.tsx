@@ -9,7 +9,7 @@ import { MetricHighlights } from "@/components/MetricHighlights";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBar } from "@/components/StatusBar";
 import { getHealthDataPageSources } from "@/lib/aqtHealthApi";
-import { addUtcDays, parseDateRange, startOfDayInstant } from "@/lib/dates";
+import { addUtcDays, parseDateRange, rangeDays, startOfDayInstant } from "@/lib/dates";
 import { buildHealthCharts } from "@/lib/healthCharts";
 import { serverConfig } from "@/lib/serverConfig";
 import type { HealthDataPageSources, ScalarSample } from "@/lib/types";
@@ -121,6 +121,7 @@ async function OverviewSection({
       <DashboardCards
         summary={summary.ok ? summary.data : undefined}
         trends={trends.ok ? trends.data : undefined}
+        rangeDays={rangeDays(fromDate, toDate)}
       />
       <DayOverview
         day={healthDay.ok ? healthDay.data : undefined}

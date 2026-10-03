@@ -8,6 +8,7 @@ import styles from "./DashboardCards.module.css";
 type DashboardCardsProps = {
   summary?: DashboardSummaryResponse;
   trends?: DashboardTrendsResponse;
+  rangeDays: number;
 };
 
 const StepsIcon = () => (
@@ -40,7 +41,7 @@ const SleepIcon = () => (
   </svg>
 );
 
-function TrendBadge({ percentChange }: { percentChange?: number | null }) {
+function TrendBadge({ percentChange, periodLabel }: { percentChange?: number | null; periodLabel?: string }) {
   if (percentChange === undefined || percentChange === null) return null;
   const isPositive = percentChange > 0;
   const isNeutral = percentChange === 0;
@@ -50,14 +51,15 @@ function TrendBadge({ percentChange }: { percentChange?: number | null }) {
     <span
       className={styles.trend}
       data-direction={isNeutral ? "neutral" : isPositive ? "up" : "down"}
-      title={`${sign}${percentChange.toFixed(1)}% vs previous${percentChange === 0 ? " period" : ""}`}
+      title={`${sign}${percentChange.toFixed(1)}% ${periodLabel ?? `vs previous${percentChange === 0 ? " period" : ""}`}`}
     >
-      {arrow} {sign}{Math.abs(percentChange).toFixed(1)}%
+      {arrow} {sign}{Math.abs(percentChange).toFixed(1)}%{periodLabel ? ` ${periodLabel}` : null}
     </span>
   );
 }
 
-export function DashboardCards({ summary, trends }: DashboardCardsProps) {
+export function DashboardCards({ summary, trends, rangeDays }: DashboardCardsProps) {
+  const periodLabel = trends && trends.periodDays !== rangeDays ? `vs prior ${trends.periodDays}d` : undefined;
   const cards = [
     {
       kind: "steps" as const,
@@ -65,6 +67,7 @@ export function DashboardCards({ summary, trends }: DashboardCardsProps) {
       value: formatNumber(summary?.steps.steps),
       detail: `${formatNumber(summary?.steps.sampleCount)} samples`,
       trend: trends?.steps?.percentChange,
+      periodLabel,
       icon: <StepsIcon />,
     },
     {
@@ -81,6 +84,7 @@ export function DashboardCards({ summary, trends }: DashboardCardsProps) {
       value: formatMeasurement(summary?.latestHeartRate?.value, summary?.latestHeartRate?.unit),
       detail: summary?.latestHeartRate?.context ?? "No data",
       trend: trends?.heartRate?.percentChange,
+      periodLabel,
       icon: <HeartIcon />,
     },
     {
@@ -89,6 +93,7 @@ export function DashboardCards({ summary, trends }: DashboardCardsProps) {
       value: formatDuration(summary?.lastSleepSession?.durationSeconds),
       detail: summary?.lastSleepSession ? formatDateTime(summary.lastSleepSession.startAt, serverConfig.timeZone) : "No data",
       trend: trends?.sleep?.percentChange,
+      periodLabel,
       icon: <SleepIcon />,
     },
   ];
@@ -110,7 +115,7 @@ export function DashboardCards({ summary, trends }: DashboardCardsProps) {
           <AnimatedNumber className={styles.value} value={card.value} />
           <span className={styles.detail}>
             {card.detail}
-            <TrendBadge percentChange={card.trend} />
+            <TrendBadge percentChange={card.trend} periodLabel={card.periodLabel} />
           </span>
         </article>
       ))}
