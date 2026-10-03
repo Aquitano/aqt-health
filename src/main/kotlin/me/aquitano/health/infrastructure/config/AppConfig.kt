@@ -127,6 +127,9 @@ fun ApplicationConfig.toAppConfig(): AppConfig =
 fun AppConfig.validateForStartup() {
     val issues =
         buildList {
+            if (ingestion.maxBodyBytes <= 0) {
+                add(ConfigValidationIssue("aqtHealth.ingestion.maxBodyBytes", "must be positive"))
+            }
             if (environment.isProduction) {
                 requireTokenKey("aqtHealth.auth.bootstrapApiKey", auth.bootstrapApiKey)
                 requireValue("aqtHealth.auth.bootstrapClientName", auth.bootstrapClientName)

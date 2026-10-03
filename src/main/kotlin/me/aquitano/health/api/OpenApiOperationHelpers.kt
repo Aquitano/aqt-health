@@ -84,6 +84,7 @@ internal fun Responses.Builder.commonErrors(
     validation: Boolean = true,
     notFound: Boolean = false,
     conflict: Boolean = false,
+    payloadTooLarge: Boolean = false,
     upstream: Boolean = false,
     internal: Boolean = true,
 ) {
@@ -120,6 +121,15 @@ internal fun Responses.Builder.commonErrors(
             content {
                 schema = buildSchema(typeOf<ErrorResponse>())
                 example("conflict", conflictErrorExample())
+            }
+        }
+    }
+    if (payloadTooLarge) {
+        HttpStatusCode.PayloadTooLarge {
+            description = "Request body exceeds the configured size limit"
+            content {
+                schema = buildSchema(typeOf<ErrorResponse>())
+                example("payloadTooLarge", payloadTooLargeErrorExample())
             }
         }
     }
