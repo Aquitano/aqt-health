@@ -164,6 +164,7 @@ export default async function RawDataPage({
           client.listScalarSamples(dataset, {
             ...instantQuery,
             sort: "measuredAt",
+            raw: true,
           }),
           scalarTables[dataset]
         );
@@ -211,6 +212,12 @@ export default async function RawDataPage({
           Show records
         </button>
       </form>
+      {dataset === "sleep-sessions" || dataset === "sleep-summaries" ? (
+        <p>
+          Sleep records are filtered by their start time in the selected timezone.
+          Overnight records appear on the day they began.
+        </p>
+      ) : null}
       <Suspense fallback={<p>Loading records...</p>}>{loadTable()}</Suspense>
     </>
   );
