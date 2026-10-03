@@ -1,5 +1,6 @@
 package me.aquitano.health.infrastructure.repositories
 
+import me.aquitano.health.infrastructure.database.suspendDbTransaction
 import me.aquitano.health.infrastructure.database.tables.ReplayJobsTable
 import me.aquitano.health.infrastructure.database.toDbTimestamp
 import org.jetbrains.exposed.v1.core.ResultRow
@@ -10,7 +11,6 @@ import org.jetbrains.exposed.v1.core.plus
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insertIgnore
 import org.jetbrains.exposed.v1.jdbc.selectAll
-import me.aquitano.health.infrastructure.database.suspendDbTransaction
 import org.jetbrains.exposed.v1.jdbc.update
 import java.time.Instant
 import java.time.LocalDate
@@ -38,9 +38,14 @@ data class ReplayJobRecord(
     val finishedAt: Instant?,
 )
 
-data class ReplayJobCreateResult(val record: ReplayJobRecord, val created: Boolean)
+data class ReplayJobCreateResult(
+    val record: ReplayJobRecord,
+    val created: Boolean,
+)
 
-class ReplayJobRepository(private val database: Database) {
+class ReplayJobRepository(
+    private val database: Database,
+) {
     suspend fun create(
         id: String,
         scope: String,
@@ -55,32 +60,34 @@ class ReplayJobRepository(private val database: Database) {
         suspendDbTransaction(db = database) {
             // insertIgnore behaves like a plain insert when no unique-key conflict exists,
             // which is always the case for the non-idempotent path (fresh id, null key).
-            val inserted = ReplayJobsTable.insertIgnore {
-                it[this.id] = id
-                it[this.idempotencyKey] = idempotencyKey
-                it[this.idempotencyRequestHash] = idempotencyRequestHash
-                it[this.scope] = scope
-                it[this.metricTypes] = metricTypes?.let(::encodeDataTypes)
-                it[this.fromDate] = fromDate
-                it[this.toDate] = toDate
-                it[this.wipe] = wipe
-                it[status] = "queued"
-                it[totalItems] = 0
-                it[completedItems] = 0
-                it[recordsReplayed] = 0
-                it[metricsWritten] = 0
-                it[duplicatesSkipped] = 0
-                it[mappingFailures] = 0
-                it[createdAt] = now.toDbTimestamp()
-                it[updatedAt] = now.toDbTimestamp()
-            }.insertedCount > 0
-            val record = getByIdInTransaction(id)
-                ?: findByIdempotencyKeyInTransaction(idempotencyKey!!)!!
+            val inserted =
+                ReplayJobsTable
+                    .insertIgnore {
+                        it[this.id] = id
+                        it[this.idempotencyKey] = idempotencyKey
+                        it[this.idempotencyRequestHash] = idempotencyRequestHash
+                        it[this.scope] = scope
+                        it[this.metricTypes] = metricTypes?.let(::encodeDataTypes)
+                        it[this.fromDate] = fromDate
+                        it[this.toDate] = toDate
+                        it[this.wipe] = wipe
+                        it[status] = "queued"
+                        it[totalItems] = 0
+                        it[completedItems] = 0
+                        it[recordsReplayed] = 0
+                        it[metricsWritten] = 0
+                        it[duplicatesSkipped] = 0
+                        it[mappingFailures] = 0
+                        it[createdAt] = now.toDbTimestamp()
+                        it[updatedAt] = now.toDbTimestamp()
+                    }.insertedCount > 0
+            val record =
+                getByIdInTransaction(id)
+                    ?: findByIdempotencyKeyInTransaction(idempotencyKey!!)!!
             ReplayJobCreateResult(record, created = inserted)
         }
 
-    suspend fun get(id: String): ReplayJobRecord? =
-        suspendDbTransaction(db = database) { getByIdInTransaction(id) }
+    suspend fun get(id: String): ReplayJobRecord? = suspendDbTransaction(db = database) { getByIdInTransaction(id) }
 
     suspend fun findByIdempotencyKey(idempotencyKey: String): ReplayJobRecord? =
         suspendDbTransaction(db = database) {
@@ -97,7 +104,11 @@ class ReplayJobRepository(private val database: Database) {
                 .singleOrNull()
         }
 
-    suspend fun markRunning(id: String, totalItems: Int, now: Instant) {
+    suspend fun markRunning(
+        id: String,
+        totalItems: Int,
+        now: Instant,
+    ) {
         suspendDbTransaction(db = database) {
             ReplayJobsTable.update({ ReplayJobsTable.id eq id }) {
                 it[status] = "running"
@@ -109,7 +120,11 @@ class ReplayJobRepository(private val database: Database) {
         }
     }
 
-    suspend fun markItemStarted(id: String, item: String, now: Instant) {
+    suspend fun markItemStarted(
+        id: String,
+        item: String,
+        now: Instant,
+    ) {
         suspendDbTransaction(db = database) {
             ReplayJobsTable.update({ ReplayJobsTable.id eq id }) {
                 it[currentItem] = item
@@ -140,7 +155,12 @@ class ReplayJobRepository(private val database: Database) {
         }
     }
 
-    suspend fun finish(id: String, status: String, errorMessage: String?, now: Instant) {
+    suspend fun finish(
+        id: String,
+        status: String,
+        errorMessage: String?,
+        now: Instant,
+    ) {
         suspendDbTransaction(db = database) {
             ReplayJobsTable.update({ ReplayJobsTable.id eq id }) {
                 it[this.status] = status
@@ -203,5 +223,4 @@ class ReplayJobRepository(private val database: Database) {
             updatedAt = this[ReplayJobsTable.updatedAt].toInstant(),
             finishedAt = this[ReplayJobsTable.finishedAt]?.toInstant(),
         )
-
 }

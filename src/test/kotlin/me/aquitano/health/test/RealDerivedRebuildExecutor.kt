@@ -11,7 +11,7 @@ import org.jetbrains.exposed.v1.jdbc.Database
 /** The production module wiring with default-constructed services, for tests. */
 fun derivedRebuildRegistry(): DerivedRebuildModuleRegistry =
     DerivedRebuildModuleRegistry(
-        derivedRebuildModules(CanonicalStepDerivationService(CanonicalStepDerivationRepository()))
+        derivedRebuildModules(CanonicalStepDerivationService(CanonicalStepDerivationRepository())),
     )
 
 /** The production rebuild wiring with default-constructed services, for tests that assert derived tables. */

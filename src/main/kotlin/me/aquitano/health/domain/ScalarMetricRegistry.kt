@@ -47,100 +47,108 @@ data class ScalarMetricDescriptor(
 }
 
 object ScalarMetricRegistry {
-    val descriptors: List<ScalarMetricDescriptor> = buildList {
-        add(
-            ScalarMetricDescriptor(
-                metricType = ScalarMetricTypes.HEART_RATE,
-                family = MetricFamilies.HEART_RATE,
-                unit = "bpm",
-                valueRange = ScalarValueRange(25.0, 250.0),
-                allowedContexts = HeartRateContexts.supported,
+    val descriptors: List<ScalarMetricDescriptor> =
+        buildList {
+            add(
+                ScalarMetricDescriptor(
+                    metricType = ScalarMetricTypes.HEART_RATE,
+                    family = MetricFamilies.HEART_RATE,
+                    unit = "bpm",
+                    valueRange = ScalarValueRange(25.0, 250.0),
+                    allowedContexts = HeartRateContexts.supported,
+                ),
             )
-        )
-        add(
-            ScalarMetricDescriptor(
-                metricType = ScalarMetricTypes.RESPIRATORY_RATE,
-                family = MetricFamilies.RESPIRATORY_RATE,
-                unit = "breaths_per_minute",
-                valueRange = ScalarValueRange(5.0, 80.0),
-                allowedContexts = RespiratoryRateContexts.supported,
+            add(
+                ScalarMetricDescriptor(
+                    metricType = ScalarMetricTypes.RESPIRATORY_RATE,
+                    family = MetricFamilies.RESPIRATORY_RATE,
+                    unit = "breaths_per_minute",
+                    valueRange = ScalarValueRange(5.0, 80.0),
+                    allowedContexts = RespiratoryRateContexts.supported,
+                ),
             )
-        )
-        add(
-            ScalarMetricDescriptor(
-                metricType = ScalarMetricTypes.HRV_RMSSD,
-                family = MetricFamilies.HRV,
-                unit = "ms",
-                valueRange = ScalarValueRange(0.0, 500.0, minInclusive = false),
-                allowedContexts = HrvContexts.supported,
+            add(
+                ScalarMetricDescriptor(
+                    metricType = ScalarMetricTypes.HRV_RMSSD,
+                    family = MetricFamilies.HRV,
+                    unit = "ms",
+                    valueRange = ScalarValueRange(0.0, 500.0, minInclusive = false),
+                    allowedContexts = HrvContexts.supported,
+                ),
             )
-        )
 
-        fun body(metricType: String, unit: String, range: ScalarValueRange) = add(
-            ScalarMetricDescriptor(
-                metricType = metricType,
-                family = MetricFamilies.BODY_MEASUREMENT,
-                unit = unit,
-                valueRange = range,
+            fun body(
+                metricType: String,
+                unit: String,
+                range: ScalarValueRange,
+            ) = add(
+                ScalarMetricDescriptor(
+                    metricType = metricType,
+                    family = MetricFamilies.BODY_MEASUREMENT,
+                    unit = unit,
+                    valueRange = range,
+                ),
             )
-        )
-        body(BodyMetricTypes.WEIGHT, "kg", ScalarValueRange(0.0, null, minInclusive = false))
-        body(BodyMetricTypes.BODY_FAT, "percent", ScalarValueRange(0.0, 100.0))
-        body(BodyMetricTypes.MUSCLE, "kg", ScalarValueRange(0.0, null, minInclusive = false))
-        body(BodyMetricTypes.WATER, "percent", ScalarValueRange(0.0, 100.0))
-        body(BodyMetricTypes.VISCERAL_FAT, "rating", ScalarValueRange(0.0, null, minInclusive = false))
+            body(BodyMetricTypes.WEIGHT, "kg", ScalarValueRange(0.0, null, minInclusive = false))
+            body(BodyMetricTypes.BODY_FAT, "percent", ScalarValueRange(0.0, 100.0))
+            body(BodyMetricTypes.MUSCLE, "kg", ScalarValueRange(0.0, null, minInclusive = false))
+            body(BodyMetricTypes.WATER, "percent", ScalarValueRange(0.0, 100.0))
+            body(BodyMetricTypes.VISCERAL_FAT, "rating", ScalarValueRange(0.0, null, minInclusive = false))
 
-        fun extendedBody(
-            metricType: String,
-            unit: String,
-            range: ScalarValueRange,
-            supportsSegment: Boolean = false,
-        ) = add(
-            ScalarMetricDescriptor(
-                metricType = metricType,
-                family = MetricFamilies.BODY_MEASUREMENT,
-                unit = unit,
-                valueRange = range,
-                supportsSegment = supportsSegment,
+            fun extendedBody(
+                metricType: String,
+                unit: String,
+                range: ScalarValueRange,
+                supportsSegment: Boolean = false,
+            ) = add(
+                ScalarMetricDescriptor(
+                    metricType = metricType,
+                    family = MetricFamilies.BODY_MEASUREMENT,
+                    unit = unit,
+                    valueRange = range,
+                    supportsSegment = supportsSegment,
+                ),
             )
-        )
-        extendedBody(BodyMetricTypes.FAT_MASS, "kg", ScalarValueRange(0.0, null, minInclusive = false))
-        extendedBody(BodyMetricTypes.FAT_FREE_MASS, "kg", ScalarValueRange(0.0, null, minInclusive = false))
-        extendedBody(BodyMetricTypes.BONE_MASS, "kg", ScalarValueRange(0.0, null, minInclusive = false))
-        extendedBody(BodyMetricTypes.INTRACELLULAR_WATER, "kg", ScalarValueRange(0.0, null))
-        extendedBody(BodyMetricTypes.EXTRACELLULAR_WATER, "kg", ScalarValueRange(0.0, null))
-        extendedBody(BodyMetricTypes.BASAL_METABOLIC_RATE, "kcal", ScalarValueRange(0.0, null, minInclusive = false))
-        extendedBody(
-            BodyMetricTypes.SEGMENTAL_FAT_MASS,
-            "kg",
-            ScalarValueRange(0.0, null, minInclusive = false),
-            supportsSegment = true,
-        )
-        extendedBody(
-            BodyMetricTypes.SEGMENTAL_MUSCLE_MASS,
-            "kg",
-            ScalarValueRange(0.0, null, minInclusive = false),
-            supportsSegment = true,
-        )
-        extendedBody(
-            BodyMetricTypes.SEGMENTAL_FAT_FREE_MASS,
-            "kg",
-            ScalarValueRange(0.0, null, minInclusive = false),
-            supportsSegment = true,
-        )
+            extendedBody(BodyMetricTypes.FAT_MASS, "kg", ScalarValueRange(0.0, null, minInclusive = false))
+            extendedBody(BodyMetricTypes.FAT_FREE_MASS, "kg", ScalarValueRange(0.0, null, minInclusive = false))
+            extendedBody(BodyMetricTypes.BONE_MASS, "kg", ScalarValueRange(0.0, null, minInclusive = false))
+            extendedBody(BodyMetricTypes.INTRACELLULAR_WATER, "kg", ScalarValueRange(0.0, null))
+            extendedBody(BodyMetricTypes.EXTRACELLULAR_WATER, "kg", ScalarValueRange(0.0, null))
+            extendedBody(BodyMetricTypes.BASAL_METABOLIC_RATE, "kcal", ScalarValueRange(0.0, null, minInclusive = false))
+            extendedBody(
+                BodyMetricTypes.SEGMENTAL_FAT_MASS,
+                "kg",
+                ScalarValueRange(0.0, null, minInclusive = false),
+                supportsSegment = true,
+            )
+            extendedBody(
+                BodyMetricTypes.SEGMENTAL_MUSCLE_MASS,
+                "kg",
+                ScalarValueRange(0.0, null, minInclusive = false),
+                supportsSegment = true,
+            )
+            extendedBody(
+                BodyMetricTypes.SEGMENTAL_FAT_FREE_MASS,
+                "kg",
+                ScalarValueRange(0.0, null, minInclusive = false),
+                supportsSegment = true,
+            )
 
-        fun cardiovascular(metricType: String, unit: String) = add(
-            ScalarMetricDescriptor(
-                metricType = metricType,
-                family = MetricFamilies.CARDIOVASCULAR,
-                unit = unit,
-                valueRange = ScalarValueRange(0.0, null, minInclusive = false),
+            fun cardiovascular(
+                metricType: String,
+                unit: String,
+            ) = add(
+                ScalarMetricDescriptor(
+                    metricType = metricType,
+                    family = MetricFamilies.CARDIOVASCULAR,
+                    unit = unit,
+                    valueRange = ScalarValueRange(0.0, null, minInclusive = false),
+                ),
             )
-        )
-        cardiovascular(CardiovascularMetricTypes.PULSE_WAVE_VELOCITY, "m/s")
-        cardiovascular(CardiovascularMetricTypes.VASCULAR_AGE, "years")
-        cardiovascular(CardiovascularMetricTypes.STANDING_HEART_RATE, "bpm")
-    }
+            cardiovascular(CardiovascularMetricTypes.PULSE_WAVE_VELOCITY, "m/s")
+            cardiovascular(CardiovascularMetricTypes.VASCULAR_AGE, "years")
+            cardiovascular(CardiovascularMetricTypes.STANDING_HEART_RATE, "bpm")
+        }
 
     private val byType: Map<String, ScalarMetricDescriptor> =
         descriptors.associateBy { it.metricType }
@@ -153,8 +161,7 @@ object ScalarMetricRegistry {
 
     fun find(metricType: String): ScalarMetricDescriptor? = byType[metricType]
 
-    fun get(metricType: String): ScalarMetricDescriptor =
-        requireNotNull(byType[metricType]) { "Unknown scalar metric type '$metricType'" }
+    fun get(metricType: String): ScalarMetricDescriptor = requireNotNull(byType[metricType]) { "Unknown scalar metric type '$metricType'" }
 
     val metricTypes: Set<String> = byType.keys
 }

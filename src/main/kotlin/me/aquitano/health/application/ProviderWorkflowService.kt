@@ -1,26 +1,26 @@
 package me.aquitano.health.application
 
-import me.aquitano.health.api.dto.*
-import me.aquitano.health.api.dto.ProviderSyncRequest
-import me.aquitano.health.application.providersync.ProviderSyncProgressSink
-import me.aquitano.health.domain.*
-import me.aquitano.health.domain.ProviderSyncRequest as DomainProviderSyncRequest
-import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
-import me.aquitano.health.infrastructure.repositories.ProviderOAuthStateConsumeResult
-import me.aquitano.health.infrastructure.repositories.ProviderSyncIdempotencyRepository
-import me.aquitano.health.shared.AppJson
-import me.aquitano.health.shared.normalizeProviderCode
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
+import me.aquitano.health.api.dto.*
+import me.aquitano.health.api.dto.ProviderSyncRequest
+import me.aquitano.health.application.providersync.ProviderSyncProgressSink
+import me.aquitano.health.domain.*
 import me.aquitano.health.infrastructure.logging.*
+import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
+import me.aquitano.health.infrastructure.repositories.ProviderOAuthStateConsumeResult
+import me.aquitano.health.infrastructure.repositories.ProviderSyncIdempotencyRepository
+import me.aquitano.health.shared.AppJson
+import me.aquitano.health.shared.normalizeProviderCode
 import java.security.SecureRandom
 import java.time.Duration
 import java.time.Instant
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
+import me.aquitano.health.domain.ProviderSyncRequest as DomainProviderSyncRequest
 
 private val logger = KotlinLogging.logger {}
 
@@ -41,10 +41,11 @@ class ProviderWorkflowService(
 
     suspend fun startOAuth(
         providerCode: String,
-        now: Instant
+        now: Instant,
     ): ProviderOAuthStartResponse {
-        val provider = providerRegistry.getProvider(providerCode)
-            ?: throw NotFoundException("Provider '$providerCode' not found")
+        val provider =
+            providerRegistry.getProvider(providerCode)
+                ?: throw NotFoundException("Provider '$providerCode' not found")
 
         val state = randomState()
         val expiresAt = now.plus(Duration.ofMinutes(10))
@@ -53,7 +54,7 @@ class ProviderWorkflowService(
             state,
             provider.providerCode,
             now,
-            expiresAt
+            expiresAt,
         )
         logger.infoWithContext(
             "provider_oauth_start_created",
@@ -75,8 +76,9 @@ class ProviderWorkflowService(
         error: String?,
         now: Instant,
     ): ProviderOAuthCallbackResponse {
-        val provider = providerRegistry.getProvider(providerCode)
-            ?: throw NotFoundException("Provider '$providerCode' not found")
+        val provider =
+            providerRegistry.getProvider(providerCode)
+                ?: throw NotFoundException("Provider '$providerCode' not found")
 
         if (!error.isNullOrBlank()) {
             logger.warnWithContext(
@@ -90,8 +92,8 @@ class ProviderWorkflowService(
                         field = "error",
                         code = ValidationIssueCodes.InvalidState,
                         message = error,
-                    )
-                )
+                    ),
+                ),
             )
         }
 
@@ -102,19 +104,20 @@ class ProviderWorkflowService(
                 listOf(
                     ValidationIssue("code"),
                     ValidationIssue("state"),
-                )
+                ),
             )
         }
 
-        val stateError = when (providerOAuthRepository.consumeState(authState, provider.providerCode, now)) {
-            ProviderOAuthStateConsumeResult.Consumed -> null
-            ProviderOAuthStateConsumeResult.AlreadyUsed -> "was already used"
-            ProviderOAuthStateConsumeResult.Expired -> "has expired"
-            ProviderOAuthStateConsumeResult.NotFound -> "is invalid"
-        }
+        val stateError =
+            when (providerOAuthRepository.consumeState(authState, provider.providerCode, now)) {
+                ProviderOAuthStateConsumeResult.Consumed -> null
+                ProviderOAuthStateConsumeResult.AlreadyUsed -> "was already used"
+                ProviderOAuthStateConsumeResult.Expired -> "has expired"
+                ProviderOAuthStateConsumeResult.NotFound -> "is invalid"
+            }
         if (stateError != null) {
             throw RequestValidationException(
-                listOf(ValidationIssue("state", ValidationIssueCodes.InvalidState, stateError))
+                listOf(ValidationIssue("state", ValidationIssueCodes.InvalidState, stateError)),
             )
         }
 
@@ -132,8 +135,9 @@ class ProviderWorkflowService(
         now: Instant,
         idempotencyKey: String? = null,
     ): ProviderSyncResponse {
-        val provider = providerRegistry.getProvider(providerCode)
-            ?: throw NotFoundException("Provider '$providerCode' not found")
+        val provider =
+            providerRegistry.getProvider(providerCode)
+                ?: throw NotFoundException("Provider '$providerCode' not found")
         val canonicalCode = provider.descriptor.providerCode
         val domainRequest = request.toDomain(now)
         if (idempotencyKey == null) {
@@ -141,7 +145,8 @@ class ProviderWorkflowService(
         }
         val requestHash = syncRequestHash(request)
         return syncIdempotencyLocks.computeIfAbsent("$canonicalCode:$idempotencyKey") { Mutex() }.withLock {
-            syncIdempotencyRepository.findResponse(canonicalCode, idempotencyKey)
+            syncIdempotencyRepository
+                .findResponse(canonicalCode, idempotencyKey)
                 ?.let { stored ->
                     if (stored.requestHash != requestHash) {
                         throw ConflictException(
@@ -151,8 +156,7 @@ class ProviderWorkflowService(
                     }
                     runCatching { AppJson.decodeFromString<ProviderSyncResponse>(stored.responseJson) }
                         .getOrNull()
-                }
-                ?.let { return@withLock it }
+                }?.let { return@withLock it }
             val response = provider.sync(domainRequest, now).toDto()
             syncIdempotencyRepository.storeResponse(
                 providerCode = canonicalCode,
@@ -171,7 +175,8 @@ class ProviderWorkflowService(
         now: Instant,
         progress: ProviderSyncProgressSink,
     ): ProviderSyncResponse =
-        providerRegistry.getProvider(providerCode)
+        providerRegistry
+            .getProvider(providerCode)
             ?.sync(request, now, progress)
             ?.toDto()
             ?: throw NotFoundException("Provider '$providerCode' not found")
@@ -180,8 +185,9 @@ class ProviderWorkflowService(
         providerCode: String,
         now: Instant,
     ): ProviderAccountListResponse {
-        val provider = providerRegistry.getProvider(providerCode)
-            ?: throw NotFoundException("Provider '$providerCode' not found")
+        val provider =
+            providerRegistry.getProvider(providerCode)
+                ?: throw NotFoundException("Provider '$providerCode' not found")
         return ProviderAccountListResponse(
             provider = provider.descriptor.providerCode,
             accounts = providerStatusService.listAccountStatuses(providerCode, now),
@@ -192,16 +198,16 @@ class ProviderWorkflowService(
         providerCode: String,
         providerInstanceId: String,
         now: Instant,
-    ): ProviderAccountStatusResponse =
-        providerStatusService.getAccountStatus(providerCode, providerInstanceId, now)
+    ): ProviderAccountStatusResponse = providerStatusService.getAccountStatus(providerCode, providerInstanceId, now)
 
     suspend fun disconnect(
         providerCode: String,
         providerInstanceId: String,
         now: Instant,
     ): ProviderDisconnectResponse {
-        val provider = providerRegistry.getProvider(providerCode)
-            ?: throw NotFoundException("Provider '$providerCode' not found")
+        val provider =
+            providerRegistry.getProvider(providerCode)
+                ?: throw NotFoundException("Provider '$providerCode' not found")
         val normalizedCode = normalizeProviderCode(providerCode)
         providerOAuthRepository.accountByProviderInstanceForStatus(
             providerCode = normalizedCode,
@@ -240,7 +246,6 @@ class ProviderWorkflowService(
         random.nextBytes(bytes)
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
     }
-
 }
 
 /**
@@ -267,7 +272,7 @@ internal fun ProviderSyncRequest.toDomain(now: Instant): DomainProviderSyncReque
                     field = "from",
                     code = ValidationIssueCodes.Required,
                     message = "is required when to is provided",
-                )
+                ),
             )
             now
         }
@@ -277,7 +282,7 @@ internal fun ProviderSyncRequest.toDomain(now: Instant): DomainProviderSyncReque
                     field = "to",
                     code = ValidationIssueCodes.Required,
                     message = "is required when from is provided",
-                )
+                ),
             )
             now
         }
@@ -289,7 +294,7 @@ internal fun ProviderSyncRequest.toDomain(now: Instant): DomainProviderSyncReque
                 field = "from",
                 code = ValidationIssueCodes.InvalidRange,
                 message = "must be before to",
-            )
+            ),
         )
     } else if (Duration.between(resolvedFrom, resolvedTo) > MAX_PROVIDER_SYNC_RANGE) {
         issues.add(
@@ -297,7 +302,7 @@ internal fun ProviderSyncRequest.toDomain(now: Instant): DomainProviderSyncReque
                 field = "from",
                 code = ValidationIssueCodes.InvalidRange,
                 message = "range must not exceed ${MAX_PROVIDER_SYNC_RANGE.toDays()} days",
-            )
+            ),
         )
     }
     if (pageSize != null && pageSize <= 0) {
@@ -306,7 +311,7 @@ internal fun ProviderSyncRequest.toDomain(now: Instant): DomainProviderSyncReque
                 field = "pageSize",
                 code = ValidationIssueCodes.OutOfRange,
                 message = "must be greater than 0",
-            )
+            ),
         )
     }
     if (providerInstanceId != null && providerInstanceId.isNotBlank() && providerInstanceId.trim() != providerInstanceId) {
@@ -315,7 +320,7 @@ internal fun ProviderSyncRequest.toDomain(now: Instant): DomainProviderSyncReque
                 field = "providerInstanceId",
                 code = ValidationIssueCodes.InvalidFormat,
                 message = "must not have leading or trailing whitespace",
-            )
+            ),
         )
     }
 

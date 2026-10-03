@@ -15,11 +15,12 @@ class AppConfigValidationTest {
     fun productionRejectsABootstrapApiKeyShorterThan32Bytes() {
         val config = productionConfig(bootstrapApiKey = "0123456789abcdef")
 
-        val issues = runCatching { config.validateForStartup() }
-            .exceptionOrNull()
-            .let { it as? AppConfigValidationException }
-            ?.issues
-            ?: fail("expected production validation to fail")
+        val issues =
+            runCatching { config.validateForStartup() }
+                .exceptionOrNull()
+                .let { it as? AppConfigValidationException }
+                ?.issues
+                ?: fail("expected production validation to fail")
 
         assertEquals(1, issues.size)
         assertEquals("aqtHealth.auth.bootstrapApiKey", issues.single().path)
@@ -31,17 +32,19 @@ class AppConfigValidationTest {
     ): AppConfig =
         AppConfig(
             environment = RuntimeEnvironment.PRODUCTION,
-            database = DatabaseConfig(
-                jdbcUrl = "jdbc:postgresql://db.aqt-health.internal:5432/aqt_health",
-                driver = "org.postgresql.Driver",
-                user = "aqt_health_app",
-                password = "a-real-database-password",
-                maxPoolSize = 10,
-            ),
-            auth = AuthConfig(
-                bootstrapClientName = "production-admin",
-                bootstrapApiKey = bootstrapApiKey,
-            ),
+            database =
+                DatabaseConfig(
+                    jdbcUrl = "jdbc:postgresql://db.aqt-health.internal:5432/aqt_health",
+                    driver = "org.postgresql.Driver",
+                    user = "aqt_health_app",
+                    password = "a-real-database-password",
+                    maxPoolSize = 10,
+                ),
+            auth =
+                AuthConfig(
+                    bootstrapClientName = "production-admin",
+                    bootstrapApiKey = bootstrapApiKey,
+                ),
             googleHealth = providerConfig("https://api.aqt-health.app/api/v2/providers/google-health/oauth/callback"),
             withings = providerConfig("https://api.aqt-health.app/api/v2/providers/withings/oauth/callback"),
             cors = CorsConfig(origins = listOf("https://app.aqt-health.app")),

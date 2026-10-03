@@ -17,7 +17,8 @@ plugins {
     id("io.ktor.plugin") version "3.5.2"
     id("org.jetbrains.kotlin.plugin.serialization") version "2.4.10"
 
-    id("com.github.ben-manes.versions") version "0.64.0"
+    id("io.github.ben-manes.versions") version "0.64.0"
+    id("org.jlleitschuh.gradle.ktlint") version "14.2.0"
 }
 
 group = "me.aquitano"
@@ -133,7 +134,10 @@ tasks.test {
 tasks.register<Test>("integrationTest") {
     description = "Runs PostgreSQL-backed integration tests."
     group = LifecycleBasePlugin.VERIFICATION_GROUP
-    testClassesDirs = sourceSets.test.get().output.classesDirs
+    testClassesDirs =
+        sourceSets.test
+            .get()
+            .output.classesDirs
     classpath = sourceSets.test.get().runtimeClasspath
     shouldRunAfter(tasks.test)
     useJUnit {
@@ -152,12 +156,18 @@ tasks.check {
 tasks.register<Test>("generateOpenApi") {
     description = "Generates the runtime OpenAPI contract at build/openapi/openapi.json."
     group = "documentation"
-    testClassesDirs = sourceSets.test.get().output.classesDirs
+    testClassesDirs =
+        sourceSets.test
+            .get()
+            .output.classesDirs
     classpath = sourceSets.test.get().runtimeClasspath
     include("**/OpenApiExportTest.class")
     systemProperty(
         "aqtHealth.openapi.output",
-        layout.buildDirectory.file("openapi/openapi.json").get().asFile.absolutePath,
+        layout.buildDirectory
+            .file("openapi/openapi.json")
+            .get()
+            .asFile.absolutePath,
     )
     outputs.file(layout.buildDirectory.file("openapi/openapi.json"))
     doFirst {

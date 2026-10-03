@@ -1,8 +1,8 @@
 package me.aquitano.health.infrastructure.repositories
 
-import me.aquitano.health.test.PostgresIntegrationTest
 import kotlinx.coroutines.runBlocking
 import me.aquitano.health.infrastructure.config.DatabaseConfig
+import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.test.PostgresTestDatabase
 import java.time.Instant
 import kotlin.test.Test
@@ -11,64 +11,66 @@ import kotlin.test.assertNotNull
 
 class ScheduledSyncRepositoryTest : PostgresIntegrationTest() {
     @Test
-    fun configAndCheckpointsArePersisted() = runBlocking {
-        val database = openDatabase(tempDatabaseConfig())
-        val repository = ScheduledSyncRepository(database)
-        val now = Instant.parse("2026-05-31T10:00:00Z")
+    fun configAndCheckpointsArePersisted() =
+        runBlocking {
+            val database = openDatabase(tempDatabaseConfig())
+            val repository = ScheduledSyncRepository(database)
+            val now = Instant.parse("2026-05-31T10:00:00Z")
 
-        val config = repository.upsertConfig(
-            providerCode = "google_health",
-            providerInstanceId = "google-health-me",
-            enabled = true,
-            dataTypes = listOf("steps", "heart-rate"),
-            cadenceMinutes = 1_440,
-            lookbackDays = 7,
-            nextRunAt = now,
-            now = now,
-        )
+            val config =
+                repository.upsertConfig(
+                    providerCode = "google_health",
+                    providerInstanceId = "google-health-me",
+                    enabled = true,
+                    dataTypes = listOf("steps", "heart-rate"),
+                    cadenceMinutes = 1_440,
+                    lookbackDays = 7,
+                    nextRunAt = now,
+                    now = now,
+                )
 
-        assertEquals(true, config.enabled)
-        assertEquals(listOf("steps", "heart-rate"), config.dataTypes)
-        assertEquals(2, repository.checkpoints(config.id).size)
+            assertEquals(true, config.enabled)
+            assertEquals(listOf("steps", "heart-rate"), config.dataTypes)
+            assertEquals(2, repository.checkpoints(config.id).size)
 
-        repository.markDataTypeSuccess(
-            configId = config.id,
-            dataType = "steps",
-            from = Instant.parse("2026-05-30T00:00:00Z"),
-            to = now,
-            now = now,
-        )
-        val stepsCheckpoint = repository.checkpoints(config.id).single { it.dataType == "steps" }
-        assertEquals(now, stepsCheckpoint.checkpointAt)
+            repository.markDataTypeSuccess(
+                configId = config.id,
+                dataType = "steps",
+                from = Instant.parse("2026-05-30T00:00:00Z"),
+                to = now,
+                now = now,
+            )
+            val stepsCheckpoint = repository.checkpoints(config.id).single { it.dataType == "steps" }
+            assertEquals(now, stepsCheckpoint.checkpointAt)
 
-        repository.markSuccess(
-            configId = config.id,
-            from = Instant.parse("2026-05-30T00:00:00Z"),
-            to = now,
-            nextRunAt = now,
-            now = now,
-        )
+            repository.markSuccess(
+                configId = config.id,
+                from = Instant.parse("2026-05-30T00:00:00Z"),
+                to = now,
+                nextRunAt = now,
+                now = now,
+            )
 
-        repository.upsertConfig(
-            providerCode = "google_health",
-            providerInstanceId = "google-health-me",
-            enabled = true,
-            dataTypes = listOf("steps"),
-            cadenceMinutes = 1_440,
-            lookbackDays = 7,
-            nextRunAt = now,
-            now = now,
-        )
-        assertEquals(listOf("steps"), repository.checkpoints(config.id).map { it.dataType })
-        // Editing the config must not reset the scheduler's run history.
-        assertEquals(now, repository.checkpoints(config.id).single().checkpointAt)
-        assertEquals(now, repository.getConfig("google_health", "google-health-me")?.lastSuccessAt)
+            repository.upsertConfig(
+                providerCode = "google_health",
+                providerInstanceId = "google-health-me",
+                enabled = true,
+                dataTypes = listOf("steps"),
+                cadenceMinutes = 1_440,
+                lookbackDays = 7,
+                nextRunAt = now,
+                now = now,
+            )
+            assertEquals(listOf("steps"), repository.checkpoints(config.id).map { it.dataType })
+            // Editing the config must not reset the scheduler's run history.
+            assertEquals(now, repository.checkpoints(config.id).single().checkpointAt)
+            assertEquals(now, repository.getConfig("google_health", "google-health-me")?.lastSuccessAt)
 
-        val due = repository.dueConfigs(now)
-        assertEquals(config.id, due.single().id)
-        assertNotNull(repository.getConfig("google_health", "google-health-me"))
-        Unit
-    }
+            val due = repository.dueConfigs(now)
+            assertEquals(config.id, due.single().id)
+            assertNotNull(repository.getConfig("google_health", "google-health-me"))
+            Unit
+        }
 
     private fun tempDatabaseConfig(): DatabaseConfig = PostgresTestDatabase.config()
 }

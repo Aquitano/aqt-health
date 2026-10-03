@@ -15,7 +15,10 @@ private val sweeperLogger = KotlinLogging.logger {}
 
 object PendingDerivedRebuildPolicy {
     /** Exponential backoff in minutes (1, 2, 4, ...) capped at one hour. */
-    fun nextAttemptAfterFailure(now: Instant, attempts: Int): Instant {
+    fun nextAttemptAfterFailure(
+        now: Instant,
+        attempts: Int,
+    ): Instant {
         val exponent = (attempts - 1).coerceAtLeast(0)
         val minutes = min(60.0, 2.0.pow(exponent)).toLong()
         return now.plus(Duration.ofMinutes(minutes))
@@ -33,28 +36,33 @@ class PendingDerivedRebuildSweeper(
     private val clock: UtcClock,
     pollInterval: Duration = Duration.ofMinutes(1),
 ) {
-    private val worker = PollingWorker(
-        logger = sweeperLogger,
-        failureEvent = "pending_derived_rebuild_sweep_failed",
-        interval = pollInterval,
-    ) {
-        sweep(clock.now())
-    }
+    private val worker =
+        PollingWorker(
+            logger = sweeperLogger,
+            failureEvent = "pending_derived_rebuild_sweep_failed",
+            interval = pollInterval,
+        ) {
+            sweep(clock.now())
+        }
 
     fun start() = worker.start()
 
     fun stop() = worker.stop()
 
     /** Returns the number of queued rows successfully rebuilt in this pass. */
-    suspend fun sweep(now: Instant, limit: Int = DEFAULT_SWEEP_LIMIT): Int {
+    suspend fun sweep(
+        now: Instant,
+        limit: Int = DEFAULT_SWEEP_LIMIT,
+    ): Int {
         val due = repository.due(now, limit)
         if (due.isEmpty()) return 0
         var rebuilt = 0
         due.groupBy { it.derivedKind to it.affectedDate }.forEach { (key, rows) ->
             val (kind, date) = key
-            val requests = rows.map { row ->
-                DerivedRebuildRequest(row.sourceInstanceId, mapOf(kind to setOf(date)))
-            }
+            val requests =
+                rows.map { row ->
+                    DerivedRebuildRequest(row.sourceInstanceId, mapOf(kind to setOf(date)))
+                }
             try {
                 derivedRebuildExecutor.rebuild(requests, clock.now())
                 repository.deleteCompleted(rows)

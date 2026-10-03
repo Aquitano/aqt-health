@@ -17,9 +17,12 @@ internal fun allocatedSteps(
     val start = maxOf(startAt, from)
     val end = minOf(endAt, to)
     if (!start.isBefore(end)) return 0
+
     fun cumulative(at: Instant) = (steps * secondsBetween(startAt, at) / duration).roundToInt()
     return cumulative(end) - cumulative(start)
 }
 
-internal fun secondsBetween(start: Instant, end: Instant): Double =
-    Duration.between(start, end).let { it.seconds + it.nano / 1_000_000_000.0 }
+internal fun secondsBetween(
+    start: Instant,
+    end: Instant,
+): Double = Duration.between(start, end).let { it.seconds + it.nano / 1_000_000_000.0 }

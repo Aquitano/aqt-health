@@ -63,8 +63,7 @@ object PostgresTestDatabase {
         )
     }
 
-    fun connection(config: DatabaseConfig): Connection =
-        DriverManager.getConnection(config.jdbcUrl, config.user, config.password)
+    fun connection(config: DatabaseConfig): Connection = DriverManager.getConnection(config.jdbcUrl, config.user, config.password)
 
     fun ktorConfigEntries(config: DatabaseConfig): Array<Pair<String, String>> =
         arrayOf(
@@ -91,7 +90,8 @@ object PostgresTestDatabase {
         val schema = "aqt_health_test_${UUID.randomUUID().toString().replace("-", "")}"
         val extensionSchema: String
         try {
-            DriverManager.getConnection(jdbcUrl.withJdbcParameter("connectTimeout", "1"), user, password)
+            DriverManager
+                .getConnection(jdbcUrl.withJdbcParameter("connectTimeout", "1"), user, password)
                 .use { connection ->
                     connection.autoCommit = false
                     connection.createStatement().use { statement ->
@@ -126,16 +126,17 @@ object PostgresTestDatabase {
 
     /** A fixture schema left behind by a killed run may still own the extension. */
     private fun Statement.rescueExtensionFromFixtureSchema(): String {
-        val owner = executeQuery(
-            """
-            SELECT n.nspname FROM pg_extension e
-            JOIN pg_namespace n ON n.oid = e.extnamespace
-            WHERE e.extname = 'btree_gist'
-            """.trimIndent()
-        ).use { rows ->
-            rows.next()
-            rows.getString(1)
-        }
+        val owner =
+            executeQuery(
+                """
+                SELECT n.nspname FROM pg_extension e
+                JOIN pg_namespace n ON n.oid = e.extnamespace
+                WHERE e.extname = 'btree_gist'
+                """.trimIndent(),
+            ).use { rows ->
+                rows.next()
+                rows.getString(1)
+            }
         if (owner == EXTENSIONS_SCHEMA || !owner.startsWith("aqt_health_test_")) return owner
         execute("ALTER EXTENSION btree_gist SET SCHEMA $EXTENSIONS_SCHEMA")
         return EXTENSIONS_SCHEMA
@@ -158,9 +159,14 @@ object PostgresTestDatabase {
             }
         }
 
-    private fun String.withJdbcParameter(name: String, value: String): String {
-        val parameters = substringAfter('?', "").split('&')
-            .filter { it.isNotEmpty() && it.substringBefore('=') != name }
+    private fun String.withJdbcParameter(
+        name: String,
+        value: String,
+    ): String {
+        val parameters =
+            substringAfter('?', "")
+                .split('&')
+                .filter { it.isNotEmpty() && it.substringBefore('=') != name }
         return substringBefore('?') + "?" + (parameters + "$name=$value").joinToString("&")
     }
 
@@ -168,19 +174,20 @@ object PostgresTestDatabase {
         Runtime.getRuntime().addShutdownHook(
             Thread {
                 externalSchemas.toList().forEach { externalSchema ->
-                    DriverManager.getConnection(
-                        externalSchema.jdbcUrl,
-                        externalSchema.user,
-                        externalSchema.password,
-                    ).use { connection ->
-                        connection.createStatement().use { statement ->
-                            statement.execute(
-                                "DROP SCHEMA IF EXISTS ${externalSchema.schema} CASCADE"
-                            )
+                    DriverManager
+                        .getConnection(
+                            externalSchema.jdbcUrl,
+                            externalSchema.user,
+                            externalSchema.password,
+                        ).use { connection ->
+                            connection.createStatement().use { statement ->
+                                statement.execute(
+                                    "DROP SCHEMA IF EXISTS ${externalSchema.schema} CASCADE",
+                                )
+                            }
                         }
-                    }
                 }
-            }
+            },
         )
     }
 
@@ -191,5 +198,5 @@ object PostgresTestDatabase {
 
     private const val MISSING_DATABASE_MESSAGE =
         "PostgreSQL integration tests require Docker or a reachable " +
-                "AQT_HEALTH_TEST_JDBC_URL/local PostgreSQL database."
+            "AQT_HEALTH_TEST_JDBC_URL/local PostgreSQL database."
 }

@@ -1,11 +1,11 @@
 package me.aquitano.health.application.metric.common
 
-import me.aquitano.health.domain.RequestValidationException
-import me.aquitano.health.domain.ValidationIssue
-import me.aquitano.health.domain.ValidationIssueCodes
 import me.aquitano.health.application.metric.common.repository.DailyReadFilters
 import me.aquitano.health.application.metric.common.repository.ReadFilters
 import me.aquitano.health.application.metric.common.repository.SleepNightReadFilters
+import me.aquitano.health.domain.RequestValidationException
+import me.aquitano.health.domain.ValidationIssue
+import me.aquitano.health.domain.ValidationIssueCodes
 import java.time.Instant
 import java.time.LocalDate
 
@@ -92,8 +92,8 @@ internal fun QueryParams.sleepNightReadFilters(now: Instant): SleepNightReadFilt
                     field = "date",
                     code = ValidationIssueCodes.InvalidState,
                     message = "cannot be combined with fromDate or toDate",
-                )
-            )
+                ),
+            ),
         )
     }
     val fromDate = exactDate ?: date("fromDate")
@@ -124,8 +124,8 @@ private fun QueryParams.dailyDateRange(now: Instant): Pair<LocalDate?, LocalDate
                     field = "date",
                     code = ValidationIssueCodes.InvalidState,
                     message = "cannot be combined with fromDate or toDate",
-                )
-            )
+                ),
+            ),
         )
     }
     val fromDate = exactDate ?: date("fromDate")
@@ -147,8 +147,8 @@ internal fun validateRange(
                     field = fromField,
                     code = ValidationIssueCodes.InvalidRange,
                     message = "must be before $toField",
-                )
-            )
+                ),
+            ),
         )
     }
 }
@@ -164,8 +164,8 @@ internal fun validateDateRange(
                     field = "fromDate",
                     code = ValidationIssueCodes.InvalidRange,
                     message = "must be on or before toDate",
-                )
-            )
+                ),
+            ),
         )
     }
 }
@@ -181,4 +181,3 @@ internal object Orders {
     const val ASC = "asc"
     const val DESC = "desc"
 }
-

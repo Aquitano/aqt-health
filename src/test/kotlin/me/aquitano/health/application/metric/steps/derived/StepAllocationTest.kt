@@ -37,18 +37,28 @@ class StepAllocationTest {
     @Test
     fun sampleInsideOneDayAllocatesEverything() {
         val (dayStart, dayEnd) = dayWindow(LocalDate.of(2026, 6, 1))
-        val steps = allocatedSteps(
-            Instant.parse("2026-06-01T08:00:00Z"), Instant.parse("2026-06-01T09:00:00Z"), 4321, dayStart, dayEnd,
-        )
+        val steps =
+            allocatedSteps(
+                Instant.parse("2026-06-01T08:00:00Z"),
+                Instant.parse("2026-06-01T09:00:00Z"),
+                4321,
+                dayStart,
+                dayEnd,
+            )
         assertEquals(4321, steps)
     }
 
     @Test
     fun sampleOutsideTheDayAllocatesNothing() {
         val (dayStart, dayEnd) = dayWindow(LocalDate.of(2026, 6, 1))
-        val steps = allocatedSteps(
-            Instant.parse("2026-06-02T08:00:00Z"), Instant.parse("2026-06-02T09:00:00Z"), 500, dayStart, dayEnd,
-        )
+        val steps =
+            allocatedSteps(
+                Instant.parse("2026-06-02T08:00:00Z"),
+                Instant.parse("2026-06-02T09:00:00Z"),
+                500,
+                dayStart,
+                dayEnd,
+            )
         assertEquals(0, steps)
     }
 }

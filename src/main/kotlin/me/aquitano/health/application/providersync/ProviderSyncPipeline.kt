@@ -1,12 +1,12 @@
 package me.aquitano.health.application.providersync
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import me.aquitano.health.domain.*
-import me.aquitano.health.infrastructure.time.UtcClock
-import io.github.oshai.kotlinlogging.KotlinLogging
 import me.aquitano.health.infrastructure.logging.*
+import me.aquitano.health.infrastructure.time.UtcClock
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.CancellationException
@@ -28,8 +28,10 @@ class ProviderSyncPipeline(
     // DB-backed claim (same gap noted on ScheduledSyncRunGuard).
     private val accountTokenLocks = ConcurrentHashMap<String, Mutex>()
 
-    private fun accountTokenLock(providerCode: String, providerInstanceId: String): Mutex =
-        accountTokenLocks.computeIfAbsent("$providerCode:$providerInstanceId") { Mutex() }
+    private fun accountTokenLock(
+        providerCode: String,
+        providerInstanceId: String,
+    ): Mutex = accountTokenLocks.computeIfAbsent("$providerCode:$providerInstanceId") { Mutex() }
 
     suspend fun sync(
         adapter: ProviderSyncAdapter,
@@ -38,22 +40,24 @@ class ProviderSyncPipeline(
         progress: ProviderSyncProgressSink = ProviderSyncProgressSink.None,
     ): ProviderSyncSummary {
         val plan = adapter.validate(request)
-        val account = store.selectForSync(
-            adapter.providerCode,
-            plan.providerInstanceId,
-        ) ?: throw adapter.accountUnavailable(
-            plan.providerInstanceId,
-            store.findAnyForStatusHint(adapter.providerCode, plan.providerInstanceId),
-        )
+        val account =
+            store.selectForSync(
+                adapter.providerCode,
+                plan.providerInstanceId,
+            ) ?: throw adapter.accountUnavailable(
+                plan.providerInstanceId,
+                store.findAnyForStatusHint(adapter.providerCode, plan.providerInstanceId),
+            )
 
         var token = freshAccessToken(adapter, account, clock.now())
-        val runId = store.startRun(
-            providerCode = adapter.providerCode,
-            providerInstanceId = account.providerInstanceId,
-            requestedFrom = plan.requestedFrom,
-            requestedTo = plan.requestedTo,
-            startedAt = now,
-        )
+        val runId =
+            store.startRun(
+                providerCode = adapter.providerCode,
+                providerInstanceId = account.providerInstanceId,
+                requestedFrom = plan.requestedFrom,
+                requestedTo = plan.requestedTo,
+                startedAt = now,
+            )
         logger.infoWithContext(
             "provider_sync_started",
             mapOf(
@@ -61,8 +65,8 @@ class ProviderSyncPipeline(
                 "providerInstanceId" to account.providerInstanceId,
                 "from" to plan.requestedFrom,
                 "to" to plan.requestedTo,
-                "dataTypes" to plan.items.map { it.dataType }.distinct()
-            )
+                "dataTypes" to plan.items.map { it.dataType }.distinct(),
+            ),
         )
         progress.started(plan.items.size, account.providerInstanceId)
 
@@ -73,20 +77,26 @@ class ProviderSyncPipeline(
 
         plan.items.forEach { item ->
             progress.itemStarted(item)
-            val windowBatchExternalId = adapter.batchExternalId(
-                providerInstanceId = account.providerInstanceId,
-                item = item,
-            )
+            val windowBatchExternalId =
+                adapter.batchExternalId(
+                    providerInstanceId = account.providerInstanceId,
+                    item = item,
+                )
             // Keyed by window start so the open day and a clamped catch-up window compare against
             // the same snapshot as the completed day.
             val windowKey = "${adapter.providerCode}:${account.providerInstanceId}:${item.dataType}:${item.from}"
             val batchExternalId = if (request.refresh) "$windowBatchExternalId:run:$runId" else windowBatchExternalId
-            val existingBatch = if (request.refresh) null else store.findExistingBatch(
-                providerCode = adapter.providerCode,
-                providerInstanceId = account.providerInstanceId,
-                batchExternalId = batchExternalId,
-                now = now,
-            )
+            val existingBatch =
+                if (request.refresh) {
+                    null
+                } else {
+                    store.findExistingBatch(
+                        providerCode = adapter.providerCode,
+                        providerInstanceId = account.providerInstanceId,
+                        batchExternalId = batchExternalId,
+                        now = now,
+                    )
+                }
             if (existingBatch?.status == BatchStatus.Processed) {
                 batches += cachedBatchResponse(item.dataType, existingBatch.id)
                 logger.infoWithContext(
@@ -96,50 +106,53 @@ class ProviderSyncPipeline(
                         "providerInstanceId" to account.providerInstanceId,
                         "dataType" to item.dataType,
                         "batchId" to existingBatch.id,
-                        "from" to item.from
-                    )
+                        "from" to item.from,
+                    ),
                 )
                 progress.itemCompleted(item)
                 return@forEach
             }
 
             try {
-                val fetched = try {
-                    throttledFetch(
-                        adapter = adapter,
-                        lastCompletedAtNanos = lastProviderRequestCompletedAtNanos,
-                        accessToken = token.accessToken,
-                        account = account,
-                        item = item,
-                        now = clock.now(),
-                    ).also { lastProviderRequestCompletedAtNanos = it.completedAtNanos }.batch
-                } catch (exception: Throwable) {
-                    if (exception is CancellationException) throw exception
-                    if (!adapter.isUnauthorized(exception)) throw exception
-                    token = obtainAccessToken(
-                        adapter = adapter,
-                        providerInstanceId = account.providerInstanceId,
-                        now = clock.now(),
-                        forceRefresh = true,
-                        usedRefreshToken = token.refreshToken,
-                    )
-                    throttledFetch(
-                        adapter = adapter,
-                        lastCompletedAtNanos = lastProviderRequestCompletedAtNanos,
-                        accessToken = token.accessToken,
-                        account = account,
-                        item = item,
-                        now = clock.now(),
-                    ).also { lastProviderRequestCompletedAtNanos = it.completedAtNanos }.batch
-                }
+                val fetched =
+                    try {
+                        throttledFetch(
+                            adapter = adapter,
+                            lastCompletedAtNanos = lastProviderRequestCompletedAtNanos,
+                            accessToken = token.accessToken,
+                            account = account,
+                            item = item,
+                            now = clock.now(),
+                        ).also { lastProviderRequestCompletedAtNanos = it.completedAtNanos }.batch
+                    } catch (exception: Throwable) {
+                        if (exception is CancellationException) throw exception
+                        if (!adapter.isUnauthorized(exception)) throw exception
+                        token =
+                            obtainAccessToken(
+                                adapter = adapter,
+                                providerInstanceId = account.providerInstanceId,
+                                now = clock.now(),
+                                forceRefresh = true,
+                                usedRefreshToken = token.refreshToken,
+                            )
+                        throttledFetch(
+                            adapter = adapter,
+                            lastCompletedAtNanos = lastProviderRequestCompletedAtNanos,
+                            accessToken = token.accessToken,
+                            account = account,
+                            item = item,
+                            now = clock.now(),
+                        ).also { lastProviderRequestCompletedAtNanos = it.completedAtNanos }.batch
+                    }
 
                 if (fetched.records.isEmpty() && adapter.recordEmptyDataTypes) {
-                    emptyDataTypes += ProviderSyncEmptyDataType(
-                        dataType = item.dataType,
-                        pagesFetched = fetched.pagesFetched,
-                        sourceRecordsReceived = fetched.sourceRecordsReceived,
-                        normalizedRecords = 0,
-                    )
+                    emptyDataTypes +=
+                        ProviderSyncEmptyDataType(
+                            dataType = item.dataType,
+                            pagesFetched = fetched.pagesFetched,
+                            sourceRecordsReceived = fetched.sourceRecordsReceived,
+                            normalizedRecords = 0,
+                        )
                 }
 
                 // Empty windows can be reused by manual backfills. Scheduled refreshes still fetch
@@ -156,8 +169,8 @@ class ProviderSyncPipeline(
                             "dataType" to item.dataType,
                             "from" to item.from,
                             "to" to item.to,
-                            "sourceRecords" to fetched.sourceRecordsReceived
-                        )
+                            "sourceRecords" to fetched.sourceRecordsReceived,
+                        ),
                     )
                     progress.itemCompleted(item)
                     return@forEach
@@ -166,39 +179,46 @@ class ProviderSyncPipeline(
                 val records = fetched.records.collapseDuplicateProviderRecordIds()
                 val snapshot = IngestionSnapshot(windowKey, fetched.copy(records = records).contentHash())
                 if (request.refresh) {
-                    store.reusableBatchId(
-                        adapter.providerCode, account.providerInstanceId, windowKey, snapshot.contentHash, now,
-                    )?.let { batchId ->
-                        batches += cachedBatchResponse(item.dataType, batchId)
-                        progress.itemCompleted(item)
-                        return@forEach
-                    }
+                    store
+                        .reusableBatchId(
+                            adapter.providerCode,
+                            account.providerInstanceId,
+                            windowKey,
+                            snapshot.contentHash,
+                            now,
+                        )?.let { batchId ->
+                            batches += cachedBatchResponse(item.dataType, batchId)
+                            progress.itemCompleted(item)
+                            return@forEach
+                        }
                 }
 
-                val sourcePayload = adapter.sourcePayload(
-                    ProviderSourcePayloadContext(
-                        providerCode = adapter.providerCode,
-                        providerInstanceId = account.providerInstanceId,
-                        item = item,
-                        fetched = fetched,
+                val sourcePayload =
+                    adapter.sourcePayload(
+                        ProviderSourcePayloadContext(
+                            providerCode = adapter.providerCode,
+                            providerInstanceId = account.providerInstanceId,
+                            item = item,
+                            fetched = fetched,
+                        ),
                     )
-                )
                 // A backfill runs for minutes, so `now` (captured when the run started) would
                 // stamp every batch with the start time. Each batch records when it was ingested.
                 val ingestedAt = clock.now()
-                val batch = store.ingest(
-                    ProviderIngestionCommand(
-                        providerCode = adapter.providerCode,
-                        providerInstanceId = account.providerInstanceId,
-                        batchExternalId = batchExternalId,
-                        dataType = item.dataType,
-                        ingestedAt = ingestedAt,
-                        sourcePayload = sourcePayload,
-                        records = records,
-                        snapshot = snapshot,
-                    ),
-                    now = ingestedAt,
-                )
+                val batch =
+                    store.ingest(
+                        ProviderIngestionCommand(
+                            providerCode = adapter.providerCode,
+                            providerInstanceId = account.providerInstanceId,
+                            batchExternalId = batchExternalId,
+                            dataType = item.dataType,
+                            ingestedAt = ingestedAt,
+                            sourcePayload = sourcePayload,
+                            records = records,
+                            snapshot = snapshot,
+                        ),
+                        now = ingestedAt,
+                    )
                 batches += batch
                 logger.infoWithContext(
                     "provider_data_type_synced",
@@ -209,8 +229,8 @@ class ProviderSyncPipeline(
                         "records" to records.size,
                         "duplicateRecordsCollapsed" to (fetched.records.size - records.size),
                         "batchId" to batch.batchId,
-                        "duplicateBatch" to batch.duplicateBatch
-                    )
+                        "duplicateBatch" to batch.duplicateBatch,
+                    ),
                 )
                 progress.itemCompleted(item)
             } catch (exception: Exception) {
@@ -233,39 +253,44 @@ class ProviderSyncPipeline(
                         "errorCode" to code,
                         "errorMessage" to (rawMessage ?: clientMessage),
                         "exceptionClass" to (exception::class.qualifiedName ?: exception::class.simpleName),
-                        "providerError" to providerAttributes
+                        "providerError" to providerAttributes,
                     ),
-                    exception
+                    exception,
                 )
-                errors += ProviderSyncError(
-                    dataType = item.dataType,
-                    code = code,
-                    message = clientMessage,
-                    retryable = isRetryableSyncFailure(exception),
-                )
+                errors +=
+                    ProviderSyncError(
+                        dataType = item.dataType,
+                        code = code,
+                        message = clientMessage,
+                        retryable = isRetryableSyncFailure(exception),
+                    )
                 progress.itemCompleted(item)
             }
         }
 
-        val status = when {
-            errors.isEmpty() -> SyncStatus.Processed
-            batches.isEmpty() -> SyncStatus.Failed
-            else -> SyncStatus.PartialFailed
-        }
+        val status =
+            when {
+                errors.isEmpty() -> SyncStatus.Processed
+                batches.isEmpty() -> SyncStatus.Failed
+                else -> SyncStatus.PartialFailed
+            }
         store.finishRun(
             runId = runId,
             status = status,
             finishedAt = clock.now(),
-            errorMessage = errors.joinToString("; ") { "${it.dataType}: ${it.message}" }
-                .ifBlank { null },
+            errorMessage =
+                errors
+                    .joinToString("; ") { "${it.dataType}: ${it.message}" }
+                    .ifBlank { null },
         )
-        val context = mapOf(
-            "provider" to adapter.providerCode,
-            "syncRunId" to runId,
-            "status" to status.stored,
-            "batchCount" to batches.size,
-            "errorCount" to errors.size
-        )
+        val context =
+            mapOf(
+                "provider" to adapter.providerCode,
+                "syncRunId" to runId,
+                "status" to status.stored,
+                "batchCount" to batches.size,
+                "errorCount" to errors.size,
+            )
         when (status) {
             SyncStatus.Processed -> logger.infoWithContext("provider_sync_completed", context)
             SyncStatus.PartialFailed -> logger.warnWithContext("provider_sync_completed", context)
@@ -305,12 +330,13 @@ class ProviderSyncPipeline(
                 throttleDelay(Duration.ofNanos(remainingNanos))
             }
         }
-        val batch = adapter.fetch(
-            accessToken = accessToken,
-            account = account,
-            item = item,
-            now = now,
-        )
+        val batch =
+            adapter.fetch(
+                accessToken = accessToken,
+                account = account,
+                item = item,
+                now = now,
+            )
         return ThrottledFetchResult(batch, System.nanoTime())
     }
 
@@ -348,15 +374,19 @@ class ProviderSyncPipeline(
         usedRefreshToken: String?,
     ): ProviderAccessToken =
         accountTokenLock(adapter.providerCode, providerInstanceId).withLock {
-            val current = store.selectForSync(adapter.providerCode, providerInstanceId)
-                ?: throw adapter.accountUnavailable(
-                    providerInstanceId,
-                    store.findAnyForStatusHint(adapter.providerCode, providerInstanceId),
-                )
+            val current =
+                store.selectForSync(adapter.providerCode, providerInstanceId)
+                    ?: throw adapter.accountUnavailable(
+                        providerInstanceId,
+                        store.findAnyForStatusHint(adapter.providerCode, providerInstanceId),
+                    )
             val currentRefreshToken = store.decryptRefreshToken(current)
             val refreshNeeded =
-                if (forceRefresh) currentRefreshToken == usedRefreshToken
-                else !current.expiresAt.isAfter(now.plusSeconds(60))
+                if (forceRefresh) {
+                    currentRefreshToken == usedRefreshToken
+                } else {
+                    !current.expiresAt.isAfter(now.plusSeconds(60))
+                }
             if (refreshNeeded) {
                 refreshAccessToken(adapter, current, currentRefreshToken, now)
             } else {
@@ -370,55 +400,59 @@ class ProviderSyncPipeline(
         refreshToken: String,
         now: Instant,
     ): ProviderAccessToken {
-        val refreshed = try {
-            adapter.refreshAccessToken(refreshToken, account, now)
-        } catch (exception: Exception) {
-            if (exception is CancellationException) throw exception
-            logger.warnWithContext(
-                "provider_token_refresh_failed",
-                mapOf(
-                    "provider" to adapter.providerCode,
-                    "providerInstanceId" to account.providerInstanceId,
-                    "errorCode" to adapter.errorCode(exception),
-                    "providerError" to adapter.errorAttributes(exception),
-                ),
-                exception,
-            )
-            val message = adapter.tokenRefreshFailureMessage
-            if (adapter.isInvalidRefreshToken(exception)) {
-                val updated = store.markNeedsReauth(
-                    account = account,
-                    code = adapter.needsReauthCode,
-                    message = message,
-                    now = now,
+        val refreshed =
+            try {
+                adapter.refreshAccessToken(refreshToken, account, now)
+            } catch (exception: Exception) {
+                if (exception is CancellationException) throw exception
+                logger.warnWithContext(
+                    "provider_token_refresh_failed",
+                    mapOf(
+                        "provider" to adapter.providerCode,
+                        "providerInstanceId" to account.providerInstanceId,
+                        "errorCode" to adapter.errorCode(exception),
+                        "providerError" to adapter.errorAttributes(exception),
+                    ),
+                    exception,
                 )
+                val message = adapter.tokenRefreshFailureMessage
+                if (adapter.isInvalidRefreshToken(exception)) {
+                    val updated =
+                        store.markNeedsReauth(
+                            account = account,
+                            code = adapter.needsReauthCode,
+                            message = message,
+                            now = now,
+                        )
+                    requireRefreshWrite(updated)
+                    throw ConflictException(
+                        code = adapter.needsReauthCode,
+                        message = adapter.needsReauthMessage,
+                        cause = exception,
+                    )
+                }
+                val updated =
+                    store.markTokenRefreshFailed(
+                        account = account,
+                        code = adapter.errorCode(exception),
+                        message = message,
+                        now = now,
+                    )
                 requireRefreshWrite(updated)
-                throw ConflictException(
-                    code = adapter.needsReauthCode,
-                    message = adapter.needsReauthMessage,
+                throw UpstreamProviderException(
+                    code = adapter.tokenRefreshFailureCode,
+                    message = message,
+                    statusCode = 502,
                     cause = exception,
                 )
             }
-            val updated = store.markTokenRefreshFailed(
+
+        val saved =
+            store.saveRefreshedToken(
                 account = account,
-                code = adapter.errorCode(exception),
-                message = message,
+                tokens = refreshed,
                 now = now,
             )
-            requireRefreshWrite(updated)
-            throw UpstreamProviderException(
-                code = adapter.tokenRefreshFailureCode,
-                message = message,
-                statusCode = 502,
-                cause = exception,
-            )
-        }
-
-        val saved = store.saveRefreshedToken(
-            account = account,
-            tokens = refreshed,
-            now = now,
-        )
         requireRefreshWrite(saved)
         return ProviderAccessToken(
             accessToken = refreshed.accessToken,

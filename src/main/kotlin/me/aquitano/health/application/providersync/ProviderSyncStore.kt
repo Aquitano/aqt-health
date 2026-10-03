@@ -103,9 +103,10 @@ class OAuthProviderSyncStore(
 
     private fun cipherFor(providerCode: String): TokenCipher =
         ciphers.computeIfAbsent(providerCode) {
-            val key = requireNotNull(tokenEncryptionKeys[it]) {
-                "No token encryption key configured for provider '$it'"
-            }
+            val key =
+                requireNotNull(tokenEncryptionKeys[it]) {
+                    "No token encryption key configured for provider '$it'"
+                }
             TokenCipher(key)
         }
 
@@ -123,18 +124,18 @@ class OAuthProviderSyncStore(
         providerCode: String,
         providerInstanceId: String?,
     ): SyncAccount? {
-        val account = providerInstanceId
-            ?.let { repository.accountByProviderInstanceForStatus(providerCode, it) }
-            ?: repository.accountsByProvider(providerCode)
-                .firstOrNull { it.accountStatus == ACCOUNT_STATUS_NEEDS_REAUTH }
+        val account =
+            providerInstanceId
+                ?.let { repository.accountByProviderInstanceForStatus(providerCode, it) }
+                ?: repository
+                    .accountsByProvider(providerCode)
+                    .firstOrNull { it.accountStatus == ACCOUNT_STATUS_NEEDS_REAUTH }
         return account?.toSyncAccount()
     }
 
-    override suspend fun decryptAccessToken(account: SyncAccount): String =
-        cipherFor(account.providerCode).decrypt(account.encryptedAccessToken)
+    override suspend fun decryptAccessToken(account: SyncAccount): String = cipherFor(account.providerCode).decrypt(account.encryptedAccessToken)
 
-    override suspend fun decryptRefreshToken(account: SyncAccount): String =
-        cipherFor(account.providerCode).decrypt(account.encryptedRefreshToken)
+    override suspend fun decryptRefreshToken(account: SyncAccount): String = cipherFor(account.providerCode).decrypt(account.encryptedRefreshToken)
 
     override suspend fun saveRefreshedToken(
         account: SyncAccount,
@@ -198,14 +199,15 @@ class OAuthProviderSyncStore(
         batchExternalId: String,
         now: Instant,
     ): ExistingProviderBatch? =
-        ingestionService.findExistingBatch(
-            provider = providerCode,
-            providerInstanceId = providerInstanceId,
-            batchExternalId = batchExternalId,
-            now = now,
-        )?.let { batch ->
-            batch.status?.let { ExistingProviderBatch(batch.id, it) }
-        }
+        ingestionService
+            .findExistingBatch(
+                provider = providerCode,
+                providerInstanceId = providerInstanceId,
+                batchExternalId = batchExternalId,
+                now = now,
+            )?.let { batch ->
+                batch.status?.let { ExistingProviderBatch(batch.id, it) }
+            }
 
     override suspend fun reusableBatchId(
         providerCode: String,
@@ -219,19 +221,20 @@ class OAuthProviderSyncStore(
         command: ProviderIngestionCommand,
         now: Instant,
     ): ProviderSyncBatch {
-        val summary = ingestionService.ingestBatch(
-            IngestionBatchRequest(
-                provider = command.providerCode,
-                providerInstanceId = command.providerInstanceId,
-                batchExternalId = command.batchExternalId,
-                ingestedAt = command.ingestedAt.toString(),
-                sourcePayload = command.sourcePayload,
-                records = command.records,
-            ),
-            now = now,
-            allowEmptyRecords = true,
-            snapshot = command.snapshot,
-        )
+        val summary =
+            ingestionService.ingestBatch(
+                IngestionBatchRequest(
+                    provider = command.providerCode,
+                    providerInstanceId = command.providerInstanceId,
+                    batchExternalId = command.batchExternalId,
+                    ingestedAt = command.ingestedAt.toString(),
+                    sourcePayload = command.sourcePayload,
+                    records = command.records,
+                ),
+                now = now,
+                allowEmptyRecords = true,
+                snapshot = command.snapshot,
+            )
         return ProviderSyncBatch(
             dataType = command.dataType,
             batchId = summary.batchId,

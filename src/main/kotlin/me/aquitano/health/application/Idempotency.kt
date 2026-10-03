@@ -29,5 +29,4 @@ internal fun idempotencyRequestHash(vararg parts: String?): String {
  * Order- and duplicate-insensitive: the same key replayed with the type list reordered is the
  * same request, so it must hash the same instead of raising a spurious idempotency conflict.
  */
-internal fun Iterable<String>.idempotencyListPart(): String =
-    distinct().sorted().joinToString("\n")
+internal fun Iterable<String>.idempotencyListPart(): String = distinct().sorted().joinToString("\n")

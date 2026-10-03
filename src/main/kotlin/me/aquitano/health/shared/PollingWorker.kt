@@ -28,18 +28,19 @@ class PollingWorker(
 
     fun start() {
         if (job != null) return
-        job = scope.launch {
-            while (isActive) {
-                try {
-                    tick()
-                } catch (exception: CancellationException) {
-                    throw exception
-                } catch (exception: Exception) {
-                    logger.error(exception) { failureEvent }
+        job =
+            scope.launch {
+                while (isActive) {
+                    try {
+                        tick()
+                    } catch (exception: CancellationException) {
+                        throw exception
+                    } catch (exception: Exception) {
+                        logger.error(exception) { failureEvent }
+                    }
+                    delay(interval.toMillis())
                 }
-                delay(interval.toMillis())
             }
-        }
     }
 
     fun stop() {

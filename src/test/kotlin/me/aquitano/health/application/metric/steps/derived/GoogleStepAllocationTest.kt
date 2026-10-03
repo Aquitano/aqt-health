@@ -41,7 +41,11 @@ class GoogleStepAllocationTest {
         val neighbor = StepSampleRow(1, 1, midnight.minusMillis(500), midnight.plusMillis(500), 8, 1)
         val correction = StepSampleRow(2, 1, midnight.minusMillis(250), midnight.plusMillis(250), 6, 2)
         val spans = resolveGoogleStepSpans(listOf(neighbor, correction), setOf(1))
-        fun total(from: Instant, to: Instant) = spans.sumOf {
+
+        fun total(
+            from: Instant,
+            to: Instant,
+        ) = spans.sumOf {
             allocatedSteps(it.sample.startAt, it.sample.endAt, it.sample.steps, maxOf(from, it.startAt), minOf(to, it.endAt))
         }
         assertEquals(5, total(midnight.minusSeconds(1), midnight))
@@ -49,10 +53,20 @@ class GoogleStepAllocationTest {
         assertEquals(10, spans.sumOf(::allocated))
     }
 
-    private fun sample(id: Int, arrival: Int, start: Long, end: Long, steps: Int) =
-        StepSampleRow(id, 1, origin.plusSeconds(start), origin.plusSeconds(end), steps, arrival)
+    private fun sample(
+        id: Int,
+        arrival: Int,
+        start: Long,
+        end: Long,
+        steps: Int,
+    ) = StepSampleRow(id, 1, origin.plusSeconds(start), origin.plusSeconds(end), steps, arrival)
 
-    private fun allocated(span: StepAllocationSpan) = allocatedSteps(
-        span.sample.startAt, span.sample.endAt, span.sample.steps, span.startAt, span.endAt,
-    )
+    private fun allocated(span: StepAllocationSpan) =
+        allocatedSteps(
+            span.sample.startAt,
+            span.sample.endAt,
+            span.sample.steps,
+            span.startAt,
+            span.endAt,
+        )
 }

@@ -24,11 +24,15 @@ class StepWriteRepository {
         now: Instant,
         preserveAcceptance: Boolean = false,
     ): Boolean {
-        if (!preserveAcceptance && normalizeProviderCode(provider) == GOOGLE_HEALTH_PROVIDER_CODE && stepSampleOverlaps(
+        if (!preserveAcceptance &&
+            normalizeProviderCode(provider) == GOOGLE_HEALTH_PROVIDER_CODE &&
+            stepSampleOverlaps(
                 sourceInstanceId,
                 record,
             )
-        ) return false
+        ) {
+            return false
+        }
 
         return StepSamplesTable.insertIgnoreAndGetId {
             it[this.sourceInstanceId] = sourceInstanceId
@@ -46,15 +50,15 @@ class StepWriteRepository {
         sourceInstanceId: Int,
         record: StepIntervalRecord,
     ): Boolean =
-        StepSamplesTable.select(StepSamplesTable.id)
+        StepSamplesTable
+            .select(StepSamplesTable.id)
             .where {
                 (StepSamplesTable.sourceInstanceId eq sourceInstanceId) and
                     StepTimeRangeOverlaps(
                         record.startAt.toDbTimestamp(),
                         record.endAt.toDbTimestamp(),
                     )
-            }
-            .limit(1)
+            }.limit(1)
             .any()
 }
 
@@ -68,11 +72,12 @@ private class StepTimeRangeOverlaps(
     private val startAt: OffsetDateTime,
     private val endAt: OffsetDateTime,
 ) : Op<Boolean>() {
-    override fun toQueryBuilder(queryBuilder: QueryBuilder) = queryBuilder {
-        append("${StepSamplesTable.tableName}.time_range && tstzrange(")
-        registerArgument(StepSamplesTable.startAt, startAt)
-        append(", ")
-        registerArgument(StepSamplesTable.endAt, endAt)
-        append(", '[)')")
-    }
+    override fun toQueryBuilder(queryBuilder: QueryBuilder) =
+        queryBuilder {
+            append("${StepSamplesTable.tableName}.time_range && tstzrange(")
+            registerArgument(StepSamplesTable.startAt, startAt)
+            append(", ")
+            registerArgument(StepSamplesTable.endAt, endAt)
+            append(", '[)')")
+        }
 }

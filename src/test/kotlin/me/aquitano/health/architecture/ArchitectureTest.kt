@@ -15,9 +15,11 @@ class ArchitectureTest {
      */
     @Test
     fun `application-layer repositories do not reference transaction entry points`() {
-        val repositories = production.classes()
-            .filter { it.resideInPackage("me.aquitano.health.application..") }
-            .filter { it.name.endsWith("Repository") }
+        val repositories =
+            production
+                .classes()
+                .filter { it.resideInPackage("me.aquitano.health.application..") }
+                .filter { it.name.endsWith("Repository") }
         check(repositories.isNotEmpty()) { "No application repositories found" }
         repositories.assertFalse { repository ->
             val text = repository.containingFile.text
@@ -27,8 +29,9 @@ class ArchitectureTest {
 
     @Test
     fun `api layer does not reference Exposed`() {
-        val apiFiles = production.files
-            .filter { it.packagee?.name?.startsWith("me.aquitano.health.api") == true }
+        val apiFiles =
+            production.files
+                .filter { it.packagee?.name?.startsWith("me.aquitano.health.api") == true }
         check(apiFiles.isNotEmpty()) { "No api files found" }
         apiFiles.assertFalse { file -> file.text.contains("org.jetbrains.exposed") }
     }

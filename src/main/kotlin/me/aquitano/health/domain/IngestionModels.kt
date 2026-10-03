@@ -3,7 +3,10 @@ package me.aquitano.health.domain
 import kotlinx.serialization.json.JsonElement
 import java.time.Instant
 
-data class IngestionSnapshot(val windowKey: String, val contentHash: String)
+data class IngestionSnapshot(
+    val windowKey: String,
+    val contentHash: String,
+)
 
 data class ValidatedIngestionBatch(
     val provider: String,
@@ -18,7 +21,9 @@ data class ValidatedIngestionBatch(
  * Created-row counts keyed by [StructuralMetricKinds] constants for structural tables and
  * by metric_type for scalar samples; the map is the wire shape of metricsCreated.
  */
-data class MetricCreatedCounts(val counts: Map<String, Int> = emptyMap()) {
+data class MetricCreatedCounts(
+    val counts: Map<String, Int> = emptyMap(),
+) {
     operator fun get(kind: String): Int = counts[kind] ?: 0
 
     operator fun plus(other: MetricCreatedCounts): MetricCreatedCounts {
@@ -30,7 +35,6 @@ data class MetricCreatedCounts(val counts: Map<String, Int> = emptyMap()) {
     }
 
     companion object {
-        fun of(vararg entries: Pair<String, Int>): MetricCreatedCounts =
-            MetricCreatedCounts(entries.toMap())
+        fun of(vararg entries: Pair<String, Int>): MetricCreatedCounts = MetricCreatedCounts(entries.toMap())
     }
 }

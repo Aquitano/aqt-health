@@ -21,17 +21,19 @@ class CardiovascularQueryService(
 ) {
     suspend fun listBloodPressure(params: QueryParams): BloodPressureMeasurementsResponse =
         suspendDbTransaction(db = database) {
-            val filters = params.readFilters(
-                sortSpec = QueryParamSpecs.sortByMeasuredAt,
-            )
+            val filters =
+                params.readFilters(
+                    sortSpec = QueryParamSpecs.sortByMeasuredAt,
+                )
             val (rows, sourceMetadata) = cardiovascularRepository.listBloodPressure(filters)
-            val page = rows.keysetPage(
-                limit = filters.limit,
-                sort = filters.sort,
-                order = filters.order,
-                sortValue = { it.measuredAt.toString() },
-                id = { it.id.toLong() },
-            )
+            val page =
+                rows.keysetPage(
+                    limit = filters.limit,
+                    sort = filters.sort,
+                    order = filters.order,
+                    sortValue = { it.measuredAt.toString() },
+                    id = { it.id.toLong() },
+                )
             BloodPressureMeasurementsResponse(
                 items = page.items.map { it.toResponse(sourceMetadata) },
                 meta = page.items.meta(filters, page.nextCursor),

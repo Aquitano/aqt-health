@@ -1,13 +1,12 @@
 package me.aquitano.health.application
 
-import me.aquitano.health.test.PostgresIntegrationTest
-import me.aquitano.health.application.providersync.ProviderSyncProgressSink
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
 import me.aquitano.health.api.dto.ProviderSyncRequest
+import me.aquitano.health.application.providersync.ProviderSyncProgressSink
 import me.aquitano.health.domain.ConflictException
 import me.aquitano.health.domain.HealthProvider
 import me.aquitano.health.domain.HealthProviderDescriptor
@@ -19,7 +18,7 @@ import me.aquitano.health.domain.RequestValidationException
 import me.aquitano.health.domain.ValidationIssueCodes
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
 import me.aquitano.health.infrastructure.repositories.ProviderSyncIdempotencyRepository
-import me.aquitano.health.infrastructure.time.UtcClock
+import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.test.PostgresTestDatabase
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicInteger
@@ -39,68 +38,75 @@ class ProviderWorkflowServiceTest : PostgresIntegrationTest() {
     ) = ProviderSyncRequest(from = from, to = to, dataTypes = listOf("steps"))
 
     @Test
-    fun syncWithoutProviderInstanceIdReplaysStoredResponseForSameKey() = runBlocking {
-        val provider = CountingProvider()
-        val service = serviceWith(provider)
-        val key = "workflow-replay-key"
+    fun syncWithoutProviderInstanceIdReplaysStoredResponseForSameKey() =
+        runBlocking {
+            val provider = CountingProvider()
+            val service = serviceWith(provider)
+            val key = "workflow-replay-key"
 
-        val first = service.sync(provider.providerCode, request(), now, key)
-        val second = service.sync(provider.providerCode, request(), now, key)
+            val first = service.sync(provider.providerCode, request(), now, key)
+            val second = service.sync(provider.providerCode, request(), now, key)
 
-        assertEquals(first, second)
-        assertEquals(1, provider.syncCalls.get())
-    }
-
-    @Test
-    fun syncSameKeyDifferentRequestConflictsWithoutProviderInstanceId() = runBlocking {
-        val provider = CountingProvider()
-        val service = serviceWith(provider)
-        val key = "workflow-conflict-key"
-
-        service.sync(provider.providerCode, request(), now, key)
-        val conflict = assertFailsWith<ConflictException> {
-            service.sync(provider.providerCode, request(to = "2026-05-09T00:00:00Z"), now, key)
+            assertEquals(first, second)
+            assertEquals(1, provider.syncCalls.get())
         }
 
-        assertEquals("idempotency_key_conflict", conflict.code)
-        assertEquals(1, provider.syncCalls.get())
-    }
-
     @Test
-    fun concurrentSyncWithSameKeyExecutesProviderOnce() = runBlocking {
-        val provider = BlockingProvider()
-        val service = serviceWith(provider)
-        val key = "workflow-concurrent-key"
+    fun syncSameKeyDifferentRequestConflictsWithoutProviderInstanceId() =
+        runBlocking {
+            val provider = CountingProvider()
+            val service = serviceWith(provider)
+            val key = "workflow-conflict-key"
 
-        val responses = coroutineScope {
-            val first = async { service.sync(provider.providerCode, request(), now, key) }
-            provider.started.await()
-            val second = async { service.sync(provider.providerCode, request(), now, key) }
-            provider.release.complete(Unit)
-            listOf(first, second).awaitAll()
+            service.sync(provider.providerCode, request(), now, key)
+            val conflict =
+                assertFailsWith<ConflictException> {
+                    service.sync(provider.providerCode, request(to = "2026-05-09T00:00:00Z"), now, key)
+                }
+
+            assertEquals("idempotency_key_conflict", conflict.code)
+            assertEquals(1, provider.syncCalls.get())
         }
 
-        assertEquals(responses[0], responses[1])
-        assertEquals(1, provider.syncCalls.get())
-    }
+    @Test
+    fun concurrentSyncWithSameKeyExecutesProviderOnce() =
+        runBlocking {
+            val provider = BlockingProvider()
+            val service = serviceWith(provider)
+            val key = "workflow-concurrent-key"
+
+            val responses =
+                coroutineScope {
+                    val first = async { service.sync(provider.providerCode, request(), now, key) }
+                    provider.started.await()
+                    val second = async { service.sync(provider.providerCode, request(), now, key) }
+                    provider.release.complete(Unit)
+                    listOf(first, second).awaitAll()
+                }
+
+            assertEquals(responses[0], responses[1])
+            assertEquals(1, provider.syncCalls.get())
+        }
 
     @Test
-    fun syncWithoutKeyExecutesEveryTime() = runBlocking {
-        val provider = CountingProvider()
-        val service = serviceWith(provider)
+    fun syncWithoutKeyExecutesEveryTime() =
+        runBlocking {
+            val provider = CountingProvider()
+            val service = serviceWith(provider)
 
-        service.sync(provider.providerCode, request(), now, idempotencyKey = null)
-        service.sync(provider.providerCode, request(), now, idempotencyKey = null)
+            service.sync(provider.providerCode, request(), now, idempotencyKey = null)
+            service.sync(provider.providerCode, request(), now, idempotencyKey = null)
 
-        assertEquals(2, provider.syncCalls.get())
-    }
+            assertEquals(2, provider.syncCalls.get())
+        }
 
     @Test
     fun syncRangeBeyondTheCeilingIsRejected() {
         // from=1970 would otherwise expand into ~20k throttled daily windows in one job.
-        val error = assertFailsWith<RequestValidationException> {
-            request(from = "1970-01-01T00:00:00Z", to = "2026-05-01T00:00:00Z").toDomain(now)
-        }
+        val error =
+            assertFailsWith<RequestValidationException> {
+                request(from = "1970-01-01T00:00:00Z", to = "2026-05-01T00:00:00Z").toDomain(now)
+            }
 
         assertEquals(listOf("from"), error.issues.map { it.field })
         assertEquals(
@@ -144,8 +150,10 @@ class ProviderWorkflowServiceTest : PostgresIntegrationTest() {
 
         override fun getAuthUrl(state: String): String = error("OAuth is not supported")
 
-        override suspend fun connect(code: String, now: Instant): ProviderConnection =
-            error("OAuth is not supported")
+        override suspend fun connect(
+            code: String,
+            now: Instant,
+        ): ProviderConnection = error("OAuth is not supported")
 
         override suspend fun sync(
             request: DomainProviderSyncRequest,
@@ -170,8 +178,10 @@ class ProviderWorkflowServiceTest : PostgresIntegrationTest() {
 
         override fun getAuthUrl(state: String): String = error("OAuth is not supported")
 
-        override suspend fun connect(code: String, now: Instant): ProviderConnection =
-            error("OAuth is not supported")
+        override suspend fun connect(
+            code: String,
+            now: Instant,
+        ): ProviderConnection = error("OAuth is not supported")
 
         override suspend fun sync(
             request: DomainProviderSyncRequest,
@@ -184,7 +194,10 @@ class ProviderWorkflowServiceTest : PostgresIntegrationTest() {
     }
 
     private companion object {
-        fun descriptorFor(providerCode: String, displayName: String) = HealthProviderDescriptor(
+        fun descriptorFor(
+            providerCode: String,
+            displayName: String,
+        ) = HealthProviderDescriptor(
             providerCode = providerCode,
             displayName = displayName,
             authType = ProviderAuthType.NONE,

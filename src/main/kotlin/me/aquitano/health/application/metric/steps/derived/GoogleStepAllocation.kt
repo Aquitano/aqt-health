@@ -4,7 +4,11 @@ import me.aquitano.health.application.metric.steps.repository.StepSampleRow
 import java.time.Instant
 import java.util.TreeSet
 
-internal data class StepAllocationSpan(val sample: StepSampleRow, val startAt: Instant, val endAt: Instant)
+internal data class StepAllocationSpan(
+    val sample: StepSampleRow,
+    val startAt: Instant,
+    val endAt: Instant,
+)
 
 /** Google corrections can move accepted intervals over their neighbors. Resolve only the shared
  * time using the saved content-change order; the original sample remains the basis for allocation. */
@@ -22,9 +26,11 @@ internal fun resolveGoogleStepSpans(
         }
     }
     googleSamples.values.forEach { sourceSamples ->
-        val boundaries = sourceSamples.flatMap { sample ->
-            listOf(Boundary(sample.startAt, sample, true), Boundary(sample.endAt, sample, false))
-        }.sortedBy { it.at }
+        val boundaries =
+            sourceSamples
+                .flatMap { sample ->
+                    listOf(Boundary(sample.startAt, sample, true), Boundary(sample.endAt, sample, false))
+                }.sortedBy { it.at }
         val active = TreeSet(compareBy<StepSampleRow> { it.allocationPriority ?: Int.MIN_VALUE }.thenBy { it.id })
         var previous = boundaries.first().at
         var index = 0
@@ -49,4 +55,8 @@ internal fun resolveGoogleStepSpans(
     return result
 }
 
-private data class Boundary(val at: Instant, val sample: StepSampleRow, val starts: Boolean)
+private data class Boundary(
+    val at: Instant,
+    val sample: StepSampleRow,
+    val starts: Boolean,
+)

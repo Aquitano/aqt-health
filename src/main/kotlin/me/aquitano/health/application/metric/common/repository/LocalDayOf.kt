@@ -21,11 +21,12 @@ internal class LocalDayOf(
     private val timestamp: Expression<OffsetDateTime>,
     private val zoneId: String,
 ) : Function<LocalDate>(JavaLocalDateColumnType()) {
-    override fun toQueryBuilder(queryBuilder: QueryBuilder) = queryBuilder {
-        append("CAST(date_trunc('day', ")
-        append(timestamp)
-        append(" AT TIME ZONE ")
-        append(stringLiteral(zoneId))
-        append(") AS DATE)")
-    }
+    override fun toQueryBuilder(queryBuilder: QueryBuilder) =
+        queryBuilder {
+            append("CAST(date_trunc('day', ")
+            append(timestamp)
+            append(" AT TIME ZONE ")
+            append(stringLiteral(zoneId))
+            append(") AS DATE)")
+        }
 }

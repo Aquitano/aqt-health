@@ -6,8 +6,8 @@ import me.aquitano.health.domain.ProviderConnection
 import me.aquitano.health.domain.ServerConfigurationException
 import me.aquitano.health.domain.ValidationIssue
 import me.aquitano.health.infrastructure.config.ProviderOAuthConfig
-import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
 import me.aquitano.health.infrastructure.logging.infoWithContext
+import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
 import me.aquitano.health.infrastructure.security.TokenCipher
 import java.time.Instant
 
@@ -25,7 +25,10 @@ fun ProviderOAuthConfig.oauthConfigurationIssues(prefix: String): List<Validatio
         if (oauthAuthUrl.isBlank()) add(ValidationIssue("$prefix.oauthAuthUrl"))
     }
 
-fun requireProviderConfigured(notConfiguredCode: String, issues: List<ValidationIssue>) {
+fun requireProviderConfigured(
+    notConfiguredCode: String,
+    issues: List<ValidationIssue>,
+) {
     if (issues.isNotEmpty()) {
         throw ServerConfigurationException(
             code = notConfiguredCode,
@@ -64,7 +67,11 @@ suspend fun persistOAuthConnection(
         "provider" to providerCode,
         "providerInstanceId" to providerInstanceId,
         "expiresAt" to tokens.expiresAt,
-        "scopeCount" to tokens.scope.orEmpty().split(scopeDelimiter).count { it.isNotBlank() },
+        "scopeCount" to
+            tokens.scope
+                .orEmpty()
+                .split(scopeDelimiter)
+                .count { it.isNotBlank() },
     )
     return ProviderConnection(
         providerCode = providerCode,

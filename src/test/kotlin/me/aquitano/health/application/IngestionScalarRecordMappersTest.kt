@@ -40,36 +40,38 @@ class IngestionScalarRecordMappersTest {
 
     @Test
     fun registryRangesBoundEveryMetricFamily() {
-        val inRange = listOf(
-            Triple("heart_rate", 25.0, "resting"),
-            Triple("heart_rate", 250.0, "resting"),
-            Triple("respiratory_rate", 5.0, null),
-            Triple("respiratory_rate", 80.0, null),
-            Triple("hrv_rmssd", 500.0, null),
-            Triple("body_fat", 100.0, null),
-            Triple("pulse_wave_velocity", 7.5, null),
-            Triple("fat_mass", 12.3, null),
-            // Zero is inside the range for cellular water compartments.
-            Triple("intracellular_water", 0.0, null),
-        )
+        val inRange =
+            listOf(
+                Triple("heart_rate", 25.0, "resting"),
+                Triple("heart_rate", 250.0, "resting"),
+                Triple("respiratory_rate", 5.0, null),
+                Triple("respiratory_rate", 80.0, null),
+                Triple("hrv_rmssd", 500.0, null),
+                Triple("body_fat", 100.0, null),
+                Triple("pulse_wave_velocity", 7.5, null),
+                Triple("fat_mass", 12.3, null),
+                // Zero is inside the range for cellular water compartments.
+                Triple("intracellular_water", 0.0, null),
+            )
         inRange.forEach { (metricType, value, context) ->
             val record = map(metricType, value, context = context)
             assertNotNull(record, "$metricType $value should be accepted")
             assertEquals(metricType, record.value.metricType)
         }
 
-        val outOfRange = listOf(
-            Triple("heart_rate", 24.0, "resting"),
-            Triple("heart_rate", 251.0, "resting"),
-            Triple("respiratory_rate", 4.0, null),
-            Triple("respiratory_rate", 81.0, null),
-            Triple("hrv_rmssd", 500.1, null),
-            Triple("hrv_rmssd", 0.0, null),
-            Triple("body_fat", 100.1, null),
-            Triple("weight", 0.0, null),
-            Triple("pulse_wave_velocity", 0.0, null),
-            Triple("fat_mass", 0.0, null),
-        )
+        val outOfRange =
+            listOf(
+                Triple("heart_rate", 24.0, "resting"),
+                Triple("heart_rate", 251.0, "resting"),
+                Triple("respiratory_rate", 4.0, null),
+                Triple("respiratory_rate", 81.0, null),
+                Triple("hrv_rmssd", 500.1, null),
+                Triple("hrv_rmssd", 0.0, null),
+                Triple("body_fat", 100.1, null),
+                Triple("weight", 0.0, null),
+                Triple("pulse_wave_velocity", 0.0, null),
+                Triple("fat_mass", 0.0, null),
+            )
         outOfRange.forEach { (metricType, value, context) ->
             assertNull(map(metricType, value, context = context), "$metricType $value should be rejected")
         }

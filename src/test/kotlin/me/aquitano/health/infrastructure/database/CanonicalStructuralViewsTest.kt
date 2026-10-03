@@ -1,7 +1,7 @@
 package me.aquitano.health.infrastructure.database
 
-import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.infrastructure.config.DatabaseConfig
+import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.test.PostgresTestDatabase
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -65,47 +65,64 @@ class CanonicalStructuralViewsTest : PostgresIntegrationTest() {
                 INSERT INTO sources (id, code, display_name, created_at)
                 VALUES (1, 'withings', NULL, '2026-04-19T00:00:00Z'),
                        (2, 'google_health', NULL, '2026-04-19T00:00:00Z')
-                """.trimIndent()
+                """.trimIndent(),
             )
             execute(
                 """
                 INSERT INTO source_instances (id, source_id, provider_instance_id, display_name, created_at, updated_at)
                 VALUES (1, 1, 'withings-1', NULL, '2026-04-19T00:00:00Z', '2026-04-19T00:00:00Z'),
                        (2, 2, 'google-1', NULL, '2026-04-19T00:00:00Z', '2026-04-19T00:00:00Z')
-                """.trimIndent()
+                """.trimIndent(),
             )
         }
 
-        fun insertActivitySummary(id: Int, sourceInstanceId: Int, date: String) {
+        fun insertActivitySummary(
+            id: Int,
+            sourceInstanceId: Int,
+            date: String,
+        ) {
             execute(
                 """
                 INSERT INTO activity_summaries (id, source_instance_id, date, distance_meters, created_at)
                 VALUES ($id, $sourceInstanceId, '$date', 1000.0, '2026-04-19T10:00:00Z')
-                """.trimIndent()
+                """.trimIndent(),
             )
         }
 
-        fun insertSleepSummary(id: Int, sourceInstanceId: Int, startAt: String, endAt: String) {
+        fun insertSleepSummary(
+            id: Int,
+            sourceInstanceId: Int,
+            startAt: String,
+            endAt: String,
+        ) {
             execute(
                 """
                 INSERT INTO sleep_summaries (id, source_instance_id, start_at, end_at, total_sleep_seconds, created_at)
                 VALUES ($id, $sourceInstanceId, '$startAt', '$endAt', 28800, '2026-04-19T10:00:00Z')
-                """.trimIndent()
+                """.trimIndent(),
             )
         }
 
-        fun insertSleepSession(id: Int, sourceInstanceId: Int, startAt: String, endAt: String) {
+        fun insertSleepSession(
+            id: Int,
+            sourceInstanceId: Int,
+            startAt: String,
+            endAt: String,
+        ) {
             execute(
                 """
                 INSERT INTO sleep_sessions (id, source_instance_id, start_at, end_at, duration_seconds, created_at)
                 VALUES ($id, $sourceInstanceId, '$startAt', '$endAt',
                         EXTRACT(EPOCH FROM ('$endAt'::timestamptz - '$startAt'::timestamptz))::bigint,
                         '2026-04-19T10:00:00Z')
-                """.trimIndent()
+                """.trimIndent(),
             )
         }
 
-        fun canonicalIds(view: String, orderBy: String): List<Int> {
+        fun canonicalIds(
+            view: String,
+            orderBy: String,
+        ): List<Int> {
             val ids = mutableListOf<Int>()
             PostgresTestDatabase.connection(dbConfig).use { connection ->
                 connection.createStatement().use { statement ->

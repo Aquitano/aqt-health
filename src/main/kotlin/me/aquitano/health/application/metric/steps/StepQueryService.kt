@@ -23,28 +23,31 @@ class StepQueryService(
 ) {
     suspend fun listStepSamples(params: QueryParams): StepSamplesResponse =
         suspendDbTransaction(db = database) {
-            val filters = params.readFilters(
-                sortSpec = QueryParamSpecs.sortByStartAt,
-            )
+            val filters =
+                params.readFilters(
+                    sortSpec = QueryParamSpecs.sortByStartAt,
+                )
             val (rows, sourceMetadata) =
                 canonicalRepository.listCanonicalStepSamples(filters, CANONICAL_STEP_ALGORITHM_VERSION)
-            val page = rows.keysetPage(
-                limit = filters.limit,
-                sort = filters.sort,
-                order = filters.order,
-                sortValue = { it.startAt.toString() },
-                id = { it.id.toLong() },
-            )
+            val page =
+                rows.keysetPage(
+                    limit = filters.limit,
+                    sort = filters.sort,
+                    order = filters.order,
+                    sortValue = { it.startAt.toString() },
+                    id = { it.id.toLong() },
+                )
             StepSamplesResponse(
-                items = page.items.map {
-                    StepSampleResponse(
-                        id = it.id,
-                        startAt = it.startAt.toString(),
-                        endAt = it.endAt.toString(),
-                        steps = it.steps,
-                        source = sourceMetadata[it.sourceInstanceId].toResponse(),
-                    )
-                },
+                items =
+                    page.items.map {
+                        StepSampleResponse(
+                            id = it.id,
+                            startAt = it.startAt.toString(),
+                            endAt = it.endAt.toString(),
+                            steps = it.steps,
+                            source = sourceMetadata[it.sourceInstanceId].toResponse(),
+                        )
+                    },
                 meta = page.items.meta(filters, page.nextCursor),
             )
         }
@@ -57,24 +60,25 @@ class StepQueryService(
             params.rejectLatest()
             val filters = params.dailyReadFilters(now)
             val (rows, sourceMetadata) = canonicalRepository.listCanonicalStepDailySummaries(filters)
-            val page = rows.keysetPage(
-                limit = filters.limit,
-                sort = filters.sort,
-                order = filters.order,
-                sortValue = { it.date },
-                id = { it.id.toLong() },
-            )
+            val page =
+                rows.keysetPage(
+                    limit = filters.limit,
+                    sort = filters.sort,
+                    order = filters.order,
+                    sortValue = { it.date },
+                    id = { it.id.toLong() },
+                )
             StepDailySummariesResponse(
-                items = page.items.map {
-                    StepDailySummaryResponse(
-                        date = it.date,
-                        steps = it.steps,
-                        sampleCount = it.sampleCount,
-                        source = sourceMetadata[it.sourceInstanceId].toResponse(),
-                    )
-                },
+                items =
+                    page.items.map {
+                        StepDailySummaryResponse(
+                            date = it.date,
+                            steps = it.steps,
+                            sampleCount = it.sampleCount,
+                            source = sourceMetadata[it.sourceInstanceId].toResponse(),
+                        )
+                    },
                 meta = page.items.meta(filters, page.nextCursor),
             )
         }
 }
-

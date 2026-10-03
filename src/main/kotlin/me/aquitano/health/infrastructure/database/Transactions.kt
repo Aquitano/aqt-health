@@ -16,7 +16,10 @@ import java.util.concurrent.ConcurrentHashMap
 object DatabaseDispatchers {
     private val dispatchers = ConcurrentHashMap<Database, CoroutineDispatcher>()
 
-    fun register(database: Database, poolSize: Int) {
+    fun register(
+        database: Database,
+        poolSize: Int,
+    ) {
         dispatchers[database] = Dispatchers.IO.limitedParallelism(poolSize)
     }
 
@@ -24,8 +27,7 @@ object DatabaseDispatchers {
         dispatchers.remove(database)
     }
 
-    fun forDatabase(database: Database): CoroutineDispatcher =
-        dispatchers[database] ?: Dispatchers.IO
+    fun forDatabase(database: Database): CoroutineDispatcher = dispatchers[database] ?: Dispatchers.IO
 }
 
 /**
@@ -46,7 +48,10 @@ suspend fun <T> suspendDbTransaction(
  * aborts the whole transaction on a SQL error (25P02), so without this the caller cannot record
  * the failure in the same transaction. The exception is rethrown either way.
  */
-inline fun <T> JdbcTransaction.withSavepoint(name: String, block: () -> T): T {
+inline fun <T> JdbcTransaction.withSavepoint(
+    name: String,
+    block: () -> T,
+): T {
     val savepoint = connection.setSavepoint(name)
     return try {
         block().also { connection.releaseSavepoint(savepoint) }

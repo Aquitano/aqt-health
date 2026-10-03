@@ -10,4 +10,3 @@ data class BloodPressureMeasurementRow(
     val diastolicMmhg: Int,
     val heartRateBpm: Int?,
 )
-
