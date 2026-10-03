@@ -46,6 +46,7 @@ dependencies {
     implementation("io.ktor:ktor-client-core")
     implementation("io.ktor:ktor-client-logging")
     implementation("io.ktor:ktor-server-auth")
+    implementation("io.ktor:ktor-server-body-limit")
     implementation("io.ktor:ktor-server-call-id")
     implementation("io.ktor:ktor-server-call-logging")
     implementation("io.ktor:ktor-server-core")

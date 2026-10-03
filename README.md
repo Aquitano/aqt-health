@@ -79,6 +79,7 @@ Environment variables:
 - `AQT_HEALTH_DB_USER`: PostgreSQL username, default `aqt_health`
 - `AQT_HEALTH_DB_PASSWORD`: PostgreSQL password, default `aqt_health`
 - `AQT_HEALTH_DB_MAX_POOL_SIZE`: maximum Hikari connection pool size, default `10`
+- `AQT_HEALTH_INGESTION_MAX_BODY_BYTES`: maximum request body size for `POST /api/v2/ingestion/batches`, default `33554432` (32 MB); larger requests get `413`
 - `AQT_HEALTH_BOOTSTRAP_CLIENT_NAME`: initial API client name, default `local-admin`
 - `AQT_HEALTH_BOOTSTRAP_API_KEY`: optional plaintext bootstrap key
 - `AQT_HEALTH_GOOGLE_CLIENT_ID`: Google OAuth web client ID for Google Health

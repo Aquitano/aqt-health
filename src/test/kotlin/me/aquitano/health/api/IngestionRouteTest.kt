@@ -34,6 +34,23 @@ class IngestionRouteTest : PostgresIntegrationTest() {
         }
 
     @Test
+    fun ingestionRejectsBodyLargerThanConfiguredLimit() =
+        testApplication {
+            val dbPath = configureTestApplication("aqtHealth.ingestion.maxBodyBytes" to "512")
+
+            val response =
+                client.post("/api/v2/ingestion/batches") {
+                    authorized()
+                    contentType(ContentType.Application.Json)
+                    setBody(mixedPayload(batchExternalId = "oversized-1"))
+                }
+
+            assertEquals(HttpStatusCode.PayloadTooLarge, response.status)
+            assertEquals("payload_too_large", response.errorCode())
+            assertEquals(0, countRows(dbPath, "ingestion_batches"))
+        }
+
+    @Test
     fun ingestionRejectsInvalidRequest() =
         testApplication {
             configureTestApplication()
@@ -413,7 +430,7 @@ class IngestionRouteTest : PostgresIntegrationTest() {
             )
         }
 
-    private fun ApplicationTestBuilder.configureTestApplication(): DatabaseConfig {
+    private fun ApplicationTestBuilder.configureTestApplication(vararg extraConfig: Pair<String, String>): DatabaseConfig {
         val dbConfig = PostgresTestDatabase.config()
         environment {
             config =
@@ -423,6 +440,7 @@ class IngestionRouteTest : PostgresIntegrationTest() {
                     *PostgresTestDatabase.ktorConfigEntries(dbConfig),
                     "aqtHealth.auth.bootstrapClientName" to "test-client",
                     "aqtHealth.auth.bootstrapApiKey" to "test-key",
+                    *extraConfig,
                 )
         }
         return dbConfig
