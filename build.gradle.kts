@@ -13,9 +13,9 @@ val kotlin_logging_version: String by project
 val konsist_version: String by project
 
 plugins {
-    kotlin("jvm") version "2.3.21"
+    kotlin("jvm") version "2.4.20"
     id("io.ktor.plugin") version "3.5.0"
-    id("org.jetbrains.kotlin.plugin.serialization") version "2.3.21"
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.4.20"
 
     id("io.github.ben-manes.versions") version "0.64.0"
     id("org.jlleitschuh.gradle.ktlint") version "14.2.0"
@@ -87,7 +87,7 @@ dependencies {
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit:$kotlin_version")
     testImplementation("org.testcontainers:postgresql:$testcontainers_version")
     testImplementation("com.lemonappdev:konsist:$konsist_version")
-    testCompileOnly("org.jetbrains.kotlin:kotlin-compiler-embeddable:2.0.21") // Supplied at runtime by Konsist.
+    testCompileOnly("org.jetbrains.kotlin:kotlin-compiler-embeddable:2.4.20") // Supplied at runtime by Konsist.
 }
 
 fun dockerIsAvailable(): Boolean =
