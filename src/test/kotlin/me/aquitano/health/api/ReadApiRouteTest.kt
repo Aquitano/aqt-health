@@ -657,6 +657,26 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
         }
 
     @Test
+    fun scalarSamplesAcrossTypesPageOneMergedList() =
+        testApplication {
+            configureTestApplication()
+            ingestMixedBatch()
+            ingestLaterBatch()
+
+            val path = "/api/v2/metrics/samples?metricTypes=weight,body_fat&order=desc&limit=2"
+            val firstPage = authorizedGet(path)
+            assertEquals(HttpStatusCode.OK, firstPage.status)
+            val cursor = firstPage.meta()["nextCursor"]!!.jsonPrimitive.content
+            val values = (firstPage.items() + authorizedGet("$path&cursor=$cursor").items()).map { it.jsonObject["value"]!!.jsonPrimitive.double }
+            assertEquals(83.1, values.first())
+            assertEquals(setOf(83.1, 82.4, 18.2), values.toSet())
+            assertEquals(3, values.size)
+
+            val unknown = authorizedGet("/api/v2/metrics/samples?metricTypes=weight,not_a_metric")
+            assertEquals(HttpStatusCode.BadRequest, unknown.status)
+        }
+
+    @Test
     fun dailyScalarSummariesBucketSamplesByTimezoneDay() =
         testApplication {
             configureTestApplication()

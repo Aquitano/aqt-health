@@ -46,6 +46,18 @@ internal fun Route.readRoutes() {
         requiresBearerAuth()
         errorResponses()
     }
+    get("/api/v2/metrics/samples") {
+        call.respond<ScalarSamplesResponse>(scalarMetricQueryService.listAcrossTypes(call.queryParams()))
+    }.describe {
+        operationId = "listScalarSamplesAcrossTypes"
+        tag("Read")
+        summary = "List scalar samples across several metric types"
+        description =
+            "Returns one canonical (or `raw=true`) sample list for every metric type in `metricTypes`, ordered by `measuredAt` with the same filters, `latest=true` and cursor pagination as the single-type list. Unknown metric types return 400."
+        requiresBearerAuth()
+        multiScalarMetricQueryParameters()
+        errorResponses()
+    }
     get("/api/v2/metrics/{metricType}") {
         call.respond<ScalarSamplesResponse>(
             scalarMetricQueryService.list(

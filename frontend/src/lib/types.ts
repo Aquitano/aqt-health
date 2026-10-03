@@ -15,7 +15,6 @@ export type StepDailySummariesResponse = ApiSchema<"StepDailySummariesResponse">
 export type ScalarSample = ApiSchema<"ScalarSampleResponse">;
 export type ScalarDailySummariesResponse = ApiSchema<"ScalarDailySummariesResponse">;
 export type ScalarSamplesResponse = ApiSchema<"ScalarSamplesResponse">;
-export type BodyMeasurementsResponse = ScalarSamplesResponse & { truncated: boolean };
 export type ActivitySummary = ApiSchema<"ActivitySummaryResponse">;
 export type ActivitySummariesResponse = ApiSchema<"ActivitySummariesResponse">;
 export type SleepSession = ApiSchema<"SleepSessionResponse">;
@@ -66,7 +65,7 @@ export type HealthDataPageData = HealthStatusData & {
   healthDay: ApiResult<HealthDayResponse>;
   dailySteps: ApiResult<StepDailySummariesResponse>;
   activitySummaries: ApiResult<ActivitySummariesResponse>;
-  bodyMeasurements: ApiResult<BodyMeasurementsResponse>;
+  bodyMeasurements: ApiResult<ScalarSamplesResponse>;
   heartRateDaily: HeartRateDailyPoint[];
   sleepNights: ApiResult<SleepNightsResponse>;
   sleepSummaries: ApiResult<SleepSummariesResponse>;

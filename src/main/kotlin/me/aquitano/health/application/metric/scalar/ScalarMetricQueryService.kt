@@ -50,12 +50,47 @@ class ScalarMetricQueryService(
         params: QueryParams,
     ): ScalarSamplesResponse {
         requireKnown(metricType)
+        return list(setOf(metricType), params)
+    }
+
+    suspend fun listAcrossTypes(params: QueryParams): ScalarSamplesResponse = list(params.metricTypes(), params)
+
+    private suspend fun list(
+        metricTypes: Set<String>,
+        params: QueryParams,
+    ): ScalarSamplesResponse {
         val raw = params.boolean(QueryParamSpecs.raw)
         val filters = params.readFilters()
         return pagedRead(database, filters, SortFields.MEASURED_AT, { it.measuredAt }, { it.id }, ::ScalarSamplesResponse) {
-            val (rows, sourceMetadata) = scalarRepository.list(filters, setOf(metricType), canonical = !raw)
+            val (rows, sourceMetadata) = scalarRepository.list(filters, metricTypes, canonical = !raw)
             rows.map { it.toScalarResponse(sourceMetadata) }
         }
+    }
+
+    private fun QueryParams.metricTypes(): Set<String> {
+        val metricTypes =
+            required("metricTypes")
+                .split(",")
+                .map { it.trim() }
+                .filterTo(linkedSetOf()) { it.isNotEmpty() }
+        val unknown = metricTypes.filter { ScalarMetricRegistry.find(it) == null }
+        if (metricTypes.isEmpty() || unknown.isNotEmpty()) {
+            throw RequestValidationException(
+                listOf(
+                    ValidationIssue(
+                        field = "metricTypes",
+                        code = ValidationIssueCodes.UnsupportedValue,
+                        message =
+                            if (unknown.isEmpty()) {
+                                "must contain at least one metric type"
+                            } else {
+                                "unknown metric types ${unknown.joinToString(", ")}"
+                            },
+                    ),
+                ),
+            )
+        }
+        return metricTypes
     }
 
     suspend fun summary(
