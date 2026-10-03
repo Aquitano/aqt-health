@@ -1,11 +1,8 @@
 import { NextResponse } from "next/server";
 import { aqtHealthClient, toProviderCode } from "@/lib/aqtHealthClient";
 import type { ProviderCode } from "@/lib/aqtHealthClient";
-import type {
-  ApiResult,
-  ProviderSyncRequest,
-  ScheduledSyncConfigUpdateRequest,
-} from "@/lib/types";
+import type { ApiResult } from "@/lib/types";
+import { readProviderSyncRequest, readScheduledSyncConfigUpdate } from "@/lib/syncRequests";
 
 // Single server-side proxy for the browser-triggered provider actions. It keeps
 // AQT_HEALTH_API_KEY out of the client and only forwards the allowlisted paths below.
@@ -43,8 +40,9 @@ const routes: ProxyRoute[] = [
     pattern: /^providers\/([^/]+)\/sync-jobs$/,
     successStatus: 202,
     handle: async (providerCode, _rest, request) => {
-      const body = (await request.json().catch(() => ({}))) as ProviderSyncRequest;
-      return aqtHealthClient.startProviderSyncJob(providerCode, normalizeSyncPayload(body));
+      const body = await readProviderSyncRequest(request);
+      if (!body.ok) return body;
+      return aqtHealthClient.startProviderSyncJob(providerCode, body.data);
     },
   },
   {
@@ -74,11 +72,12 @@ const routes: ProxyRoute[] = [
     method: "PUT",
     pattern: /^providers\/([^/]+)\/accounts\/([^/]+)\/scheduled-sync$/,
     handle: async (providerCode, [providerInstanceId], request) => {
-      const body = (await request.json().catch(() => ({}))) as ScheduledSyncConfigUpdateRequest;
+      const body = await readScheduledSyncConfigUpdate(request);
+      if (!body.ok) return body;
       return aqtHealthClient.updateScheduledSyncConfig(
         providerCode,
         providerInstanceId,
-        normalizeScheduledSyncPayload(body),
+        body.data,
       );
     },
   },
@@ -160,43 +159,4 @@ export function POST(request: Request, context: RouteContext) {
 
 export function PUT(request: Request, context: RouteContext) {
   return dispatch("PUT", request, context);
-}
-
-function normalizeSyncPayload(body: ProviderSyncRequest): ProviderSyncRequest {
-  const dataTypes = Array.isArray(body.dataTypes)
-    ? body.dataTypes.filter((dataType) => typeof dataType === "string" && dataType.trim())
-    : undefined;
-  const pageSize =
-    typeof body.pageSize === "number" && Number.isInteger(body.pageSize) && body.pageSize > 0
-      ? body.pageSize
-      : undefined;
-
-  return {
-    from: nonEmpty(body.from),
-    to: nonEmpty(body.to),
-    dataTypes: dataTypes && dataTypes.length > 0 ? dataTypes : undefined,
-    pageSize,
-  };
-}
-
-function normalizeScheduledSyncPayload(
-  body: ScheduledSyncConfigUpdateRequest,
-): ScheduledSyncConfigUpdateRequest {
-  const dataTypes = Array.isArray(body.dataTypes)
-    ? body.dataTypes.filter((dataType) => typeof dataType === "string" && dataType.trim())
-    : undefined;
-  return {
-    enabled: typeof body.enabled === "boolean" ? body.enabled : undefined,
-    dataTypes: dataTypes && dataTypes.length > 0 ? dataTypes : undefined,
-    cadenceMinutes: positiveInteger(body.cadenceMinutes),
-    lookbackDays: positiveInteger(body.lookbackDays),
-  };
-}
-
-function nonEmpty(value?: string | null): string | undefined {
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
-}
-
-function positiveInteger(value?: number | null): number | undefined {
-  return Number.isInteger(value) && value && value > 0 ? value : undefined;
 }

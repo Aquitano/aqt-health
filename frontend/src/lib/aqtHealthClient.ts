@@ -1,7 +1,10 @@
+import { type } from "arktype";
+import type { ArkErrors } from "arktype";
 import createClient from "openapi-fetch";
 import type {
   ApiResult,
   ApiSchema,
+  BodyMeasurementsResponse,
   ScheduledSyncConfig,
   ScheduledSyncConfigUpdateRequest,
   ScheduledSyncRunResponse,
@@ -13,6 +16,13 @@ type ClientResponse<T> = {
   error?: unknown;
   response?: Response;
 };
+
+type NextFetchInit = RequestInit & { next: { revalidate: number } };
+
+const backendErrorBody = type({
+  error: { "code?": "string", "message?": "string" },
+}).or("string");
+type BackendErrorBody = typeof backendErrorBody.infer;
 
 type ClientOptions = {
   protected?: boolean;
@@ -37,19 +47,6 @@ export function toProviderCode(value: string): ProviderCode | null {
 }
 
 const bodyMetricTypes = ["weight", "body_fat", "muscle", "water", "visceral_fat"];
-const cardiovascularMetricTypes = ["pulse_wave_velocity", "vascular_age", "standing_heart_rate"];
-const extendedBodyMetricTypes = [
-  "fat_mass",
-  "fat_free_mass",
-  "bone_mass",
-  "intracellular_water",
-  "extracellular_water",
-  "basal_metabolic_rate",
-  "segmental_fat_mass",
-  "segmental_muscle_mass",
-  "segmental_fat_free_mass",
-];
-
 const defaultBaseUrl = "http://localhost:8080";
 const backendRequestTimeoutMs = 8_000;
 const longRunningBackendRequestTimeoutMs = 300_000;
@@ -231,17 +228,6 @@ export const aqtHealthClient = {
       }),
     ),
 
-  listHeartRateSamples: (query: ScalarSamplesQuery) =>
-    listScalarMetric("heart_rate", query),
-
-  getScalarSummary: (metricType: string, query: GetQuery<"/api/v2/metrics/{metricType}/summary">) =>
-    call<ApiSchema<"ScalarSummaryResponse">>((headers) =>
-      rawClient.GET("/api/v2/metrics/{metricType}/summary", {
-        headers,
-        params: { path: { metricType }, query },
-      }),
-    ),
-
   getScalarDailySummaries: (
     metricType: string,
     query: GetQuery<"/api/v2/metrics/{metricType}/daily">,
@@ -283,9 +269,6 @@ export const aqtHealthClient = {
       }),
     ),
 
-  getLatestBodyMeasurement: (query: ScalarSamplesQuery) =>
-    listScalarMetric("weight", { ...query, latest: true }),
-
   listBodyMeasurements: (query: ScalarSamplesQuery) =>
     listScalarMetrics(bodyMetricTypes, query),
 
@@ -321,11 +304,12 @@ export const aqtHealthClient = {
       }),
     ),
 
-  listCardiovascular: (query: ScalarSamplesQuery) =>
-    listScalarMetrics(cardiovascularMetricTypes, query),
+  listScalarSamples: listScalarMetric,
 
-  listExtendedBodyMeasurements: (query: ScalarSamplesQuery) =>
-    listScalarMetrics(extendedBodyMetricTypes, query),
+  listSleepSessions: (query: GetQuery<"/api/v2/sleep/sessions">) =>
+    call<ApiSchema<"SleepSessionsResponse">>((headers) =>
+      rawClient.GET("/api/v2/sleep/sessions", { headers, params: { query } }),
+    ),
 };
 
 type ScalarSamplesQuery = GetQuery<"/api/v2/metrics/{metricType}">;
@@ -345,8 +329,8 @@ function listScalarMetric(
 function listScalarMetrics(
   metricTypes: string[],
   query: ScalarSamplesQuery,
-): Promise<ApiResult<ApiSchema<"ScalarSamplesResponse">>> {
-  return call<ApiSchema<"ScalarSamplesResponse">>((headers) =>
+): Promise<ApiResult<BodyMeasurementsResponse>> {
+  return call<BodyMeasurementsResponse>((headers) =>
     mergedScalarMetrics(metricTypes, query, headers),
   );
 }
@@ -355,7 +339,7 @@ async function mergedScalarMetrics(
   metricTypes: string[],
   query: ScalarSamplesQuery,
   headers: HeadersInit,
-): Promise<ClientResponse<ApiSchema<"ScalarSamplesResponse">>> {
+): Promise<ClientResponse<BodyMeasurementsResponse>> {
   const responses = await Promise.all(
     metricTypes.map((metricType) =>
       rawClient.GET("/api/v2/metrics/{metricType}", {
@@ -365,7 +349,7 @@ async function mergedScalarMetrics(
     ),
   );
   const failed = responses.find((result) => result.error || !result.response?.ok);
-  if (failed) return failed as ClientResponse<ApiSchema<"ScalarSamplesResponse">>;
+  if (failed) return { error: failed.error, response: failed.response };
 
   const order = query.order ?? (query.latest ? "desc" : "asc");
   const requestedLimit = query.limit ?? 500;
@@ -383,6 +367,7 @@ async function mergedScalarMetrics(
   return {
     data: {
       items,
+      truncated: items.length < mergedItems.length || responses.some((result) => Boolean(result.data?.meta.nextCursor)),
       meta: {
         count: items.length,
         limit: requestedLimit,
@@ -401,12 +386,13 @@ async function fetchWithTimeout(
 ): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const uncachedInit: NextFetchInit = {
+    ...init,
+    signal: controller.signal,
+    next: { revalidate: 0 },
+  };
   try {
-    return await fetch(input, {
-      ...init,
-      signal: controller.signal,
-      next: { revalidate: 0 },
-    } as RequestInit & { next: { revalidate: 0 } });
+    return await fetch(input, uncachedInit);
   } finally {
     clearTimeout(timeout);
   }
@@ -436,14 +422,15 @@ async function call<T>(
       return {
         ok: false,
         status: response?.status,
-        message: errorMessage(error, response?.statusText ?? "Backend returned an error."),
+        message: errorMessage(backendErrorBody(error), response?.statusText || "Backend returned an error."),
       };
     }
 
-    return {
-      ok: true,
-      data: data as T,
-    };
+    if (data === undefined) {
+      return { ok: false, status: response.status, message: "Backend returned an empty response." };
+    }
+
+    return { ok: true, data };
   } catch (error) {
     return {
       ok: false,
@@ -452,13 +439,8 @@ async function call<T>(
   }
 }
 
-function errorMessage(body: unknown, fallback: string): string {
-  if (typeof body === "object" && body !== null && "error" in body) {
-    const error = (body as { error?: { message?: unknown; code?: unknown } }).error;
-    if (typeof error?.message === "string") return error.message;
-    if (typeof error?.code === "string") return error.code;
-  }
-
-  if (typeof body === "string" && body.trim()) return body;
-  return fallback || "Backend returned an error.";
+function errorMessage(body: BackendErrorBody | ArkErrors, fallback: string): string {
+  if (body instanceof type.errors) return fallback;
+  if (typeof body === "string") return body.trim() ? body : fallback;
+  return body.error.message ?? body.error.code ?? fallback;
 }

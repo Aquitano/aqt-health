@@ -1,6 +1,7 @@
 import type {
   ActivitySummariesResponse,
   ScalarSamplesResponse,
+  ScalarDailySummariesResponse,
   SleepSummariesResponse,
   StepDailySummariesResponse,
 } from "./types";
@@ -35,53 +36,42 @@ export type TrendStat = {
   change30d: TrendChange | null;
 };
 
-type AggregateMode = "last" | "avg" | "sum";
-
-type SourceItem = {
-  date: string;
-  value: number;
-};
-
 function dayKey(isoTimestamp: string): string {
   return isoTimestamp.slice(0, 10);
 }
 
-/** Collapse raw samples to one value per calendar day, ascending by day. */
-function dailyAggregate(items: SourceItem[], mode: AggregateMode): TrendPoint[] {
-  const byDay = new Map<string, number[]>();
+/** Inputs arrive in ascending timestamp order; retain the final measurement each day. */
+function dailyLast(items: TrendPoint[]): TrendPoint[] {
+  const byDay = new Map<string, number>();
   for (const item of items) {
-    if (!Number.isFinite(item.value)) continue;
-    const bucket = byDay.get(item.date);
-    if (bucket) bucket.push(item.value);
-    else byDay.set(item.date, [item.value]);
+    if (Number.isFinite(item.value)) byDay.set(item.date, item.value);
   }
-
-  return Array.from(byDay.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, values]) => ({ date, value: reduceValues(values, mode) }));
+  return Array.from(byDay, ([date, value]) => ({ date, value }))
+    .sort((a, b) => a.date.localeCompare(b.date));
 }
 
-function reduceValues(values: number[], mode: AggregateMode): number {
-  if (mode === "sum") return values.reduce((total, value) => total + value, 0);
-  if (mode === "avg") return values.reduce((total, value) => total + value, 0) / values.length;
-  return values[values.length - 1];
+function dailyAverages(response?: ScalarDailySummariesResponse): TrendPoint[] {
+  return (response?.items ?? []).flatMap((item) =>
+    item.avgValue != null && Number.isFinite(item.avgValue)
+      ? [{ date: item.date, value: item.avgValue }]
+      : [],
+  );
 }
 
-/** Compare the latest point to the nearest point at or before `days` ago. */
+/** Compare with the closest day near the target, leaving sparse comparisons unavailable. */
 function changeOverDays(points: TrendPoint[], days: number): TrendChange | null {
   if (points.length < 2) return null;
   const latest = points[points.length - 1];
   const latestMs = Date.parse(`${latest.date}T00:00:00Z`);
   const targetMs = latestMs - days * 86_400_000;
-  // Tolerate a few days of gaps around the target so sparse data still reports.
-  const toleranceMs = Math.min(days, 7) * 86_400_000;
-
+  const toleranceMs = (days === 7 ? 2 : 7) * 86_400_000;
   let base: TrendPoint | null = null;
-  for (let i = points.length - 2; i >= 0; i -= 1) {
-    const pointMs = Date.parse(`${points[i].date}T00:00:00Z`);
-    if (pointMs <= targetMs + toleranceMs) {
+  let closestDistance = Infinity;
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const distance = Math.abs(Date.parse(`${points[i].date}T00:00:00Z`) - targetMs);
+    if (distance <= toleranceMs && distance < closestDistance) {
       base = points[i];
-      if (pointMs <= targetMs) break;
+      closestDistance = distance;
     }
   }
   if (!base) return null;
@@ -114,9 +104,9 @@ export type TrendsInput = {
   weight?: ScalarSamplesResponse;
   steps?: StepDailySummariesResponse;
   sleep?: SleepSummariesResponse;
-  hrv?: ScalarSamplesResponse;
+  hrv?: ScalarDailySummariesResponse;
   activity?: ActivitySummariesResponse;
-  respiratory?: ScalarSamplesResponse;
+  respiratory?: ScalarDailySummariesResponse;
 };
 
 export function buildTrendStats(input: TrendsInput): TrendStat[] {
@@ -127,9 +117,8 @@ export function buildTrendStats(input: TrendsInput): TrendStat[] {
   stats.push(
     summarize(
       { key: "weight", label: "Weight", unit: weightUnit, color: "var(--hue-weight)", goodWhen: null },
-      dailyAggregate(
+      dailyLast(
         weightItems.map((item) => ({ date: dayKey(item.measuredAt), value: item.value })),
-        "last",
       ),
     ),
   );
@@ -137,9 +126,8 @@ export function buildTrendStats(input: TrendsInput): TrendStat[] {
   stats.push(
     summarize(
       { key: "steps", label: "Steps", unit: "steps", color: "var(--hue-steps)", goodWhen: "up" },
-      dailyAggregate(
+      dailyLast(
         (input.steps?.items ?? []).map((item) => ({ date: item.date, value: item.steps })),
-        "last",
       ),
     ),
   );
@@ -147,11 +135,10 @@ export function buildTrendStats(input: TrendsInput): TrendStat[] {
   stats.push(
     summarize(
       { key: "sleep", label: "Sleep", unit: "h", color: "var(--hue-sleep)", goodWhen: "up" },
-      dailyAggregate(
+      dailyLast(
         (input.sleep?.items ?? [])
           .filter((item) => typeof item.totalSleepSeconds === "number")
           .map((item) => ({ date: dayKey(item.endAt), value: (item.totalSleepSeconds ?? 0) / 3600 })),
-        "last",
       ),
     ),
   );
@@ -159,11 +146,10 @@ export function buildTrendStats(input: TrendsInput): TrendStat[] {
   stats.push(
     summarize(
       { key: "sleep_score", label: "Sleep score", unit: "", color: "var(--hue-score)", goodWhen: "up" },
-      dailyAggregate(
+      dailyLast(
         (input.sleep?.items ?? [])
           .filter((item) => typeof item.sleepScore === "number")
           .map((item) => ({ date: dayKey(item.endAt), value: item.sleepScore ?? 0 })),
-        "last",
       ),
     ),
   );
@@ -171,21 +157,17 @@ export function buildTrendStats(input: TrendsInput): TrendStat[] {
   stats.push(
     summarize(
       { key: "hrv", label: "HRV", unit: "ms", color: "var(--hue-hrv)", goodWhen: "up" },
-      dailyAggregate(
-        (input.hrv?.items ?? []).map((item) => ({ date: dayKey(item.measuredAt), value: item.value })),
-        "avg",
-      ),
+      dailyAverages(input.hrv),
     ),
   );
 
   stats.push(
     summarize(
       { key: "resting_hr", label: "Resting HR", unit: "bpm", color: "var(--hue-heart)", goodWhen: "down" },
-      dailyAggregate(
+      dailyLast(
         (input.activity?.items ?? [])
           .filter((item) => typeof item.minHeartRateBpm === "number")
           .map((item) => ({ date: item.date, value: item.minHeartRateBpm ?? 0 })),
-        "last",
       ),
     ),
   );
@@ -193,10 +175,7 @@ export function buildTrendStats(input: TrendsInput): TrendStat[] {
   stats.push(
     summarize(
       { key: "respiratory", label: "Respiratory", unit: "rpm", color: "var(--hue-resp)", goodWhen: null },
-      dailyAggregate(
-        (input.respiratory?.items ?? []).map((item) => ({ date: dayKey(item.measuredAt), value: item.value })),
-        "avg",
-      ),
+      dailyAverages(input.respiratory),
     ),
   );
 
@@ -216,7 +195,7 @@ export function insightSentence(stat: TrendStat): string {
   const direction = change.abs > 0 ? "up" : "down";
   const magnitude =
     change.pct !== null
-      ? `${Math.abs(change.pct).toFixed(change.pct >= 10 ? 0 : 1)}%`
+      ? `${Math.abs(change.pct).toFixed(Math.abs(change.pct) >= 10 ? 0 : 1)}%`
       : `${Math.abs(change.abs).toFixed(1)}${stat.unit ? ` ${stat.unit}` : ""}`;
   const verdict =
     stat.goodWhen && stat.goodWhen === direction

@@ -1,5 +1,6 @@
 import type {
   ApiResult,
+  ApiSchema,
   HealthDataPageSources,
   HealthDayModuleName,
   HealthDayResponse,
@@ -17,6 +18,7 @@ import {
   dateOnlyToUtcInstant,
   dayAfterDateOnlyToUtcInstant,
   first,
+  startOfDayInstant,
 } from "./dates";
 
 export async function getHealthStatus(): Promise<HealthStatusData> {
@@ -26,21 +28,15 @@ export async function getHealthStatus(): Promise<HealthStatusData> {
   };
 }
 
-/**
- * Fires every health-data request without awaiting so the route can wrap each
- * section in its own Suspense boundary and stream results independently. The
- * requests still run concurrently, exactly as the previous single `Promise.all`
- * did, but no section blocks first paint on the slowest fetch (the per-day
- * heart-rate fan-out in particular).
- */
+/** Start independent section requests before rendering their Suspense boundaries. */
 export function getHealthDataPageSources(
   fromDate: string,
   toDate: string,
   timezone: string,
 ): HealthDataPageSources {
   const client = aqtHealthClient;
-  const measurementsFrom = dateOnlyToUtcInstant(fromDate);
-  const measurementsTo = dayAfterDateOnlyToUtcInstant(toDate);
+  const measurementsFrom = startOfDayInstant(fromDate, timezone);
+  const measurementsTo = startOfDayInstant(addUtcDays(toDate, 1), timezone);
 
   return {
     apiBaseUrl: client.apiBaseUrl,
@@ -70,8 +66,7 @@ export function getHealthDataPageSources(
       order: "desc",
       limit: 5000,
     }),
-    latestHeartRate: client.listHeartRateSamples({ latest: true, includeSource: true }),
-    heartRateDaily: fetchHeartRateDaily(fromDate, toDate),
+    heartRateDaily: fetchHeartRateDaily(fromDate, toDate, timezone),
     sleepNights: client.listSleepNights({ fromDate, toDate, timezone, includeSource: true }),
     sleepSummaries: client.listSleepSummaries({
       from: measurementsFrom,
@@ -101,31 +96,7 @@ export function getHealthDataPageSources(
     latestSleepSummary: client.getLatestSleepSummary({ includeSource: true }),
     latestRespiratoryRate: client.listRespiratoryRateSamples({ latest: true, includeSource: true }),
     latestHrv: client.listHrvSamples({ latest: true, includeSource: true }),
-    bloodPressure: client.listBloodPressure({
-      from: measurementsFrom,
-      to: measurementsTo,
-      includeSource: true,
-      sort: "measuredAt",
-      order: "desc",
-      limit: 5000,
-    }),
     latestBloodPressure: client.getLatestBloodPressure({ includeSource: true }),
-    cardiovascular: client.listCardiovascular({
-      from: measurementsFrom,
-      to: measurementsTo,
-      includeSource: true,
-      sort: "measuredAt",
-      order: "desc",
-      limit: 5000,
-    }),
-    extendedBodyMeasurements: client.listExtendedBodyMeasurements({
-      from: measurementsFrom,
-      to: measurementsTo,
-      includeSource: true,
-      sort: "measuredAt",
-      order: "desc",
-      limit: 5000,
-    }),
   };
 }
 
@@ -148,26 +119,28 @@ export async function getTrendsPageData(
 
   const [health, weight, steps, sleep, hrv, activity, respiratory] = await Promise.all([
     client.getHealth(),
-    client.listBodyMeasurements(sampleQuery),
-    client.listDailyStepSummaries({ fromDate, toDate, includeSource: true }),
-    client.listSleepSummaries({
+    readAllPages((cursor) => client.listScalarSamples("weight", { ...sampleQuery, cursor })),
+    readAllPages((cursor) => client.listDailyStepSummaries({ fromDate, toDate, limit: 5000, cursor })),
+    readAllPages((cursor) => client.listSleepSummaries({
+      cursor,
       from,
       to,
       includeSource: true,
       sort: "endAt",
       order: "asc",
       limit: 5000,
-    }),
-    client.listHrvSamples(sampleQuery),
-    client.listActivitySummaries({
+    })),
+    client.getScalarDailySummaries("hrv_rmssd", { from, to }),
+    readAllPages((cursor) => client.listActivitySummaries({
+      cursor,
       fromDate,
       toDate,
       includeSource: true,
       sort: "date",
       order: "asc",
       limit: 5000,
-    }),
-    client.listRespiratoryRateSamples(sampleQuery),
+    })),
+    client.getScalarDailySummaries("respiratory_rate", { from, to }),
   ]);
 
   return {
@@ -263,24 +236,20 @@ async function getHealthDay(paramsValue: {
   });
 }
 
-/** Bounds the daily heart-rate query window to the most recent stretch of days. */
-const MAX_HEART_RATE_DAILY_DAYS = 92;
-
 /**
  * Builds a per-day heart-rate series (avg/min/max) across the range in one request. The scalar
- * `/daily` endpoint buckets by UTC calendar day server-side, so we send the full range instead of
+ * `/daily` endpoint buckets by the selected calendar timezone, so we send the full range instead of
  * charting hundreds of thousands of raw samples or fanning out one request per day.
  */
 async function fetchHeartRateDaily(
   fromDate: string,
   toDate: string,
+  timezone: string,
 ): Promise<HeartRateDailyPoint[]> {
-  const earliest = addUtcDays(toDate, -(MAX_HEART_RATE_DAILY_DAYS - 1));
-  const from = fromDate < earliest ? earliest : fromDate;
-
   const result = await aqtHealthClient.getScalarDailySummaries("heart_rate", {
-    from: dateOnlyToUtcInstant(from),
-    to: dayAfterDateOnlyToUtcInstant(toDate),
+    from: startOfDayInstant(fromDate, timezone),
+    to: startOfDayInstant(addUtcDays(toDate, 1), timezone),
+    timezone,
   });
   if (!result.ok) return [];
 
@@ -298,4 +267,23 @@ async function fetchHeartRateDaily(
 function ingestionStatus(value?: string): "processed" | "failed" | undefined {
   if (value === "processed" || value === "failed") return value;
   return undefined;
+}
+
+type ReadPage<T> = { items: T[]; meta: ApiSchema<"ReadResponseMeta"> };
+
+const maxReadPages = 20;
+
+async function readAllPages<T>(
+  readPage: (cursor?: string) => Promise<ApiResult<ReadPage<T>>>,
+): Promise<ApiResult<ReadPage<T>>> {
+  const items: T[] = [];
+  let cursor: string | undefined;
+  for (let pages = 0; pages < maxReadPages; pages++) {
+    const page = await readPage(cursor);
+    if (!page.ok) return page;
+    items.push(...page.data.items);
+    cursor = page.data.meta.nextCursor ?? undefined;
+    if (!cursor) return { ok: true, data: { items, meta: { ...page.data.meta, count: items.length } } };
+  }
+  return { ok: false, message: `Stopped after ${maxReadPages} pages; the backend kept returning a next cursor.` };
 }

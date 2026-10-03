@@ -11,8 +11,8 @@ type DataSectionProps<T> = {
 
 export function DataSection<T>({ title, result, children }: DataSectionProps<T>) {
   const count = result.ok && typeof result.data === "object" && result.data !== null
-    && "items" in result.data && Array.isArray((result.data as { items: unknown[] }).items)
-    ? (result.data as { items: unknown[] }).items.length
+    && "items" in result.data && Array.isArray(result.data.items)
+    ? result.data.items.length
     : undefined;
 
   return (
