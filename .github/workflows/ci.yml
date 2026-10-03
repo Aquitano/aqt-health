@@ -47,3 +47,14 @@ jobs:
 
       - name: Run tests
         run: ./gradlew check generateOpenApi --continue
+      - name: Set up Bun for contract generation
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.2"
+
+      - name: Verify generated frontend contract
+        working-directory: frontend
+        run: |
+          bun install --frozen-lockfile
+          bun run generate:api
+          git diff --exit-code -- src/lib/generated/aqtHealthApiTypes.ts

@@ -6,6 +6,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.server.config.MapApplicationConfig
 import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import me.aquitano.health.shared.AppJson
@@ -17,6 +18,7 @@ import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 class OpenApiExportTest : PostgresIntegrationTest() {
     @Test
@@ -40,6 +42,25 @@ class OpenApiExportTest : PostgresIntegrationTest() {
                 schemas.keys.filter { it.startsWith("Error") }.toSet(),
                 "Reusable error schemas must not be duplicated by OpenAPI inference",
             )
+
+            val summariesItemRef =
+                schemas["ScheduledSyncRunResponse"]!!
+                    .jsonObject["properties"]!!
+                    .jsonObject["summaries"]!!
+                    .jsonObject["items"]!!
+                    .jsonObject["\$ref"]!!
+                    .jsonPrimitive.content
+            val itemSchema = schemas[summariesItemRef.substringAfterLast('/')]!!.jsonObject
+            assertEquals("object", itemSchema["type"]!!.jsonPrimitive.content)
+
+            val nullableSummary =
+                schemas["ProviderSyncJobStatusResponse"]!!
+                    .jsonObject["properties"]!!
+                    .jsonObject["summary"]!!
+                    .jsonObject["oneOf"]!!
+                    .jsonArray
+            assertTrue(nullableSummary.any { it.jsonObject["type"]?.jsonPrimitive?.content == "null" })
+            assertTrue(nullableSummary.any { it.jsonObject["\$ref"]?.jsonPrimitive?.content == summariesItemRef })
 
             val scalarSampleProperties =
                 schemas["ScalarSampleResponse"]!!
