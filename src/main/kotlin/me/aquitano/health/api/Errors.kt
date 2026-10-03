@@ -135,6 +135,23 @@ fun Application.configureErrorHandling() {
                 ),
             )
         }
+        exception<PayloadTooLargeException> { call, _ ->
+            logger.infoWithContext(
+                "request_payload_too_large",
+                "errorCode" to "payload_too_large",
+                "requestId" to call.requestId(),
+            )
+            call.respond(
+                HttpStatusCode.PayloadTooLarge,
+                ErrorResponse(
+                    ErrorBody(
+                        code = "payload_too_large",
+                        message = "Request body exceeds the configured size limit",
+                        requestId = call.requestId(),
+                    ),
+                ),
+            )
+        }
         exception<BadRequestException> { call, _ ->
             logger.infoWithContext(
                 "request_bad_request",

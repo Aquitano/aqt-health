@@ -9,6 +9,7 @@ data class AppConfig(
     val auth: AuthConfig,
     val googleHealth: ProviderOAuthConfig,
     val withings: ProviderOAuthConfig,
+    val ingestion: IngestionConfig,
     val openObserve: OpenObserveConfig,
 )
 
@@ -34,6 +35,10 @@ data class OpenObserveConfig(
     val org: String,
     val user: String,
     val password: String,
+)
+
+data class IngestionConfig(
+    val maxBodyBytes: Long,
 )
 
 data class DatabaseConfig(
@@ -105,6 +110,10 @@ fun ApplicationConfig.toAppConfig(): AppConfig =
                 defaultApiBaseUrl = "https://wbsapi.withings.net",
                 defaultOauthTokenUrl = "https://wbsapi.withings.net/v2/oauth2",
                 defaultOauthAuthUrl = "https://account.withings.com/oauth2_user/authorize2",
+            ),
+        ingestion =
+            IngestionConfig(
+                maxBodyBytes = optional("aqtHealth.ingestion.maxBodyBytes", "33554432").toLong(),
             ),
         openObserve =
             OpenObserveConfig(
