@@ -113,9 +113,7 @@ multiline() {
   ' "$1"
 }
 
-# .env.example is the canonical list of keys an app needs, so a key it documents
-# and the environment does not have is a boot failure waiting to happen. An
-# example key left empty means the app runs without it, so it is not required.
+# Examples include optional defaults, so missing example keys only warn.
 undocumented() {
   test -f "$rel.example" || return 0
   pairs <"$rel.example" | sed 's/=.*//' | sort >"$scratch/want"
@@ -157,10 +155,22 @@ pull)
   }
   chmod 600 "$scratch/new"
   pairs <"$scratch/new" >"$scratch/now"
+  test -s "$scratch/now" || {
+    echo "$target $slug:$folder returned no nonempty keys; refusing to replace $disp" >&2
+    exit 1
+  }
   if [ ! -f "$rel" ]; then
     note=" (new)"
   else
     pairs <"$rel" >"$scratch/was"
+    sed 's/=.*//' "$scratch/was" | sort -u >"$scratch/previous-keys"
+    sed 's/=.*//' "$scratch/now" | sort -u >"$scratch/current-keys"
+    missing=$(comm -23 "$scratch/previous-keys" "$scratch/current-keys" | tr '\n' ' ')
+    if [ -n "$missing" ]; then
+      echo "$target $slug:$folder is missing existing keys: $missing" >&2
+      echo "refusing to replace $disp; remove those local keys first if their removal is intentional" >&2
+      exit 1
+    fi
     if cmp -s "$scratch/was" "$scratch/now"; then
       note=" (unchanged)"
     else
