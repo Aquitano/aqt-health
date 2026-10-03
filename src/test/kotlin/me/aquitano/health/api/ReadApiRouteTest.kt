@@ -378,6 +378,21 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
         }
 
     @Test
+    fun healthDaySleepFallsBackToClippedSessionDurationWithoutStages() =
+        testApplication {
+            configureTestApplication()
+            val ingestion =
+                client.post("/api/v2/ingestion/batches") {
+                    authorized()
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"provider":"health_connect","providerInstanceId":"unstaged","ingestedAt":"2026-04-20T10:00:00Z","sourcePayload":{},"records":[{"type":"sleep_session","startAt":"2026-04-19T22:00:00Z","endAt":"2026-04-20T06:00:00Z"}]}""")
+                }
+            assertEquals(HttpStatusCode.Created, ingestion.status)
+            val sleep = authorizedGet("/api/v2/health/day?date=2026-04-20&timezone=UTC&modules=sleep").jsonBody()["sleep"]!!.jsonObject
+            assertEquals(21600, sleep["totalDurationSeconds"]!!.jsonPrimitive.long)
+        }
+
+    @Test
     fun queryModeEndpointsReturnLatestAndDateSpecificData() =
         testApplication {
             configureTestApplication()
