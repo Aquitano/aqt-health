@@ -121,35 +121,12 @@ class IdempotencyKeyRouteTest : PostgresIntegrationTest() {
             assertEquals("idempotency_key_conflict", second.errorCode())
         }
 
-    @Test
-    fun failedSyncIsNotStoredForKeyReplay() =
-        testApplication {
-            configureTestApplication()
-
-            // google-health is not connected in tests, so the synchronous sync fails with 409.
-            // The failure must not be cached: the retry hits the provider again instead of
-            // replaying a stored response.
-            val first = syncNow(key = "sync-key-1")
-            val second = syncNow(key = "sync-key-1")
-
-            assertEquals(HttpStatusCode.Conflict, first.status)
-            assertEquals(HttpStatusCode.Conflict, second.status)
-        }
-
     private suspend fun ApplicationTestBuilder.startSyncJob(key: String?): HttpResponse =
         client.post("/api/v2/providers/google-health/sync-jobs") {
             authorized()
             if (key != null) {
                 header("Idempotency-Key", key)
             }
-            contentType(ContentType.Application.Json)
-            setBody("""{"from":"2026-04-01T00:00:00Z","to":"2026-04-02T00:00:00Z","dataTypes":["steps"]}""")
-        }
-
-    private suspend fun ApplicationTestBuilder.syncNow(key: String): HttpResponse =
-        client.post("/api/v2/providers/google-health/sync") {
-            authorized()
-            header("Idempotency-Key", key)
             contentType(ContentType.Application.Json)
             setBody("""{"from":"2026-04-01T00:00:00Z","to":"2026-04-02T00:00:00Z","dataTypes":["steps"]}""")
         }

@@ -22,8 +22,8 @@ class ProviderSyncPipeline(
     // Serializes the token-refresh critical section per account so a manual + scheduled + sync-job
     // run for the same account can't interleave refreshAccessToken/saveRefreshedToken and invalidate
     // each other's rotating refresh token (Google), bricking the account into needs_reauth. Only the
-    // short refresh window is guarded, not the whole sync, so the synchronous POST /sync path never
-    // blocks for the length of a backfill. Process-local: the pipeline is a singleton shared by all
+    // short refresh window is guarded, not the whole sync, so one run never blocks another for the
+    // length of a backfill. Process-local: the pipeline is a singleton shared by all
     // providers, so this covers every in-process sync path. Multi-instance deploys still need a
     // DB-backed claim (same gap noted on ScheduledSyncRunGuard).
     private val accountTokenLocks = ConcurrentHashMap<String, Mutex>()

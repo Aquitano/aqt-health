@@ -38,7 +38,7 @@ function descriptor(): ProviderDescriptor {
       accounts: "/api/v2/providers/google-health/accounts",
       disconnect: "/api/v2/providers/google-health/accounts/{id}/disconnect",
       reconnect: "/api/v2/providers/google-health/accounts/{id}/reconnect",
-      sync: "/api/v2/providers/google-health/sync",
+      sync: "/api/v2/providers/google-health/sync-jobs",
     },
   };
 }

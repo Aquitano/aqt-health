@@ -104,16 +104,6 @@ object ProviderScheduledSyncConfigsTable : IntIdTable("provider_scheduled_sync_c
     }
 }
 
-object ProviderSyncIdempotencyTable : Table("provider_sync_idempotency") {
-    val providerCode = text("provider_code")
-    val idempotencyKey = text("idempotency_key")
-    val requestHash = text("request_hash")
-    val responseJson = text("response_json")
-    val createdAt = timestampWithTimeZone("created_at")
-
-    override val primaryKey = PrimaryKey(providerCode, idempotencyKey)
-}
-
 object ProviderScheduledSyncCheckpointsTable : IntIdTable("provider_scheduled_sync_checkpoints") {
     val configId = reference("config_id", ProviderScheduledSyncConfigsTable)
     val dataType = text("data_type")
