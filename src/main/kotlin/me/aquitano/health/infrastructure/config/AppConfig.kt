@@ -9,7 +9,6 @@ data class AppConfig(
     val auth: AuthConfig,
     val googleHealth: ProviderOAuthConfig,
     val withings: ProviderOAuthConfig,
-    val cors: CorsConfig,
     val openObserve: OpenObserveConfig,
 )
 
@@ -35,10 +34,6 @@ data class OpenObserveConfig(
     val org: String,
     val user: String,
     val password: String,
-)
-
-data class CorsConfig(
-    val origins: List<String>,
 )
 
 data class DatabaseConfig(
@@ -111,14 +106,6 @@ fun ApplicationConfig.toAppConfig(): AppConfig =
                 defaultOauthTokenUrl = "https://wbsapi.withings.net/v2/oauth2",
                 defaultOauthAuthUrl = "https://account.withings.com/oauth2_user/authorize2",
             ),
-        cors =
-            CorsConfig(
-                origins =
-                    optional("aqtHealth.cors.origins", "http://localhost:3000")
-                        .split(",")
-                        .map { it.trim() }
-                        .filter { it.isNotBlank() },
-            ),
         openObserve =
             OpenObserveConfig(
                 url = optional("aqtHealth.openObserve.url"),
@@ -148,7 +135,6 @@ fun AppConfig.validateForStartup() {
 
                 validateProviderOAuth("aqtHealth.googleHealth", googleHealth)
                 validateProviderOAuth("aqtHealth.withings", withings)
-                validateCors(cors)
             } else {
                 // Outside production, only fail fast for a provider the operator has started wiring up
                 // (any client credential set). Require its token-encryption key so OAuth/sync fails at
@@ -181,21 +167,6 @@ private fun MutableList<ConfigValidationIssue>.validateProviderOAuth(
     requireHttpsUrl("$prefix.apiBaseUrl", config.apiBaseUrl)
     requireHttpsUrl("$prefix.oauthTokenUrl", config.oauthTokenUrl)
     requireHttpsUrl("$prefix.oauthAuthUrl", config.oauthAuthUrl)
-}
-
-private fun MutableList<ConfigValidationIssue>.validateCors(cors: CorsConfig) {
-    if (cors.origins.isEmpty()) {
-        add(ConfigValidationIssue("aqtHealth.cors.origins", "must include at least one production origin"))
-        return
-    }
-    cors.origins.forEachIndexed { index, origin ->
-        val path = "aqtHealth.cors.origins[$index]"
-        if (origin == "*") {
-            add(ConfigValidationIssue(path, "must not allow wildcard origins in production"))
-        } else {
-            requirePublicHttpsUrl(path, origin)
-        }
-    }
 }
 
 private fun MutableList<ConfigValidationIssue>.requireValue(

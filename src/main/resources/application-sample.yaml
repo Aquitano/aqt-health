@@ -32,8 +32,6 @@ aqtHealth:
     apiBaseUrl: "$AQT_HEALTH_WITHINGS_API_BASE_URL:https://wbsapi.withings.net"
     oauthTokenUrl: "$AQT_HEALTH_WITHINGS_OAUTH_TOKEN_URL:https://wbsapi.withings.net/v2/oauth2"
     oauthAuthUrl: "$AQT_HEALTH_WITHINGS_OAUTH_AUTH_URL:https://account.withings.com/oauth2_user/authorize2"
-  cors:
-    origins: "$AQT_HEALTH_CORS_ORIGINS:http://localhost:3000"
   openObserve:
     url: "$OPENOBSERVE_URL:"
     org: "$OPENOBSERVE_ORG:"
@@ -43,5 +41,4 @@ aqtHealth:
 # Set AQT_HEALTH_ENV=production for production deployments. Production mode
 # fails startup when required secrets are blank/placeholders, provider token
 # encryption keys are shorter than 32 bytes, OAuth redirects are not public
-# HTTPS URLs, CORS origins are localhost/wildcard, or DB credentials use the
-# local compose defaults.
+# HTTPS URLs, or DB credentials use the local compose defaults.

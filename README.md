@@ -116,7 +116,6 @@ Production requires:
 - Non-default database credentials; the compose `aqt_health` / `aqt_health` pair is rejected.
 - Google Health and Withings OAuth client IDs, client secrets, public HTTPS redirect URIs, and token encryption keys.
 - Provider token encryption keys of at least 32 bytes.
-- Public HTTPS CORS origins. `localhost`, HTTP origins, and `*` are rejected.
 - Public HTTPS provider API, OAuth token, and OAuth authorization URLs.
 
 For local secrets, copy `.env.example` to `.env` and put real values only in `.env`. The `.env` file is ignored by git.
