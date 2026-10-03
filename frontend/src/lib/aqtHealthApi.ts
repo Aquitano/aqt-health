@@ -281,8 +281,12 @@ async function readAllPages<T>(
   for (let pages = 0; pages < maxReadPages; pages++) {
     const page = await readPage(cursor);
     if (!page.ok) return page;
+    const nextCursor = page.data.meta.nextCursor ?? undefined;
+    if (nextCursor && nextCursor === cursor) {
+      return { ok: false, message: "The backend repeated a pagination cursor." };
+    }
     items.push(...page.data.items);
-    cursor = page.data.meta.nextCursor ?? undefined;
+    cursor = nextCursor;
     if (!cursor) return { ok: true, data: { items, meta: { ...page.data.meta, count: items.length } } };
   }
   return { ok: false, message: `Stopped after ${maxReadPages} pages; the backend kept returning a next cursor.` };

@@ -6,5 +6,13 @@ export async function proxyFetch<T>(
   init?: RequestInit,
 ): Promise<ApiResult<T>> {
   const response = await fetch(`/api/backend${path}`, init);
-  return readResponse(response);
+  try {
+    return await readResponse(response);
+  } catch {
+    return {
+      ok: false,
+      status: response.status,
+      message: "Backend returned an invalid response.",
+    };
+  }
 }

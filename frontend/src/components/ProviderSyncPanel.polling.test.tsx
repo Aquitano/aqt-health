@@ -147,6 +147,19 @@ describe("ProviderSyncPanel polling", () => {
     expect(mocks.refresh).not.toHaveBeenCalled();
   });
 
+  it.each([
+    { status: 502, body: "<html>Bad gateway</html>" },
+    { status: 204, body: null },
+  ])("shows HTTP $status when a poll returns a non-JSON response", async ({ status, body }) => {
+    storeActiveJob();
+    fetchMock.mockResolvedValue(new Response(body, { status }));
+    renderPanel();
+    await screen.findByText("Backend returned an invalid response.");
+    expect(screen.getByText(`HTTP ${status}:`)).toBeInTheDocument();
+    expect(window.localStorage.getItem(SYNC_JOB_STORAGE_KEY)).toBeNull();
+    expect(screen.getByRole("button", { name: "Start sync" })).toBeEnabled();
+  });
+
   it("refreshes the router and clears the stored job when the sync finishes", async () => {
     storeActiveJob();
     fetchMock.mockResolvedValue({

@@ -63,11 +63,16 @@ export async function readScheduledSyncConfigUpdate(
   const body = scheduledSyncUpdateBody(raw.data);
   if (body instanceof type.errors) return { ok: false, status: 400, message: body.summary };
 
+  const selectedDataTypes = presentDataTypes(body.dataTypes);
+  if (body.dataTypes != null && selectedDataTypes === undefined) {
+    return { ok: false, status: 400, message: "dataTypes must include at least one data type." };
+  }
+
   return {
     ok: true,
     data: {
       enabled: body.enabled ?? undefined,
-      dataTypes: presentDataTypes(body.dataTypes),
+      dataTypes: selectedDataTypes,
       cadenceMinutes: body.cadenceMinutes ?? undefined,
       lookbackDays: body.lookbackDays ?? undefined,
     },
