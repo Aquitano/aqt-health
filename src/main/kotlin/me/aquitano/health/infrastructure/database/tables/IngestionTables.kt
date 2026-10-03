@@ -24,6 +24,7 @@ object IngestionRecordsTable : IntIdTable("ingestion_records") {
     val recordType = text("record_type")
     val providerRecordId = text("provider_record_id").nullable()
     val normalizedRecordJson = jsonb("normalized_record_json")
+    val googleStepAllocationPriority = integer("google_step_allocation_priority_record_id").nullable()
     val recordStartAt = timestampWithTimeZone("record_start_at").nullable()
     val recordEndAt = timestampWithTimeZone("record_end_at").nullable()
     val createdAt = timestampWithTimeZone("created_at")

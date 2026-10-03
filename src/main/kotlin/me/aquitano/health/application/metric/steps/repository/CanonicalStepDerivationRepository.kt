@@ -8,6 +8,7 @@ import me.aquitano.health.application.metric.common.repository.DailyReadFilters
 import me.aquitano.health.infrastructure.database.tables.CanonicalStepDayBucketContributionsTable
 import me.aquitano.health.infrastructure.database.tables.CanonicalStepSamplesTable
 import me.aquitano.health.infrastructure.database.tables.StepSamplesTable
+import me.aquitano.health.infrastructure.database.tables.IngestionRecordsTable
 import me.aquitano.health.infrastructure.database.toDbTimestamp
 import me.aquitano.health.application.metric.common.repository.BaseMetricReadRepository
 import me.aquitano.health.application.metric.common.repository.TimeFilterMode
@@ -59,7 +60,8 @@ data class CanonicalDashboardStepsSummary(
 
 class CanonicalStepDerivationRepository : BaseMetricReadRepository() {
     fun listRawSamplesForDay(dayStart: Instant, dayEnd: Instant): List<StepSampleRow> =
-        StepSamplesTable.selectAll()
+        StepSamplesTable.leftJoin(IngestionRecordsTable, { ingestionRecordId }, { IngestionRecordsTable.id })
+            .select(StepSamplesTable.columns + IngestionRecordsTable.googleStepAllocationPriority)
             .where {
                 (StepSamplesTable.startAt less dayEnd.toDbTimestamp()) and
                     (StepSamplesTable.endAt greater dayStart.toDbTimestamp())

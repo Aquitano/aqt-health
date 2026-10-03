@@ -54,22 +54,34 @@ class CanonicalStepDerivationService(
                 if (stepPreference.compare(left.row, right.row) <= 0) left else right
             }
         )
+        val googleSourceIds = metadata.filterValues { normalizeProviderCode(it.provider) == "google_health" }.keys
+        val spans = resolveGoogleStepSpans(canonicalSamples.map { it.row }, googleSourceIds)
+            .filter { it.startAt.isBefore(dayEnd) && dayStart.isBefore(it.endAt) }
+        val durations = canonicalSamples.associate { it.row.id to it.durationSeconds }
+        val contributions = linkedMapOf<Pair<Int, Instant>, CanonicalStepBucketContributionOutput>()
+        spans.forEach { span ->
+            bucketContributions(date, dayStart, dayEnd, span, durations.getValue(span.sample.id), computedAt)
+                .forEach { contribution ->
+                    val key = contribution.sampleId to contribution.bucketStartAt
+                    val previous = contributions[key]
+                    contributions[key] = if (previous == null) contribution else
+                        previous.copy(value = previous.value + contribution.value)
+                }
+        }
         val output = CanonicalStepOutput(
             date = date,
             algorithmVersion = CANONICAL_STEP_ALGORITHM_VERSION,
             computedAt = computedAt,
-            samples = canonicalSamples.map {
+            samples = spans.map { it.sample }.distinctBy { it.id }.map {
                 CanonicalStepSampleOutput(
-                    sampleId = it.row.id,
-                    sourceInstanceId = it.row.sourceInstanceId,
-                    startAt = it.row.startAt,
-                    endAt = it.row.endAt,
-                    steps = it.row.steps,
+                    sampleId = it.id,
+                    sourceInstanceId = it.sourceInstanceId,
+                    startAt = it.startAt,
+                    endAt = it.endAt,
+                    steps = it.steps,
                 )
             },
-            bucketContributions = canonicalSamples.flatMap {
-                bucketContributions(date, dayStart, dayEnd, it, computedAt)
-            },
+            bucketContributions = contributions.values.toList(),
         )
         return suspendDbTransaction(db = database) {
             // Serialize persistence per date, then reject computations made from stale raw rows.
@@ -84,27 +96,28 @@ class CanonicalStepDerivationService(
         date: LocalDate,
         dayStart: Instant,
         dayEnd: Instant,
-        sample: PreparedCanonicalStepSample,
+        span: StepAllocationSpan,
+        durationSeconds: Double,
         computedAt: Instant,
     ): List<CanonicalStepBucketContributionOutput> {
-        if (sample.durationSeconds <= 0) return emptyList()
-
+        if (durationSeconds <= 0) return emptyList()
+        val sample = span.sample
         val contributions = mutableListOf<CanonicalStepBucketContributionOutput>()
-        val firstBucket = Duration.between(dayStart, maxOf(dayStart, sample.row.startAt)).seconds / 900
+        val firstBucket = Duration.between(dayStart, maxOf(dayStart, span.startAt)).seconds / 900
         var bucketStart = dayStart.plusSeconds(firstBucket * 900)
-        val lastEnd = minOf(dayEnd, sample.row.endAt)
+        val lastEnd = minOf(dayEnd, span.endAt)
         while (bucketStart.isBefore(lastEnd)) {
             val bucketEnd = minOf(bucketStart.plus(Duration.ofMinutes(15)), dayEnd)
-            if (sample.row.startAt.isBefore(bucketEnd) && bucketStart.isBefore(sample.row.endAt)) {
+            if (span.startAt.isBefore(bucketEnd) && bucketStart.isBefore(span.endAt)) {
                 contributions += CanonicalStepBucketContributionOutput(
                     date = date,
-                    sourceInstanceId = sample.row.sourceInstanceId,
-                    sampleId = sample.row.id,
+                    sourceInstanceId = sample.sourceInstanceId,
+                    sampleId = sample.id,
                     bucketStartAt = bucketStart,
                     bucketEndAt = bucketEnd,
                     value = allocatedSteps(
-                        sample.row.startAt, sample.row.endAt, sample.row.steps,
-                        bucketStart, bucketEnd, sample.durationSeconds,
+                        sample.startAt, sample.endAt, sample.steps,
+                        maxOf(bucketStart, span.startAt), minOf(bucketEnd, span.endAt), durationSeconds,
                     ).toDouble(),
                     computedAt = computedAt,
                 )
