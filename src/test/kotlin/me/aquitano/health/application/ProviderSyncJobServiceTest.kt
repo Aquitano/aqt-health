@@ -11,14 +11,15 @@ import me.aquitano.health.api.dto.ProviderSyncRequest
 import me.aquitano.health.application.providersync.ProviderSyncProgressSink
 import me.aquitano.health.domain.HealthProvider
 import me.aquitano.health.domain.HealthProviderDescriptor
+import me.aquitano.health.domain.NotFoundException
 import me.aquitano.health.domain.ProviderAuthType
 import me.aquitano.health.domain.ProviderConnection
 import me.aquitano.health.domain.ProviderSyncSummary
 import me.aquitano.health.domain.ProviderWorkflowEndpoints
 import me.aquitano.health.domain.SyncJobStatus
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
-import me.aquitano.health.infrastructure.repositories.ProviderSyncIdempotencyRepository
 import me.aquitano.health.infrastructure.repositories.ProviderSyncJobRepository
+import me.aquitano.health.infrastructure.repositories.ScheduledSyncRepository
 import me.aquitano.health.infrastructure.time.UtcClock
 import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.test.PostgresTestDatabase
@@ -28,6 +29,7 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
@@ -63,10 +65,10 @@ class ProviderSyncJobServiceTest : PostgresIntegrationTest() {
 
             val terminal =
                 withTimeout(30_000) {
-                    var job = fixture.service.get(jobIds[0])
+                    var job = fixture.service.get(provider.providerCode, jobIds[0])
                     while (!job.status.terminal) {
                         delay(50)
-                        job = fixture.service.get(jobIds[0])
+                        job = fixture.service.get(provider.providerCode, jobIds[0])
                     }
                     job
                 }
@@ -129,10 +131,10 @@ class ProviderSyncJobServiceTest : PostgresIntegrationTest() {
 
             withTimeout(30_000) {
                 listOf(first.jobId, second.jobId).forEach { jobId ->
-                    var job = fixture.service.get(jobId)
+                    var job = fixture.service.get(provider.providerCode, jobId)
                     while (!job.status.terminal) {
                         delay(50)
-                        job = fixture.service.get(jobId)
+                        job = fixture.service.get(provider.providerCode, jobId)
                     }
                 }
             }
@@ -195,6 +197,52 @@ class ProviderSyncJobServiceTest : PostgresIntegrationTest() {
         }
 
     @Test
+    fun latestPrefersOlderRunningJobOverNewerFinishedJob() =
+        runBlocking {
+            val repository = ProviderSyncJobRepository(database())
+            val runningId = UUID.randomUUID().toString()
+            val finishedId = UUID.randomUUID().toString()
+            listOf(runningId to now, finishedId to now.plusSeconds(60)).forEach { (id, createdAt) ->
+                repository.create(
+                    id = id,
+                    providerCode = "blocking_provider",
+                    providerInstanceId = null,
+                    requestedFrom = now,
+                    requestedTo = now.plusSeconds(3600),
+                    dataTypes = null,
+                    pageSize = null,
+                    now = createdAt,
+                )
+            }
+            repository.markRunning(runningId, now)
+            repository.finish(
+                id = finishedId,
+                status = "processed",
+                batchesCount = 0,
+                emptyCount = 0,
+                errorCount = 0,
+                summaryJson = null,
+                errorMessage = null,
+                now = now.plusSeconds(120),
+            )
+
+            assertEquals(runningId, repository.latest("blocking_provider")?.id)
+
+            repository.finish(
+                id = runningId,
+                status = "failed",
+                batchesCount = 0,
+                emptyCount = 0,
+                errorCount = 1,
+                summaryJson = null,
+                errorMessage = "boom",
+                now = now.plusSeconds(180),
+            )
+
+            assertEquals(finishedId, repository.latest("blocking_provider")?.id)
+        }
+
+    @Test
     fun startResumesInterruptedJob() =
         runBlocking {
             val provider = CountingProvider()
@@ -217,10 +265,10 @@ class ProviderSyncJobServiceTest : PostgresIntegrationTest() {
 
             val terminal =
                 withTimeout(30_000) {
-                    var job = fixture.service.get(jobId)
+                    var job = fixture.service.get(provider.providerCode, jobId)
                     while (!job.status.terminal) {
                         delay(50)
-                        job = fixture.service.get(jobId)
+                        job = fixture.service.get(provider.providerCode, jobId)
                     }
                     job
                 }
@@ -230,20 +278,34 @@ class ProviderSyncJobServiceTest : PostgresIntegrationTest() {
             assertEquals(1, provider.syncCalls.get())
         }
 
+    @Test
+    fun getRejectsJobOfAnotherProvider() =
+        runBlocking {
+            val provider = CountingProvider()
+            val other = BlockingProvider()
+            val fixture = Fixture(provider, other)
+            val job = fixture.service.create(provider.providerCode, request, now)
+
+            assertFailsWith<NotFoundException> { fixture.service.get(other.providerCode, job.jobId) }
+            withTimeout(30_000) {
+                while (!fixture.service.get(provider.providerCode, job.jobId).terminal) delay(50)
+            }
+        }
+
     private fun database(): Database = openDatabase(PostgresTestDatabase.config())
 
     private inner class Fixture(
-        provider: HealthProvider,
+        vararg providers: HealthProvider,
     ) {
         val database = database()
-        private val registry = HealthProviderRegistry(listOf(provider))
+        private val registry = HealthProviderRegistry(providers.toList())
         private val oAuthRepository = ProviderOAuthRepository(database)
         private val workflowService =
             ProviderWorkflowService(
                 providerRegistry = registry,
                 providerOAuthRepository = oAuthRepository,
                 providerStatusService = ProviderStatusService(registry, oAuthRepository),
-                syncIdempotencyRepository = ProviderSyncIdempotencyRepository(database),
+                scheduledSyncRepository = ScheduledSyncRepository(database),
             )
         val service =
             ProviderSyncJobService(

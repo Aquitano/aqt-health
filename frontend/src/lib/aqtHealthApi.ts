@@ -164,21 +164,33 @@ export async function getProviderSyncPageData(): Promise<ProviderSyncPageData> {
     client.listProviders(),
     client.listProviderStatuses(),
   ]);
-  const scheduledSyncConfigs =
-    providerStatuses.ok
-      ? await Promise.all(
-          providerStatuses.data.items.flatMap((provider) => {
-            const providerCode = toProviderCode(provider.providerCode);
-            if (!providerCode) return [];
-            return provider.accounts.map((account) =>
-              client.getScheduledSyncConfig(
-                providerCode,
-                account.providerInstanceId,
-              ),
-            );
-          }),
-        )
-      : [];
+  const providers = providerStatuses.ok
+    ? providerStatuses.data.items.flatMap((provider) => {
+        const providerCode = toProviderCode(provider.providerCode);
+        return providerCode ? [{ providerCode, accounts: provider.accounts }] : [];
+      })
+    : [];
+  const [scheduledSyncConfigs, latestSyncJobs] = await Promise.all([
+    Promise.all(
+      providers.flatMap(({ providerCode, accounts }) =>
+        accounts.map((account) =>
+          client.getScheduledSyncConfig(
+            providerCode,
+            account.providerInstanceId,
+          ),
+        ),
+      ),
+    ),
+    Promise.all(
+      providers.map(({ providerCode }) =>
+        client.getLatestProviderSyncJob(providerCode),
+      ),
+    ),
+  ]);
+  const runningSyncJob =
+    latestSyncJobs
+      .flatMap((job) => (job.ok && !job.data.terminal ? [job.data] : []))
+      .at(0) ?? null;
 
   return {
     apiBaseUrl: client.apiBaseUrl,
@@ -186,6 +198,7 @@ export async function getProviderSyncPageData(): Promise<ProviderSyncPageData> {
     providerCatalog,
     providerStatuses,
     scheduledSyncConfigs,
+    runningSyncJob,
   };
 }
 

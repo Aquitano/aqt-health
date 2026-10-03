@@ -32,6 +32,7 @@ class UnauthorizedException(
 class ConflictException(
     val code: String,
     message: String,
+    val retryable: Boolean = false,
     cause: Throwable? = null,
 ) : RuntimeException(message, cause)
 
@@ -60,10 +61,10 @@ fun isRetryableSyncFailure(error: Throwable): Boolean =
         is RequestValidationException,
         is NotFoundException,
         is UnauthorizedException,
-        is ConflictException,
         is ServerConfigurationException,
         -> false
 
+        is ConflictException -> error.retryable
         is UpstreamProviderException -> error.retryable
         else -> true
     }

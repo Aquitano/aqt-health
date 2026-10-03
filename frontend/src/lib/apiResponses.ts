@@ -65,6 +65,7 @@ const providerSyncJobStatus = type({
   requestedTo: "string",
   "dataTypes?": "string[] | null",
   status: "'queued' | 'running' | 'processed' | 'partial_failed' | 'failed'",
+  terminal: "boolean",
   totalItems: "number",
   completedItems: "number",
   "currentItem?": providerSyncJobItem.or("null"),

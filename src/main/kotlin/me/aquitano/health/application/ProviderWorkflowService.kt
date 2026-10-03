@@ -1,10 +1,6 @@
 package me.aquitano.health.application
 
 import io.github.oshai.kotlinlogging.KotlinLogging
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.encodeToString
 import me.aquitano.health.api.dto.*
 import me.aquitano.health.api.dto.ProviderSyncRequest
 import me.aquitano.health.application.providersync.ProviderSyncProgressSink
@@ -12,14 +8,12 @@ import me.aquitano.health.domain.*
 import me.aquitano.health.infrastructure.logging.*
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthStateConsumeResult
-import me.aquitano.health.infrastructure.repositories.ProviderSyncIdempotencyRepository
-import me.aquitano.health.shared.AppJson
+import me.aquitano.health.infrastructure.repositories.ScheduledSyncRepository
 import me.aquitano.health.shared.normalizeProviderCode
 import java.security.SecureRandom
 import java.time.Duration
 import java.time.Instant
 import java.util.*
-import java.util.concurrent.ConcurrentHashMap
 import me.aquitano.health.domain.ProviderSyncRequest as DomainProviderSyncRequest
 
 private val logger = KotlinLogging.logger {}
@@ -28,16 +22,9 @@ class ProviderWorkflowService(
     private val providerRegistry: HealthProviderRegistry,
     private val providerOAuthRepository: ProviderOAuthRepository,
     private val providerStatusService: ProviderStatusService,
-    private val syncIdempotencyRepository: ProviderSyncIdempotencyRepository,
+    private val scheduledSyncRepository: ScheduledSyncRepository,
 ) {
     private val random = SecureRandom()
-
-    // Serializes lookup -> provider.sync -> store per Idempotency-Key so concurrent duplicates
-    // execute the provider once and the loser replays the stored response. Process-local
-    // (single-instance deployment); entries are never evicted, matching
-    // ProviderSyncPipeline.accountTokenLocks — safe removal needs reference counting, and at
-    // single-user volumes (ADR 0001) the map stays trivially small.
-    private val syncIdempotencyLocks = ConcurrentHashMap<String, Mutex>()
 
     suspend fun startOAuth(
         providerCode: String,
@@ -122,51 +109,12 @@ class ProviderWorkflowService(
         }
 
         val connection = provider.connect(authCode, now)
+        scheduledSyncRepository.resumeParked(provider.providerCode, connection.providerInstanceId, now)
         return ProviderOAuthCallbackResponse(
             provider = connection.providerCode,
             providerInstanceId = connection.providerInstanceId,
             connected = connection.connected,
         )
-    }
-
-    suspend fun sync(
-        providerCode: String,
-        request: ProviderSyncRequest,
-        now: Instant,
-        idempotencyKey: String? = null,
-    ): ProviderSyncResponse {
-        val provider =
-            providerRegistry.getProvider(providerCode)
-                ?: throw NotFoundException("Provider '$providerCode' not found")
-        val canonicalCode = provider.descriptor.providerCode
-        val domainRequest = request.toDomain(now)
-        if (idempotencyKey == null) {
-            return provider.sync(domainRequest, now).toDto()
-        }
-        val requestHash = syncRequestHash(request)
-        return syncIdempotencyLocks.computeIfAbsent("$canonicalCode:$idempotencyKey") { Mutex() }.withLock {
-            syncIdempotencyRepository
-                .findResponse(canonicalCode, idempotencyKey)
-                ?.let { stored ->
-                    if (stored.requestHash != requestHash) {
-                        throw ConflictException(
-                            "idempotency_key_conflict",
-                            "Idempotency-Key was already used for a different provider sync request.",
-                        )
-                    }
-                    runCatching { AppJson.decodeFromString<ProviderSyncResponse>(stored.responseJson) }
-                        .getOrNull()
-                }?.let { return@withLock it }
-            val response = provider.sync(domainRequest, now).toDto()
-            syncIdempotencyRepository.storeResponse(
-                providerCode = canonicalCode,
-                idempotencyKey = idempotencyKey,
-                requestHash = requestHash,
-                responseJson = AppJson.encodeToString(response),
-                now = now,
-            )
-            response
-        }
     }
 
     suspend fun sync(

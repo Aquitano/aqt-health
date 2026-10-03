@@ -195,6 +195,25 @@ class ScheduledSyncRepository(
         }
     }
 
+    suspend fun resumeParked(
+        providerCode: String,
+        providerInstanceId: String,
+        now: Instant,
+    ) {
+        suspendDbTransaction(db = database) {
+            ProviderScheduledSyncConfigsTable.update({
+                (ProviderScheduledSyncConfigsTable.providerCode eq providerCode) and
+                    (ProviderScheduledSyncConfigsTable.providerInstanceId eq providerInstanceId) and
+                    (ProviderScheduledSyncConfigsTable.enabled eq true) and
+                    ProviderScheduledSyncConfigsTable.nextRunAt.isNull()
+            }) {
+                it[failureCount] = 0
+                it[nextRunAt] = now.toDbTimestamp()
+                it[updatedAt] = now.toDbTimestamp()
+            }
+        }
+    }
+
     private fun syncCheckpointRows(
         configId: Int,
         dataTypes: List<String>,

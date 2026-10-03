@@ -10,6 +10,7 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.plus
 import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.andWhere
 import org.jetbrains.exposed.v1.jdbc.insertIgnore
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
@@ -113,16 +114,7 @@ class ProviderSyncJobRepository(
 
     suspend fun latest(providerCode: String? = null): ProviderSyncJobRecord? =
         suspendDbTransaction(db = database) {
-            ProviderSyncJobsTable
-                .selectAll()
-                .let { query ->
-                    providerCode?.let {
-                        query.where { ProviderSyncJobsTable.providerCode eq it }
-                    } ?: query
-                }.orderBy(ProviderSyncJobsTable.createdAt to SortOrder.DESC)
-                .limit(1)
-                .map { it.toRecord() }
-                .singleOrNull()
+            latestInTransaction(providerCode, activeOnly = true) ?: latestInTransaction(providerCode, activeOnly = false)
         }
 
     suspend fun markRunning(
@@ -262,6 +254,20 @@ class ProviderSyncJobRepository(
                 abandoned = abandoned,
             )
         }
+
+    private fun latestInTransaction(
+        providerCode: String?,
+        activeOnly: Boolean,
+    ): ProviderSyncJobRecord? =
+        ProviderSyncJobsTable
+            .selectAll()
+            .apply {
+                providerCode?.let { andWhere { ProviderSyncJobsTable.providerCode eq it } }
+                if (activeOnly) andWhere { ProviderSyncJobsTable.status inList listOf("queued", "running") }
+            }.orderBy(ProviderSyncJobsTable.createdAt to SortOrder.DESC)
+            .limit(1)
+            .map { it.toRecord() }
+            .singleOrNull()
 
     private fun getByIdInTransaction(id: String): ProviderSyncJobRecord? =
         ProviderSyncJobsTable

@@ -17,6 +17,7 @@ import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
 import me.aquitano.health.infrastructure.repositories.ScheduledSyncRepository
 import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.test.PostgresTestDatabase
+import org.jetbrains.exposed.v1.jdbc.Database
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
@@ -129,16 +130,46 @@ class ScheduledProviderSyncServiceTest : PostgresIntegrationTest() {
         }
 
     @Test
-    fun nonRetryableFailureParksConfigEvenWhenMessageIsReworded() =
+    fun nonRetryableFailureParksConfigOnlyAfterRepeatedFailures() =
         runBlocking {
-            // The ConflictException message deliberately avoids the old magic substrings;
-            // classification must come from the exception type, not the wording.
-            val provider =
-                ThrowingProvider(
-                    ConflictException("withings_needs_reauth", "token expired, reauthorize the account"),
-                )
+            val provider = ThrowingProvider(ConflictException("withings_account_not_found", "account is gone"))
             val (service, repository) = serviceWith(provider)
+            var runAt = Instant.parse("2026-05-31T10:00:00Z")
+            configureEnabled(repository, provider, runAt)
+
+            repeat(2) {
+                assertEquals(1, service.runDue(runAt))
+                runAt = assertNotNull(repository.getConfig(provider.providerCode, provider.defaultProviderInstanceId)?.nextRunAt)
+            }
+            assertEquals(1, service.runDue(runAt))
+
+            val config = repository.getConfig(provider.providerCode, provider.defaultProviderInstanceId)
+            assertNotNull(config)
+            assertNull(config.nextRunAt)
+            assertEquals(3, config.failureCount)
+        }
+
+    @Test
+    fun needsReauthAccountParksConfigOnFirstRetryableFailure() =
+        runBlocking {
+            val provider = ThrowingProvider(IllegalStateException("upstream timed out"))
+            val database = openDatabase(PostgresTestDatabase.config())
             val now = Instant.parse("2026-05-31T10:00:00Z")
+            val accounts = ProviderOAuthRepository(database)
+            accounts.upsertAccount(
+                providerCode = provider.providerCode,
+                providerUserId = "throwing-user",
+                providerInstanceId = provider.defaultProviderInstanceId,
+                accessTokenCiphertext = "access",
+                refreshTokenCiphertext = "refresh",
+                tokenType = "Bearer",
+                expiresAt = now.plusSeconds(3600),
+                scope = "scope",
+                now = now,
+            )
+            val account = accounts.accountByProviderInstanceForStatus(provider.providerCode, provider.defaultProviderInstanceId)!!
+            accounts.markNeedsReauth(account.id, account.refreshTokenCiphertext, "withings_needs_reauth", "reconnect", now)
+            val (service, repository) = serviceWith(provider, database)
             configureEnabled(repository, provider, now)
 
             assertEquals(1, service.runDue(now))
@@ -170,8 +201,8 @@ class ScheduledProviderSyncServiceTest : PostgresIntegrationTest() {
 
     private fun serviceWith(
         provider: HealthProvider,
+        database: Database = openDatabase(PostgresTestDatabase.config()),
     ): Pair<ScheduledProviderSyncService, ScheduledSyncRepository> {
-        val database = openDatabase(PostgresTestDatabase.config())
         val repository = ScheduledSyncRepository(database)
         val service =
             ScheduledProviderSyncService(

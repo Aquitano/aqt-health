@@ -409,10 +409,10 @@ curl "http://localhost:8080/api/v2/providers/google-health/oauth/start" \
 
 Open the returned `authorizationUrl` in a browser. Google redirects back to `/api/v2/providers/google-health/oauth/callback`, which stores encrypted tokens for future syncs.
 
-Sync Google Health data:
+Sync Google Health data with a background job:
 
 ```bash
-curl -X POST http://localhost:8080/api/v2/providers/google-health/sync \
+curl -X POST http://localhost:8080/api/v2/providers/google-health/sync-jobs \
   -H "Authorization: Bearer local-dev-key" \
   -H "Content-Type: application/json" \
   -d '{
@@ -424,19 +424,6 @@ curl -X POST http://localhost:8080/api/v2/providers/google-health/sync \
 ```
 
 If `dataTypes` is omitted, the sync reads `steps`, `sleep`, `heart-rate`, `weight`, and `body-fat`. If both `from` and `to` are omitted, the sync defaults to the last seven days. Long explicit ranges are accepted for historical backfill and are split into UTC-day-aligned one-day windows before fetching. Completed days are skipped on repeated syncs over the same range; only the current, still-open day is re-fetched.
-
-For longer historical backfills, prefer the background job endpoint so the browser or client does not need to keep the request open:
-
-```bash
-curl -X POST http://localhost:8080/api/v2/providers/google-health/sync-jobs \
-  -H "Authorization: Bearer local-dev-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "from": "2020-01-01T00:00:00Z",
-    "to": "2026-01-01T00:00:00Z",
-    "dataTypes": ["steps", "sleep", "heart-rate", "weight", "body-fat"]
-  }'
-```
 
 Poll `/api/v2/providers/google-health/sync-jobs/{jobId}` for progress and the final summary. The backend owns the provider-safe sequential work after the job is accepted, so frontend reloads or browser closes do not stop the sync job.
 
@@ -469,10 +456,10 @@ curl "http://localhost:8080/api/v2/providers/withings/oauth/start" \
 
 Open the returned `authorizationUrl` in a browser. Withings redirects back to `/api/v2/providers/withings/oauth/callback`, which stores encrypted tokens for future syncs. Withings authorization codes are valid for only 30 seconds, so the callback must reach this backend immediately.
 
-Sync Withings data:
+Sync Withings data with a background job:
 
 ```bash
-curl -X POST http://localhost:8080/api/v2/providers/withings/sync \
+curl -X POST http://localhost:8080/api/v2/providers/withings/sync-jobs \
   -H "Authorization: Bearer local-dev-key" \
   -H "Content-Type: application/json" \
   -d '{
@@ -484,7 +471,7 @@ curl -X POST http://localhost:8080/api/v2/providers/withings/sync \
 
 If `dataTypes` is omitted, the sync reads `activity`, `measures`, `sleep-summary`, and `sleep`. Long explicit ranges are accepted for historical backfill and are fetched in sequential UTC-day-aligned one-day windows per data type, so completed days are skipped on repeated syncs. Withings fields from the listed Measure, Activity, Sleep, and Sleep Summary APIs are preserved in the ingestion source payload. The current normalized metric tables store steps, supported body measurements, heart-rate samples, and sleep sessions; unsupported Withings metrics such as blood pressure, SpO2, temperature, ECG intervals, BMR, metabolic age, bone mass, vascular age, segmental body composition, and conductance values remain available in source payloads until matching metric tables exist.
 
-Use `/api/v2/providers/withings/sync-jobs` for long Withings backfills. Poll `/api/v2/providers/withings/sync-jobs/{jobId}` for progress; the backend continues processing provider-safe windows even if the frontend disconnects.
+Poll `/api/v2/providers/withings/sync-jobs/{jobId}` for progress; the backend continues processing provider-safe windows even if the frontend disconnects.
 
 ## Read Data
 

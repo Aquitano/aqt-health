@@ -41,7 +41,7 @@ class GoogleHealthProvider(
                     accounts = "/api/v2/providers/google-health/accounts",
                     disconnect = "/api/v2/providers/google-health/accounts/{providerInstanceId}/disconnect",
                     reconnect = "/api/v2/providers/google-health/accounts/{providerInstanceId}/reconnect",
-                    sync = "/api/v2/providers/google-health/sync",
+                    sync = "/api/v2/providers/google-health/sync-jobs",
                 ),
             aliases = listOf(GOOGLE_HEALTH_PROVIDER_CODE),
         )

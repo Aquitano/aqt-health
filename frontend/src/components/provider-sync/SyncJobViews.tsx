@@ -5,7 +5,6 @@ import type {
 } from "@/lib/types";
 import { ErrorNotice } from "../ErrorNotice";
 import { formatStatus } from "./labels";
-import { isFinishedSyncJob } from "./useProviderSyncJob";
 import styles from "../ProviderSyncPanel.module.css";
 
 export function SyncProgressView({
@@ -56,7 +55,7 @@ export function SyncProgressView({
       </div>
       <div className={styles.progressMeta}>
         <span>{completedPercent}%</span>
-        <span>{isFinishedSyncJob(job.status) ? "Finished" : currentLabel}</span>
+        <span>{job.terminal ? "Finished" : currentLabel}</span>
       </div>
       {lastLabel ? <small>Last completed: {lastLabel}</small> : null}
       <small>Job {job.jobId}</small>

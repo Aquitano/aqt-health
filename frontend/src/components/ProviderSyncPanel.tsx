@@ -7,6 +7,7 @@ import type {
   ProviderDescriptor,
   ProviderStatus,
   ProviderStatusCatalogResponse,
+  ProviderSyncJobStatusResponse,
   ScheduledSyncConfig,
 } from "@/lib/types";
 import { readOAuthStart } from "@/lib/apiResponses";
@@ -28,6 +29,7 @@ type ProviderSyncPanelProps = {
   catalog: ApiResult<ProviderCatalogResponse>;
   statuses: ApiResult<ProviderStatusCatalogResponse>;
   scheduledSyncConfigs: ApiResult<ScheduledSyncConfig>[];
+  runningSyncJob: ProviderSyncJobStatusResponse | null;
 };
 
 type ProviderOption = {
@@ -35,11 +37,11 @@ type ProviderOption = {
   status?: ProviderStatus;
 };
 
-export function ProviderSyncPanel({ catalog, statuses, scheduledSyncConfigs }: ProviderSyncPanelProps) {
+export function ProviderSyncPanel({ catalog, statuses, scheduledSyncConfigs, runningSyncJob }: ProviderSyncPanelProps) {
   const [selectedProviderCode, setSelectedProviderCode] = useState("");
   const [oauthError, setOAuthError] = useState<string | null>(null);
   const [isOAuthPending, startOAuthTransition] = useTransition();
-  const { activeSyncJob, syncJob, result, isPending, startSync, clearResult } = useProviderSyncJob();
+  const { activeSyncJob, syncJob, result, isPending, startSync, clearResult } = useProviderSyncJob(runningSyncJob);
 
   if (!catalog.ok || !statuses.ok) {
     return (

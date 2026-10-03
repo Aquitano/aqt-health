@@ -8,8 +8,6 @@ import type {
   ProviderStatusCatalogResponse,
   ProviderSyncJobStatusResponse,
 } from "@/lib/types";
-import { renderToString } from "react-dom/server";
-import { hydrateRoot } from "react-dom/client";
 import { ProviderSyncPanel } from "./ProviderSyncPanel";
 
 const mocks = vi.hoisted(() => ({
@@ -19,8 +17,6 @@ const mocks = vi.hoisted(() => ({
 vi.mock("next/navigation", () => ({
   useRouter: () => mocks,
 }));
-
-const SYNC_JOB_STORAGE_KEY = "aqt-health.provider-sync.active-job";
 
 function descriptor(): ProviderDescriptor {
   return {
@@ -38,7 +34,7 @@ function descriptor(): ProviderDescriptor {
       accounts: "/api/v2/providers/google-health/accounts",
       disconnect: "/api/v2/providers/google-health/accounts/{id}/disconnect",
       reconnect: "/api/v2/providers/google-health/accounts/{id}/reconnect",
-      sync: "/api/v2/providers/google-health/sync",
+      sync: "/api/v2/providers/google-health/sync-jobs",
     },
   };
 }
@@ -73,6 +69,7 @@ function jobStatus(
     requestedFrom: "2026-04-01T00:00:00.000Z",
     requestedTo: "2026-04-02T00:00:00.000Z",
     status: "running",
+    terminal: false,
     totalItems: 2,
     completedItems: 1,
     batchesCount: 0,
@@ -85,20 +82,14 @@ function jobStatus(
   };
 }
 
-function renderPanel() {
+function renderRunningJob() {
   return render(
     <ProviderSyncPanel
       catalog={catalog()}
       statuses={statuses()}
       scheduledSyncConfigs={[]}
+      runningSyncJob={jobStatus()}
     />,
-  );
-}
-
-function storeActiveJob() {
-  window.localStorage.setItem(
-    SYNC_JOB_STORAGE_KEY,
-    JSON.stringify({ providerCode: "google-health", jobId: "job-1" }),
   );
 }
 
@@ -114,35 +105,32 @@ describe("ProviderSyncPanel polling", () => {
     fetchMock.mockReset();
     mocks.refresh.mockReset();
     vi.unstubAllGlobals();
-    window.localStorage.clear();
   });
 
-  it("rehydrates the active job from localStorage and polls its status", async () => {
-    storeActiveJob();
+  it("re-attaches to the running job from the server and polls its status", async () => {
     fetchMock.mockResolvedValue({
-      json: async () => ({ ok: true, data: jobStatus() }),
+      json: async () => ({ ok: true, data: jobStatus({ completedItems: 2, totalItems: 3 }) }),
     });
 
-    renderPanel();
+    renderRunningJob();
 
     expect(screen.getByRole("button", { name: /syncing/i })).toBeDisabled();
+    expect(screen.getByText(/1 of 2 windows complete/)).toBeInTheDocument();
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
         "/api/backend/providers/google-health/sync-jobs/job-1",
         expect.objectContaining({ signal: expect.any(AbortSignal) }),
       );
     });
-    await screen.findByText(/1 of 2 windows complete/);
+    await screen.findByText(/2 of 3 windows complete/);
   });
 
-  it("stops polling and clears the stored job when the status check throws", async () => {
-    storeActiveJob();
+  it("stops polling when the status check throws", async () => {
     fetchMock.mockRejectedValue(new Error("network down"));
 
-    renderPanel();
+    renderRunningJob();
 
     await screen.findByText(/network down/);
-    expect(window.localStorage.getItem(SYNC_JOB_STORAGE_KEY)).toBeNull();
     expect(screen.getByRole("button", { name: "Start sync" })).toBeEnabled();
     expect(mocks.refresh).not.toHaveBeenCalled();
   });
@@ -151,22 +139,20 @@ describe("ProviderSyncPanel polling", () => {
     { status: 502, body: "<html>Bad gateway</html>" },
     { status: 204, body: null },
   ])("shows HTTP $status when a poll returns a non-JSON response", async ({ status, body }) => {
-    storeActiveJob();
     fetchMock.mockResolvedValue(new Response(body, { status }));
-    renderPanel();
+    renderRunningJob();
     await screen.findByText("Backend returned an invalid response.");
     expect(screen.getByText(`HTTP ${status}:`)).toBeInTheDocument();
-    expect(window.localStorage.getItem(SYNC_JOB_STORAGE_KEY)).toBeNull();
     expect(screen.getByRole("button", { name: "Start sync" })).toBeEnabled();
   });
 
-  it("refreshes the router and clears the stored job when the sync finishes", async () => {
-    storeActiveJob();
+  it("refreshes the router when the job turns terminal", async () => {
     fetchMock.mockResolvedValue({
       json: async () => ({
         ok: true,
         data: jobStatus({
           status: "processed",
+          terminal: true,
           completedItems: 2,
           finishedAt: "2026-04-01T00:01:00.000Z",
           summary: {
@@ -183,63 +169,46 @@ describe("ProviderSyncPanel polling", () => {
       }),
     });
 
-    renderPanel();
+    renderRunningJob();
 
     await screen.findByText(/Synced 0 batches, created 0 metrics/);
     expect(mocks.refresh).toHaveBeenCalledTimes(1);
-    expect(window.localStorage.getItem(SYNC_JOB_STORAGE_KEY)).toBeNull();
     expect(screen.getByRole("button", { name: "Start sync" })).toBeEnabled();
   });
 
-  it("hydrates a saved job without replacing server-rendered markup", async () => {
-    storeActiveJob();
+  it("adopts a running job supplied by a later refresh while idle", async () => {
     fetchMock.mockReturnValue(new Promise(() => {}));
-    const element = <ProviderSyncPanel catalog={catalog()} statuses={statuses()} scheduledSyncConfigs={[]} />;
-    const container = document.createElement("div");
-    container.innerHTML = renderToString(element);
-    expect(container.textContent).toContain("Start sync");
-    document.body.append(container);
-    const recoverableError = vi.fn();
-    let root: ReturnType<typeof hydrateRoot>;
-    await act(async () => { root = hydrateRoot(container, element, { onRecoverableError: recoverableError }); });
-    expect(container.textContent).toContain("Syncing...");
-    expect(recoverableError).not.toHaveBeenCalled();
-    act(() => root.unmount());
-    container.remove();
-  });
+    const view = render(
+      <ProviderSyncPanel catalog={catalog()} statuses={statuses()} scheduledSyncConfigs={[]} runningSyncJob={null} />,
+    );
+    expect(screen.getByRole("button", { name: "Start sync" })).toBeEnabled();
 
-  it.each(["processed", "failed", "network"])("preserves another tab's newer job after an old poll is %s", async (outcome) => {
-    storeActiveJob();
-    let finish!: (value: unknown) => void;
-    let fail!: (reason: Error) => void;
-    fetchMock.mockReturnValueOnce(new Promise((resolve, reject) => { finish = resolve; fail = reject; }));
-    fetchMock.mockReturnValue(new Promise(() => {}));
-    renderPanel();
-    const newerJob = JSON.stringify({ providerCode: "google-health", jobId: "job-2" });
-    window.localStorage.setItem(SYNC_JOB_STORAGE_KEY, newerJob);
-    await act(async () => {
-      if (outcome === "network") fail(new Error("offline"));
-      else finish({ json: async () => outcome === "failed"
-        ? { ok: false, message: "expired" }
-        : { ok: true, data: jobStatus({ status: "processed" }) } });
+    view.rerender(
+      <ProviderSyncPanel
+        catalog={catalog()}
+        statuses={statuses()}
+        scheduledSyncConfigs={[]}
+        runningSyncJob={jobStatus({ jobId: "job-2" })}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: /syncing/i })).toBeDisabled();
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/backend/providers/google-health/sync-jobs/job-2",
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
     });
-    expect(window.localStorage.getItem(SYNC_JOB_STORAGE_KEY)).toBe(newerJob);
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
-      "/api/backend/providers/google-health/sync-jobs/job-2",
-      expect.objectContaining({ signal: expect.any(AbortSignal) }),
-    ));
   });
 
   it("aborts and ignores a status response after unmount", async () => {
-    storeActiveJob();
     let finish!: (value: unknown) => void;
     fetchMock.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
-    const view = renderPanel();
+    const view = renderRunningJob();
     const signal = fetchMock.mock.calls[0][1].signal as AbortSignal;
     view.unmount();
     expect(signal.aborted).toBe(true);
-    await act(async () => { finish({ json: async () => ({ ok: false, message: "expired" }) }); });
-    expect(window.localStorage.getItem(SYNC_JOB_STORAGE_KEY)).not.toBeNull();
+    await act(async () => { finish({ json: async () => ({ ok: true, data: jobStatus({ status: "processed", terminal: true }) }) }); });
     expect(mocks.refresh).not.toHaveBeenCalled();
   });
 
@@ -249,7 +218,7 @@ describe("ProviderSyncPanel polling", () => {
     render(<ProviderSyncPanel catalog={catalog()} statuses={{ ok: true, data: { items: [{ ...status(), accounts: [
       { providerInstanceId: "first", status: "connected", tokenStatus: "valid" },
       { providerInstanceId: "second", status: "connected", tokenStatus: "valid" },
-    ] }] } }} scheduledSyncConfigs={[]} />);
+    ] }] } }} scheduledSyncConfigs={[]} runningSyncJob={null} />);
     const first = screen.getByText("first").closest("div")!.parentElement!;
     const second = screen.getByText("second").closest("div")!.parentElement!;
     fireEvent.click(within(first).getByRole("button", { name: "Run auto now" }));
@@ -259,6 +228,25 @@ describe("ProviderSyncPanel polling", () => {
     expect(within(second).getByRole("button", { name: "Running..." })).toBeDisabled();
     expect(within(second).getByRole("button", { name: "Disconnect" })).toBeDisabled();
     await act(async () => { finishes[1]({ json: async () => ({ ok: false, message: "second failed" }) }); });
+  });
+
+  it("shows an enabled schedule without a next run as stopped and resumes it", async () => {
+    fetchMock.mockResolvedValue({ json: async () => ({ ok: true, data: { ok: true } }) });
+    render(<ProviderSyncPanel catalog={catalog()} statuses={{ ok: true, data: { items: [{ ...status(), accounts: [
+      { providerInstanceId: "me", status: "connected", tokenStatus: "valid" },
+    ] }] } }} scheduledSyncConfigs={[{ ok: true, data: {
+      providerCode: "google-health", providerInstanceId: "me", enabled: true, dataTypes: ["steps"],
+      cadenceMinutes: 1440, lookbackDays: 7, failureCount: 3, lastErrorMessage: "steps: account is gone", checkpoints: [],
+    } }]} runningSyncJob={null} />);
+    expect(screen.getByText("Stopped after errors")).toBeInTheDocument();
+    expect(screen.getByText("steps: account is gone")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Resume auto" }));
+
+    await waitFor(() => expect(mocks.refresh).toHaveBeenCalled());
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/backend/providers/google-health/accounts/me/scheduled-sync");
+    expect(JSON.parse(init.body)).toMatchObject({ enabled: true });
   });
 
 });
