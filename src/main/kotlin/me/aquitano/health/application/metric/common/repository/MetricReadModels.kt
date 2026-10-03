@@ -27,4 +27,5 @@ data class ReadFilters(
     val limit: Int,
     val order: String,
     val cursor: Cursor? = null,
+    val latest: Boolean = false,
 )

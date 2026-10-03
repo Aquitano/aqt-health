@@ -25,6 +25,7 @@ internal fun QueryParams.readFilters(): ReadFilters {
         limit = if (latest) 1 else limit(QueryParamSpecs.readLimit),
         order = order,
         cursor = if (latest) null else cursor(order),
+        latest = latest,
     )
 }
 
@@ -69,6 +70,7 @@ internal fun QueryParams.dailyLatestReadFilters(now: Instant): ReadFilters {
         includeSource = boolean("includeSource", default = false),
         limit = 1,
         order = Orders.DESC,
+        latest = true,
     )
 }
 

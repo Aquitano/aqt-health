@@ -7,7 +7,8 @@ import org.jetbrains.exposed.v1.jdbc.Database
 
 /**
  * The shared body of every keyset-paginated list read: [fetch] runs in its own transaction and
- * returns up to `limit + 1` items, the lookahead item becomes `meta.nextCursor`.
+ * returns up to `limit + 1` items, the lookahead item becomes `meta.nextCursor` unless the read
+ * is `latest=true`, which has no next page.
  */
 internal suspend fun <T, R> pagedRead(
     database: Database,
@@ -29,7 +30,7 @@ internal suspend fun <T, R> pagedRead(
             limit = filters.limit,
             sort = sortField,
             order = filters.order,
-            nextCursor = page.nextCursor,
+            nextCursor = page.nextCursor.takeUnless { filters.latest },
         ),
     )
 }
