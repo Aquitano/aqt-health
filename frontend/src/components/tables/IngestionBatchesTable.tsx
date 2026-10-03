@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { formatDateTime, formatNumber } from "@/lib/format";
+import { serverConfig } from "@/lib/serverConfig";
 import type { IngestionBatch } from "@/lib/types";
 import { DataTable, type Column } from "./DataTable";
 import styles from "./tables.module.css";
@@ -26,7 +27,7 @@ export function IngestionBatchesTable({ items, getHref }: Props) {
     { header: "Status", cell: (item) => <span className={badgeClass(item.status)}>{item.status}</span> },
     { header: "Provider", cell: (item) => item.providerInstanceId || item.provider, muted: true },
     { header: "Records", cell: (item) => formatNumber(item.recordCount) },
-    { header: "Ingested", cell: (item) => formatDateTime(item.ingestedAt), muted: true },
+    { header: "Ingested", cell: (item) => formatDateTime(item.ingestedAt, serverConfig.timeZone), muted: true },
     { header: "Error", cell: (item) => item.errorMessage ?? "", muted: true },
   ];
 

@@ -1,10 +1,11 @@
 import { formatDateTime, formatDuration, formatMeasurement, formatNumber } from "@/lib/format";
+import { serverConfig } from "@/lib/serverConfig";
 import type { SleepSummary } from "@/lib/types";
 import { DataTable, type Column } from "./DataTable";
 import { sourceLabel } from "./shared";
 
 const columns: Column<SleepSummary>[] = [
-  { header: "Start", cell: (item) => formatDateTime(item.startAt) },
+  { header: "Start", cell: (item) => formatDateTime(item.startAt, serverConfig.timeZone) },
   { header: "Sleep", cell: (item) => formatDuration(item.totalSleepSeconds) },
   { header: "Score", cell: (item) => formatNumber(item.sleepScore) },
   { header: "Efficiency", cell: (item) => formatMeasurement(item.sleepEfficiencyPercent, "%") },

@@ -1,8 +1,9 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, useCallback, useEffect } from "react";
+import type { FormEvent } from "react";
 import { addUtcDays, defaultDateRange } from "@/lib/dates";
+import { useTimeZone } from "./TimeZoneProvider";
 import styles from "./DateRangeForm.module.css";
 
 type DateRangeFormProps = {
@@ -13,31 +14,18 @@ type DateRangeFormProps = {
 export function DateRangeForm({ fromDate, toDate }: DateRangeFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const browserTimezone =
-    Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  const timeZone = useTimeZone();
 
-  useEffect(() => {
-    if (searchParams.get("timezone")) return;
+  function navigate(from: string, to: string) {
     const params = new URLSearchParams(searchParams.toString());
-    params.set("timezone", browserTimezone);
-    router.replace(`?${params.toString()}`);
-  }, [browserTimezone, router, searchParams]);
-
-  const navigate = useCallback(
-    (from: string, to: string) => {
-      const params = new URLSearchParams(searchParams.toString());
-      params.delete("cursor");
-      params.set("fromDate", from);
-      params.set("toDate", to);
-      params.set("timezone", params.get("timezone") ?? browserTimezone);
-      router.push(`?${params.toString()}`);
-    },
-    [browserTimezone, router, searchParams],
-  );
+    params.delete("cursor");
+    params.set("fromDate", from);
+    params.set("toDate", to);
+    router.push(`?${params.toString()}`);
+  }
 
   function applyPreset(days: number) {
-    const timezone = searchParams.get("timezone") ?? browserTimezone;
-    const to = defaultDateRange(new Date(), timezone).toDate;
+    const to = defaultDateRange(timeZone).toDate;
     navigate(addUtcDays(to, -(days - 1)), to);
   }
 

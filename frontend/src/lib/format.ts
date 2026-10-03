@@ -1,12 +1,19 @@
-export function formatDateTime(value?: string | number | null): string {
+const dateTimeFormatters = new Map<string, Intl.DateTimeFormat>();
+
+export function formatDateTime(value: string | number | null | undefined, timeZone: string): string {
   if (value === undefined || value === null || value === "") return "n/a";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return typeof value === "number" ? "n/a" : String(value);
 
-  return new Intl.DateTimeFormat("en", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
+  return dateTimeFormatter(timeZone).format(date);
+}
+
+function dateTimeFormatter(timeZone: string): Intl.DateTimeFormat {
+  const cached = dateTimeFormatters.get(timeZone);
+  if (cached) return cached;
+  const formatter = new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short", timeZone });
+  dateTimeFormatters.set(timeZone, formatter);
+  return formatter;
 }
 
 export function formatNumber(value?: number | null): string {

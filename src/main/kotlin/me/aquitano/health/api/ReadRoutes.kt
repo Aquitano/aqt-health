@@ -215,7 +215,7 @@ internal fun Route.readRoutes() {
         tag("Read")
         summary = "Get dashboard summary"
         description =
-            "Returns aggregate dashboard data for an inclusive UTC date range, including total steps and latest matching weight, heart-rate, and sleep values."
+            "Returns aggregate dashboard data for an inclusive local date range in `timezone` (UTC by default), including total steps and latest matching weight, heart-rate, and sleep values. Step totals come from the stored UTC daily summaries."
         requiresBearerAuth()
         dashboardQueryParameters()
         errorResponses()
@@ -243,6 +243,10 @@ internal fun Route.readRoutes() {
             query("toDate") {
                 description = "End date of current period (ISO-8601 date); defaults to today"
                 schema = stringSchema(format = "date", example = "2026-05-30")
+            }
+            query("timezone") {
+                description = "IANA timezone that defines today and the local-day boundaries of both periods. Defaults to UTC."
+                schema = stringSchema(default = "UTC", example = "Europe/Berlin")
             }
         }
         errorResponses()

@@ -13,7 +13,7 @@ type LoadingPulseProps = {
 export function LoadingPulse({ label = "Loading health data…" }: LoadingPulseProps) {
   return (
     <div className={styles.wrap} role="status" aria-live="polite">
-      <PulseLine className={styles.pulse} duration={1.8} repeatDelay={0.15} />
+      <PulseLine className={styles.pulse} />
       <span className={styles.label}>{label}</span>
     </div>
   );
