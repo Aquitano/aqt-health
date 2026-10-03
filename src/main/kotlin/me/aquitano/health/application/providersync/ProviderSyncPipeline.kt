@@ -156,7 +156,8 @@ class ProviderSyncPipeline(
                     return@forEach
                 }
 
-                val snapshot = IngestionSnapshot(windowKey, fetched.contentHash())
+                val records = fetched.records.collapseDuplicateProviderRecordIds()
+                val snapshot = IngestionSnapshot(windowKey, fetched.copy(records = records).contentHash())
                 if (request.refresh) {
                     store.reusableBatchId(
                         adapter.providerCode, account.providerInstanceId, windowKey, snapshot.contentHash, now,
@@ -186,7 +187,7 @@ class ProviderSyncPipeline(
                         dataType = item.dataType,
                         ingestedAt = ingestedAt,
                         sourcePayload = sourcePayload,
-                        records = fetched.records,
+                        records = records,
                         snapshot = snapshot,
                     ),
                     now = ingestedAt,
@@ -198,7 +199,8 @@ class ProviderSyncPipeline(
                         "provider" to adapter.providerCode,
                         "dataType" to item.dataType,
                         "pages" to fetched.pagesFetched,
-                        "records" to fetched.records.size,
+                        "records" to records.size,
+                        "duplicateRecordsCollapsed" to (fetched.records.size - records.size),
                         "batchId" to batch.batchId,
                         "duplicateBatch" to batch.duplicateBatch
                     )
@@ -446,4 +448,3 @@ private data class ThrottledFetchResult(
     val batch: ProviderFetchedBatch,
     val completedAtNanos: Long,
 )
-

@@ -6,6 +6,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.buildJsonObject
+import me.aquitano.health.api.dto.IngestionRecord
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.put
 import me.aquitano.health.api.dto.StepInterval
@@ -121,6 +122,46 @@ class ProviderSyncPipelineTest {
         assertEquals(0, adapter.refreshCalls)
         assertEquals(0, store.saveCount)
         assertEquals("processed", summary.status)
+    }
+
+    @Test
+    fun duplicateProviderRecordIdsCollapseBeforeIngestion() = runBlocking {
+        // Ingestion rejects the whole batch over one repeated id, non-retryably, which parks the
+        // sync schedule. Providers do repeat records inside a window, so the pipeline collapses
+        // them instead, last one winning.
+        val store = FakeStore()
+        val adapter = FakeAdapter(
+            records = listOf(
+                stepInterval(steps = 1200),
+                stepInterval(steps = 1500),
+            ),
+        )
+        val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+
+        pipeline.sync(adapter, request, now)
+
+        val stored = store.ingested.single().records
+        assertEquals(1, stored.size)
+        assertEquals(1500, (stored.single() as StepInterval).steps)
+    }
+
+    @Test
+    fun refreshIngestsWhenDuplicateOrderChangesTheWinningRecord() = runBlocking {
+        val store = FakeStore()
+        val first = stepInterval(steps = 1200)
+        val last = stepInterval(steps = 1500)
+        val adapter = FakeAdapter(records = listOf(first, last))
+        val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+        val refresh = request.copy(refresh = true)
+
+        pipeline.sync(adapter, refresh, now)
+        adapter.records = listOf(last, first)
+        pipeline.sync(adapter, refresh, now)
+        pipeline.sync(adapter, refresh, now)
+
+        assertEquals(listOf(1500, 1200), store.ingested.map {
+            (it.records.single() as StepInterval).steps
+        })
     }
 
     @Test
@@ -246,6 +287,7 @@ class ProviderSyncPipelineTest {
         private var throwUnauthorizedOnce: Boolean = false,
         private val itemCount: Int = 1,
         private val fetchFailure: RuntimeException? = null,
+        var records: List<IngestionRecord>? = null,
         override val providerRequestInterval: Duration = Duration.ZERO,
     ) : ProviderSyncAdapter {
         var fetchCalls = 0
@@ -313,14 +355,7 @@ class ProviderSyncPipelineTest {
                 sourceRecordsReceived = 1,
                 sourcePayload = buildJsonObject { put("requestId", fetchCalls) },
                 sourceRecords = sourceRecords,
-                records = listOf(
-                    StepInterval(
-                        providerRecordId = "steps-1",
-                        startAt = "2026-04-01T08:00:00Z",
-                        endAt = "2026-04-01T09:00:00Z",
-                        steps = steps,
-                    )
-                ),
+                records = records ?: listOf(stepInterval(steps = steps)),
             )
         }
 
@@ -478,6 +513,14 @@ class ProviderSyncPipelineTest {
 
     private class InvalidRefreshToken : RuntimeException("invalid refresh")
 }
+
+private fun stepInterval(steps: Int): StepInterval =
+    StepInterval(
+        providerRecordId = "steps-1",
+        startAt = "2026-04-01T08:00:00Z",
+        endAt = "2026-04-01T09:00:00Z",
+        steps = steps,
+    )
 
 private fun syncAccount(
     expiresAt: Instant = Instant.parse("2026-04-20T11:00:00Z"),
