@@ -23,9 +23,25 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.test.assertFalse
 
 class WithingsOAuthClientTest {
     private val now = Instant.parse("2026-04-20T10:00:00Z")
+
+    @Test
+    fun transportUnauthorizedIsClassifiedForTokenRecovery() = runBlocking {
+        val client = client { respond("unauthorized", HttpStatusCode.Unauthorized) }
+        val adapter = WithingsSyncAdapter(client, WithingsNormalizer())
+        val dataError = assertFailsWith<WithingsHttpException> {
+            client.fetchMeasures("token", now.minusSeconds(3600), now, listOf(1), 1)
+        }
+        assertEquals(401, dataError.httpStatus)
+        assertNull(dataError.providerStatus)
+        assertTrue(adapter.isUnauthorized(dataError))
+        val tokenError = assertFailsWith<WithingsHttpException> { client.refreshToken("refresh", now) }
+        assertEquals(401, tokenError.httpStatus)
+        assertFalse(adapter.isInvalidRefreshToken(tokenError))
+    }
 
     @Test
     fun authorizationCodeExchangeSendsRequiredFormFieldsAndParsesResponse() = runBlocking {

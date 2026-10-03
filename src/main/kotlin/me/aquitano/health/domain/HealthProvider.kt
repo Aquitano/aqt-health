@@ -87,6 +87,8 @@ data class ProviderSyncRequest(
     val to: Instant,
     val dataTypes: List<String>? = null,
     val pageSize: Int? = null,
+    // Scheduled lookbacks fetch completed windows again to collect late provider records.
+    val refresh: Boolean = false,
 )
 
 data class ProviderSyncSummary(

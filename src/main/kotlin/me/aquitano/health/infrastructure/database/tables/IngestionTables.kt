@@ -9,6 +9,8 @@ object IngestionBatchesTable : IntIdTable("ingestion_batches") {
     val sourceInstanceId =
         integer("source_instance_id").references(SourceInstancesTable.id)
     val batchExternalId = text("batch_external_id").nullable()
+    val syncWindowKey = text("sync_window_key").nullable()
+    val syncContentHash = text("sync_content_hash").nullable()
     val sourcePayloadJson = jsonb("source_payload_json")
     val status = text("status")
     val ingestedAt = timestampWithTimeZone("ingested_at")

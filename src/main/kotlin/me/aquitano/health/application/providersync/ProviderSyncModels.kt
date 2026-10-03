@@ -3,6 +3,7 @@ package me.aquitano.health.application.providersync
 import kotlinx.serialization.json.JsonObject
 import me.aquitano.health.api.dto.IngestionRecord
 import me.aquitano.health.domain.BatchStatus
+import me.aquitano.health.domain.IngestionSnapshot
 import java.time.Instant
 
 data class ProviderSyncPlan(
@@ -59,6 +60,7 @@ data class ProviderFetchedBatch(
     val sourceRecordsReceived: Int,
     val sourcePayload: JsonObject,
     val records: List<IngestionRecord>,
+    val sourceRecords: List<JsonObject> = emptyList(),
 )
 
 data class ProviderSourcePayloadContext(
@@ -87,4 +89,5 @@ data class ProviderIngestionCommand(
     val ingestedAt: Instant,
     val sourcePayload: JsonObject,
     val records: List<IngestionRecord>,
+    val snapshot: IngestionSnapshot,
 )

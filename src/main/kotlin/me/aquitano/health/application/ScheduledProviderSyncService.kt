@@ -182,6 +182,7 @@ class ScheduledProviderSyncService(
                         from = from,
                         to = to,
                         dataTypes = listOf(dataType),
+                        refresh = true,
                     ),
                     now,
                 )
@@ -235,9 +236,10 @@ class ScheduledProviderSyncService(
     ): Pair<Instant, Instant> {
         val lookback = Duration.ofDays(config.lookbackDays.toLong())
         val candidateFrom = checkpoint?.checkpointAt?.minus(lookback) ?: now.minus(lookback)
-        val maxTo = candidateFrom.plus(Duration.ofDays(provider.descriptor.maxSyncRangeDays.toLong()))
-        val to = if (maxTo.isBefore(now)) maxTo else now
-        return candidateFrom to to
+        // Bound forward progress separately from overlap, so maximum lookback still advances.
+        val catchUpTo = checkpoint?.checkpointAt
+            ?.plus(Duration.ofDays(provider.descriptor.maxSyncRangeDays.toLong())) ?: now
+        return candidateFrom to minOf(catchUpTo, now)
     }
 
     private fun runKey(config: ScheduledSyncConfigRecord): String =
