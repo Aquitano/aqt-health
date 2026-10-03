@@ -132,27 +132,28 @@ describe("page data requests", () => {
 
   it("uses local-day instants consistently and leaves raw-only datasets unfetched", async () => {
     const sources = getHealthDataPageSources(
-      "2026-03-08",
+      "2026-03-01",
       "2026-03-08",
       "America/New_York"
     );
     await Promise.all(Object.values(sources));
     expect(mocks.listBodyMeasurements).toHaveBeenCalledWith(
       expect.objectContaining({
-        from: "2026-03-08T05:00:00.000Z",
+        from: "2026-03-01T05:00:00.000Z",
         to: "2026-03-09T04:00:00.000Z",
       })
     );
     expect(mocks.getScalarDailySummaries).toHaveBeenCalledWith("heart_rate", {
-      from: "2026-03-08T05:00:00.000Z",
+      from: "2026-03-01T05:00:00.000Z",
       to: "2026-03-09T04:00:00.000Z",
       timezone: "America/New_York",
     });
     expect(mocks.getDashboardSummary).toHaveBeenCalledWith({
-      fromDate: "2026-03-08",
+      fromDate: "2026-03-01",
       toDate: "2026-03-08",
       timezone: "America/New_York",
     });
+    expect(mocks.getDashboardTrends).toHaveBeenCalledWith({ periodDays: 8, toDate: "2026-03-08" });
     expect(mocks.listBloodPressure).not.toHaveBeenCalled();
     expect(mocks.listScalarSamples).not.toHaveBeenCalled();
   });

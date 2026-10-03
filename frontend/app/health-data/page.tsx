@@ -10,6 +10,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { StatusBar } from "@/components/StatusBar";
 import { getHealthDataPageSources } from "@/lib/aqtHealthApi";
 import { addUtcDays, parseDateRange, startOfDayInstant } from "@/lib/dates";
+import { buildHealthCharts } from "@/lib/healthCharts";
 import { serverConfig } from "@/lib/serverConfig";
 import type { HealthDataPageSources, ScalarSample } from "@/lib/types";
 import { Suspense } from "react";
@@ -188,14 +189,19 @@ async function VisualizationsSection({
         </div>
       ) : null}
       <HealthDataVisualizations
-        activitySummaries={activitySummaries.ok ? activitySummaries.data : undefined}
-        bodyMeasurements={bodyMeasurements.ok ? bodyMeasurements.data : undefined}
-        dailySteps={dailySteps.ok ? dailySteps.data : undefined}
-        heartRateDaily={heartRateDaily}
-        hrvSamples={hrvSamples.ok ? hrvSamples.data : undefined}
-        sleepNights={sleepNights.ok ? sleepNights.data : undefined}
-        respiratoryRates={respiratoryRates.ok ? respiratoryRates.data : undefined}
-        sleepSummaries={sleepSummaries.ok ? sleepSummaries.data : undefined}
+        charts={buildHealthCharts(
+          {
+            activitySummaries: activitySummaries.ok ? activitySummaries.data : undefined,
+            bodyMeasurements: bodyMeasurements.ok ? bodyMeasurements.data : undefined,
+            dailySteps: dailySteps.ok ? dailySteps.data : undefined,
+            heartRateDaily,
+            hrvSamples: hrvSamples.ok ? hrvSamples.data : undefined,
+            sleepNights: sleepNights.ok ? sleepNights.data : undefined,
+            respiratoryRates: respiratoryRates.ok ? respiratoryRates.data : undefined,
+            sleepSummaries: sleepSummaries.ok ? sleepSummaries.data : undefined,
+          },
+          timezone,
+        )}
         fromDate={fromDate}
         toDate={toDate}
         timezone={timezone}

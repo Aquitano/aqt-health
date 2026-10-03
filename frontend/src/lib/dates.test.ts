@@ -11,6 +11,14 @@ describe("date ranges", () => {
     ).toBeUndefined();
   });
 
+  it("clamps ranges longer than 366 days to the days ending at toDate", () => {
+    expect(parseDateRange({ fromDate: "2020-01-01", toDate: "2026-03-01" }, "UTC")).toEqual({
+      fromDate: "2025-03-01",
+      toDate: "2026-03-01",
+      warning: "Ranges are limited to 366 days, so this shows the 366 days ending 2026-03-01.",
+    });
+  });
+
   it.each([
     ["2026-03-08", "America/New_York", "2026-03-08T05:00:00.000Z"],
     ["2026-03-09", "America/New_York", "2026-03-09T04:00:00.000Z"],

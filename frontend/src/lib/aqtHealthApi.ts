@@ -13,7 +13,7 @@ import type {
 } from "./types";
 import { aqtHealthClient, toProviderCode } from "./aqtHealthClient";
 import { toPositiveInteger } from "./format";
-import { addUtcDays, first, startOfDayInstant } from "./dates";
+import { addUtcDays, first, rangeDays, startOfDayInstant } from "./dates";
 
 export async function getHealthStatus(): Promise<HealthStatusData> {
   return {
@@ -36,7 +36,7 @@ export function getHealthDataPageSources(
     apiBaseUrl: client.apiBaseUrl,
     health: client.getHealth(),
     summary: client.getDashboardSummary({ fromDate, toDate, timezone }),
-    trends: client.getDashboardTrends({ periodDays: 7, toDate }),
+    trends: client.getDashboardTrends({ periodDays: Math.min(rangeDays(fromDate, toDate), 90), toDate }),
     healthDay: getHealthDay({
       date: toDate,
       timezone,

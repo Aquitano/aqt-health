@@ -1,40 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { ExpandedChartModal, type ChartSummary } from "./ExpandedChartModal";
 import { HealthMetricChart } from "./charts/HealthMetricChart";
-import type {
-  ActivitySummariesResponse,
-  HeartRateDailyPoint,
-  ScalarSamplesResponse,
-  SleepNightsResponse,
-  SleepSummariesResponse,
-  StepDailySummariesResponse,
-} from "@/lib/types";
-import {
-  buildBodyChart,
-  buildWeightChart,
-  buildStepsChart,
-  buildActivityChart,
-  buildHeartRateDailyChart,
-  buildSleepChart,
-  buildSleepSummaryChart,
-  buildRespiratoryRateChart,
-  buildHrvChart,
-  buildSummaries,
-  type NormalizedChart,
-} from "@/lib/healthCharts";
+import { buildSummaries, type HealthCharts, type NormalizedChart } from "@/lib/healthCharts";
 import styles from "./HealthDataVisualizations.module.css";
 
 type HealthDataVisualizationsProps = {
-  activitySummaries?: ActivitySummariesResponse;
-  bodyMeasurements?: ScalarSamplesResponse;
-  dailySteps?: StepDailySummariesResponse;
-  heartRateDaily: HeartRateDailyPoint[];
-  hrvSamples?: ScalarSamplesResponse;
-  sleepNights?: SleepNightsResponse;
-  respiratoryRates?: ScalarSamplesResponse;
-  sleepSummaries?: SleepSummariesResponse;
+  charts: HealthCharts;
   fromDate: string;
   toDate: string;
   timezone: string;
@@ -54,100 +27,74 @@ type ChartCard = {
   height: number;
 };
 
-export function HealthDataVisualizations({
-  activitySummaries,
-  bodyMeasurements,
-  dailySteps,
-  heartRateDaily,
-  hrvSamples,
-  sleepNights,
-  respiratoryRates,
-  sleepSummaries,
-  fromDate,
-  toDate,
-  timezone,
-}: HealthDataVisualizationsProps) {
+export function HealthDataVisualizations({ charts, fromDate, toDate, timezone }: HealthDataVisualizationsProps) {
   const [modalChart, setModalChart] = useState<ModalChart | null>(null);
-  const bodyChart = useMemo(() => buildBodyChart(bodyMeasurements?.items ?? []), [bodyMeasurements]);
-  const weightChart = useMemo(() => buildWeightChart(bodyChart), [bodyChart]);
-  const stepsChart = useMemo(() => buildStepsChart(dailySteps?.items ?? []), [dailySteps]);
-  const activityChart = useMemo(() => buildActivityChart(activitySummaries?.items ?? []), [activitySummaries]);
-  const heartRateChart = useMemo(() => buildHeartRateDailyChart(heartRateDaily), [heartRateDaily]);
-  const sleepChart = useMemo(() => buildSleepChart(sleepNights), [sleepNights]);
-  const sleepSummaryChart = useMemo(() => buildSleepSummaryChart(sleepSummaries?.items ?? []), [sleepSummaries]);
-  const respiratoryRateChart = useMemo(
-    () => buildRespiratoryRateChart(respiratoryRates?.items ?? []),
-    [respiratoryRates],
-  );
-  const hrvChart = useMemo(() => buildHrvChart(hrvSamples?.items ?? []), [hrvSamples]);
   const dateLabel = `${fromDate} to ${toDate} (${timezone})`;
 
-  // The key remounts HealthMetricChart when the chart's shape changes so its
-  // internal visible-series state resets.
   const primaryCharts: ChartCard[] = [
     {
-      key: `body-${bodyChart.defaultVisibleMetricKeys.join("-")}-${bodyChart.data.length}`,
+      key: "body",
       title: "Body composition",
       description: "All body measurements available in the selected range.",
-      chart: bodyChart,
+      chart: charts.body,
       height: 320,
     },
     {
-      key: `weight-${weightChart.data.length}`,
+      key: "weight",
       title: "Weight trend",
       description: "Weight measurements with latest, range, and movement detail.",
-      chart: weightChart,
+      chart: charts.weight,
       height: 320,
     },
   ];
   const secondaryCharts: ChartCard[] = [
     {
-      key: `steps-${stepsChart.data.length}`,
+      key: "steps",
       title: "Daily steps",
       description: "Daily totals from normalized step summaries.",
-      chart: stepsChart,
+      chart: charts.steps,
       height: 260,
     },
     {
-      key: `activity-${activityChart.data.length}`,
+      key: "activity",
       title: "Activity summaries",
       description: "Distance, energy, active minutes, and daily heart-rate ranges.",
-      chart: activityChart,
+      chart: charts.activity,
       height: 260,
     },
     {
-      key: `heart-${heartRateChart.data.length}`,
+      key: "heart",
       title: "Heart-rate detail",
       description: "Daily average, minimum, and maximum across the selected range.",
-      chart: heartRateChart,
+      chart: charts.heartRate,
       height: 260,
     },
     {
-      key: `sleep-${sleepChart.data.length}`,
+      key: "sleep",
       title: "Sleep sessions",
       description: "Sleep duration by recorded session.",
-      chart: sleepChart,
+      chart: charts.sleep,
       height: 260,
     },
     {
-      key: `sleep-summary-${sleepSummaryChart.data.length}`,
+      key: "sleep-summary",
       title: "Sleep summaries",
       description: "Sleep score, efficiency, and duration totals.",
-      chart: sleepSummaryChart,
+      chart: charts.sleepSummary,
       height: 260,
     },
     {
-      key: `respiratory-${respiratoryRateChart.data.length}`,
+      key: "respiratory",
       title: "Respiratory rate",
       description: "Breaths per minute across the selected range.",
-      chart: respiratoryRateChart,
+      chart: charts.respiratoryRate,
       height: 260,
     },
     {
-      key: `hrv-${hrvChart.data.length}`,
+      key: "hrv",
       title: "HRV",
       description: "Heart-rate variability samples by metric type.",
-      chart: hrvChart,
+      chart: charts.hrv,
       height: 260,
     },
   ];
