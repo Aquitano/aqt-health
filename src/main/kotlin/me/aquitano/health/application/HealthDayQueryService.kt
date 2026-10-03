@@ -339,9 +339,13 @@ class SleepDayModule(
                 }.map { (stage, duration) ->
                     HealthDaySleepStageTotalResponse(stage, duration)
                 }.sortedBy { it.stage }
+        val unstagedSeconds =
+            sessions
+                .filter { stagesBySession[it.id].isNullOrEmpty() }
+                .sumOf { Duration.between(maxOf(it.startAt, context.from), minOf(it.endAt, context.to)).seconds }
 
         return HealthDaySleepResponse(
-            totalDurationSeconds = stageTotals.sumOf { it.durationSeconds },
+            totalDurationSeconds = stageTotals.sumOf { it.durationSeconds } + unstagedSeconds,
             sessions = sessions.map { it.toResponse(stagesBySession, sourceMetadata) },
             stageTotals = stageTotals,
             timeline =
