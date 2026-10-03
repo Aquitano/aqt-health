@@ -1,5 +1,7 @@
 package me.aquitano.health.application.metric.common.repository
 
+import me.aquitano.health.api.dto.SourceMetadataResponse
+import me.aquitano.health.application.metric.common.toResponse
 import me.aquitano.health.domain.RequestValidationException
 import me.aquitano.health.domain.ValidationIssue
 import me.aquitano.health.domain.ValidationIssueCodes
@@ -172,6 +174,15 @@ abstract class BaseMetricReadRepository {
         sourceInstanceIds: Set<Int>,
         includeSource: Boolean,
     ): Map<Int, SourceMetadata> = if (includeSource) sourceMetadataFor(sourceInstanceIds) else emptyMap()
+
+    protected fun <T> List<ResultRow>.mapWithSource(
+        sourceInstanceId: Column<Int>,
+        includeSource: Boolean,
+        toItem: (row: ResultRow, source: SourceMetadataResponse?) -> T,
+    ): List<T> {
+        val metadata = sourceMetadata(mapTo(HashSet()) { it[sourceInstanceId] }, includeSource)
+        return map { toItem(it, metadata[it[sourceInstanceId]].toResponse()) }
+    }
 
     /**
      * Combines a list of Exposed boolean conditions with `AND`.
