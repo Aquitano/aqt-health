@@ -11,8 +11,7 @@ import me.aquitano.health.application.metric.common.Orders
 import me.aquitano.health.application.metric.common.QueryParamSpecs
 import me.aquitano.health.application.metric.common.QueryParams
 import me.aquitano.health.application.metric.common.SortFields
-import me.aquitano.health.application.metric.common.keysetPage
-import me.aquitano.health.application.metric.common.meta
+import me.aquitano.health.application.metric.common.pagedRead
 import me.aquitano.health.application.metric.common.readFilters
 import me.aquitano.health.application.metric.common.summaryFilters
 import me.aquitano.health.domain.NotFoundException
@@ -52,25 +51,10 @@ class ScalarMetricQueryService(
     ): ScalarSamplesResponse {
         requireKnown(metricType)
         val raw = params.boolean(QueryParamSpecs.raw)
-        return suspendDbTransaction(db = database) {
-            val filters =
-                params.readFilters(
-                    sortSpec = QueryParamSpecs.sortByMeasuredAt,
-                )
-            val (rows, sourceMetadata) =
-                scalarRepository.list(filters, setOf(metricType), canonical = !raw)
-            val page =
-                rows.keysetPage(
-                    limit = filters.limit,
-                    sort = filters.sort,
-                    order = filters.order,
-                    sortValue = { it.measuredAt.toString() },
-                    id = { it.id },
-                )
-            ScalarSamplesResponse(
-                items = page.items.map { it.toScalarResponse(sourceMetadata) },
-                meta = page.items.meta(filters, page.nextCursor),
-            )
+        val filters = params.readFilters(sortSpec = QueryParamSpecs.sortByMeasuredAt)
+        return pagedRead(database, filters, { it.measuredAt }, { it.id }, ::ScalarSamplesResponse) {
+            val (rows, sourceMetadata) = scalarRepository.list(filters, setOf(metricType), canonical = !raw)
+            rows.map { it.toScalarResponse(sourceMetadata) }
         }
     }
 
