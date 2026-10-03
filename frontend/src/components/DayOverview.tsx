@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { revealStyle } from "@/lib/styles";
 import { Bars } from "@/components/charts/Bars";
 import { SleepTimeline } from "@/components/charts/SleepTimeline";
 import { BucketSparkline } from "@/components/charts/BucketSparkline";
@@ -25,7 +25,7 @@ export function DayOverview({ day, weightDelta7d, weightDelta7dUnit }: DayOvervi
 
   return (
     <section className={styles.overview} aria-label="One-day overview">
-      <article className={styles.card} data-kind="weight" data-reveal style={revealIndex(1)}>
+      <article className={styles.card} data-kind="weight" data-reveal style={revealStyle(1)}>
         <div className={styles.head}>
           <span className={styles.label}>Weight</span>
           <span className={styles.meta}>{formatSevenDayDelta(weightDelta7d, weightDelta7dUnit)}</span>
@@ -39,7 +39,7 @@ export function DayOverview({ day, weightDelta7d, weightDelta7dUnit }: DayOvervi
         </div>
       </article>
 
-      <article className={styles.card} data-kind="steps" data-reveal style={revealIndex(2)}>
+      <article className={styles.card} data-kind="steps" data-reveal style={revealStyle(2)}>
         <div className={styles.head}>
           <span className={styles.label}>Steps</span>
           <span className={styles.meta}>{formatNumber(day?.steps?.sampleCount)} samples</span>
@@ -50,7 +50,7 @@ export function DayOverview({ day, weightDelta7d, weightDelta7dUnit }: DayOvervi
         </div>
       </article>
 
-      <article className={styles.card} data-kind="heart" data-reveal style={revealIndex(3)}>
+      <article className={styles.card} data-kind="heart" data-reveal style={revealStyle(3)}>
         <div className={styles.head}>
           <span className={styles.label}>Heart rate</span>
           <span className={styles.meta}>
@@ -71,7 +71,7 @@ export function DayOverview({ day, weightDelta7d, weightDelta7dUnit }: DayOvervi
         </div>
       </article>
 
-      <article className={styles.card} data-kind="sleep" data-reveal style={revealIndex(4)}>
+      <article className={styles.card} data-kind="sleep" data-reveal style={revealStyle(4)}>
         <div className={styles.head}>
           <span className={styles.label}>Sleep</span>
           <span className={styles.meta}>{day?.sleep?.sessions.length ?? 0} sessions</span>
@@ -92,10 +92,6 @@ export function DayOverview({ day, weightDelta7d, weightDelta7dUnit }: DayOvervi
       </article>
     </section>
   );
-}
-
-function revealIndex(index: number): CSSProperties {
-  return { "--reveal-i": index } as CSSProperties;
 }
 
 function formatDelta(value?: number | null, unit?: string | null): string {

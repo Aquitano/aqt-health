@@ -3,14 +3,14 @@ import type { ScalarSample } from "@/lib/types";
 import { DataTable, type Column } from "./DataTable";
 import { sourceLabel } from "./shared";
 
-const METRIC_LABELS: Record<string, string> = {
-  pulse_wave_velocity: "Pulse Wave Velocity",
-  vascular_age: "Vascular Age",
-  standing_heart_rate: "Standing Heart Rate",
-};
+const metricLabels = new Map([
+  ["pulse_wave_velocity", "Pulse Wave Velocity"],
+  ["vascular_age", "Vascular Age"],
+  ["standing_heart_rate", "Standing Heart Rate"],
+]);
 
 function metricLabel(metricType: string): string {
-  return METRIC_LABELS[metricType] ?? metricType;
+  return metricLabels.get(metricType) ?? metricType;
 }
 
 const columns: Column<ScalarSample>[] = [

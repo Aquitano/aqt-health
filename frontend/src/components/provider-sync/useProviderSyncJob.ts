@@ -14,6 +14,7 @@ import type {
   ProviderSyncResponse,
   ProviderSyncJobStatusResponse,
 } from "@/lib/types";
+import { readSyncJobStart, readSyncJobStatus } from "@/lib/apiResponses";
 import { proxyFetch } from "./proxyFetch";
 
 const STORAGE_KEY = "aqt-health.provider-sync.active-job";
@@ -98,10 +99,11 @@ export function useProviderSyncJob() {
     let timer: ReturnType<typeof setTimeout> | undefined;
     async function poll() {
       try {
-        const body = await proxyFetch<ProviderSyncJobStatusResponse>(
+        const body = await proxyFetch(
           `/providers/${encodeURIComponent(
             pollingJob.providerCode
           )}/sync-jobs/${encodeURIComponent(pollingJob.jobId)}`,
+          readSyncJobStatus,
           { signal: controller.signal }
         );
         if (controller.signal.aborted) return;
@@ -152,8 +154,9 @@ export function useProviderSyncJob() {
     setSyncJob(null);
     startTransition(async () => {
       try {
-        const body = await proxyFetch<{ jobId: string }>(
+        const body = await proxyFetch(
           `/providers/${encodeURIComponent(providerCode)}/sync-jobs`,
+          readSyncJobStart,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },

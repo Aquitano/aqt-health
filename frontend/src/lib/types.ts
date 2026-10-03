@@ -34,6 +34,7 @@ export type ProviderOAuthStartResponse = ApiSchema<"ProviderOAuthStartResponse">
 export type ProviderSyncRequest = ApiSchema<"ProviderSyncRequest">;
 export type ProviderSyncResponse = ApiSchema<"ProviderSyncResponse">;
 export type ProviderSyncJobStatusResponse = ApiSchema<"ProviderSyncJobStatusResponse">;
+export type ProviderSyncJobStartResponse = ApiSchema<"ProviderSyncJobStartResponse">;
 export type ProviderStatusCatalogResponse = ApiSchema<"ProviderStatusCatalogResponse">;
 export type ProviderStatus = ApiSchema<"ProviderStatusResponse">;
 export type ProviderAccountStatus = ApiSchema<"ProviderAccountStatusResponse">;

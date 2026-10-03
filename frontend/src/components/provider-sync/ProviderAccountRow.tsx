@@ -6,10 +6,10 @@ import type {
   ApiResult,
   ProviderAccountStatus,
   ProviderDescriptor,
-  ProviderOAuthStartResponse,
   ScheduledSyncConfig,
   ScheduledSyncRunResponse,
 } from "@/lib/types";
+import { readAcknowledgement, readOAuthStart, readScheduledSyncRun } from "@/lib/apiResponses";
 import { formatDateTime } from "@/lib/format";
 import { ErrorNotice } from "../ErrorNotice";
 import { formatStatus } from "./labels";
@@ -58,24 +58,23 @@ export function ProviderAccountRow({
 
   function onAccountAction(action: "disconnect" | "reconnect") {
     void perform(action, async () => {
-      const body = await proxyFetch<ProviderOAuthStartResponse>(
-        `${base}/${action}`,
-        { method: "POST" }
-      );
-      if (!body.ok) {
-        setError(body.message);
-        return;
+      if (action === "reconnect") {
+        const body = await proxyFetch(`${base}/reconnect`, readOAuthStart, { method: "POST" });
+        if (body.ok) window.location.assign(body.data.authorizationUrl);
+        else setError(body.message);
+      } else {
+        const body = await proxyFetch(`${base}/disconnect`, readAcknowledgement, { method: "POST" });
+        if (body.ok) router.refresh();
+        else setError(body.message);
       }
-      if (action === "reconnect")
-        window.location.assign(body.data.authorizationUrl);
-      else router.refresh();
     });
   }
 
   function onToggleScheduled(enabled: boolean) {
     void perform("scheduled", async () => {
-      const body = await proxyFetch<ScheduledSyncConfig>(
+      const body = await proxyFetch(
         `${base}/scheduled-sync`,
+        readAcknowledgement,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -95,8 +94,9 @@ export function ProviderAccountRow({
 
   function onRunScheduled() {
     void perform("run", async () => {
-      const body = await proxyFetch<ScheduledSyncRunResponse>(
+      const body = await proxyFetch(
         `${base}/scheduled-sync/run`,
+        readScheduledSyncRun,
         { method: "POST" }
       );
       setScheduledResult(body);

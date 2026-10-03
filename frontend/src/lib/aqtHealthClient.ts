@@ -1,3 +1,5 @@
+import { type } from "arktype";
+import type { ArkErrors } from "arktype";
 import createClient from "openapi-fetch";
 import type {
   ApiResult,
@@ -14,6 +16,13 @@ type ClientResponse<T> = {
   error?: unknown;
   response?: Response;
 };
+
+type NextFetchInit = RequestInit & { next: { revalidate: number } };
+
+const backendErrorBody = type({
+  error: { "code?": "string", "message?": "string" },
+}).or("string");
+type BackendErrorBody = typeof backendErrorBody.infer;
 
 type ClientOptions = {
   protected?: boolean;
@@ -377,12 +386,13 @@ async function fetchWithTimeout(
 ): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const uncachedInit: NextFetchInit = {
+    ...init,
+    signal: controller.signal,
+    next: { revalidate: 0 },
+  };
   try {
-    return await fetch(input, {
-      ...init,
-      signal: controller.signal,
-      next: { revalidate: 0 },
-    } as RequestInit & { next: { revalidate: 0 } });
+    return await fetch(input, uncachedInit);
   } finally {
     clearTimeout(timeout);
   }
@@ -412,14 +422,15 @@ async function call<T>(
       return {
         ok: false,
         status: response?.status,
-        message: errorMessage(error, response?.statusText ?? "Backend returned an error."),
+        message: errorMessage(backendErrorBody(error), response?.statusText || "Backend returned an error."),
       };
     }
 
-    return {
-      ok: true,
-      data: data as T,
-    };
+    if (data === undefined) {
+      return { ok: false, status: response.status, message: "Backend returned an empty response." };
+    }
+
+    return { ok: true, data };
   } catch (error) {
     return {
       ok: false,
@@ -428,13 +439,8 @@ async function call<T>(
   }
 }
 
-function errorMessage(body: unknown, fallback: string): string {
-  if (typeof body === "object" && body !== null && "error" in body) {
-    const error = (body as { error?: { message?: unknown; code?: unknown } }).error;
-    if (typeof error?.message === "string") return error.message;
-    if (typeof error?.code === "string") return error.code;
-  }
-
-  if (typeof body === "string" && body.trim()) return body;
-  return fallback || "Backend returned an error.";
+function errorMessage(body: BackendErrorBody | ArkErrors, fallback: string): string {
+  if (body instanceof type.errors) return fallback;
+  if (typeof body === "string") return body.trim() ? body : fallback;
+  return body.error.message ?? body.error.code ?? fallback;
 }

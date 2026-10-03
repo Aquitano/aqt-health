@@ -5,11 +5,11 @@ import type {
   ApiResult,
   ProviderCatalogResponse,
   ProviderDescriptor,
-  ProviderOAuthStartResponse,
   ProviderStatus,
   ProviderStatusCatalogResponse,
   ScheduledSyncConfig,
 } from "@/lib/types";
+import { readOAuthStart } from "@/lib/apiResponses";
 import { toPositiveInteger } from "@/lib/format";
 import { ErrorNotice } from "./ErrorNotice";
 import { useProviderSyncJob } from "./provider-sync/useProviderSyncJob";
@@ -93,8 +93,9 @@ export function ProviderSyncPanel({ catalog, statuses, scheduledSyncConfigs }: P
 
     startOAuthTransition(async () => {
       try {
-        const body = await proxyFetch<ProviderOAuthStartResponse>(
+        const body = await proxyFetch(
           `/providers/${encodeURIComponent(selectedProvider.descriptor.providerCode)}/oauth/start`,
+          readOAuthStart,
           { method: "POST" },
         );
         if (body.ok) {
@@ -262,7 +263,7 @@ function ProviderStatusSummary({
 }
 
 function selectedDataTypes(formData: FormData): string[] | undefined {
-  const dataTypes = formData.getAll("dataTypes").map(String).filter(Boolean);
+  const dataTypes = formData.getAll("dataTypes").filter((value): value is string => typeof value === "string" && value.trim() !== "");
   return dataTypes.length > 0 ? dataTypes : undefined;
 }
 
