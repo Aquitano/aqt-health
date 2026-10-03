@@ -34,7 +34,7 @@ fun Application.configureRoutes(appConfig: AppConfig) {
         if (!appConfig.environment.isProduction) {
             val openApiInfo = openApiInfo()
             val openApiBaseDoc = openApiBaseDoc()
-            val openApiSource = OpenApiDocSource.Routing()
+            val openApiSource = OpenApiDocSource.Routing(schemaInference = openApiSchemaInference())
 
             get("/openapi") {
                 val doc = openApiSource.read(application, openApiBaseDoc)

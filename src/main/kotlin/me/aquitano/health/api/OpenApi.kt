@@ -11,8 +11,17 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import me.aquitano.health.shared.AppJson
+import java.util.concurrent.ConcurrentHashMap
+import kotlin.reflect.KType
 
 internal const val BearerApiKeySecurityScheme = "bearerApiKey"
+
+internal fun openApiSchemaInference(): JsonSchemaInference {
+    val inference = KotlinxSerializerJsonSchemaInference(AppJson.serializersModule)
+    val schemas = ConcurrentHashMap<KType, JsonSchema>()
+    // Ktor 3.6 compares annotation elements by identity when deduplicating schemas.
+    return JsonSchemaInference { type -> schemas.computeIfAbsent(type, inference::buildSchema) }
+}
 
 internal fun openApiInfo(): OpenApiInfo =
     OpenApiInfo(
