@@ -967,7 +967,6 @@ export interface components {
             maxSyncRangeDays: number;
             supportsPageSize: boolean;
             workflowEndpoints: components["schemas"]["ProviderWorkflowEndpointsResponse"];
-            aliases?: string[];
         };
         /** ProviderCatalogResponse */
         ProviderCatalogResponse: {
