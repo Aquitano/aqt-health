@@ -25,7 +25,6 @@ class StepQueryService(
         suspendDbTransaction(db = database) {
             val filters = params.readFilters(
                 sortSpec = QueryParamSpecs.sortByStartAt,
-                latestSupported = true,
             )
             val (rows, sourceMetadata) =
                 canonicalRepository.listCanonicalStepSamples(filters, CANONICAL_STEP_ALGORITHM_VERSION)

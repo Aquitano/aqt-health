@@ -12,18 +12,19 @@ data class CanonicalIntervalCandidate<T>(
 
 fun <T> canonicalIntervalRows(
     rows: List<CanonicalIntervalCandidate<T>>,
-    overlaps: (CanonicalIntervalCandidate<T>, CanonicalIntervalCandidate<T>) -> Boolean,
     choosePreferred: (CanonicalIntervalCandidate<T>, CanonicalIntervalCandidate<T>) -> CanonicalIntervalCandidate<T>,
-    compareSameSource: Boolean = false,
 ): List<T> {
     val selected = linkedSetOf<CanonicalIntervalCandidate<T>>()
     val activeBySource = mutableMapOf<Int, TreeMap<Instant, MutableList<CanonicalIntervalCandidate<T>>>>()
     rows.forEach { row ->
-        activeBySource.values.forEach { it.pruneEndedAtOrBefore(row.startAt) }
+        activeBySource.entries.removeIf { (_, intervals) ->
+            intervals.pruneEndedAtOrBefore(row.startAt)
+            intervals.isEmpty()
+        }
         val overlapping = activeBySource.asSequence()
-            .filter { (sourceInstanceId, _) -> compareSameSource || sourceInstanceId != row.sourceInstanceId }
+            .filter { (sourceInstanceId, _) -> sourceInstanceId != row.sourceInstanceId }
             .flatMap { (_, intervalsByEnd) -> intervalsByEnd.values.asSequence().flatMap { it.asSequence() } }
-            .filter { overlaps(it, row) }
+            .filter { it.startAt.isBefore(row.endAt) && row.startAt.isBefore(it.endAt) }
             .toList()
         if (overlapping.isEmpty()) {
             selected.add(row)

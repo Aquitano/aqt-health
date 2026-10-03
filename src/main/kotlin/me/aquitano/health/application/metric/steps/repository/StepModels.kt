@@ -23,7 +23,7 @@ internal fun toStepSampleRow(row: ResultRow): StepSampleRow =
 
 data class StepDailySummaryRow(
     val id: Int,
-    val sourceInstanceId: Int,
+    val sourceInstanceId: Int?,
     val date: String,
     val steps: Int,
     val sampleCount: Int

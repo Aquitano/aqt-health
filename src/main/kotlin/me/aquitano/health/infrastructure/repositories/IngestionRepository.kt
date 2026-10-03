@@ -307,18 +307,12 @@ class IngestionRepository {
         dayEnd: Instant,
         recordTypes: Set<String>?,
     ): List<ReplayRecordRow> {
-        val conditions = mutableListOf<Op<Boolean>>(
-            IngestionBatchesTable.status eq "processed",
-            IngestionRecordsTable.recordStartAt greaterEq dayStart.toDbTimestamp(),
-            IngestionRecordsTable.recordStartAt less dayEnd.toDbTimestamp(),
-        )
-        recordTypes?.let { conditions.add(IngestionRecordsTable.recordType inList it) }
         return IngestionRecordsTable
             .innerJoin(IngestionBatchesTable)
             .innerJoin(SourceInstancesTable)
             .innerJoin(SourcesTable)
             .selectAll()
-            .where(combineConditions(conditions))
+            .where(replayConditions(dayStart, dayEnd, recordTypes))
             .orderBy(IngestionRecordsTable.id to SortOrder.ASC)
             .map {
                 ReplayRecordRow(
@@ -331,6 +325,23 @@ class IngestionRepository {
                     recordEndAt = it[IngestionRecordsTable.recordEndAt]?.toInstant(),
                 )
             }
+    }
+
+    /** Compare the prepared immutable log snapshot while ingestion writes are locked. */
+    fun recordIdsForReplay(dayStart: Instant, dayEnd: Instant, recordTypes: Set<String>?): Set<Int> =
+        IngestionRecordsTable.innerJoin(IngestionBatchesTable)
+            .select(IngestionRecordsTable.id)
+            .where(replayConditions(dayStart, dayEnd, recordTypes))
+            .mapTo(hashSetOf()) { it[IngestionRecordsTable.id].value }
+
+    private fun replayConditions(dayStart: Instant, dayEnd: Instant, recordTypes: Set<String>?): Op<Boolean> {
+        val conditions = mutableListOf<Op<Boolean>>(
+            IngestionBatchesTable.status eq "processed",
+            IngestionRecordsTable.recordStartAt greaterEq dayStart.toDbTimestamp(),
+            IngestionRecordsTable.recordStartAt less dayEnd.toDbTimestamp(),
+        )
+        recordTypes?.let { conditions.add(IngestionRecordsTable.recordType inList it) }
+        return combineConditions(conditions)
     }
 
     private fun recordCounts(batchIds: List<Int>): Map<Int, Int> {
