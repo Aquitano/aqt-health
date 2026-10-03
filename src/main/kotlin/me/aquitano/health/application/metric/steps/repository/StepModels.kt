@@ -26,14 +26,6 @@ internal fun toStepSampleRow(row: ResultRow): StepSampleRow =
                 ?: row[StepSamplesTable.ingestionRecordId],
     )
 
-data class StepDailySummaryRow(
-    val id: Int,
-    val sourceInstanceId: Int?,
-    val date: String,
-    val steps: Int,
-    val sampleCount: Int,
-)
-
 data class DashboardStepsSummaryRow(
     val steps: Int,
     val dayCount: Int,

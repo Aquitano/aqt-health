@@ -1,13 +1,10 @@
 package me.aquitano.health.application.metric.common
 
 import me.aquitano.health.api.dto.*
-import me.aquitano.health.application.metric.activity.repository.ActivitySummaryRow
-import me.aquitano.health.application.metric.cardiovascular.repository.BloodPressureMeasurementRow
 import me.aquitano.health.application.metric.common.repository.SourceMetadata
 import me.aquitano.health.application.metric.sleep.repository.SleepNightRow
 import me.aquitano.health.application.metric.sleep.repository.SleepSessionRow
 import me.aquitano.health.application.metric.sleep.repository.SleepStageRow
-import me.aquitano.health.application.metric.sleep.repository.SleepSummaryRow
 import me.aquitano.health.shared.Cursor
 
 internal fun SourceMetadata?.toResponse(): SourceMetadataResponse? =
@@ -30,76 +27,6 @@ internal fun <T> Iterable<T>.singleSource(
     if (ids.size != 1) return null
     return sourceMetadata[ids.single()].toResponse()
 }
-
-internal fun ActivitySummaryRow.toResponse(
-    sourceMetadata: Map<Int, SourceMetadata>,
-): ActivitySummaryResponse =
-    ActivitySummaryResponse(
-        id = id,
-        date = date,
-        distanceMeters = distanceMeters,
-        activeEnergyKcal = activeEnergyKcal,
-        totalEnergyKcal = totalEnergyKcal,
-        elevationMeters = elevationMeters,
-        softMinutes = softMinutes,
-        moderateMinutes = moderateMinutes,
-        intenseMinutes = intenseMinutes,
-        activeMinutes = activeMinutes,
-        averageHeartRateBpm = averageHeartRateBpm,
-        minHeartRateBpm = minHeartRateBpm,
-        maxHeartRateBpm = maxHeartRateBpm,
-        source = sourceMetadata[sourceInstanceId].toResponse(),
-    )
-
-internal fun SleepSummaryRow.toResponse(
-    sourceMetadata: Map<Int, SourceMetadata>,
-): SleepSummaryResponse =
-    SleepSummaryResponse(
-        id = id,
-        startAt = startAt.toString(),
-        endAt = endAt.toString(),
-        timeInBedSeconds = timeInBedSeconds,
-        totalSleepSeconds = totalSleepSeconds,
-        lightSleepSeconds = lightSleepSeconds,
-        deepSleepSeconds = deepSleepSeconds,
-        remSleepSeconds = remSleepSeconds,
-        sleepEfficiencyPercent = sleepEfficiencyPercent,
-        sleepLatencySeconds = sleepLatencySeconds,
-        wakeupLatencySeconds = wakeupLatencySeconds,
-        wakeupDurationSeconds = wakeupDurationSeconds,
-        wakeupCount = wakeupCount,
-        wasoSeconds = wasoSeconds,
-        sleepScore = sleepScore,
-        remEpisodesCount = remEpisodesCount,
-        outOfBedCount = outOfBedCount,
-        awakeDurationSeconds = awakeDurationSeconds,
-        overnightHrvRmssd = overnightHrvRmssd,
-        respiratoryRhythm = respiratoryRhythm,
-        breathingQuality = breathingQuality,
-        snoringDurationSeconds = snoringDurationSeconds,
-        apneaHypopneaIndex = apneaHypopneaIndex,
-        movementScore = movementScore,
-        snoringEpisodeCount = snoringEpisodeCount,
-        hrAverageBpm = hrAverageBpm,
-        hrMinBpm = hrMinBpm,
-        hrMaxBpm = hrMaxBpm,
-        rrAverage = rrAverage,
-        rrMin = rrMin,
-        rrMax = rrMax,
-        source = sourceMetadata[sourceInstanceId].toResponse(),
-    )
-
-internal fun BloodPressureMeasurementRow.toResponse(
-    sourceMetadata: Map<Int, SourceMetadata>,
-): BloodPressureMeasurementResponse =
-    BloodPressureMeasurementResponse(
-        id = id,
-        measuredAt = measuredAt.toString(),
-        systolicMmhg = systolicMmhg,
-        diastolicMmhg = diastolicMmhg,
-        heartRateBpm = heartRateBpm,
-        source = sourceMetadata[sourceInstanceId].toResponse(),
-    )
 
 internal fun SleepSessionRow.toResponse(
     stagesBySession: Map<Int, List<SleepStageRow>>,

@@ -1,7 +1,6 @@
 package me.aquitano.health.application.metric.steps
 
 import me.aquitano.health.api.dto.StepDailySummariesResponse
-import me.aquitano.health.api.dto.StepDailySummaryResponse
 import me.aquitano.health.api.dto.StepSampleResponse
 import me.aquitano.health.api.dto.StepSamplesResponse
 import me.aquitano.health.application.metric.common.QueryParams
@@ -43,15 +42,7 @@ class StepQueryService(
         params.rejectLatest()
         val filters = params.dailyReadFilters(now)
         return pagedRead(database, filters, SortFields.DATE, { it.date }, { 0L }, ::StepDailySummariesResponse) {
-            val (rows, sourceMetadata) = canonicalRepository.listCanonicalStepDailySummaries(filters)
-            rows.map {
-                StepDailySummaryResponse(
-                    date = it.date,
-                    steps = it.steps,
-                    sampleCount = it.sampleCount,
-                    source = sourceMetadata[it.sourceInstanceId].toResponse(),
-                )
-            }
+            canonicalRepository.listCanonicalStepDailySummaries(filters)
         }
     }
 }

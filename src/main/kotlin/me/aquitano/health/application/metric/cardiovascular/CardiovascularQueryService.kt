@@ -6,7 +6,6 @@ import me.aquitano.health.application.metric.common.QueryParams
 import me.aquitano.health.application.metric.common.SortFields
 import me.aquitano.health.application.metric.common.pagedRead
 import me.aquitano.health.application.metric.common.readFilters
-import me.aquitano.health.application.metric.common.toResponse
 import org.jetbrains.exposed.v1.jdbc.Database
 
 /**
@@ -20,8 +19,7 @@ class CardiovascularQueryService(
     suspend fun listBloodPressure(params: QueryParams): BloodPressureMeasurementsResponse {
         val filters = params.readFilters()
         return pagedRead(database, filters, SortFields.MEASURED_AT, { it.measuredAt }, { it.id.toLong() }, ::BloodPressureMeasurementsResponse) {
-            val (rows, sourceMetadata) = cardiovascularRepository.listBloodPressure(filters)
-            rows.map { it.toResponse(sourceMetadata) }
+            cardiovascularRepository.listBloodPressure(filters)
         }
     }
 }
