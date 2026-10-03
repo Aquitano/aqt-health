@@ -123,7 +123,7 @@ class QueryParams(
         }
     }
 
-    internal fun limit(spec: LimitParamSpec): Int {
+    internal fun int(spec: IntParamSpec): Int {
         val value = optional(spec.name) ?: return spec.default
         val parsed =
             value.toIntOrNull()
@@ -167,32 +167,8 @@ class QueryParams(
         return normalized
     }
 
-    internal fun sort(spec: EnumParamSpec): String = sort(spec.allowed, spec.default)
-
-    fun sort(
-        allowedValues: Set<String>,
-        default: String,
-    ): String {
-        val value = optional("sort") ?: return default
-        if (value !in allowedValues) {
-            throw RequestValidationException(
-                listOf(
-                    ValidationIssue(
-                        field = "sort",
-                        code = ValidationIssueCodes.UnsupportedValue,
-                        message = "must be one of ${allowedValues.sorted().joinToString(", ")}",
-                    ),
-                ),
-            )
-        }
-        return value
-    }
-
-    /** Decodes the cursor parameter, rejecting cursors issued under a different sort/order. */
-    fun cursor(
-        sort: String,
-        order: String,
-    ): Cursor? = optional("cursor")?.let { Cursor.decode(it, expectedField = sort, expectedOrder = order) }
+    /** Decodes the cursor parameter, rejecting cursors issued under a different order. */
+    fun cursor(order: String): Cursor? = optional("cursor")?.let { Cursor.decode(it, expectedOrder = order) }
 
     fun rejectLatest() {
         if (boolean("latest", default = false)) {
@@ -210,7 +186,7 @@ class QueryParams(
 
     fun rejectLatestOverrides(message: String = "cannot be combined with latest=true") {
         val invalidFields =
-            listOf("limit", "sort", "order", "cursor")
+            listOf("limit", "order", "cursor")
                 .filter { optional(it) != null }
         if (invalidFields.isNotEmpty()) {
             throw RequestValidationException(

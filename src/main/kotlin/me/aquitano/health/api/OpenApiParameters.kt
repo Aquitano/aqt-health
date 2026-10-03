@@ -6,20 +6,20 @@ import io.ktor.openapi.*
 import io.ktor.utils.io.*
 import me.aquitano.external.withings.WITHINGS_PROVIDER_CODE
 import me.aquitano.health.api.dto.HealthDayModuleName
-import me.aquitano.health.application.metric.common.EnumParamSpec
-import me.aquitano.health.application.metric.common.LimitParamSpec
+import me.aquitano.health.application.metric.common.IntParamSpec
 import me.aquitano.health.application.metric.common.QueryParamSpecs
 import me.aquitano.health.domain.BatchStatus
+import me.aquitano.health.domain.BodyMetricTypes
 import me.aquitano.health.domain.ScalarMetricTypes
 
 private const val ReadCursorExample =
-    "eyJzIjoiMjAyNi0wNC0wMlQwODowNTowMFoiLCJpZCI6MTIzLCJvIjoiYXNjIiwiZiI6Im1lYXN1cmVkQXQifQ"
+    "eyJzIjoiMjAyNi0wNC0wMlQwODowNTowMFoiLCJpZCI6MTIzLCJvIjoiYXNjIn0"
 private const val DateCursorExample =
-    "eyJzIjoiMjAyNi0wNC0wMiIsImlkIjoxMjMsIm8iOiJhc2MiLCJmIjoiZGF0ZSJ9"
+    "eyJzIjoiMjAyNi0wNC0wMiIsImlkIjoxMjMsIm8iOiJhc2MifQ"
 private const val AdminCursorExample =
-    "eyJzIjoiMjAyNi0wNC0wMlQwODoxNTozMFoiLCJpZCI6MTIzLCJvIjoiZGVzYyIsImYiOiJyZWNlaXZlZEF0In0"
+    "eyJzIjoiMjAyNi0wNC0wMlQwODoxNTozMFoiLCJpZCI6MTIzLCJvIjoiZGVzYyJ9"
 private const val CursorDescription =
-    "Opaque cursor from `meta.nextCursor` for the next page. Must be used with the same sort and order."
+    "Opaque cursor from `meta.nextCursor` for the next page. Must be used with the same order."
 
 internal fun Operation.Builder.providerCodePath() {
     parameters {
@@ -49,11 +49,7 @@ internal fun Operation.Builder.idempotencyKeyHeader() {
     }
 }
 
-internal fun Operation.Builder.readQueryParameters(
-    includeLatest: Boolean = false,
-    sortSpec: EnumParamSpec,
-    sortExample: String = sortSpec.default,
-) {
+internal fun Operation.Builder.readQueryParameters(includeLatest: Boolean = false) {
     instantRangeParameters(
         fromDescription =
             "Inclusive start timestamp or date. Date-only values are interpreted by the endpoint's query service.",
@@ -63,15 +59,9 @@ internal fun Operation.Builder.readQueryParameters(
     providerFilterParameters()
     if (includeLatest) {
         latestParameter(
-            "Return the latest matching item when true. Defaults to false. Cannot be combined with limit, sort, or order.",
+            "Return the latest matching item when true. Defaults to false. Cannot be combined with limit, order, or cursor.",
         )
     }
-    sortParameter(
-        spec = sortSpec,
-        description =
-            "Sort field for this endpoint. Each metric endpoint supports its documented default temporal or date field.",
-        example = sortExample,
-    )
     orderParameter("Sort direction. Defaults to ${QueryParamSpecs.order.default}. Use desc for newest-first reads.")
     limitParameter(
         spec = QueryParamSpecs.readLimit,
@@ -83,10 +73,22 @@ internal fun Operation.Builder.readQueryParameters(
 
 internal fun Operation.Builder.scalarMetricQueryParameters() {
     metricTypePathParameter()
-    readQueryParameters(
-        includeLatest = true,
-        sortSpec = QueryParamSpecs.sortByMeasuredAt,
-    )
+    scalarListQueryParameters()
+}
+
+internal fun Operation.Builder.multiScalarMetricQueryParameters() {
+    parameters {
+        query("metricTypes") {
+            description = "Required comma-separated scalar metric types from the metric catalog."
+            required = true
+            schema = stringSchema(example = "${BodyMetricTypes.WEIGHT},${BodyMetricTypes.BODY_FAT}")
+        }
+    }
+    scalarListQueryParameters()
+}
+
+private fun Operation.Builder.scalarListQueryParameters() {
+    readQueryParameters(includeLatest = true)
     parameters {
         query(QueryParamSpecs.raw.name) {
             description =
@@ -126,10 +128,6 @@ internal fun Operation.Builder.scalarDailySummaryQueryParameters() {
 
 internal fun Operation.Builder.dailyStepQueryParameters() {
     providerFilterParameters()
-    sortParameter(
-        spec = QueryParamSpecs.sortByDate,
-        description = "Sort field. Daily endpoints support date.",
-    )
     orderParameter("Sort direction. Defaults to ${QueryParamSpecs.order.default}. Use desc for newest-first reads.")
     limitParameter(
         spec = QueryParamSpecs.readLimit,
@@ -169,10 +167,6 @@ internal fun Operation.Builder.sleepNightQueryParameters() {
             "Maximum number of items. Defaults to ${QueryParamSpecs.readLimit.default}, cannot exceed " +
                 "${QueryParamSpecs.readLimit.max}, and is ignored as 1 when date is provided.",
         example = 7,
-    )
-    sortParameter(
-        spec = QueryParamSpecs.sortByDate,
-        description = "Sort field. Sleep night reads support `date`.",
     )
     orderParameter(
         "Sort direction. Defaults to ${QueryParamSpecs.order.default}. Use desc for most recent sleep nights first.",
@@ -350,25 +344,6 @@ private fun Operation.Builder.latestParameter(latestDescription: String) {
     }
 }
 
-private fun Operation.Builder.sortParameter(
-    spec: EnumParamSpec,
-    description: String,
-    example: String = spec.default,
-) {
-    val sortDescription = description
-    parameters {
-        query(spec.name) {
-            this.description = sortDescription
-            schema =
-                stringSchema(
-                    enumValues = spec.values,
-                    default = spec.default,
-                    example = example,
-                )
-        }
-    }
-}
-
 private fun Operation.Builder.orderParameter(orderDescription: String) {
     parameters {
         query(QueryParamSpecs.order.name) {
@@ -384,7 +359,7 @@ private fun Operation.Builder.orderParameter(orderDescription: String) {
 }
 
 private fun Operation.Builder.limitParameter(
-    spec: LimitParamSpec,
+    spec: IntParamSpec,
     description: String,
     example: Int,
 ) {
@@ -428,4 +403,4 @@ private fun Operation.Builder.timezoneParameter(
     }
 }
 
-private fun defaultLimitDescription(spec: LimitParamSpec): String = "Maximum number of items. Defaults to ${spec.default} and cannot exceed ${spec.max}."
+private fun defaultLimitDescription(spec: IntParamSpec): String = "Maximum number of items. Defaults to ${spec.default} and cannot exceed ${spec.max}."

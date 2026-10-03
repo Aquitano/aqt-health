@@ -4,10 +4,7 @@ import me.aquitano.health.api.dto.DashboardStepsSummaryResponse
 import me.aquitano.health.api.dto.DashboardSummaryResponse
 import me.aquitano.health.application.metric.common.Orders
 import me.aquitano.health.application.metric.common.QueryParams
-import me.aquitano.health.application.metric.common.SortFields
-import me.aquitano.health.application.metric.common.repository.DailyReadFilters
 import me.aquitano.health.application.metric.common.repository.ReadFilters
-import me.aquitano.health.application.metric.common.repository.SleepNightReadFilters
 import me.aquitano.health.application.metric.common.singleSource
 import me.aquitano.health.application.metric.common.toResponse
 import me.aquitano.health.application.metric.common.validateDateRange
@@ -41,19 +38,20 @@ class DashboardQueryService(
         val toInstant = toDate.plusDays(1).atStartOfDay(timezone).toInstant()
 
         return suspendDbTransaction(db = database) {
-            val dailyFilters =
-                DailyReadFilters(
+            val filters =
+                ReadFilters(
+                    from = fromInstant,
+                    to = toInstant,
                     fromDate = fromDate,
                     toDate = toDate,
                     provider = params.optional("provider"),
                     providerInstanceId = params.optional("providerInstanceId"),
                     includeSource = includeSource,
                     limit = 1,
-                    sort = SortFields.MEASURED_AT,
                     order = Orders.DESC,
                 )
             val sleepNightFilters =
-                SleepNightReadFilters(
+                ReadFilters(
                     fromDate = toDate,
                     toDate = toDate,
                     timezone = timezone,
@@ -61,38 +59,22 @@ class DashboardQueryService(
                     providerInstanceId = params.optional("providerInstanceId"),
                     includeSource = includeSource,
                     limit = 1,
-                    sort = SortFields.DATE,
                     order = Orders.ASC,
                 )
 
             DashboardSummaryResponse(
                 fromDate = fromDate.toString(),
                 toDate = toDate.toString(),
-                steps = stepsSummary(dailyFilters),
-                latestWeight = latestWeight(dailyFilters.toReadFilters(fromInstant, toInstant)),
-                latestHeartRate = latestHeartRate(dailyFilters.toReadFilters(fromInstant, toInstant)),
+                steps = stepsSummary(filters),
+                latestWeight = latestWeight(filters),
+                latestHeartRate = latestHeartRate(filters),
                 lastSleepSession = lastSleepSession(sleepNightFilters),
             )
         }
     }
 
-    private fun DailyReadFilters.toReadFilters(
-        from: Instant,
-        to: Instant,
-    ): ReadFilters =
-        ReadFilters(
-            from = from,
-            to = to,
-            provider = provider,
-            providerInstanceId = providerInstanceId,
-            includeSource = includeSource,
-            limit = 1,
-            sort = SortFields.MEASURED_AT,
-            order = Orders.DESC,
-        )
-
     private fun stepsSummary(
-        filters: DailyReadFilters,
+        filters: ReadFilters,
     ): DashboardStepsSummaryResponse {
         val (summary, sourceMetadata) =
             canonicalStepRepository.summarizeCanonicalStepsForDashboard(
@@ -131,7 +113,7 @@ class DashboardQueryService(
     }
 
     private fun lastSleepSession(
-        filters: SleepNightReadFilters,
+        filters: ReadFilters,
     ) = sleepRepository
         .listCanonicalSleepNights(
             filters.copy(order = Orders.DESC),

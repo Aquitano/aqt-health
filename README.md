@@ -512,6 +512,9 @@ curl "http://localhost:8080/api/v2/metrics/weight" \
 curl "http://localhost:8080/api/v2/metrics/weight?latest=true&includeSource=true" \
   -H "Authorization: Bearer local-dev-key"
 
+curl "http://localhost:8080/api/v2/metrics/samples?metricTypes=weight,body_fat" \
+  -H "Authorization: Bearer local-dev-key"
+
 curl "http://localhost:8080/api/v2/metrics/heart_rate" \
   -H "Authorization: Bearer local-dev-key"
 
@@ -540,7 +543,6 @@ Common read filters:
 - `providerInstanceId`: concrete provider/device/account instance
 - `includeSource`: `true` or `false`
 - `limit`: default `500`, max `5000`
-- `sort`: endpoint-specific field; current metric list endpoints support `startAt`, `date`, or `measuredAt` as documented by OpenAPI and the metric catalog
 - `order`: `asc` or `desc`, default `asc`
 
 Metric list responses include an `items` array plus a `meta` object:
@@ -557,9 +559,9 @@ Metric list responses include an `items` array plus a `meta` object:
 }
 ```
 
-Cursor pagination is exposed through the `cursor` query parameter. When `meta.nextCursor` is present, pass it back with the same `sort` and `order` values to fetch the next page.
+Cursor pagination is exposed through the `cursor` query parameter. When `meta.nextCursor` is present, pass it back with the same `order` value to fetch the next page. `meta.sort` names the field each endpoint orders by.
 
-`latest=true` is supported on timestamp-based list endpoints, scalar metric reads, activity summaries, sleep summaries, and blood pressure. It cannot be combined with `limit`, `sort`, `order`, or `cursor`; unsupported combinations return `400 validation_failed` with field-level details. Daily step summaries and sleep nights do not support `latest=true`; use `date` or descending `order` where appropriate.
+`latest=true` is supported on timestamp-based list endpoints, scalar metric reads, activity summaries, sleep summaries, and blood pressure. It cannot be combined with `limit`, `order`, or `cursor`; unsupported combinations return `400 validation_failed` with field-level details. Daily step summaries, sleep nights and the scalar `/summary` and `/daily` aggregates reject `latest=true`; use `date` or descending `order` where appropriate.
 
 Sleep reads have two modes:
 

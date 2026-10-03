@@ -175,8 +175,7 @@ async function VisualizationsSection({
     activitySummaries, bodyMeasurements, dailySteps, hrvSamples,
     sleepNights, respiratoryRates, sleepSummaries,
   ];
-  const limited = responses.some((response) => response.ok && Boolean(response.data.meta.nextCursor))
-    || (bodyMeasurements.ok && bodyMeasurements.data.truncated);
+  const limited = responses.some((response) => response.ok && Boolean(response.data.meta.nextCursor));
 
   return (
     <>

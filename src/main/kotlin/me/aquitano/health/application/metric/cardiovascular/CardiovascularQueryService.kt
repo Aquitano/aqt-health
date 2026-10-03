@@ -2,13 +2,10 @@ package me.aquitano.health.application.metric.cardiovascular
 
 import me.aquitano.health.api.dto.BloodPressureMeasurementsResponse
 import me.aquitano.health.application.metric.cardiovascular.repository.CardiovascularRepository
-import me.aquitano.health.application.metric.common.QueryParamSpecs
 import me.aquitano.health.application.metric.common.QueryParams
-import me.aquitano.health.application.metric.common.keysetPage
-import me.aquitano.health.application.metric.common.meta
+import me.aquitano.health.application.metric.common.SortFields
+import me.aquitano.health.application.metric.common.pagedRead
 import me.aquitano.health.application.metric.common.readFilters
-import me.aquitano.health.application.metric.common.toResponse
-import me.aquitano.health.infrastructure.database.suspendDbTransaction
 import org.jetbrains.exposed.v1.jdbc.Database
 
 /**
@@ -19,24 +16,10 @@ class CardiovascularQueryService(
     private val database: Database,
     private val cardiovascularRepository: CardiovascularRepository,
 ) {
-    suspend fun listBloodPressure(params: QueryParams): BloodPressureMeasurementsResponse =
-        suspendDbTransaction(db = database) {
-            val filters =
-                params.readFilters(
-                    sortSpec = QueryParamSpecs.sortByMeasuredAt,
-                )
-            val (rows, sourceMetadata) = cardiovascularRepository.listBloodPressure(filters)
-            val page =
-                rows.keysetPage(
-                    limit = filters.limit,
-                    sort = filters.sort,
-                    order = filters.order,
-                    sortValue = { it.measuredAt.toString() },
-                    id = { it.id.toLong() },
-                )
-            BloodPressureMeasurementsResponse(
-                items = page.items.map { it.toResponse(sourceMetadata) },
-                meta = page.items.meta(filters, page.nextCursor),
-            )
+    suspend fun listBloodPressure(params: QueryParams): BloodPressureMeasurementsResponse {
+        val filters = params.readFilters()
+        return pagedRead(database, filters, SortFields.MEASURED_AT, { it.measuredAt }, { it.id.toLong() }, ::BloodPressureMeasurementsResponse) {
+            cardiovascularRepository.listBloodPressure(filters)
         }
+    }
 }

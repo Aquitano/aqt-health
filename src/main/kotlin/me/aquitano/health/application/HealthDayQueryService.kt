@@ -3,7 +3,6 @@ package me.aquitano.health.application
 import me.aquitano.health.api.dto.*
 import me.aquitano.health.application.metric.common.QueryParams
 import me.aquitano.health.application.metric.common.repository.ReadFilters
-import me.aquitano.health.application.metric.common.repository.SleepNightReadFilters
 import me.aquitano.health.application.metric.common.singleSource
 import me.aquitano.health.application.metric.common.toResponse
 import me.aquitano.health.application.metric.scalar.ScalarSampleReadRepository
@@ -219,7 +218,7 @@ class HeartRateDayModule(
         val filters = context.filters()
         val (samples, sourceMetadata) =
             scalarRepository.list(
-                filters.copy(limit = Int.MAX_VALUE, sort = "measuredAt", order = "asc"),
+                filters.copy(limit = Int.MAX_VALUE, order = "asc"),
                 metricTypes,
                 canonical = true,
             )
@@ -297,7 +296,7 @@ class SleepDayModule(
 
     override suspend fun read(context: HealthDayQueryContext): HealthDaySleepResponse {
         val filters =
-            SleepNightReadFilters(
+            ReadFilters(
                 fromDate = context.date,
                 toDate = context.date.plusDays(1),
                 timezone = context.timezone,
@@ -305,7 +304,6 @@ class SleepDayModule(
                 providerInstanceId = context.providerInstanceId,
                 includeSource = context.includeSource,
                 limit = Int.MAX_VALUE,
-                sort = "date",
                 order = "asc",
             )
         val (nights, stagesBySession, sourceMetadata) =
@@ -341,9 +339,13 @@ class SleepDayModule(
                 }.map { (stage, duration) ->
                     HealthDaySleepStageTotalResponse(stage, duration)
                 }.sortedBy { it.stage }
+        val unstagedSeconds =
+            sessions
+                .filter { stagesBySession[it.id].isNullOrEmpty() }
+                .sumOf { Duration.between(maxOf(it.startAt, context.from), minOf(it.endAt, context.to)).seconds }
 
         return HealthDaySleepResponse(
-            totalDurationSeconds = stageTotals.sumOf { it.durationSeconds },
+            totalDurationSeconds = stageTotals.sumOf { it.durationSeconds } + unstagedSeconds,
             sessions = sessions.map { it.toResponse(stagesBySession, sourceMetadata) },
             stageTotals = stageTotals,
             timeline =
@@ -373,7 +375,6 @@ private fun HealthDayQueryContext.filters(): ReadFilters =
         providerInstanceId = providerInstanceId,
         includeSource = includeSource,
         limit = Int.MAX_VALUE,
-        sort = "startAt",
         order = "asc",
     )
 

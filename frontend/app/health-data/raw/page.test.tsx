@@ -47,7 +47,6 @@ it("fetches only the selected raw metric and forwards its cursor and local-day b
     includeSource: true,
     limit: 100,
     order: "desc",
-    sort: "measuredAt",
     raw: true,
     cursor: "page-two",
   });
@@ -56,9 +55,9 @@ it("fetches only the selected raw metric and forwards its cursor and local-day b
 });
 
 it.each([
-  { dataset: "sleep-sessions", sort: "startAt", request: mocks.sessions },
-  { dataset: "sleep-summaries", sort: "endAt", request: mocks.summaries },
-])("explains the start-time filter for $dataset and preserves record pagination", async ({ dataset, sort, request }) => {
+  { dataset: "sleep-sessions", request: mocks.sessions },
+  { dataset: "sleep-summaries", request: mocks.summaries },
+])("explains the start-time filter for $dataset and preserves record pagination", async ({ dataset, request }) => {
   const page = await RawDataPage({
     searchParams: Promise.resolve({
       dataset,
@@ -73,7 +72,6 @@ it.each([
     includeSource: true,
     limit: 100,
     order: "desc",
-    sort,
     cursor: "older-records",
   });
   expect(renderToStaticMarkup(page)).toContain("Overnight records appear on the day they began.");
