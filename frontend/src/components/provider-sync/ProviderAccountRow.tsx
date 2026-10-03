@@ -155,7 +155,11 @@ export function ProviderAccountRow({
         <div className={styles.scheduledMeta}>
           <dt>Automatic</dt>
           <dd>
-            {scheduledConfig?.enabled ? "Enabled" : "Paused"}
+            {!scheduledConfig?.enabled
+              ? "Paused"
+              : scheduledConfig.nextRunAt
+              ? "Enabled"
+              : "Stopped after errors"}
             {scheduledConfig?.nextRunAt
               ? `, next ${formatDateTime(scheduledConfig.nextRunAt)}`
               : ""}

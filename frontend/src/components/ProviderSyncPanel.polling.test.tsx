@@ -261,4 +261,15 @@ describe("ProviderSyncPanel polling", () => {
     await act(async () => { finishes[1]({ json: async () => ({ ok: false, message: "second failed" }) }); });
   });
 
+  it("shows an enabled schedule without a next run as stopped", () => {
+    render(<ProviderSyncPanel catalog={catalog()} statuses={{ ok: true, data: { items: [{ ...status(), accounts: [
+      { providerInstanceId: "me", status: "connected", tokenStatus: "valid" },
+    ] }] } }} scheduledSyncConfigs={[{ ok: true, data: {
+      providerCode: "google-health", providerInstanceId: "me", enabled: true, dataTypes: ["steps"],
+      cadenceMinutes: 1440, lookbackDays: 7, failureCount: 3, lastErrorMessage: "steps: account is gone", checkpoints: [],
+    } }]} />);
+    expect(screen.getByText("Stopped after errors")).toBeInTheDocument();
+    expect(screen.getByText("steps: account is gone")).toBeInTheDocument();
+  });
+
 });

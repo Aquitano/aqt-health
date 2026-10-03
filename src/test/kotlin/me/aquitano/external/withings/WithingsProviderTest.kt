@@ -20,6 +20,7 @@ import me.aquitano.health.infrastructure.repositories.IngestionRepository
 import me.aquitano.health.infrastructure.repositories.PendingDerivedRebuildRepository
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
 import me.aquitano.health.infrastructure.repositories.ProviderSyncIdempotencyRepository
+import me.aquitano.health.infrastructure.repositories.ScheduledSyncRepository
 import me.aquitano.health.infrastructure.repositories.SupportRepository
 import me.aquitano.health.infrastructure.security.TokenCipher
 import me.aquitano.health.infrastructure.time.UtcClock
@@ -669,6 +670,7 @@ class WithingsProviderTest : PostgresIntegrationTest() {
                 providerOAuthRepository = providerRepository,
                 providerStatusService = providerStatusService,
                 syncIdempotencyRepository = ProviderSyncIdempotencyRepository(database),
+                scheduledSyncRepository = ScheduledSyncRepository(database),
             )
 
         suspend fun seedAccount(

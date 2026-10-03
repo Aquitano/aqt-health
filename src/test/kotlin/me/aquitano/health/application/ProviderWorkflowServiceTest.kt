@@ -18,8 +18,10 @@ import me.aquitano.health.domain.RequestValidationException
 import me.aquitano.health.domain.ValidationIssueCodes
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
 import me.aquitano.health.infrastructure.repositories.ProviderSyncIdempotencyRepository
+import me.aquitano.health.infrastructure.repositories.ScheduledSyncRepository
 import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.test.PostgresTestDatabase
+import org.jetbrains.exposed.v1.jdbc.Database
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
@@ -125,8 +127,37 @@ class ProviderWorkflowServiceTest : PostgresIntegrationTest() {
         assertEquals(now, domain.to)
     }
 
-    private fun serviceWith(provider: HealthProvider): ProviderWorkflowService {
-        val database = openDatabase(PostgresTestDatabase.config())
+    @Test
+    fun completingOAuthResumesAParkedSchedule() =
+        runBlocking {
+            val provider = ConnectingProvider()
+            val database = openDatabase(PostgresTestDatabase.config())
+            val scheduledSyncRepository = ScheduledSyncRepository(database)
+            val parked =
+                scheduledSyncRepository.upsertConfig(
+                    providerCode = provider.providerCode,
+                    providerInstanceId = provider.defaultProviderInstanceId,
+                    enabled = true,
+                    dataTypes = listOf("steps"),
+                    cadenceMinutes = 1_440,
+                    lookbackDays = 7,
+                    nextRunAt = null,
+                    now = now,
+                )
+            scheduledSyncRepository.markFailure(parked.id, failureCount = 3, nextRunAt = null, errorMessage = "needs reauth", now = now)
+            ProviderOAuthRepository(database).insertState("reconnect-state", provider.providerCode, now, now.plusSeconds(600))
+
+            serviceWith(provider, database).completeOAuth(provider.providerCode, "code", "reconnect-state", null, now)
+
+            val resumed = scheduledSyncRepository.getConfig(provider.providerCode, provider.defaultProviderInstanceId)!!
+            assertEquals(now, resumed.nextRunAt)
+            assertEquals(0, resumed.failureCount)
+        }
+
+    private fun serviceWith(
+        provider: HealthProvider,
+        database: Database = openDatabase(PostgresTestDatabase.config()),
+    ): ProviderWorkflowService {
         val registry = HealthProviderRegistry(listOf(provider))
         val oAuthRepository = ProviderOAuthRepository(database)
         return ProviderWorkflowService(
@@ -134,7 +165,29 @@ class ProviderWorkflowServiceTest : PostgresIntegrationTest() {
             providerOAuthRepository = oAuthRepository,
             providerStatusService = ProviderStatusService(registry, oAuthRepository),
             syncIdempotencyRepository = ProviderSyncIdempotencyRepository(database),
+            scheduledSyncRepository = ScheduledSyncRepository(database),
         )
+    }
+
+    private class ConnectingProvider : HealthProvider {
+        override val providerCode = "connecting_provider"
+        override val defaultProviderInstanceId = "connecting-provider-me"
+        override val descriptor = descriptorFor(providerCode, "Connecting Provider")
+
+        override fun isConfigured(): Boolean = true
+
+        override fun getAuthUrl(state: String): String = "https://example.test/auth?state=$state"
+
+        override suspend fun connect(
+            code: String,
+            now: Instant,
+        ): ProviderConnection = ProviderConnection(providerCode, defaultProviderInstanceId, connected = true)
+
+        override suspend fun sync(
+            request: DomainProviderSyncRequest,
+            now: Instant,
+            progress: ProviderSyncProgressSink,
+        ): ProviderSyncSummary = error("Sync is not supported")
     }
 
     private class BlockingProvider : HealthProvider {

@@ -13,6 +13,7 @@ import me.aquitano.health.infrastructure.logging.*
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthStateConsumeResult
 import me.aquitano.health.infrastructure.repositories.ProviderSyncIdempotencyRepository
+import me.aquitano.health.infrastructure.repositories.ScheduledSyncRepository
 import me.aquitano.health.shared.AppJson
 import me.aquitano.health.shared.normalizeProviderCode
 import java.security.SecureRandom
@@ -29,6 +30,7 @@ class ProviderWorkflowService(
     private val providerOAuthRepository: ProviderOAuthRepository,
     private val providerStatusService: ProviderStatusService,
     private val syncIdempotencyRepository: ProviderSyncIdempotencyRepository,
+    private val scheduledSyncRepository: ScheduledSyncRepository,
 ) {
     private val random = SecureRandom()
 
@@ -122,6 +124,7 @@ class ProviderWorkflowService(
         }
 
         val connection = provider.connect(authCode, now)
+        scheduledSyncRepository.resumeParked(provider.providerCode, connection.providerInstanceId, now)
         return ProviderOAuthCallbackResponse(
             provider = connection.providerCode,
             providerInstanceId = connection.providerInstanceId,

@@ -19,6 +19,7 @@ import me.aquitano.health.domain.SyncJobStatus
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
 import me.aquitano.health.infrastructure.repositories.ProviderSyncIdempotencyRepository
 import me.aquitano.health.infrastructure.repositories.ProviderSyncJobRepository
+import me.aquitano.health.infrastructure.repositories.ScheduledSyncRepository
 import me.aquitano.health.infrastructure.time.UtcClock
 import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.test.PostgresTestDatabase
@@ -244,6 +245,7 @@ class ProviderSyncJobServiceTest : PostgresIntegrationTest() {
                 providerOAuthRepository = oAuthRepository,
                 providerStatusService = ProviderStatusService(registry, oAuthRepository),
                 syncIdempotencyRepository = ProviderSyncIdempotencyRepository(database),
+                scheduledSyncRepository = ScheduledSyncRepository(database),
             )
         val service =
             ProviderSyncJobService(
