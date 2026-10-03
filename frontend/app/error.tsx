@@ -3,6 +3,7 @@
 import styles from "./error.module.css";
 
 export default function Error({
+  error,
   reset,
 }: {
   error: Error & { digest?: string };
@@ -14,6 +15,9 @@ export default function Error({
       <span className={styles.message}>
         An unexpected error occurred.
       </span>
+      {error.digest ? (
+        <code className={styles.digest}>Error reference: {error.digest}</code>
+      ) : null}
       <button className={styles.retry} onClick={reset} type="button">
         Try again
       </button>

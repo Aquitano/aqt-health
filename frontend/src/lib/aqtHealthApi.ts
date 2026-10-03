@@ -272,8 +272,8 @@ async function fetchHeartRateDaily(
     }));
 }
 
-function ingestionStatus(value?: string): "processed" | "failed" | undefined {
-  if (value === "processed" || value === "failed") return value;
+function ingestionStatus(value?: string): "received" | "processed" | "failed" | undefined {
+  if (value === "received" || value === "processed" || value === "failed") return value;
   return undefined;
 }
 

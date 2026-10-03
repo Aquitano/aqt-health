@@ -33,6 +33,7 @@ export default async function IngestionsPage({ searchParams }: PageProps) {
           <span className={styles.label}>Status</span>
           <select className={styles.input} name="status" defaultValue={status ?? ""}>
             <option value="">Any</option>
+            <option value="received">Received</option>
             <option value="processed">Processed</option>
             <option value="failed">Failed</option>
           </select>
