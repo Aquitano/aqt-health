@@ -104,6 +104,19 @@ describe("page data requests", () => {
     });
   });
 
+  it("stops immediately when the backend repeats the requested cursor", async () => {
+    mocks.listScalarSamples.mockResolvedValue(response([], "same-page"));
+    expect((await getTrendsPageData("2026-09-01", 30)).weight).toEqual({
+      ok: false,
+      message: "The backend repeated a pagination cursor.",
+    });
+    expect(mocks.listScalarSamples).toHaveBeenCalledTimes(2);
+    expect(mocks.listScalarSamples).toHaveBeenLastCalledWith(
+      "weight",
+      expect.objectContaining({ cursor: "same-page" }),
+    );
+  });
+
   it("uses local-day instants consistently and leaves raw-only datasets unfetched", async () => {
     const sources = getHealthDataPageSources(
       "2026-03-08",

@@ -197,9 +197,13 @@ function normalizeScheduledSyncPayload(
   if (body.enabled != null && typeof body.enabled !== "boolean") {
     throw new InvalidPayloadError("enabled must be a boolean.");
   }
+  const selectedDataTypes = dataTypes(body.dataTypes);
+  if (Array.isArray(body.dataTypes) && selectedDataTypes === undefined) {
+    throw new InvalidPayloadError("dataTypes must include at least one data type.");
+  }
   return {
     enabled: body.enabled ?? undefined,
-    dataTypes: dataTypes(body.dataTypes),
+    dataTypes: selectedDataTypes,
     cadenceMinutes: positiveInteger(body.cadenceMinutes, "cadenceMinutes"),
     lookbackDays: positiveInteger(body.lookbackDays, "lookbackDays"),
   };

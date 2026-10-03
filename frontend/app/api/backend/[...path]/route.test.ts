@@ -184,7 +184,7 @@ describe("proxy request validation", () => {
       expect(mocks.startProviderSyncJob).not.toHaveBeenCalled();
     });
 
-  it.each(["null", "{invalid", '{"enabled":"true"}', '{"cadenceMinutes":0}'])
+  it.each(["null", "{invalid", '{"enabled":"true"}', '{"cadenceMinutes":0}', '{"dataTypes":[]}', '{"dataTypes":[" "]}'])
     ("rejects invalid scheduled updates %s", async (body) => {
       mocks.updateScheduledSyncConfig.mockClear();
       const response = await PUT(
@@ -194,4 +194,22 @@ describe("proxy request validation", () => {
       expect(response.status).toBe(400);
       expect(mocks.updateScheduledSyncConfig).not.toHaveBeenCalled();
     });
+
+  it("preserves existing scheduled data types when they are omitted", async () => {
+    mocks.updateScheduledSyncConfig.mockResolvedValue({ ok: true, data: { enabled: false } });
+    const response = await PUT(
+      new Request("http://frontend.test/api/backend/providers/withings/accounts/me/scheduled-sync", {
+        method: "PUT",
+        body: JSON.stringify({ enabled: false }),
+      }),
+      context("providers", "withings", "accounts", "me", "scheduled-sync"),
+    );
+    expect(response.status).toBe(200);
+    expect(mocks.updateScheduledSyncConfig).toHaveBeenLastCalledWith("withings", "me", {
+      enabled: false,
+      dataTypes: undefined,
+      cadenceMinutes: undefined,
+      lookbackDays: undefined,
+    });
+  });
 });
