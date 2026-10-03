@@ -18,7 +18,6 @@ import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
-import kotlin.test.assertTrue
 
 class OpenApiExportTest : PostgresIntegrationTest() {
     @Test
@@ -53,14 +52,19 @@ class OpenApiExportTest : PostgresIntegrationTest() {
             val itemSchema = schemas[summariesItemRef.substringAfterLast('/')]!!.jsonObject
             assertEquals("object", itemSchema["type"]!!.jsonPrimitive.content)
 
-            val nullableSummary =
+            val nullableSummaryRef =
                 schemas["ProviderSyncJobStatusResponse"]!!
                     .jsonObject["properties"]!!
                     .jsonObject["summary"]!!
-                    .jsonObject["oneOf"]!!
-                    .jsonArray
-            assertTrue(nullableSummary.any { it.jsonObject["type"]?.jsonPrimitive?.content == "null" })
-            assertTrue(nullableSummary.any { it.jsonObject["\$ref"]?.jsonPrimitive?.content == summariesItemRef })
+                    .jsonObject["\$ref"]!!
+                    .jsonPrimitive.content
+            val nullableSummary = schemas[nullableSummaryRef.substringAfterLast('/')]!!.jsonObject
+            assertEquals(
+                setOf("object", "null"),
+                nullableSummary["type"]!!.jsonArray.map { it.jsonPrimitive.content }.toSet(),
+            )
+            assertEquals(itemSchema["properties"], nullableSummary["properties"])
+            assertEquals(itemSchema["required"], nullableSummary["required"])
 
             val scalarSampleProperties =
                 schemas["ScalarSampleResponse"]!!

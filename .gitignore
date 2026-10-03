@@ -42,7 +42,6 @@ aqt-health.yaml
 src/main/resources/openapi/aqt-health.yaml
 frontend/.openapi/
 frontend/next-env.d.ts
-graphify-out/
 .claude/
 
 ### NetBeans ###

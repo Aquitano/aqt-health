@@ -318,15 +318,16 @@ class ApplicationTest : PostgresIntegrationTest() {
                     .toSet(),
             )
 
-            val recordSchemaRefs =
-                setOf(
-                    "#/components/schemas/step_interval",
-                    "#/components/schemas/sleep_session",
-                    "#/components/schemas/activity_summary",
-                    "#/components/schemas/sleep_summary",
-                    "#/components/schemas/blood_pressure",
-                    "#/components/schemas/scalar",
+            val recordSchemaNames =
+                mapOf(
+                    "step_interval" to "StepInterval",
+                    "sleep_session" to "SleepSession",
+                    "activity_summary" to "ActivitySummary",
+                    "sleep_summary" to "SleepSummary",
+                    "blood_pressure" to "BloodPressure",
+                    "scalar" to "ScalarSample",
                 )
+            val recordSchemaRefs = recordSchemaNames.values.map { "#/components/schemas/$it" }.toSet()
             recordSchemaRefs.forEach { ref ->
                 val schemaName = ref.substringAfterLast('/')
                 assertNotNull(schemas[schemaName], "Missing OpenAPI component schema $schemaName")
@@ -370,9 +371,10 @@ class ApplicationTest : PostgresIntegrationTest() {
                 recordSchemaRefs,
                 mapping.values.map { it.jsonPrimitive.content }.toSet(),
             )
-            mapping.forEach { (typeValue, ref) ->
-                assertEquals("#/components/schemas/$typeValue", ref.jsonPrimitive.content)
-            }
+            assertEquals(
+                recordSchemaNames.mapValues { (_, schemaName) -> "#/components/schemas/$schemaName" },
+                mapping.mapValues { (_, ref) -> ref.jsonPrimitive.content },
+            )
         }
 
     @Test

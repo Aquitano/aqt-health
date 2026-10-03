@@ -1,7 +1,7 @@
 package me.aquitano.health.test
 
 import me.aquitano.health.infrastructure.config.DatabaseConfig
-import org.testcontainers.containers.PostgreSQLContainer
+import org.testcontainers.postgresql.PostgreSQLContainer
 import java.sql.Connection
 import java.sql.DriverManager
 import java.sql.SQLException
@@ -20,8 +20,8 @@ object PostgresTestDatabase {
     private val externalSchemas =
         Collections.synchronizedList(mutableListOf<ExternalSchema>())
 
-    private val container: PostgreSQLContainer<Nothing> by lazy {
-        PostgreSQLContainer<Nothing>("postgres:17-alpine").apply {
+    private val container: PostgreSQLContainer by lazy {
+        PostgreSQLContainer("postgres:17-alpine").apply {
             withDatabaseName("postgres")
             withUsername("aqt_health")
             withPassword("aqt_health")
