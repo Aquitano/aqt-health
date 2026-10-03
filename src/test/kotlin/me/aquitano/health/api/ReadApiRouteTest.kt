@@ -847,6 +847,30 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
         }
 
     @Test
+    fun dashboardSummaryUsesTimezoneDayBoundaries() =
+        testApplication {
+            configureTestApplication()
+            ingestJustAfterBerlinMidnight("weight", 80.0)
+
+            val berlin = authorizedGet("/api/v2/dashboard/summary?fromDate=2026-04-20&toDate=2026-04-20&timezone=Europe/Berlin").jsonBody()
+            val utc = authorizedGet("/api/v2/dashboard/summary?fromDate=2026-04-20&toDate=2026-04-20").jsonBody()
+            assertEquals(80.0, berlin["latestWeight"]!!.jsonObject["value"]!!.jsonPrimitive.double)
+            assertFalse(utc.containsKey("latestWeight"))
+        }
+
+    @Test
+    fun dashboardTrendsUseTimezonePeriodBoundaries() =
+        testApplication {
+            configureTestApplication()
+            ingestJustAfterBerlinMidnight("heart_rate", 60.0)
+
+            val berlin = authorizedGet("/api/v2/dashboard/trends?toDate=2026-04-20&periodDays=1&timezone=Europe/Berlin").jsonBody()
+            val utc = authorizedGet("/api/v2/dashboard/trends?toDate=2026-04-20&periodDays=1").jsonBody()
+            assertEquals(60.0, berlin["heartRate"]!!.jsonObject["currentAvg"]!!.jsonPrimitive.double)
+            assertEquals(60.0, utc["heartRate"]!!.jsonObject["previousAvg"]!!.jsonPrimitive.double)
+        }
+
+    @Test
     fun readsResolveCrossProviderConflicts() =
         testApplication {
             configureTestApplication()
@@ -1122,6 +1146,19 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
             }
         assertEquals(HttpStatusCode.Created, response.status)
         return response.jsonBody()["batchId"]!!.jsonPrimitive.int
+    }
+
+    private suspend fun ApplicationTestBuilder.ingestJustAfterBerlinMidnight(
+        metricType: String,
+        value: Double,
+    ) {
+        val response =
+            client.post("/api/v2/ingestion/batches") {
+                authorized()
+                contentType(ContentType.Application.Json)
+                setBody("""{"provider":"health_connect","providerInstanceId":"berlin","ingestedAt":"2026-04-20T10:00:00Z","sourcePayload":{},"records":[{"type":"scalar","metricType":"$metricType","measuredAt":"2026-04-19T22:30:00Z","value":$value}]}""")
+            }
+        assertEquals(HttpStatusCode.Created, response.status)
     }
 
     private suspend fun ApplicationTestBuilder.ingestLaterBatch(): Int {
