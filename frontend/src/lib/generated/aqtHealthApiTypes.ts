@@ -3802,6 +3802,8 @@ export interface operations {
                 fromDate: string;
                 /** @description Inclusive UTC end date for dashboard summaries. */
                 toDate: string;
+                /** @description IANA timezone used to resolve the last sleep night for toDate. Defaults to UTC. */
+                timezone?: string;
                 /** @description Source provider filter applied to summary metric lookups. */
                 provider?: string;
                 /** @description Source provider account or instance filter applied to summary metric lookups. */

@@ -195,6 +195,7 @@ internal fun Operation.Builder.dashboardQueryParameters() {
                 stringSchema(format = JsonFormatDate, example = ExampleToDate)
         }
     }
+    timezoneParameter("IANA timezone used to resolve the last sleep night for toDate. Defaults to UTC.")
     providerFilterParameters(
         providerDescription =
             "Source provider filter applied to summary metric lookups.",
