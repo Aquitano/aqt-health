@@ -2,17 +2,21 @@
 
 Personal, single-user health data hub built with Ktor, Kotlin, PostgreSQL, Exposed, and Flyway.
 
+This is the authoritative Health repository. The former `Aquitano/aqt/apps/health` copy is retired. Open Health issues and pull requests here.
+
 The service accepts normalized health batches from trusted scripts or provider adapters, stores the original source JSON for audit/reprocessing, writes structured metric tables, and exposes read endpoints for local tools.
 
 ## Stack
 
-- Kotlin 2.3
-- Ktor 3.4
+- Kotlin 2.4
+- Ktor 3.5
 - PostgreSQL via JDBC and HikariCP
 - Exposed DAO for support entities only
 - Exposed DSL for ingestion and metric reads/writes
 - Flyway versioned migrations
 - API-key authentication with `Authorization: Bearer <api-key>`
+
+- JDK 25
 
 ## Run Locally
 
@@ -132,6 +136,21 @@ Get-Content .env | Where-Object { $_ -and $_ -notmatch '^\s*#' } | ForEach-Objec
 ```
 
 Never commit `.env`, real API keys, database passwords, production URLs, or OpenObserve credentials. Commit only `.env.example` with placeholders.
+
+### Infisical environments
+
+`.infisical.json` retains the Health project used by the former monorepo. Backend variables live at `/`; frontend variables live at `/frontend` in the same project.
+
+After authenticating with the Infisical CLI, run these commands from the repository root with a POSIX shell such as Git Bash:
+
+```sh
+sh scripts/secrets.sh pull backend dev
+sh scripts/secrets.sh pull frontend dev
+sh scripts/secrets.sh diff backend dev
+sh scripts/secrets.sh push backend dev
+```
+
+Replace `dev` with the required environment. Pulls replace the corresponding local `.env` atomically and refuse empty exports. Pushes require confirmation. The diff command prints secret values, so keep its output out of shared logs. Deployment uses this repository's Compose files; the script does not contact the VPS.
 
 ## OpenObserve Logs
 
