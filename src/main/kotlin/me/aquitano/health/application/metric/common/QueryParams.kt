@@ -123,7 +123,7 @@ class QueryParams(
         }
     }
 
-    internal fun limit(spec: LimitParamSpec): Int {
+    internal fun int(spec: IntParamSpec): Int {
         val value = optional(spec.name) ?: return spec.default
         val parsed =
             value.toIntOrNull()

@@ -13,6 +13,7 @@ import me.aquitano.health.application.SleepSummaryReadService
 import me.aquitano.health.application.TrendQueryService
 import me.aquitano.health.application.metric.activity.ActivityQueryService
 import me.aquitano.health.application.metric.cardiovascular.CardiovascularQueryService
+import me.aquitano.health.application.metric.common.QueryParamSpecs
 import me.aquitano.health.application.metric.dashboard.DashboardQueryService
 import me.aquitano.health.application.metric.scalar.ScalarMetricQueryService
 import me.aquitano.health.application.metric.sleep.SleepQueryService
@@ -231,9 +232,16 @@ internal fun Route.readRoutes() {
             "Returns trend comparisons for steps, heart rate, sleep, and weight over a configurable period compared to the preceding period."
         requiresBearerAuth()
         parameters {
-            query("periodDays") {
+            val periodDays = QueryParamSpecs.periodDays
+            query(periodDays.name) {
                 description = "Number of days in the comparison period"
-                schema = integerSchema(minimum = 1.0, maximum = 90.0, example = 7)
+                schema =
+                    integerSchema(
+                        default = periodDays.default,
+                        minimum = periodDays.min.toDouble(),
+                        maximum = periodDays.max.toDouble(),
+                        example = 7,
+                    )
             }
             query("toDate") {
                 description = "End date of current period (ISO-8601 date); defaults to today"

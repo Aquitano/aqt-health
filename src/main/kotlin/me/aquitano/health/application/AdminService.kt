@@ -54,7 +54,7 @@ class AdminService(
         validateRange(from, to, "from", "to")
         val order = "desc"
         val cursor = params.cursor(order)
-        val limit = params.limit(QueryParamSpecs.adminLimit)
+        val limit = params.int(QueryParamSpecs.adminLimit)
         return suspendDbTransaction(db = database) {
             val page =
                 ingestionRepository

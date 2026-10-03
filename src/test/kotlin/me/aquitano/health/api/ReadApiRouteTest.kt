@@ -262,6 +262,18 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
                     .jsonObject["code"]!!
                     .jsonPrimitive.content,
             )
+
+            listOf("abc", "0", "91").forEach { periodDays ->
+                val invalidPeriod = authorizedGet("/api/v2/dashboard/trends?periodDays=$periodDays")
+                assertEquals(HttpStatusCode.BadRequest, invalidPeriod.status)
+                assertEquals(
+                    "periodDays",
+                    invalidPeriod
+                        .errorDetails()[0]
+                        .jsonObject["field"]!!
+                        .jsonPrimitive.content,
+                )
+            }
         }
 
     @Test
