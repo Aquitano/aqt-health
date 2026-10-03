@@ -1,6 +1,7 @@
 package me.aquitano.health.application
 
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -177,6 +178,7 @@ class ProviderSyncJobService(
                 "status" to summary.status,
             )
         } catch (exception: Exception) {
+            if (exception is CancellationException) throw exception
             repository.finish(
                 id = jobId,
                 status = "failed",

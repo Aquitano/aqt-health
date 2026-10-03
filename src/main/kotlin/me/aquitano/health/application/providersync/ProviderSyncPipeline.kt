@@ -447,17 +447,40 @@ class ProviderSyncPipeline(
                 )
             }
 
-        val saved =
-            store.saveRefreshedToken(
-                account = account,
-                tokens = refreshed,
-                now = now,
-            )
-        requireRefreshWrite(saved)
+        requireRefreshWrite(saveRefreshedToken(adapter, account, refreshed, now))
         return ProviderAccessToken(
             accessToken = refreshed.accessToken,
             refreshToken = refreshed.refreshToken ?: refreshToken,
         )
+    }
+
+    // The provider has already rotated the refresh token, so a failed write here would leave the
+    // account with a revoked token. A compare-and-swap rejection (false) is final; errors are retried.
+    private suspend fun saveRefreshedToken(
+        adapter: ProviderSyncAdapter,
+        account: SyncAccount,
+        tokens: RefreshedTokenSet,
+        now: Instant,
+    ): Boolean {
+        var attempt = 1
+        while (true) {
+            try {
+                return store.saveRefreshedToken(account, tokens, now)
+            } catch (exception: Exception) {
+                if (exception is CancellationException || attempt == TOKEN_SAVE_ATTEMPTS) throw exception
+                logger.warnWithContext(
+                    "provider_token_save_retry",
+                    mapOf(
+                        "provider" to adapter.providerCode,
+                        "providerInstanceId" to account.providerInstanceId,
+                        "attempt" to attempt,
+                    ),
+                    exception,
+                )
+                delay(TOKEN_SAVE_BACKOFF.multipliedBy(attempt.toLong()).toMillis())
+                attempt += 1
+            }
+        }
     }
 
     private fun requireRefreshWrite(updated: Boolean) {
@@ -484,6 +507,9 @@ class ProviderSyncPipeline(
             affectedStepSummaryDates = emptyList(),
         )
 }
+
+private const val TOKEN_SAVE_ATTEMPTS = 3
+private val TOKEN_SAVE_BACKOFF: Duration = Duration.ofMillis(100)
 
 private data class ThrottledFetchResult(
     val batch: ProviderFetchedBatch,
