@@ -512,6 +512,9 @@ curl "http://localhost:8080/api/v2/metrics/weight" \
 curl "http://localhost:8080/api/v2/metrics/weight?latest=true&includeSource=true" \
   -H "Authorization: Bearer local-dev-key"
 
+curl "http://localhost:8080/api/v2/metrics/samples?metricTypes=weight,body_fat" \
+  -H "Authorization: Bearer local-dev-key"
+
 curl "http://localhost:8080/api/v2/metrics/heart_rate" \
   -H "Authorization: Bearer local-dev-key"
 

@@ -9,6 +9,7 @@ import me.aquitano.health.api.dto.HealthDayModuleName
 import me.aquitano.health.application.metric.common.IntParamSpec
 import me.aquitano.health.application.metric.common.QueryParamSpecs
 import me.aquitano.health.domain.BatchStatus
+import me.aquitano.health.domain.BodyMetricTypes
 import me.aquitano.health.domain.ScalarMetricTypes
 
 private const val ReadCursorExample =
@@ -72,6 +73,21 @@ internal fun Operation.Builder.readQueryParameters(includeLatest: Boolean = fals
 
 internal fun Operation.Builder.scalarMetricQueryParameters() {
     metricTypePathParameter()
+    scalarListQueryParameters()
+}
+
+internal fun Operation.Builder.multiScalarMetricQueryParameters() {
+    parameters {
+        query("metricTypes") {
+            description = "Required comma-separated scalar metric types from the metric catalog."
+            required = true
+            schema = stringSchema(example = "${BodyMetricTypes.WEIGHT},${BodyMetricTypes.BODY_FAT}")
+        }
+    }
+    scalarListQueryParameters()
+}
+
+private fun Operation.Builder.scalarListQueryParameters() {
     readQueryParameters(includeLatest = true)
     parameters {
         query(QueryParamSpecs.raw.name) {
