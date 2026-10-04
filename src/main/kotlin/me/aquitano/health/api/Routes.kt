@@ -5,6 +5,7 @@ package me.aquitano.health.api
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
+import io.ktor.server.plugins.bodylimit.*
 import io.ktor.server.plugins.swagger.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
@@ -123,48 +124,53 @@ fun Application.configureRoutes(appConfig: AppConfig) {
             )
         }
         authenticate(ApiKeyAuthProviderName) {
-            post("/api/v2/ingestion/batches") {
-                val response =
-                    ingestionService.ingestBatch(
-                        request = call.receive<IngestionBatchRequest>(),
-                        now = clock.now(),
+            route("/api/v2/ingestion/batches") {
+                install(RequestBodyLimit) {
+                    bodyLimit { appConfig.ingestion.maxBodyBytes }
+                }
+                post {
+                    val response =
+                        ingestionService.ingestBatch(
+                            request = call.receive<IngestionBatchRequest>(),
+                            now = clock.now(),
+                        )
+                    val status =
+                        if (response.duplicateBatch) HttpStatusCode.OK else HttpStatusCode.Created
+                    call.respond(status, response)
+                }.describe {
+                    operationId = "ingestBatch"
+                    tag("Ingestion")
+                    summary = "Ingest a normalized health data batch"
+                    description =
+                        "Accepts a trusted normalized health data batch, stores the source payload for audit/reprocessing, writes structured metric tables, and treats repeated provider/batch identifiers idempotently. A duplicate batch returns 200 OK with `duplicateBatch=true`; a newly processed batch returns 201 Created."
+                    requiresBearerAuth()
+                    jsonRequest<IngestionBatchRequest>(
+                        descriptionText =
+                            "Normalized ingestion batch. Fields are nullable at the transport layer where provider adapters may omit them, but validation enforces provider, providerInstanceId, batch identity, and record-specific required fields.",
+                        exampleName = "batch",
+                        example = ingestionBatchExample(),
                     )
-                val status =
-                    if (response.duplicateBatch) HttpStatusCode.OK else HttpStatusCode.Created
-                call.respond(status, response)
-            }.describe {
-                operationId = "ingestBatch"
-                tag("Ingestion")
-                summary = "Ingest a normalized health data batch"
-                description =
-                    "Accepts a trusted normalized health data batch, stores the source payload for audit/reprocessing, writes structured metric tables, and treats repeated provider/batch identifiers idempotently. A duplicate batch returns 200 OK with `duplicateBatch=true`; a newly processed batch returns 201 Created."
-                requiresBearerAuth()
-                jsonRequest<IngestionBatchRequest>(
-                    descriptionText =
-                        "Normalized ingestion batch. Fields are nullable at the transport layer where provider adapters may omit them, but validation enforces provider, providerInstanceId, batch identity, and record-specific required fields.",
-                    exampleName = "batch",
-                    example = ingestionBatchExample(),
-                )
-                responses {
-                    HttpStatusCode.Created {
-                        description = "Batch accepted and processed"
-                        content {
-                            schema = buildSchema(typeOf<IngestionSummaryResponse>())
-                            example("created", ingestionSummaryExample())
+                    responses {
+                        HttpStatusCode.Created {
+                            description = "Batch accepted and processed"
+                            content {
+                                schema = buildSchema(typeOf<IngestionSummaryResponse>())
+                                example("created", ingestionSummaryExample())
+                            }
                         }
-                    }
-                    HttpStatusCode.OK {
-                        description =
-                            "Duplicate batch accepted without creating a new batch"
-                        content {
-                            schema = buildSchema(typeOf<IngestionSummaryResponse>())
-                            example(
-                                "duplicate",
-                                ingestionSummaryExample(duplicate = true),
-                            )
+                        HttpStatusCode.OK {
+                            description =
+                                "Duplicate batch accepted without creating a new batch"
+                            content {
+                                schema = buildSchema(typeOf<IngestionSummaryResponse>())
+                                example(
+                                    "duplicate",
+                                    ingestionSummaryExample(duplicate = true),
+                                )
+                            }
                         }
+                        commonErrors(conflict = true, payloadTooLarge = true)
                     }
-                    commonErrors(conflict = true)
                 }
             }
             providerRoutes()

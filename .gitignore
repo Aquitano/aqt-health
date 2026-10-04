@@ -34,6 +34,9 @@ data/
 .env
 .env.*
 !.env.example
+compose.override.y*ml
+docker-compose.override.y*ml
+!docker-compose.override.example.yml
 application-local.yaml
 docs/index.html
 docs/.swagger-codegen/

@@ -13,7 +13,6 @@ import me.aquitano.health.api.dto.ReplayRequest
 import me.aquitano.health.application.metric.common.MetricWrite
 import me.aquitano.health.application.metric.common.MetricWriteService
 import me.aquitano.health.domain.ConflictException
-import me.aquitano.health.domain.DerivedKind
 import me.aquitano.health.domain.NotFoundException
 import me.aquitano.health.domain.RecordTypes
 import me.aquitano.health.domain.ReplayJobStatus
@@ -236,8 +235,7 @@ class ReplayService(
         val dayStart = day.atStartOfDay(ZoneOffset.UTC).toInstant()
         val dayEnd = day.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant()
         val now = clock.now()
-        val affectedBySource =
-            mutableMapOf<Int, MutableMap<DerivedKind, MutableSet<LocalDate>>>()
+        val affectedBySource = mutableMapOf<Int, MutableSet<LocalDate>>()
 
         val rows =
             suspendDbTransaction(db = database) {
@@ -254,14 +252,10 @@ class ReplayService(
         val writesBySource = prepared.groupBy { it.first.sourceInstanceId }.toSortedMap()
         if (plan.includesDerived) {
             rows.forEach { row ->
-                derivedRebuildRegistry
-                    .affectedDatesFor(row.recordType, row.recordStartAt, row.recordEndAt)
-                    .forEach { (kind, dates) ->
-                        affectedBySource
-                            .getOrPut(row.sourceInstanceId) { mutableMapOf() }
-                            .getOrPut(kind) { linkedSetOf() }
-                            .addAll(dates)
-                    }
+                val dates = derivedRebuildRegistry.affectedDatesFor(row.recordType, row.recordStartAt, row.recordEndAt)
+                if (dates.isNotEmpty()) {
+                    affectedBySource.getOrPut(row.sourceInstanceId) { linkedSetOf() }.addAll(dates)
+                }
             }
         }
         val replayed =
@@ -298,11 +292,8 @@ class ReplayService(
                                 now = now,
                             )
                         if (plan.includesDerived) {
-                            writeResult.affectedDates.forEach { (kind, dates) ->
-                                affectedBySource
-                                    .getOrPut(sourceId) { mutableMapOf() }
-                                    .getOrPut(kind) { linkedSetOf() }
-                                    .addAll(dates)
+                            if (writeResult.affectedStepDates.isNotEmpty()) {
+                                affectedBySource.getOrPut(sourceId) { linkedSetOf() }.addAll(writeResult.affectedStepDates)
                             }
                         }
                         recordsReplayed += entries.size
@@ -314,8 +305,8 @@ class ReplayService(
                 }
 
                 val rebuildRequests =
-                    affectedBySource.map { (sourceInstanceId, affectedDates) ->
-                        DerivedRebuildRequest(sourceInstanceId, affectedDates.mapValues { it.value.toSet() })
+                    affectedBySource.map { (sourceInstanceId, dates) ->
+                        DerivedRebuildRequest(sourceInstanceId, dates.toSet())
                     }
                 ReplayedDay(
                     result = DayReplayResult(recordsReplayed, metricsWritten, duplicatesSkipped, mappingFailures),

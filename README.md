@@ -26,7 +26,7 @@ Start PostgreSQL:
 docker compose up -d postgres
 ```
 
-The compose file uses `AQT_HEALTH_DB_USER`, `AQT_HEALTH_DB_PASSWORD`, and `POSTGRES_DB` from the environment when set. Postgres is not published to the host; the app reaches it over the compose network at `postgres:5432`. To run the app outside compose against that database, publish the port yourself with a local `compose.override.yml`.
+The compose file uses `AQT_HEALTH_DB_USER`, `AQT_HEALTH_DB_PASSWORD`, and `POSTGRES_DB` from the environment when set. Postgres is not published to the host; the app reaches it over the compose network at `postgres:5432`. To run the app outside compose against that database, publish the port with a local override: `cp docker-compose.override.example.yml docker-compose.override.yml`, then `docker compose up -d postgres`. The override file is ignored by git.
 
 Bash:
 
@@ -79,6 +79,7 @@ Environment variables:
 - `AQT_HEALTH_DB_USER`: PostgreSQL username, default `aqt_health`
 - `AQT_HEALTH_DB_PASSWORD`: PostgreSQL password, default `aqt_health`
 - `AQT_HEALTH_DB_MAX_POOL_SIZE`: maximum Hikari connection pool size, default `10`
+- `AQT_HEALTH_INGESTION_MAX_BODY_BYTES`: maximum request body size for `POST /api/v2/ingestion/batches`, default `33554432` (32 MB); larger requests get `413`
 - `AQT_HEALTH_BOOTSTRAP_CLIENT_NAME`: initial API client name, default `local-admin`
 - `AQT_HEALTH_BOOTSTRAP_API_KEY`: optional plaintext bootstrap key
 - `AQT_HEALTH_GOOGLE_CLIENT_ID`: Google OAuth web client ID for Google Health
@@ -116,7 +117,6 @@ Production requires:
 - Non-default database credentials; the compose `aqt_health` / `aqt_health` pair is rejected.
 - Google Health and Withings OAuth client IDs, client secrets, public HTTPS redirect URIs, and token encryption keys.
 - Provider token encryption keys of at least 32 bytes.
-- Public HTTPS CORS origins. `localhost`, HTTP origins, and `*` are rejected.
 - Public HTTPS provider API, OAuth token, and OAuth authorization URLs.
 
 For local secrets, copy `.env.example` to `.env` and put real values only in `.env`. The `.env` file is ignored by git.

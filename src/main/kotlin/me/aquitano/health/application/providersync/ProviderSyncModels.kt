@@ -4,6 +4,7 @@ import kotlinx.serialization.json.JsonObject
 import me.aquitano.health.api.dto.IngestionRecord
 import me.aquitano.health.domain.BatchStatus
 import me.aquitano.health.domain.IngestionSnapshot
+import me.aquitano.health.domain.ProviderSyncItem
 import java.time.Instant
 
 data class ProviderSyncPlan(
@@ -12,28 +13,6 @@ data class ProviderSyncPlan(
     val requestedTo: Instant,
     val items: List<ProviderSyncItem>,
 )
-
-data class ProviderSyncItem(
-    val dataType: String,
-    val from: Instant,
-    val to: Instant,
-    val pageSize: Int? = null,
-)
-
-interface ProviderSyncProgressSink {
-    suspend fun started(
-        totalItems: Int,
-        providerInstanceId: String,
-    ) {}
-
-    suspend fun itemStarted(item: ProviderSyncItem) {}
-
-    suspend fun itemCompleted(item: ProviderSyncItem) {}
-
-    companion object {
-        val None = object : ProviderSyncProgressSink {}
-    }
-}
 
 data class SyncAccount(
     val id: Int,

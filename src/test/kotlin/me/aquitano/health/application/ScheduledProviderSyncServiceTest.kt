@@ -5,12 +5,12 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
 import me.aquitano.health.api.dto.ScheduledSyncConfigUpdateRequest
-import me.aquitano.health.application.providersync.ProviderSyncProgressSink
 import me.aquitano.health.domain.ConflictException
 import me.aquitano.health.domain.HealthProvider
 import me.aquitano.health.domain.HealthProviderDescriptor
 import me.aquitano.health.domain.ProviderAuthType
 import me.aquitano.health.domain.ProviderConnection
+import me.aquitano.health.domain.ProviderSyncProgressSink
 import me.aquitano.health.domain.ProviderSyncRequest
 import me.aquitano.health.domain.ProviderSyncSummary
 import me.aquitano.health.domain.ProviderWorkflowEndpoints

@@ -37,7 +37,6 @@ class ProviderDiscoveryService(
             maxSyncRangeDays = maxSyncRangeDays,
             supportsPageSize = supportsPageSize,
             workflowEndpoints = workflowEndpoints.toDto(),
-            aliases = aliases,
         )
 
     private fun ProviderAuthType.toDto(): String = name.lowercase()

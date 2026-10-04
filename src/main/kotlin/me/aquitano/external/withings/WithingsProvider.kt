@@ -110,7 +110,7 @@ class WithingsProvider(
     override suspend fun sync(
         request: ProviderSyncRequest,
         now: Instant,
-        progress: me.aquitano.health.application.providersync.ProviderSyncProgressSink,
+        progress: ProviderSyncProgressSink,
     ): ProviderSyncSummary = syncPipeline.sync(syncAdapter, request, now, progress)
 
     private fun requireConfigured() = requireProviderConfigured("withings_not_configured", configurationIssues())

@@ -967,7 +967,6 @@ export interface components {
             maxSyncRangeDays: number;
             supportsPageSize: boolean;
             workflowEndpoints: components["schemas"]["ProviderWorkflowEndpointsResponse"];
-            aliases?: string[];
         };
         /** ProviderCatalogResponse */
         ProviderCatalogResponse: {
@@ -1820,6 +1819,15 @@ export interface operations {
             };
             /** @description Request conflicts with current state */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request body exceeds the configured size limit */
+            413: {
                 headers: {
                     [name: string]: unknown;
                 };

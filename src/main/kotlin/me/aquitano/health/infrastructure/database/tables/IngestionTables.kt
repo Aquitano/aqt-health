@@ -36,7 +36,6 @@ object PendingDerivedRebuildsTable : IntIdTable("pending_derived_rebuilds") {
     val revision = text("revision")
     val sourceInstanceId =
         integer("source_instance_id").references(SourceInstancesTable.id)
-    val derivedKind = text("derived_kind")
     val affectedDate = date("affected_date")
     val attempts = integer("attempts")
     val nextAttemptAt = timestampWithTimeZone("next_attempt_at")
@@ -45,6 +44,6 @@ object PendingDerivedRebuildsTable : IntIdTable("pending_derived_rebuilds") {
     val updatedAt = timestampWithTimeZone("updated_at")
 
     init {
-        uniqueIndex(sourceInstanceId, derivedKind, affectedDate)
+        uniqueIndex(sourceInstanceId, affectedDate)
     }
 }

@@ -167,7 +167,7 @@ class IngestionService(
 
                 var created = MetricCreatedCounts()
                 var duplicateSkipped = 0
-                var affectedDates = mapOf<DerivedKind, Set<LocalDate>>()
+                var affectedStepDates = emptySet<LocalDate>()
 
                 try {
                     // The metric writes run in a savepoint: a SQL-level failure would otherwise
@@ -185,7 +185,7 @@ class IngestionService(
                         }
                     created = writeResult.created
                     duplicateSkipped = writeResult.duplicateSkipped
-                    affectedDates = writeResult.affectedDates
+                    affectedStepDates = writeResult.affectedStepDates
                     ingestionRepository.markProcessed(batchId, now)
                 } catch (exception: Exception) {
                     if (exception is CancellationException) throw exception
@@ -217,14 +217,12 @@ class IngestionService(
                                 duplicates = duplicateSkipped,
                             ),
                         affectedStepSummaryDates =
-                            affectedDates[DerivedKind.STEP_SUMMARY]
-                                .orEmpty()
-                                .map { it.toString() },
+                            affectedStepDates.map { it.toString() },
                     )
                 val rebuildRequest =
                     DerivedRebuildRequest(
                         sourceInstanceId = sourceInstance.id,
-                        affectedDates = affectedDates,
+                        affectedStepDates = affectedStepDates,
                     )
                 IngestionTransactionResult.Success(
                     response,

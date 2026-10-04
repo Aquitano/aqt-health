@@ -107,7 +107,7 @@ class OAuthProviderSyncStore(
                 requireNotNull(tokenEncryptionKeys[it]) {
                     "No token encryption key configured for provider '$it'"
                 }
-            TokenCipher(key)
+            TokenCipher(key, it)
         }
 
     override suspend fun selectForSync(
