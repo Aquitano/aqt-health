@@ -49,6 +49,8 @@ class WithingsNormalizerTest {
                             addMeasure(type = 76, value = 402, unit = -1)
                             addMeasure(type = 77, value = 40068, unit = -3)
                             addMeasure(type = 135, value = 98, unit = 0)
+                            addMeasure(type = 168, value = 172, unit = -1)
+                            addMeasure(type = 169, value = 228, unit = -1)
                             addMeasure(type = 170, value = 9, unit = 0)
                             addMeasure(type = 226, value = 1650, unit = 0)
                         }
@@ -57,12 +59,17 @@ class WithingsNormalizerTest {
             )
 
         val samples = result.records.filterIsInstance<ScalarSample>().associateBy { it.metricType }
-        assertEquals(setOf("weight", "body_fat", "muscle", "water", "visceral_fat", "basal_metabolic_rate"), samples.keys)
+        assertEquals(
+            setOf("weight", "body_fat", "muscle", "water", "extracellular_water", "intracellular_water", "visceral_fat", "basal_metabolic_rate"),
+            samples.keys,
+        )
         assertEquals("withings:measure:123:weight", samples.getValue("weight").providerRecordId)
         assertEquals(80.136, samples.getValue("weight").value, 0.000001)
         assertEquals(21.4, samples.getValue("body_fat").value, 0.000001)
         assertEquals(40.2, samples.getValue("muscle").value, 0.000001)
         assertEquals(50.0, samples.getValue("water").value, 0.000001)
+        assertEquals(17.2, samples.getValue("extracellular_water").value, 0.000001)
+        assertEquals(22.8, samples.getValue("intracellular_water").value, 0.000001)
         assertEquals(9.0, samples.getValue("visceral_fat").value, 0.000001)
         assertEquals(1650.0, samples.getValue("basal_metabolic_rate").value, 0.000001)
     }

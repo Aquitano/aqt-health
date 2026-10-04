@@ -15,6 +15,8 @@ import io.ktor.http.headersOf
 import io.ktor.http.parseQueryString
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
 import me.aquitano.health.infrastructure.config.ProviderOAuthConfig
 import me.aquitano.health.shared.AppJson
 import java.time.Instant
@@ -339,6 +341,36 @@ class WithingsOAuthClientTest {
             assertEquals(listOf("1775001600", "1775088000"), forms.map { it["startdate"]!!.single() })
             assertEquals(listOf("1775087999", "1775174399"), forms.map { it["enddate"]!!.single() })
             assertNull(forms[0]["meastypes"])
+        }
+
+    @Test
+    fun sleepSegmentReturnedByBothChunksIsKeptOnce() =
+        runBlocking {
+            val crossingEdge = """{"startdate": 1775087400, "enddate": 1775088600, "state": 2}"""
+            val responses =
+                ArrayDeque(
+                    listOf(
+                        """[{"startdate": 1775084400, "enddate": 1775087400, "state": 1}, $crossingEdge]""",
+                        """[$crossingEdge, {"startdate": 1775088600, "enddate": 1775091600, "state": 3}]""",
+                    ),
+                )
+            val client =
+                client {
+                    respondJson("""{"status": 0, "body": {"series": ${responses.removeFirst()}, "more": false}}""")
+                }
+
+            val result =
+                client.fetchSleep(
+                    accessToken = "token",
+                    from = Instant.parse("2026-04-01T00:00:00Z"),
+                    to = Instant.parse("2026-04-03T00:00:00Z"),
+                    dataFields = listOf("state"),
+                )
+
+            assertEquals(
+                listOf(1775084400L, 1775087400L, 1775088600L),
+                result.records.map { it.getValue("startdate").jsonPrimitive.long },
+            )
         }
 
     @Test
