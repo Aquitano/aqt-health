@@ -55,7 +55,6 @@ dependencies {
     implementation("io.micrometer:micrometer-registry-prometheus:1.17.1")
     implementation("org.xerial.snappy:snappy-java:1.1.10.10")
     implementation("io.ktor:ktor-server-netty")
-    implementation("io.ktor:ktor-server-openapi")
     implementation("io.ktor:ktor-server-routing-openapi")
     implementation("io.ktor:ktor-openapi-schema")
     implementation("io.ktor:ktor-server-status-pages")
