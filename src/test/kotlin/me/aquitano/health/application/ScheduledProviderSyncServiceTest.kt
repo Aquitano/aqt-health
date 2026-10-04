@@ -4,6 +4,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
+import me.aquitano.health.api.dto.ScheduledSyncConfigUpdateRequest
 import me.aquitano.health.application.providersync.ProviderSyncProgressSink
 import me.aquitano.health.domain.ConflictException
 import me.aquitano.health.domain.HealthProvider
@@ -147,6 +148,50 @@ class ScheduledProviderSyncServiceTest : PostgresIntegrationTest() {
             assertNotNull(config)
             assertNull(config.nextRunAt)
             assertEquals(3, config.failureCount)
+        }
+
+    @Test
+    fun resumingParkedConfigStartsFailureCountOver() =
+        runBlocking {
+            val provider = ThrowingProvider(ConflictException("withings_account_not_found", "account is gone"))
+            val database = openDatabase(PostgresTestDatabase.config())
+            val now = Instant.parse("2026-05-31T10:00:00Z")
+            ProviderOAuthRepository(database).upsertAccount(
+                providerCode = provider.providerCode,
+                providerUserId = "throwing-user",
+                providerInstanceId = provider.defaultProviderInstanceId,
+                accessTokenCiphertext = "access",
+                refreshTokenCiphertext = "refresh",
+                tokenType = "Bearer",
+                expiresAt = now.plusSeconds(3600),
+                scope = "scope",
+                now = now,
+            )
+            val (service, repository) = serviceWith(provider, database)
+            val parked =
+                repository.upsertConfig(
+                    providerCode = provider.providerCode,
+                    providerInstanceId = provider.defaultProviderInstanceId,
+                    enabled = true,
+                    dataTypes = listOf("steps"),
+                    cadenceMinutes = 1_440,
+                    lookbackDays = 7,
+                    nextRunAt = null,
+                    now = now,
+                )
+            repository.markFailure(parked.id, failureCount = 3, nextRunAt = null, errorMessage = "account is gone", now = now)
+
+            service.updateConfig(
+                provider.providerCode,
+                provider.defaultProviderInstanceId,
+                ScheduledSyncConfigUpdateRequest(enabled = true),
+                now,
+            )
+
+            val resumed = repository.getConfig(provider.providerCode, provider.defaultProviderInstanceId)
+            assertNotNull(resumed)
+            assertEquals(now, resumed.nextRunAt)
+            assertEquals(0, resumed.failureCount)
         }
 
     @Test

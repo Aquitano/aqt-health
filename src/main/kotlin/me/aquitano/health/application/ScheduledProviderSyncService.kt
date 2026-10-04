@@ -106,6 +106,9 @@ class ScheduledProviderSyncService(
                 max = provider.descriptor.maxSyncRangeDays,
             )
         val nextRunAt = if (enabled) existing?.nextRunAt ?: now else null
+        if (enabled && existing != null && existing.nextRunAt == null) {
+            repository.resumeParked(normalizedCode, providerInstanceId, now)
+        }
         val config =
             repository.upsertConfig(
                 providerCode = normalizedCode,
