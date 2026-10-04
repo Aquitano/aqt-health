@@ -4,7 +4,7 @@ FROM eclipse-temurin:25-jdk-alpine AS builder
 WORKDIR /app
 
 COPY gradlew gradle.properties settings.gradle.kts build.gradle.kts ./
-COPY gradle/wrapper/ gradle/wrapper/
+COPY gradle/ gradle/
 
 RUN chmod +x ./gradlew
 

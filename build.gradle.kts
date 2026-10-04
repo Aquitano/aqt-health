@@ -1,24 +1,10 @@
-val exposed_version: String by project
-val flyway_version: String by project
-val hikari_version: String by project
-val kotlin_version: String by project
-val koin_version: String by project
-val logback_version: String by project
-val logstash_logback_encoder_version: String by project
-val okhttp_version: String by project
-val postgresql_jdbc_version: String by project
-val testcontainers_version: String by project
-val kotlinx_coroutines_version: String by project
-val kotlin_logging_version: String by project
-val konsist_version: String by project
-
 plugins {
-    kotlin("jvm") version "2.4.20"
-    id("io.ktor.plugin") version "3.6.0"
-    id("org.jetbrains.kotlin.plugin.serialization") version "2.4.20"
+    alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.ktor)
+    alias(libs.plugins.kotlin.serialization)
 
-    id("io.github.ben-manes.versions") version "0.64.0"
-    id("org.jlleitschuh.gradle.ktlint") version "14.2.0"
+    alias(libs.plugins.ben.manes.versions)
+    alias(libs.plugins.ktlint)
 }
 
 group = "me.aquitano"
@@ -52,8 +38,8 @@ dependencies {
     implementation("io.ktor:ktor-server-core")
     implementation("io.ktor:ktor-server-content-negotiation")
     implementation("io.ktor:ktor-server-metrics-micrometer")
-    implementation("io.micrometer:micrometer-registry-prometheus:1.17.1")
-    implementation("org.xerial.snappy:snappy-java:1.1.10.10")
+    implementation(libs.micrometer.registry.prometheus)
+    implementation(libs.snappy.java)
     implementation("io.ktor:ktor-server-netty")
     implementation("io.ktor:ktor-server-routing-openapi")
     implementation("io.ktor:ktor-openapi-schema")
@@ -61,32 +47,32 @@ dependencies {
     implementation("io.ktor:ktor-server-swagger")
     implementation("io.ktor:ktor-serialization-kotlinx-json")
     implementation("io.ktor:ktor-server-config-yaml")
-    implementation("io.insert-koin:koin-ktor:$koin_version")
-    implementation("io.insert-koin:koin-logger-slf4j:$koin_version")
+    implementation(libs.koin.ktor)
+    implementation(libs.koin.logger.slf4j)
 
-    implementation("ch.qos.logback:logback-classic:$logback_version")
-    implementation("net.logstash.logback:logstash-logback-encoder:$logstash_logback_encoder_version")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-slf4j:$kotlinx_coroutines_version")
-    implementation("io.github.oshai:kotlin-logging-jvm:$kotlin_logging_version")
-    implementation("com.squareup.okhttp3:okhttp:$okhttp_version")
+    implementation(libs.logback.classic)
+    implementation(libs.logstash.logback.encoder)
+    implementation(libs.kotlinx.coroutines.slf4j)
+    implementation(libs.kotlin.logging.jvm)
+    implementation(libs.okhttp)
 
-    implementation("org.jetbrains.exposed:exposed-core:$exposed_version")
-    implementation("org.jetbrains.exposed:exposed-dao:$exposed_version")
-    implementation("org.jetbrains.exposed:exposed-java-time:$exposed_version")
-    implementation("org.jetbrains.exposed:exposed-jdbc:$exposed_version")
-    implementation("org.postgresql:postgresql:$postgresql_jdbc_version")
-    implementation("com.zaxxer:HikariCP:$hikari_version")
-    implementation("org.flywaydb:flyway-core:$flyway_version")
-    implementation("org.flywaydb:flyway-database-postgresql:$flyway_version")
+    implementation(libs.exposed.core)
+    implementation(libs.exposed.dao)
+    implementation(libs.exposed.java.time)
+    implementation(libs.exposed.jdbc)
+    implementation(libs.postgresql)
+    implementation(libs.hikari)
+    implementation(libs.flyway.core)
+    implementation(libs.flyway.database.postgresql)
 
-    implementation("com.google.cloud:google-cloud-health:0.8.0")
+    implementation(libs.google.cloud.health)
 
     testImplementation("io.ktor:ktor-server-test-host")
     testImplementation("io.ktor:ktor-client-mock")
-    testImplementation("org.jetbrains.kotlin:kotlin-test-junit:$kotlin_version")
-    testImplementation("org.testcontainers:testcontainers-postgresql:$testcontainers_version")
-    testImplementation("com.lemonappdev:konsist:$konsist_version")
-    testCompileOnly("org.jetbrains.kotlin:kotlin-compiler-embeddable:2.0.21") // Supplied at runtime by Konsist.
+    testImplementation(kotlin("test-junit"))
+    testImplementation(libs.testcontainers.postgresql)
+    testImplementation(libs.konsist)
+    testCompileOnly(libs.konsist.kotlin.compiler)
 }
 
 fun dockerIsAvailable(): Boolean =
@@ -115,7 +101,7 @@ fun requirePostgresIntegrationDatabase() {
 }
 
 ktlint {
-    version.set("1.8.0")
+    version.set(libs.versions.ktlint)
 }
 
 // The Ktor plugin defaults shadowJar to DuplicatesStrategy.EXCLUDE, which drops

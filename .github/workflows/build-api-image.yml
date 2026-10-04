@@ -14,7 +14,7 @@ on:
       - settings.gradle.kts
       - gradle.properties
       - gradlew
-      - gradle/wrapper/**
+      - gradle/**
       - .github/workflows/build-api-image.yml
   workflow_dispatch:
 
