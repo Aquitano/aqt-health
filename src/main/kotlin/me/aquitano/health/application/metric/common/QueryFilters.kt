@@ -1,17 +1,13 @@
 package me.aquitano.health.application.metric.common
 
-import me.aquitano.health.application.metric.common.repository.DailyReadFilters
 import me.aquitano.health.application.metric.common.repository.ReadFilters
-import me.aquitano.health.application.metric.common.repository.SleepNightReadFilters
 import me.aquitano.health.domain.RequestValidationException
 import me.aquitano.health.domain.ValidationIssue
 import me.aquitano.health.domain.ValidationIssueCodes
 import java.time.Instant
 import java.time.LocalDate
 
-internal fun QueryParams.readFilters(
-    sortSpec: EnumParamSpec,
-): ReadFilters {
+internal fun QueryParams.readFilters(): ReadFilters {
     val latest = boolean(QueryParamSpecs.latest)
     if (latest) {
         rejectLatestOverrides()
@@ -19,7 +15,6 @@ internal fun QueryParams.readFilters(
     val from = instant("from")
     val to = instant("to")
     validateRange(from, to, "from", "to")
-    val sort = if (latest) sortSpec.default else sort(sortSpec)
     val order = if (latest) Orders.DESC else order()
     return ReadFilters(
         from = from,
@@ -27,14 +22,15 @@ internal fun QueryParams.readFilters(
         provider = optional("provider"),
         providerInstanceId = optional("providerInstanceId"),
         includeSource = boolean(QueryParamSpecs.includeSource),
-        limit = if (latest) 1 else limit(QueryParamSpecs.readLimit),
-        sort = sort,
+        limit = if (latest) 1 else int(QueryParamSpecs.readLimit),
         order = order,
-        cursor = if (latest) null else cursor(sort, order),
+        cursor = if (latest) null else cursor(order),
+        latest = latest,
     )
 }
 
-internal fun QueryParams.summaryFilters(defaultSort: String): ReadFilters {
+internal fun QueryParams.summaryFilters(): ReadFilters {
+    rejectLatest()
     val from = instant("from")
     val to = instant("to")
     validateRange(from, to, "from", "to")
@@ -45,44 +41,41 @@ internal fun QueryParams.summaryFilters(defaultSort: String): ReadFilters {
         providerInstanceId = optional("providerInstanceId"),
         includeSource = boolean("includeSource", default = false),
         limit = 1,
-        sort = defaultSort,
         order = Orders.DESC,
     )
 }
 
-internal fun QueryParams.dailyReadFilters(now: Instant): DailyReadFilters {
+internal fun QueryParams.dailyReadFilters(now: Instant): ReadFilters {
     val (fromDate, toDate) = dailyDateRange(now)
-    val sort = sort(QueryParamSpecs.sortByDate)
     val order = order()
-    return DailyReadFilters(
+    return ReadFilters(
         fromDate = fromDate,
         toDate = toDate,
         provider = optional("provider"),
         providerInstanceId = optional("providerInstanceId"),
         includeSource = boolean(QueryParamSpecs.includeSource),
-        limit = if (optional("date") != null) 1 else limit(QueryParamSpecs.readLimit),
-        sort = sort,
+        limit = if (optional("date") != null) 1 else int(QueryParamSpecs.readLimit),
         order = order,
-        cursor = cursor(sort, order),
+        cursor = cursor(order),
     )
 }
 
-internal fun QueryParams.dailyLatestReadFilters(now: Instant): DailyReadFilters {
+internal fun QueryParams.dailyLatestReadFilters(now: Instant): ReadFilters {
     rejectLatestOverrides(message = "is not supported for latest endpoints")
     val (fromDate, toDate) = dailyDateRange(now)
-    return DailyReadFilters(
+    return ReadFilters(
         fromDate = fromDate,
         toDate = toDate,
         provider = optional("provider"),
         providerInstanceId = optional("providerInstanceId"),
         includeSource = boolean("includeSource", default = false),
         limit = 1,
-        sort = SortFields.DATE,
         order = Orders.DESC,
+        latest = true,
     )
 }
 
-internal fun QueryParams.sleepNightReadFilters(now: Instant): SleepNightReadFilters {
+internal fun QueryParams.sleepNightReadFilters(now: Instant): ReadFilters {
     val timezone = timezone()
     val exactDate = dateOrToday("date", now, timezone)
     if (exactDate != null && (optional("fromDate") != null || optional("toDate") != null)) {
@@ -99,19 +92,17 @@ internal fun QueryParams.sleepNightReadFilters(now: Instant): SleepNightReadFilt
     val fromDate = exactDate ?: date("fromDate")
     val toDate = exactDate ?: date("toDate")
     validateDateRange(fromDate, toDate)
-    val sort = sort(QueryParamSpecs.sortByDate)
     val order = order()
-    return SleepNightReadFilters(
+    return ReadFilters(
         fromDate = fromDate,
         toDate = toDate,
         timezone = timezone,
         provider = optional("provider"),
         providerInstanceId = optional("providerInstanceId"),
         includeSource = boolean(QueryParamSpecs.includeSource),
-        limit = if (exactDate != null) 1 else limit(QueryParamSpecs.readLimit),
-        sort = sort,
+        limit = if (exactDate != null) 1 else int(QueryParamSpecs.readLimit),
         order = order,
-        cursor = cursor(sort, order),
+        cursor = cursor(order),
     )
 }
 

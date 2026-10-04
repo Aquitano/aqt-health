@@ -1,8 +1,8 @@
 package me.aquitano.health.application
 
 import me.aquitano.health.api.dto.*
+import me.aquitano.health.application.metric.common.QueryParamSpecs
 import me.aquitano.health.application.metric.common.QueryParams
-import me.aquitano.health.application.metric.common.repository.DailyReadFilters
 import me.aquitano.health.application.metric.common.repository.ReadFilters
 import me.aquitano.health.application.metric.scalar.ScalarSampleReadRepository
 import me.aquitano.health.application.metric.scalar.toScalarResponse
@@ -30,7 +30,7 @@ class TrendQueryService(
         now: Instant,
     ): DashboardTrendsResponse =
         suspendDbTransaction(db = database) {
-            val periodDays = params.optional("periodDays")?.toIntOrNull()?.coerceIn(1, 90) ?: 7
+            val periodDays = params.int(QueryParamSpecs.periodDays)
             val timezone = params.timezone()
             val toDate = params.date("toDate") ?: now.atZone(timezone).toLocalDate()
             val fromDate = toDate.minusDays(periodDays.toLong() - 1)
@@ -173,15 +173,14 @@ class TrendQueryService(
     private fun dailyReadFilters(
         fromDate: LocalDate,
         toDate: LocalDate,
-    ): DailyReadFilters =
-        DailyReadFilters(
+    ): ReadFilters =
+        ReadFilters(
             fromDate = fromDate,
             toDate = toDate,
             provider = null,
             providerInstanceId = null,
             includeSource = false,
             limit = Int.MAX_VALUE,
-            sort = "date",
             order = "asc",
         )
 
@@ -193,7 +192,6 @@ class TrendQueryService(
             providerInstanceId = null,
             includeSource = false,
             limit = 1,
-            sort = "measuredAt",
             order = "desc",
         )
 
@@ -209,7 +207,6 @@ class TrendQueryService(
             providerInstanceId = null,
             includeSource = false,
             limit = Int.MAX_VALUE,
-            sort = "measuredAt",
             order = "asc",
         )
 

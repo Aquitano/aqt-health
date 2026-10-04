@@ -52,17 +52,15 @@ class AdminService(
         val from = params.instant("from")
         val to = params.instant("to")
         validateRange(from, to, "from", "to")
-        val sort = "receivedAt"
         val order = "desc"
-        val cursor = params.cursor(sort, order)
-        val limit = params.limit(QueryParamSpecs.adminLimit)
+        val cursor = params.cursor(order)
+        val limit = params.int(QueryParamSpecs.adminLimit)
         return suspendDbTransaction(db = database) {
             val page =
                 ingestionRepository
                     .listBatches(status, from, to, keysetFetchLimit(limit), cursor)
                     .keysetPage(
                         limit = limit,
-                        sort = sort,
                         order = order,
                         sortValue = { it.receivedAt },
                         id = { it.id.toLong() },
@@ -88,7 +86,7 @@ class AdminService(
                     ReadResponseMeta(
                         count = page.items.size,
                         limit = limit,
-                        sort = sort,
+                        sort = "receivedAt",
                         order = order,
                         nextCursor = page.nextCursor,
                     ),

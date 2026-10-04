@@ -4,7 +4,6 @@ import createClient from "openapi-fetch";
 import type {
   ApiResult,
   ApiSchema,
-  BodyMeasurementsResponse,
   ScheduledSyncConfig,
   ScheduledSyncConfigUpdateRequest,
   ScheduledSyncRunResponse,
@@ -277,8 +276,13 @@ export const aqtHealthClient = {
       }),
     ),
 
-  listBodyMeasurements: (query: ScalarSamplesQuery) =>
-    listScalarMetrics(bodyMetricTypes, query),
+  listBodyMeasurements: (query: Omit<GetQuery<"/api/v2/metrics/samples">, "metricTypes">) =>
+    call<ApiSchema<"ScalarSamplesResponse">>((headers) =>
+      rawClient.GET("/api/v2/metrics/samples", {
+        headers,
+        params: { query: { ...query, metricTypes: bodyMetricTypes.join(",") } },
+      }),
+    ),
 
   getDashboardSummary: (query: GetQuery<"/api/v2/dashboard/summary">) =>
     call<ApiSchema<"DashboardSummaryResponse">>((headers) =>
@@ -332,59 +336,6 @@ function listScalarMetric(
       params: { path: { metricType }, query },
     }),
   );
-}
-
-function listScalarMetrics(
-  metricTypes: string[],
-  query: ScalarSamplesQuery,
-): Promise<ApiResult<BodyMeasurementsResponse>> {
-  return call<BodyMeasurementsResponse>((headers) =>
-    mergedScalarMetrics(metricTypes, query, headers),
-  );
-}
-
-async function mergedScalarMetrics(
-  metricTypes: string[],
-  query: ScalarSamplesQuery,
-  headers: HeadersInit,
-): Promise<ClientResponse<BodyMeasurementsResponse>> {
-  const responses = await Promise.all(
-    metricTypes.map((metricType) =>
-      rawClient.GET("/api/v2/metrics/{metricType}", {
-        headers,
-        params: { path: { metricType }, query },
-      }),
-    ),
-  );
-  const failed = responses.find((result) => result.error || !result.response?.ok);
-  if (failed) return { error: failed.error, response: failed.response };
-
-  const order = query.order ?? (query.latest ? "desc" : "asc");
-  const requestedLimit = query.limit ?? 500;
-  const mergedItems = responses
-    .flatMap((result) => result.data?.items ?? [])
-    .sort((left, right) => {
-      const measured = left.measuredAt.localeCompare(right.measuredAt);
-      const byTime = order === "desc" ? -measured : measured;
-      if (byTime !== 0) return byTime;
-      return order === "desc" ? right.id - left.id : left.id - right.id;
-    });
-  const items = query.latest ? mergedItems : mergedItems.slice(0, requestedLimit);
-  const firstMeta = responses[0]?.data?.meta;
-
-  return {
-    data: {
-      items,
-      truncated: items.length < mergedItems.length || responses.some((result) => Boolean(result.data?.meta.nextCursor)),
-      meta: {
-        count: items.length,
-        limit: requestedLimit,
-        sort: firstMeta?.sort ?? "measuredAt",
-        order,
-      },
-    },
-    response: responses[0]?.response,
-  };
 }
 
 async function fetchWithTimeout(

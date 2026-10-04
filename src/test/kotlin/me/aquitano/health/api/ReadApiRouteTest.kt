@@ -262,6 +262,18 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
                     .jsonObject["code"]!!
                     .jsonPrimitive.content,
             )
+
+            listOf("abc", "0", "91").forEach { periodDays ->
+                val invalidPeriod = authorizedGet("/api/v2/dashboard/trends?periodDays=$periodDays")
+                assertEquals(HttpStatusCode.BadRequest, invalidPeriod.status)
+                assertEquals(
+                    "periodDays",
+                    invalidPeriod
+                        .errorDetails()[0]
+                        .jsonObject["field"]!!
+                        .jsonPrimitive.content,
+                )
+            }
         }
 
     @Test
@@ -375,6 +387,21 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
                 authorizedGet("/api/v2/health/day?date=2026-04-20&timezone=Europe/Berlin&modules=sleep")
             assertEquals("2026-04-19T22:00:00Z", berlin.jsonBody()["from"]!!.jsonPrimitive.content)
             assertEquals("2026-04-20T22:00:00Z", berlin.jsonBody()["to"]!!.jsonPrimitive.content)
+        }
+
+    @Test
+    fun healthDaySleepFallsBackToClippedSessionDurationWithoutStages() =
+        testApplication {
+            configureTestApplication()
+            val ingestion =
+                client.post("/api/v2/ingestion/batches") {
+                    authorized()
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"provider":"health_connect","providerInstanceId":"unstaged","ingestedAt":"2026-04-20T10:00:00Z","sourcePayload":{},"records":[{"type":"sleep_session","startAt":"2026-04-19T22:00:00Z","endAt":"2026-04-20T06:00:00Z"}]}""")
+                }
+            assertEquals(HttpStatusCode.Created, ingestion.status)
+            val sleep = authorizedGet("/api/v2/health/day?date=2026-04-20&timezone=UTC&modules=sleep").jsonBody()["sleep"]!!.jsonObject
+            assertEquals(21600, sleep["totalDurationSeconds"]!!.jsonPrimitive.long)
         }
 
     @Test
@@ -519,6 +546,7 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
             )
             assertEquals("desc", latestSteps.meta()["order"]!!.jsonPrimitive.content)
             assertEquals(1, latestSteps.meta()["limit"]!!.jsonPrimitive.int)
+            assertFalse(latestSteps.meta().containsKey("nextCursor"))
 
             val invalidLimit = authorizedGet("/api/v2/metrics/heart_rate?limit=0")
             assertEquals(HttpStatusCode.BadRequest, invalidLimit.status)
@@ -528,31 +556,6 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
             assertEquals(
                 "order",
                 invalidOrder
-                    .errorDetails()[0]
-                    .jsonObject["field"]!!
-                    .jsonPrimitive.content,
-            )
-
-            val invalidSort = authorizedGet("/api/v2/metrics/heart_rate?sort=startAt")
-            assertEquals(HttpStatusCode.BadRequest, invalidSort.status)
-            assertEquals(
-                "sort",
-                invalidSort
-                    .errorDetails()[0]
-                    .jsonObject["field"]!!
-                    .jsonPrimitive.content,
-            )
-
-            val validSleepSummarySort =
-                authorizedGet("/api/v2/sleep/summaries?sort=endAt&order=desc")
-            assertEquals(HttpStatusCode.OK, validSleepSummarySort.status)
-
-            val invalidSleepSummarySort =
-                authorizedGet("/api/v2/sleep/summaries?sort=startAt")
-            assertEquals(HttpStatusCode.BadRequest, invalidSleepSummarySort.status)
-            assertEquals(
-                "sort",
-                invalidSleepSummarySort
                     .errorDetails()[0]
                     .jsonObject["field"]!!
                     .jsonPrimitive.content,
@@ -621,6 +624,16 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
             assertFalse(emptyBody.containsKey("avgValue"))
             assertFalse(emptyBody.containsKey("latest"))
 
+            val latestSummary = authorizedGet("/api/v2/metrics/heart_rate/summary?latest=true")
+            assertEquals(HttpStatusCode.BadRequest, latestSummary.status)
+            assertEquals(
+                "latest",
+                latestSummary
+                    .errorDetails()[0]
+                    .jsonObject["field"]!!
+                    .jsonPrimitive.content,
+            )
+
             val latestWeight =
                 authorizedGet("/api/v2/metrics/weight?latest=true")
             assertEquals(HttpStatusCode.OK, latestWeight.status)
@@ -641,6 +654,26 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
                     .jsonObject["code"]!!
                     .jsonPrimitive.content,
             )
+        }
+
+    @Test
+    fun scalarSamplesAcrossTypesPageOneMergedList() =
+        testApplication {
+            configureTestApplication()
+            ingestMixedBatch()
+            ingestLaterBatch()
+
+            val path = "/api/v2/metrics/samples?metricTypes=weight,body_fat&order=desc&limit=2"
+            val firstPage = authorizedGet(path)
+            assertEquals(HttpStatusCode.OK, firstPage.status)
+            val cursor = firstPage.meta()["nextCursor"]!!.jsonPrimitive.content
+            val values = (firstPage.items() + authorizedGet("$path&cursor=$cursor").items()).map { it.jsonObject["value"]!!.jsonPrimitive.double }
+            assertEquals(83.1, values.first())
+            assertEquals(setOf(83.1, 82.4, 18.2), values.toSet())
+            assertEquals(3, values.size)
+
+            val unknown = authorizedGet("/api/v2/metrics/samples?metricTypes=weight,not_a_metric")
+            assertEquals(HttpStatusCode.BadRequest, unknown.status)
         }
 
     @Test

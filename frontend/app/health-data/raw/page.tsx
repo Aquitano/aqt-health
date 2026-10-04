@@ -111,34 +111,33 @@ export default async function RawDataPage({
     switch (dataset) {
       case "steps":
         return table(
-          client.listDailyStepSummaries({ ...dateQuery, sort: "date" }),
+          client.listDailyStepSummaries(dateQuery),
           DailyStepsTable
         );
       case "activity":
         return table(
-          client.listActivitySummaries({ ...dateQuery, sort: "date" }),
+          client.listActivitySummaries(dateQuery),
           ActivitySummariesTable
         );
       case "sleep-sessions":
         return table(
-          client.listSleepSessions({ ...instantQuery, sort: "startAt" }),
+          client.listSleepSessions(instantQuery),
           SleepSessionsTable
         );
       case "sleep-summaries":
         return table(
-          client.listSleepSummaries({ ...instantQuery, sort: "endAt" }),
+          client.listSleepSummaries(instantQuery),
           SleepSummariesTable
         );
       case "blood-pressure":
         return table(
-          client.listBloodPressure({ ...instantQuery, sort: "measuredAt" }),
+          client.listBloodPressure(instantQuery),
           BloodPressureTable
         );
       default:
         return table(
           client.listScalarSamples(dataset, {
             ...instantQuery,
-            sort: "measuredAt",
             raw: true,
           }),
           ScalarSamplesTable

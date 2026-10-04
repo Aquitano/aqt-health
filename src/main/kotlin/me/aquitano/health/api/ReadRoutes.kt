@@ -46,6 +46,18 @@ internal fun Route.readRoutes() {
         requiresBearerAuth()
         errorResponses()
     }
+    get("/api/v2/metrics/samples") {
+        call.respond<ScalarSamplesResponse>(scalarMetricQueryService.listAcrossTypes(call.queryParams()))
+    }.describe {
+        operationId = "listScalarSamplesAcrossTypes"
+        tag("Read")
+        summary = "List scalar samples across several metric types"
+        description =
+            "Returns one canonical (or `raw=true`) sample list for every metric type in `metricTypes`, ordered by `measuredAt` with the same filters, `latest=true` and cursor pagination as the single-type list. Unknown metric types return 400."
+        requiresBearerAuth()
+        multiScalarMetricQueryParameters()
+        errorResponses()
+    }
     get("/api/v2/metrics/{metricType}") {
         call.respond<ScalarSamplesResponse>(
             scalarMetricQueryService.list(
@@ -135,7 +147,6 @@ internal fun Route.readRoutes() {
         summary = "List step samples",
         descriptionText = "Returns canonical step samples filtered by timestamp range, source provider, provider instance, source metadata inclusion, item limit, and sort order. Use `latest=true` to return the latest matching sample only.",
         includeLatest = true,
-        sortSpec = QueryParamSpecs.sortByStartAt,
     )
     get("/api/v2/steps/daily") {
         call.respond<StepDailySummariesResponse>(
@@ -166,7 +177,6 @@ internal fun Route.readRoutes() {
         summary = "List sleep sessions",
         descriptionText = "Returns sleep sessions with nested stages. Use `latest=true` to return the latest matching session only.",
         includeLatest = true,
-        sortSpec = QueryParamSpecs.sortByStartAt,
     )
     get("/api/v2/sleep/nights") {
         call.respond<SleepNightsResponse>(
@@ -188,7 +198,6 @@ internal fun Route.readRoutes() {
         summary = "List sleep summaries",
         descriptionText = "Returns aggregate sleep summary records such as sleep score, efficiency, latency, wakeups, WASO, and stage-duration totals. Use `latest=true` to return the latest matching summary only.",
         includeLatest = true,
-        sortSpec = QueryParamSpecs.sortByEndAt,
     )
     get("/api/v2/blood-pressure") {
         call.respond<BloodPressureMeasurementsResponse>(
@@ -199,7 +208,6 @@ internal fun Route.readRoutes() {
         summary = "List blood pressure measurements",
         descriptionText = "Returns paired systolic/diastolic blood-pressure measurements filtered by timestamp and source. Use `latest=true` to return the latest matching measurement only.",
         includeLatest = true,
-        sortSpec = QueryParamSpecs.sortByMeasuredAt,
     )
 
     get("/api/v2/dashboard/summary") {
@@ -236,9 +244,16 @@ internal fun Route.readRoutes() {
             "Returns trend comparisons for steps, heart rate, sleep, and weight over a configurable period compared to the preceding period."
         requiresBearerAuth()
         parameters {
-            query("periodDays") {
+            val periodDays = QueryParamSpecs.periodDays
+            query(periodDays.name) {
                 description = "Number of days in the comparison period"
-                schema = integerSchema(minimum = 1.0, maximum = 90.0, example = 7)
+                schema =
+                    integerSchema(
+                        default = periodDays.default,
+                        minimum = periodDays.min.toDouble(),
+                        maximum = periodDays.max.toDouble(),
+                        example = 7,
+                    )
             }
             query("toDate") {
                 description = "End date of current period (ISO-8601 date); defaults to today"
