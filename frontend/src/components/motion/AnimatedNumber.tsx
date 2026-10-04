@@ -34,7 +34,7 @@ function useCountUp(ref: RefObject<HTMLElement | null>, value: string, durationS
 
     const start = performance.now();
     let frame = requestAnimationFrame(function tick(now) {
-      const elapsed = Math.min((now - start) / (durationSeconds * 1000), 1);
+      const elapsed = Math.max(0, Math.min((now - start) / (durationSeconds * 1000), 1));
       el.textContent = scaleNumbers(value, 1 - (1 - elapsed) ** 3);
       if (elapsed < 1) frame = requestAnimationFrame(tick);
     });
