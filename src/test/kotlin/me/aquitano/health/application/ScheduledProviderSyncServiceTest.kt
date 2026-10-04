@@ -151,7 +151,7 @@ class ScheduledProviderSyncServiceTest : PostgresIntegrationTest() {
         }
 
     @Test
-    fun resumingParkedConfigStartsFailureCountOver() =
+    fun reschedulingParkedOrPausedConfigStartsFailureCountOver() =
         runBlocking {
             val provider = ThrowingProvider(ConflictException("withings_account_not_found", "account is gone"))
             val database = openDatabase(PostgresTestDatabase.config())
@@ -168,30 +168,33 @@ class ScheduledProviderSyncServiceTest : PostgresIntegrationTest() {
                 now = now,
             )
             val (service, repository) = serviceWith(provider, database)
-            val parked =
-                repository.upsertConfig(
-                    providerCode = provider.providerCode,
-                    providerInstanceId = provider.defaultProviderInstanceId,
-                    enabled = true,
-                    dataTypes = listOf("steps"),
-                    cadenceMinutes = 1_440,
-                    lookbackDays = 7,
-                    nextRunAt = null,
-                    now = now,
+
+            for (wasEnabled in listOf(true, false)) {
+                val stopped =
+                    repository.upsertConfig(
+                        providerCode = provider.providerCode,
+                        providerInstanceId = provider.defaultProviderInstanceId,
+                        enabled = wasEnabled,
+                        dataTypes = listOf("steps"),
+                        cadenceMinutes = 1_440,
+                        lookbackDays = 7,
+                        nextRunAt = null,
+                        now = now,
+                    )
+                repository.markFailure(stopped.id, failureCount = 3, nextRunAt = null, errorMessage = "account is gone", now = now)
+
+                service.updateConfig(
+                    provider.providerCode,
+                    provider.defaultProviderInstanceId,
+                    ScheduledSyncConfigUpdateRequest(enabled = true),
+                    now,
                 )
-            repository.markFailure(parked.id, failureCount = 3, nextRunAt = null, errorMessage = "account is gone", now = now)
 
-            service.updateConfig(
-                provider.providerCode,
-                provider.defaultProviderInstanceId,
-                ScheduledSyncConfigUpdateRequest(enabled = true),
-                now,
-            )
-
-            val resumed = repository.getConfig(provider.providerCode, provider.defaultProviderInstanceId)
-            assertNotNull(resumed)
-            assertEquals(now, resumed.nextRunAt)
-            assertEquals(0, resumed.failureCount)
+                val rescheduled = repository.getConfig(provider.providerCode, provider.defaultProviderInstanceId)
+                assertNotNull(rescheduled)
+                assertEquals(now, rescheduled.nextRunAt)
+                assertEquals(0, rescheduled.failureCount, "wasEnabled=$wasEnabled")
+            }
         }
 
     @Test
