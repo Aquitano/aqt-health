@@ -52,7 +52,7 @@ async function TrendsContent({ days, toDate }: { days: number; toDate: string })
     hrv: data.hrv.ok ? data.hrv.data : undefined,
     activity: data.activity.ok ? data.activity.data : undefined,
     respiratory: data.respiratory.ok ? data.respiratory.data : undefined,
-  });
+  }, serverConfig.timeZone);
 
   return (
     <>

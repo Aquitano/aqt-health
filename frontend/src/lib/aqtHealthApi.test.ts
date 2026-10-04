@@ -82,7 +82,7 @@ describe("page data requests", () => {
     expect(
       buildTrendStats({
         weight: data.weight.ok ? data.weight.data : undefined,
-      })[0].latest
+      }, "UTC")[0].latest
     ).toBe(75);
     expect(mocks.getScalarDailySummaries).toHaveBeenCalledWith(
       "hrv_rmssd",
