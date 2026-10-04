@@ -131,15 +131,18 @@ class WithingsSyncAdapter(
 
     override fun errorAttributes(error: Throwable): Map<String, String> =
         when (error) {
-            is WithingsHttpException ->
+            is WithingsHttpException -> {
                 buildMap {
                     error.httpStatus?.let { put("httpStatus", it.toString()) }
                     error.providerStatus?.let { put("providerStatus", it.toString()) }
                     error.providerAction?.let { put("providerAction", it) }
                     error.providerEndpoint?.let { put("providerEndpoint", it) }
                 }
+            }
 
-            else -> emptyMap()
+            else -> {
+                emptyMap()
+            }
         }
 
     private suspend fun fetchDataType(
@@ -149,15 +152,16 @@ class WithingsSyncAdapter(
         to: Instant,
     ): WithingsFetchResult =
         when (dataType) {
-            "activity" ->
+            "activity" -> {
                 client.fetchActivity(
                     accessToken,
                     from,
                     to,
                     WITHINGS_ACTIVITY_FIELDS,
                 )
+            }
 
-            "measures" ->
+            "measures" -> {
                 client.fetchMeasures(
                     accessToken,
                     from,
@@ -165,29 +169,34 @@ class WithingsSyncAdapter(
                     WITHINGS_MEASURE_TYPES,
                     1,
                 )
+            }
 
-            "sleep-summary" ->
+            "sleep-summary" -> {
                 client.fetchSleepSummary(
                     accessToken,
                     from,
                     to,
                     WITHINGS_SLEEP_SUMMARY_FIELDS,
                 )
+            }
 
             // Reaches back past the window start so a night that began on the previous UTC day is
             // fetched whole; the normalizer keeps the sessions that end inside the window.
-            "sleep" ->
+            "sleep" -> {
                 client.fetchSleep(
                     accessToken,
                     from.minus(WITHINGS_SLEEP_LOOKBEHIND),
                     to,
                     WITHINGS_SLEEP_FIELDS,
                 )
+            }
 
-            else -> throw WithingsHttpException(
-                "withings_unsupported_data_type",
-                "Unsupported Withings data type: $dataType",
-            )
+            else -> {
+                throw WithingsHttpException(
+                    "withings_unsupported_data_type",
+                    "Unsupported Withings data type: $dataType",
+                )
+            }
         }
 
     private fun batchExternalId(

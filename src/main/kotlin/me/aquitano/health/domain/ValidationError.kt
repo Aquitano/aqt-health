@@ -65,6 +65,8 @@ fun isRetryableSyncFailure(error: Throwable): Boolean =
         -> false
 
         is ConflictException -> error.retryable
+
         is UpstreamProviderException -> error.retryable
+
         else -> true
     }

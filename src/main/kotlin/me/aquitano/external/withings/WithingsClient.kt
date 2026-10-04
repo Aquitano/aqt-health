@@ -471,8 +471,11 @@ class KtorWithingsClient(
 
     private fun JsonObject.records(key: String): List<JsonObject> =
         when (val element = this[key]) {
-            is JsonArray -> element.mapNotNull { it as? JsonObject }
-            is JsonObject ->
+            is JsonArray -> {
+                element.mapNotNull { it as? JsonObject }
+            }
+
+            is JsonObject -> {
                 element.entries.map { (recordKey, value) ->
                     if (value is JsonObject) {
                         buildJsonObject {
@@ -491,8 +494,11 @@ class KtorWithingsClient(
                         }
                     }
                 }
+            }
 
-            else -> emptyList()
+            else -> {
+                emptyList()
+            }
         }
 
     // Withings accepts inclusive seconds. Subtract before truncating so fractional window ends

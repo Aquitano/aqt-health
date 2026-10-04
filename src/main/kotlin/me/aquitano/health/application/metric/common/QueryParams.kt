@@ -110,7 +110,9 @@ class QueryParams(
         val value = optional(name) ?: return default
         return when (value.lowercase()) {
             "true" -> true
+
             "false" -> false
+
             else -> throw RequestValidationException(
                 listOf(
                     ValidationIssue(

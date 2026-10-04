@@ -35,39 +35,45 @@ class ProjectionWipeRepository {
         val end = dayEnd.toDbTimestamp()
         recordTypes.forEach { recordType ->
             when (recordType) {
-                RecordTypes.STEP_INTERVAL ->
+                RecordTypes.STEP_INTERVAL -> {
                     StepSamplesTable.deleteWhere {
                         (startAt greaterEq start) and (startAt less end)
                     }
+                }
 
-                RecordTypes.SLEEP_SESSION ->
+                RecordTypes.SLEEP_SESSION -> {
                     SleepSessionsTable.deleteWhere {
                         (startAt greaterEq start) and (startAt less end)
                     }
+                }
 
-                RecordTypes.ACTIVITY_SUMMARY ->
+                RecordTypes.ACTIVITY_SUMMARY -> {
                     ActivitySummariesTable.deleteWhere {
                         date eq day
                     }
+                }
 
-                RecordTypes.SLEEP_SUMMARY ->
+                RecordTypes.SLEEP_SUMMARY -> {
                     SleepSummariesTable.deleteWhere {
                         (startAt greaterEq start) and (startAt less end)
                     }
+                }
 
-                RecordTypes.BLOOD_PRESSURE ->
+                RecordTypes.BLOOD_PRESSURE -> {
                     BloodPressureMeasurementsTable.deleteWhere {
                         (measuredAt greaterEq start) and (measuredAt less end)
                     }
+                }
 
-                RecordTypes.SCALAR ->
+                RecordTypes.SCALAR -> {
                     ScalarSamplesTable.deleteWhere {
                         (measuredAt greaterEq start) and
                             (measuredAt less end) and
                             (metricType inList ScalarMetricRegistry.metricTypes)
                     }
+                }
 
-                else -> Unit
+                else -> {}
             }
         }
     }
