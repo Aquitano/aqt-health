@@ -13,8 +13,6 @@ import me.aquitano.health.shared.stringOrNull
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
-import javax.crypto.Mac
-import javax.crypto.spec.SecretKeySpec
 
 interface WithingsOAuthClient {
     suspend fun exchangeCode(
@@ -69,7 +67,6 @@ class KtorWithingsClient(
         code: String,
         now: Instant,
     ): WithingsTokenSet {
-        val nonce = getNonce(now)
         val action = "requesttoken"
         val response =
             httpClient.submitForm(
@@ -79,17 +76,9 @@ class KtorWithingsClient(
                         "action" to action,
                         "grant_type" to "authorization_code",
                         "client_id" to config.clientId,
+                        "client_secret" to config.clientSecret,
                         "code" to code,
                         "redirect_uri" to config.redirectUri,
-                        "nonce" to nonce,
-                        "signature" to
-                            sign(
-                                mapOf(
-                                    "action" to action,
-                                    "client_id" to config.clientId,
-                                    "nonce" to nonce,
-                                ),
-                            ),
                     ),
             )
         return parseTokenResponse(
@@ -105,7 +94,6 @@ class KtorWithingsClient(
         refreshToken: String,
         now: Instant,
     ): WithingsTokenSet {
-        val nonce = getNonce(now)
         val action = "requesttoken"
         val response =
             httpClient.submitForm(
@@ -115,16 +103,8 @@ class KtorWithingsClient(
                         "action" to action,
                         "grant_type" to "refresh_token",
                         "client_id" to config.clientId,
+                        "client_secret" to config.clientSecret,
                         "refresh_token" to refreshToken,
-                        "nonce" to nonce,
-                        "signature" to
-                            sign(
-                                mapOf(
-                                    "action" to action,
-                                    "client_id" to config.clientId,
-                                    "nonce" to nonce,
-                                ),
-                            ),
                     ),
             )
         return parseTokenResponse(
@@ -134,57 +114,6 @@ class KtorWithingsClient(
             existingRefreshToken = refreshToken,
             requireUserId = false,
         )
-    }
-
-    private suspend fun getNonce(now: Instant): String {
-        val action = "getnonce"
-        val timestamp = now.epochSecond.toString()
-        val response =
-            httpClient.submitForm(
-                url = signatureEndpoint(),
-                formParameters =
-                    formParameters(
-                        "action" to action,
-                        "client_id" to config.clientId,
-                        "timestamp" to timestamp,
-                        "signature" to
-                            sign(
-                                mapOf(
-                                    "action" to action,
-                                    "client_id" to config.clientId,
-                                    "timestamp" to timestamp,
-                                ),
-                            ),
-                    ),
-            )
-        if (!response.status.isSuccess()) {
-            throw WithingsHttpException(
-                "withings_nonce_request_failed",
-                "Withings nonce request failed with ${response.status.value}",
-                providerAction = action,
-                providerEndpoint = signatureEndpoint(),
-            )
-        }
-
-        val payload =
-            AppJson.parseToJsonElement(response.body<String>()).jsonObject
-        val withingsStatus = payload["status"]?.jsonPrimitive?.intOrNull
-        if (withingsStatus != 0) {
-            throw WithingsHttpException(
-                "withings_nonce_request_failed",
-                "Withings nonce request failed with status ${withingsStatus ?: "missing"}",
-                providerStatus = withingsStatus,
-                providerAction = action,
-                providerEndpoint = signatureEndpoint(),
-            )
-        }
-        return payload["body"]?.jsonObject?.stringOrNull("nonce")
-            ?: throw WithingsHttpException(
-                "withings_nonce_request_failed",
-                "Withings nonce response did not include nonce",
-                providerAction = action,
-                providerEndpoint = signatureEndpoint(),
-            )
     }
 
     override suspend fun fetchMeasures(
@@ -231,25 +160,40 @@ class KtorWithingsClient(
         )
     }
 
+    // Sleep v2 `get` silently returns only the first 24h of a longer range, so the range is
+    // fetched in 24h chunks. A segment crossing a chunk edge can come back twice.
     override suspend fun fetchSleep(
         accessToken: String,
         from: Instant,
         to: Instant,
         dataFields: List<String>,
-    ): WithingsFetchResult =
-        fetchPaged(
-            accessToken = accessToken,
+    ): WithingsFetchResult {
+        val chunks =
+            generateSequence(from) { it.plus(WITHINGS_SLEEP_GET_MAX_RANGE) }
+                .takeWhile { it.isBefore(to) }
+                .toList()
+                .map { start ->
+                    val end = minOf(start.plus(WITHINGS_SLEEP_GET_MAX_RANGE), to)
+                    fetchPaged(
+                        accessToken = accessToken,
+                        dataType = "sleep",
+                        endpoint = sleepEndpoint(),
+                        action = "get",
+                        recordsKey = "series",
+                        baseParameters =
+                            listOf(
+                                "startdate" to start.epochSecond.toString(),
+                                "enddate" to inclusiveEndSeconds(start, end).toString(),
+                                "data_fields" to dataFields.joinToString(","),
+                            ),
+                    )
+                }
+        return WithingsFetchResult(
             dataType = "sleep",
-            endpoint = sleepEndpoint(),
-            action = "get",
-            recordsKey = "series",
-            baseParameters =
-                listOf(
-                    "startdate" to from.epochSecond.toString(),
-                    "enddate" to inclusiveEndSeconds(from, to).toString(),
-                    "data_fields" to dataFields.joinToString(","),
-                ),
+            pages = chunks.flatMap { it.pages },
+            records = chunks.flatMap { it.records }.distinct(),
         )
+    }
 
     override suspend fun fetchSleepSummary(
         accessToken: String,
@@ -520,21 +464,5 @@ class KtorWithingsClient(
 
     private fun measureEndpoint(): String = "${config.apiBaseUrl.trimEnd('/')}/v2/measure"
 
-    private fun signatureEndpoint(): String = "${config.apiBaseUrl.trimEnd('/')}/v2/signature"
-
     private fun sleepEndpoint(): String = "${config.apiBaseUrl.trimEnd('/')}/v2/sleep"
-
-    private fun sign(parameters: Map<String, String>): String {
-        val payload = parameters.toSortedMap().values.joinToString(",")
-        val mac = Mac.getInstance("HmacSHA256")
-        mac.init(
-            SecretKeySpec(
-                config.clientSecret.toByteArray(Charsets.UTF_8),
-                "HmacSHA256",
-            ),
-        )
-        return mac
-            .doFinal(payload.toByteArray(Charsets.UTF_8))
-            .joinToString("") { "%02x".format(it) }
-    }
 }

@@ -36,15 +36,14 @@ val WITHINGS_MEASURE_TYPES =
         77,
         88,
         91,
-        130,
-        135,
-        136,
-        137,
-        138,
-        139,
         155,
+        168,
+        169,
         170,
         173,
+        174,
+        175,
+        226,
     )
 
 val WITHINGS_ACTIVITY_FIELDS =
@@ -79,6 +78,8 @@ val WITHINGS_SLEEP_FIELDS =
  * by the window holding its end.
  */
 val WITHINGS_SLEEP_LOOKBEHIND: Duration = Duration.ofDays(1)
+
+val WITHINGS_SLEEP_GET_MAX_RANGE: Duration = Duration.ofHours(24)
 
 val WITHINGS_SLEEP_SUMMARY_FIELDS =
     listOf(

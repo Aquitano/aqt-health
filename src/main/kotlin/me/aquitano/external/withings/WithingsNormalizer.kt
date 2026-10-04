@@ -115,6 +115,8 @@ class WithingsNormalizer {
                 var systolicMmhg: Int? = null
                 var diastolicMmhg: Int? = null
                 var heartRateBpm: Int? = null
+                var weightKg: Double? = null
+                var hydrationKg: Double? = null
 
                 fun scalar(
                     metricType: String,
@@ -152,7 +154,10 @@ class WithingsNormalizer {
                     val realValue = value * 10.0.pow(unit)
                     when (type) {
                         1 -> {
-                            if (realValue > 0.0) scalar(BodyMetricTypes.WEIGHT, realValue)
+                            if (realValue > 0.0) {
+                                weightKg = realValue
+                                scalar(BodyMetricTypes.WEIGHT, realValue)
+                            }
                         }
 
                         5 -> {
@@ -184,7 +189,7 @@ class WithingsNormalizer {
                         }
 
                         77 -> {
-                            if (realValue in 0.0..100.0) scalar(BodyMetricTypes.WATER, realValue)
+                            if (realValue > 0.0) hydrationKg = realValue
                         }
 
                         88 -> {
@@ -197,42 +202,18 @@ class WithingsNormalizer {
                             }
                         }
 
-                        130 -> {
-                            if (realValue >= 0.0) scalar(BodyMetricTypes.EXTRACELLULAR_WATER, realValue)
-                        }
-
-                        135 -> {
-                            if (realValue >= 0.0) scalar(BodyMetricTypes.INTRACELLULAR_WATER, realValue)
-                        }
-
-                        136 -> {
-                            if (realValue > 0.0) {
-                                segmental(BodyMetricTypes.SEGMENTAL_FAT_MASS, measure, realValue)
-                            }
-                        }
-
-                        137 -> {
-                            if (realValue > 0.0) {
-                                segmental(BodyMetricTypes.SEGMENTAL_MUSCLE_MASS, measure, realValue)
-                            }
-                        }
-
-                        138 -> {
-                            if (realValue > 0.0) {
-                                segmental(BodyMetricTypes.SEGMENTAL_FAT_FREE_MASS, measure, realValue)
-                            }
-                        }
-
-                        139 -> {
+                        155 -> {
                             if (realValue > 0.0) {
                                 scalar(CardiovascularMetricTypes.VASCULAR_AGE, realValue)
                             }
                         }
 
-                        155 -> {
-                            if (realValue.toInt() in 25..250) {
-                                scalar(CardiovascularMetricTypes.STANDING_HEART_RATE, realValue)
-                            }
+                        168 -> {
+                            if (realValue >= 0.0) scalar(BodyMetricTypes.EXTRACELLULAR_WATER, realValue)
+                        }
+
+                        169 -> {
+                            if (realValue >= 0.0) scalar(BodyMetricTypes.INTRACELLULAR_WATER, realValue)
                         }
 
                         170 -> {
@@ -240,10 +221,32 @@ class WithingsNormalizer {
                         }
 
                         173 -> {
+                            if (realValue > 0.0) {
+                                segmental(BodyMetricTypes.SEGMENTAL_FAT_FREE_MASS, measure, realValue)
+                            }
+                        }
+
+                        174 -> {
+                            if (realValue > 0.0) {
+                                segmental(BodyMetricTypes.SEGMENTAL_FAT_MASS, measure, realValue)
+                            }
+                        }
+
+                        175 -> {
+                            if (realValue > 0.0) {
+                                segmental(BodyMetricTypes.SEGMENTAL_MUSCLE_MASS, measure, realValue)
+                            }
+                        }
+
+                        226 -> {
                             if (realValue > 0.0) scalar(BodyMetricTypes.BASAL_METABOLIC_RATE, realValue)
                         }
                     }
                 }
+
+                // Withings reports hydration (77) in kg; the water metric is a share of body weight.
+                val waterPercent = hydrationKg?.let { kg -> weightKg?.let { kg / it * 100.0 } }
+                if (waterPercent != null && waterPercent <= 100.0) scalar(BodyMetricTypes.WATER, waterPercent)
 
                 // A measure group's heart rate belongs to its blood pressure reading when the
                 // group carries one; only a group without blood pressure emits it standalone.

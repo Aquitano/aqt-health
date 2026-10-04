@@ -15,6 +15,8 @@ import io.ktor.http.headersOf
 import io.ktor.http.parseQueryString
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
 import me.aquitano.health.infrastructure.config.ProviderOAuthConfig
 import me.aquitano.health.shared.AppJson
 import java.time.Instant
@@ -76,8 +78,8 @@ class WithingsOAuthClientTest {
             assertEquals(listOf("client-id"), form["client_id"])
             assertEquals(listOf("auth-code"), form["code"])
             assertEquals(listOf("http://localhost:8080/api/v2/providers/withings/oauth/callback"), form["redirect_uri"])
-            assertEquals(listOf("test-nonce"), form["nonce"])
-            assertTrue(!form["signature"].isNullOrEmpty())
+            assertEquals(listOf("client-secret"), form["client_secret"])
+            assertNull(form["signature"])
             assertEquals("363", tokens.providerUserId)
             assertEquals("access-from-code", tokens.accessToken)
             assertEquals("refresh-from-code", tokens.refreshToken)
@@ -112,8 +114,8 @@ class WithingsOAuthClientTest {
             assertEquals(listOf("refresh_token"), form["grant_type"])
             assertEquals(listOf("client-id"), form["client_id"])
             assertEquals(listOf("existing-refresh"), form["refresh_token"])
-            assertEquals(listOf("test-nonce"), form["nonce"])
-            assertTrue(!form["signature"].isNullOrEmpty())
+            assertEquals(listOf("client-secret"), form["client_secret"])
+            assertNull(form["signature"])
             assertEquals("fresh-access", tokens.accessToken)
             assertEquals("existing-refresh", tokens.refreshToken)
             assertEquals("", tokens.providerUserId)
@@ -279,7 +281,7 @@ class WithingsOAuthClientTest {
             client.fetchMeasures("access", from, to, listOf(1), 1)
             client.fetchSleep("access", from, to, listOf("hr"))
 
-            assertEquals(listOf("1775088000", "1775088000"), forms.map { it["enddate"]!!.single() })
+            assertEquals(listOf("1775088000", "1775087999", "1775088000"), forms.map { it["enddate"]!!.single() })
         }
 
     @Test
@@ -334,12 +336,41 @@ class WithingsOAuthClientTest {
                 dataFields = listOf("state"),
             )
 
-            // A multi-day range stays one request: window splitting is the sync adapter's job.
-            assertEquals(1, forms.size)
-            assertEquals(listOf("1775001600"), forms[0]["startdate"])
-            // Half-open window, inclusive Withings bounds: the last second belongs to the next window.
-            assertEquals(listOf("1775174399"), forms[0]["enddate"])
+            // Withings returns only the first 24h of a longer sleep range, so 48h takes two requests.
+            // Half-open windows, inclusive Withings bounds: the last second belongs to the next window.
+            assertEquals(listOf("1775001600", "1775088000"), forms.map { it["startdate"]!!.single() })
+            assertEquals(listOf("1775087999", "1775174399"), forms.map { it["enddate"]!!.single() })
             assertNull(forms[0]["meastypes"])
+        }
+
+    @Test
+    fun sleepSegmentReturnedByBothChunksIsKeptOnce() =
+        runBlocking {
+            val crossingEdge = """{"startdate": 1775087400, "enddate": 1775088600, "state": 2}"""
+            val responses =
+                ArrayDeque(
+                    listOf(
+                        """[{"startdate": 1775084400, "enddate": 1775087400, "state": 1}, $crossingEdge]""",
+                        """[$crossingEdge, {"startdate": 1775088600, "enddate": 1775091600, "state": 3}]""",
+                    ),
+                )
+            val client =
+                client {
+                    respondJson("""{"status": 0, "body": {"series": ${responses.removeFirst()}, "more": false}}""")
+                }
+
+            val result =
+                client.fetchSleep(
+                    accessToken = "token",
+                    from = Instant.parse("2026-04-01T00:00:00Z"),
+                    to = Instant.parse("2026-04-03T00:00:00Z"),
+                    dataFields = listOf("state"),
+                )
+
+            assertEquals(
+                listOf(1775084400L, 1775087400L, 1775088600L),
+                result.records.map { it.getValue("startdate").jsonPrimitive.long },
+            )
         }
 
     @Test
@@ -402,13 +433,7 @@ class WithingsOAuthClientTest {
     private fun client(handler: MockRequestHandler): KtorWithingsClient {
         val httpClient =
             HttpClient(
-                MockEngine { request ->
-                    if (request.url.encodedPath == "/v2/signature") {
-                        respondJson("""{"status": 0, "body": {"nonce": "test-nonce"}}""")
-                    } else {
-                        handler(request)
-                    }
-                },
+                MockEngine { request -> handler(request) },
             ) {
                 install(ContentNegotiation) {
                     json(AppJson)
