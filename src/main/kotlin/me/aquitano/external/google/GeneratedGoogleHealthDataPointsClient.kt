@@ -133,16 +133,18 @@ class GeneratedGoogleHealthClient(
         dataType: String,
     ): RuntimeException =
         when (exception.statusCode.code) {
-            StatusCode.Code.UNAUTHENTICATED ->
+            StatusCode.Code.UNAUTHENTICATED -> {
                 GoogleHealthUnauthorizedException(
                     "Google Health access token is unauthorized",
                 )
+            }
 
-            else ->
+            else -> {
                 GoogleHealthHttpException(
                     "google_health_upstream_failed",
                     "Google Health $dataType request failed with ${exception.statusCode.code}",
                 )
+            }
         }
 
     private fun validateSupportedDataType(dataType: String) {
@@ -161,10 +163,15 @@ class GeneratedGoogleHealthClient(
     ): String =
         when (dataType) {
             "steps" -> """steps.interval.start_time >= "$from" AND steps.interval.start_time < "$to""""
+
             "sleep" -> """sleep.interval.end_time >= "$from" AND sleep.interval.end_time < "$to""""
+
             "heart-rate" -> """heart_rate.sample_time.physical_time >= "$from" AND heart_rate.sample_time.physical_time < "$to""""
+
             "weight" -> """weight.sample_time.physical_time >= "$from" AND weight.sample_time.physical_time < "$to""""
+
             "body-fat" -> """body_fat.sample_time.physical_time >= "$from" AND body_fat.sample_time.physical_time < "$to""""
+
             else -> throw GoogleHealthHttpException(
                 "google_health_unsupported_data_type",
                 "Unsupported Google Health data type: $dataType",

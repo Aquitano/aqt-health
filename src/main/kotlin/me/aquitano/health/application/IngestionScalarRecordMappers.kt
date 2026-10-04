@@ -90,8 +90,8 @@ internal fun mapScalarSample(
         measuredAt != null &&
             (dto.unit == null || dto.unit == descriptor.unit) &&
             descriptor.valueIsValid(dto.value) &&
-            (allowedContexts == null && dto.context == null || allowedContexts != null && context in allowedContexts) &&
-            (dto.segment == null || descriptor.supportsSegment && dto.segment in BodySegments.supported)
+            ((allowedContexts == null && dto.context == null) || (allowedContexts != null && context in allowedContexts)) &&
+            (dto.segment == null || (descriptor.supportsSegment && dto.segment in BodySegments.supported))
     return if (valid) {
         ScalarSampleRecord(
             providerRecordId = dto.providerRecordId,

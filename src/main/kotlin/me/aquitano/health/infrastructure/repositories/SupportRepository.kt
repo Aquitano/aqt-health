@@ -68,7 +68,9 @@ class SupportRepository(
                     BootstrapApiClientOutcome.ROTATED
                 }
 
-                else -> BootstrapApiClientOutcome.UNCHANGED
+                else -> {
+                    BootstrapApiClientOutcome.UNCHANGED
+                }
             }
         }
 

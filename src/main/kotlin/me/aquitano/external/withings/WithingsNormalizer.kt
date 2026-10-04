@@ -151,44 +151,97 @@ class WithingsNormalizer {
                     val unit = measure.int("unit") ?: 0
                     val realValue = value * 10.0.pow(unit)
                     when (type) {
-                        1 -> if (realValue > 0.0) scalar(BodyMetricTypes.WEIGHT, realValue)
-                        5 -> if (realValue > 0.0) scalar(BodyMetricTypes.FAT_FREE_MASS, realValue)
-                        6 -> if (realValue in 0.0..100.0) scalar(BodyMetricTypes.BODY_FAT, realValue)
-                        8 -> if (realValue > 0.0) scalar(BodyMetricTypes.FAT_MASS, realValue)
-                        9 -> if (realValue.toInt() in 30..200) diastolicMmhg = realValue.toInt()
-                        10 -> if (realValue.toInt() in 60..300) systolicMmhg = realValue.toInt()
-                        11 -> if (realValue.toInt() in 25..250) heartRateBpm = realValue.toInt()
-                        76 -> if (realValue > 0.0) scalar(BodyMetricTypes.MUSCLE, realValue)
-                        77 -> if (realValue in 0.0..100.0) scalar(BodyMetricTypes.WATER, realValue)
-                        88 -> if (realValue > 0.0) scalar(BodyMetricTypes.BONE_MASS, realValue)
-                        91 ->
+                        1 -> {
+                            if (realValue > 0.0) scalar(BodyMetricTypes.WEIGHT, realValue)
+                        }
+
+                        5 -> {
+                            if (realValue > 0.0) scalar(BodyMetricTypes.FAT_FREE_MASS, realValue)
+                        }
+
+                        6 -> {
+                            if (realValue in 0.0..100.0) scalar(BodyMetricTypes.BODY_FAT, realValue)
+                        }
+
+                        8 -> {
+                            if (realValue > 0.0) scalar(BodyMetricTypes.FAT_MASS, realValue)
+                        }
+
+                        9 -> {
+                            if (realValue.toInt() in 30..200) diastolicMmhg = realValue.toInt()
+                        }
+
+                        10 -> {
+                            if (realValue.toInt() in 60..300) systolicMmhg = realValue.toInt()
+                        }
+
+                        11 -> {
+                            if (realValue.toInt() in 25..250) heartRateBpm = realValue.toInt()
+                        }
+
+                        76 -> {
+                            if (realValue > 0.0) scalar(BodyMetricTypes.MUSCLE, realValue)
+                        }
+
+                        77 -> {
+                            if (realValue in 0.0..100.0) scalar(BodyMetricTypes.WATER, realValue)
+                        }
+
+                        88 -> {
+                            if (realValue > 0.0) scalar(BodyMetricTypes.BONE_MASS, realValue)
+                        }
+
+                        91 -> {
                             if (realValue > 0.0) {
                                 scalar(CardiovascularMetricTypes.PULSE_WAVE_VELOCITY, realValue)
                             }
-                        130 -> if (realValue >= 0.0) scalar(BodyMetricTypes.EXTRACELLULAR_WATER, realValue)
-                        135 -> if (realValue >= 0.0) scalar(BodyMetricTypes.INTRACELLULAR_WATER, realValue)
-                        136 ->
+                        }
+
+                        130 -> {
+                            if (realValue >= 0.0) scalar(BodyMetricTypes.EXTRACELLULAR_WATER, realValue)
+                        }
+
+                        135 -> {
+                            if (realValue >= 0.0) scalar(BodyMetricTypes.INTRACELLULAR_WATER, realValue)
+                        }
+
+                        136 -> {
                             if (realValue > 0.0) {
                                 segmental(BodyMetricTypes.SEGMENTAL_FAT_MASS, measure, realValue)
                             }
-                        137 ->
+                        }
+
+                        137 -> {
                             if (realValue > 0.0) {
                                 segmental(BodyMetricTypes.SEGMENTAL_MUSCLE_MASS, measure, realValue)
                             }
-                        138 ->
+                        }
+
+                        138 -> {
                             if (realValue > 0.0) {
                                 segmental(BodyMetricTypes.SEGMENTAL_FAT_FREE_MASS, measure, realValue)
                             }
-                        139 ->
+                        }
+
+                        139 -> {
                             if (realValue > 0.0) {
                                 scalar(CardiovascularMetricTypes.VASCULAR_AGE, realValue)
                             }
-                        155 ->
+                        }
+
+                        155 -> {
                             if (realValue.toInt() in 25..250) {
                                 scalar(CardiovascularMetricTypes.STANDING_HEART_RATE, realValue)
                             }
-                        170 -> if (realValue > 0.0) scalar(BodyMetricTypes.VISCERAL_FAT, realValue)
-                        173 -> if (realValue > 0.0) scalar(BodyMetricTypes.BASAL_METABOLIC_RATE, realValue)
+                        }
+
+                        170 -> {
+                            if (realValue > 0.0) scalar(BodyMetricTypes.VISCERAL_FAT, realValue)
+                        }
+
+                        173 -> {
+                            if (realValue > 0.0) scalar(BodyMetricTypes.BASAL_METABOLIC_RATE, realValue)
+                        }
                     }
                 }
 

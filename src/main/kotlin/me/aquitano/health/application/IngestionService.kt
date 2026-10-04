@@ -266,7 +266,9 @@ class IngestionService(
                 response
             }
 
-            is IngestionTransactionResult.Failure -> throw transactionResult.throwable
+            is IngestionTransactionResult.Failure -> {
+                throw transactionResult.throwable
+            }
         }
     }
 }

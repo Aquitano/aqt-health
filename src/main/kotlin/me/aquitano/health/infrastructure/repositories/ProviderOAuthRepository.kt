@@ -98,8 +98,11 @@ class ProviderOAuthRepository(
 
             return@suspendDbTransaction when {
                 updated == 1 -> ProviderOAuthStateConsumeResult.Consumed
+
                 existing[ProviderOAuthStatesTable.consumedAt] != null -> ProviderOAuthStateConsumeResult.AlreadyUsed
+
                 !now.isBefore(existing[ProviderOAuthStatesTable.expiresAt].toInstant()) -> ProviderOAuthStateConsumeResult.Expired
+
                 // Raced: another request consumed the state between our update and select.
                 else -> ProviderOAuthStateConsumeResult.AlreadyUsed
             }

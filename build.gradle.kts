@@ -115,6 +115,10 @@ fun requirePostgresIntegrationDatabase() {
     }
 }
 
+ktlint {
+    version.set("1.8.0")
+}
+
 // The Ktor plugin defaults shadowJar to DuplicatesStrategy.EXCLUDE, which drops
 // duplicate service files before the merge transformer sees them; Flyway then
 // registers only half its plugins and NPEs on the first connection.

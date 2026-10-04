@@ -114,7 +114,7 @@ class MetricWriteService(
         preserveAcceptance: Boolean,
     ): MetricWriteResult =
         when (record) {
-            is StepIntervalRecord ->
+            is StepIntervalRecord -> {
                 writeStepInterval(
                     provider,
                     sourceInstanceId,
@@ -123,46 +123,52 @@ class MetricWriteService(
                     now,
                     preserveAcceptance,
                 )
+            }
 
-            is SleepSessionRecord ->
+            is SleepSessionRecord -> {
                 writeSleepSession(
                     sourceInstanceId,
                     ingestionRecordId,
                     record,
                     now,
                 )
+            }
 
-            is ActivitySummaryRecord ->
+            is ActivitySummaryRecord -> {
                 writeActivitySummary(
                     sourceInstanceId,
                     ingestionRecordId,
                     record,
                     now,
                 )
+            }
 
-            is SleepSummaryRecord ->
+            is SleepSummaryRecord -> {
                 writeSleepSummary(
                     sourceInstanceId,
                     ingestionRecordId,
                     record,
                     now,
                 )
+            }
 
-            is BloodPressureRecord ->
+            is BloodPressureRecord -> {
                 writeBloodPressure(
                     sourceInstanceId,
                     ingestionRecordId,
                     record,
                     now,
                 )
+            }
 
-            is ScalarSampleRecord ->
+            is ScalarSampleRecord -> {
                 writeScalarSamples(
                     sourceInstanceId,
                     ingestionRecordId,
                     record,
                     now,
                 )
+            }
         }
 
     private fun writeStepInterval(

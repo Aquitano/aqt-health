@@ -126,8 +126,7 @@ class GoogleHealthSyncAdapter(
 
     override fun isInvalidRefreshToken(error: Throwable): Boolean =
         error is GoogleHealthUnauthorizedException ||
-            error is GoogleHealthHttpException &&
-            error.oauthError == "invalid_grant"
+            (error is GoogleHealthHttpException && error.oauthError == "invalid_grant")
 
     override fun errorCode(error: Throwable): String =
         when (error) {
