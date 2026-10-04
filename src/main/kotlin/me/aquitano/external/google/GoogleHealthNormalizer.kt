@@ -9,6 +9,7 @@ import me.aquitano.health.shared.AppJson
 import me.aquitano.health.shared.doubleOrNull
 import me.aquitano.health.shared.longOrNull
 import me.aquitano.health.shared.objOrNull
+import me.aquitano.health.shared.primitiveOrNull
 import me.aquitano.health.shared.stringOrNull
 import java.security.MessageDigest
 import java.util.*
@@ -16,7 +17,7 @@ import java.util.*
 class GoogleHealthNormalizer {
     fun normalize(fetchResult: GoogleHealthFetchResult): NormalizedProviderBatch {
         val records =
-            fetchResult.dataPoints.mapNotNull {
+            fetchResult.dataPoints.flatMap {
                 normalizeDataPoint(
                     fetchResult.dataType,
                     it,
@@ -43,15 +44,15 @@ class GoogleHealthNormalizer {
     private fun normalizeDataPoint(
         dataType: String,
         dataPoint: JsonObject,
-    ): IngestionRecord? {
+    ): List<IngestionRecord> {
         val point = (dataPoint["dataPoint"] as? JsonObject) ?: dataPoint
         return when (dataType) {
-            "steps" -> normalizeSteps(dataType, point)
+            "steps" -> listOfNotNull(normalizeSteps(dataType, point))
             "sleep" -> normalizeSleep(dataType, point)
-            "heart-rate" -> normalizeHeartRate(dataType, point)
-            "weight" -> normalizeWeight(dataType, point)
-            "body-fat" -> normalizeBodyFat(dataType, point)
-            else -> null
+            "heart-rate" -> listOfNotNull(normalizeHeartRate(dataType, point))
+            "weight" -> listOfNotNull(normalizeWeight(dataType, point))
+            "body-fat" -> listOfNotNull(normalizeBodyFat(dataType, point))
+            else -> emptyList()
         }
     }
 
@@ -82,11 +83,11 @@ class GoogleHealthNormalizer {
     private fun normalizeSleep(
         dataType: String,
         point: JsonObject,
-    ): SleepSession? {
-        val sleep = point.objOrNull("sleep") ?: return null
-        val interval = sleep.objOrNull("interval") ?: return null
-        val startAt = interval.stringOrNull("startTime") ?: return null
-        val endAt = interval.stringOrNull("endTime") ?: return null
+    ): List<IngestionRecord> {
+        val sleep = point.objOrNull("sleep") ?: return emptyList()
+        val interval = sleep.objOrNull("interval") ?: return emptyList()
+        val startAt = interval.stringOrNull("startTime") ?: return emptyList()
+        val endAt = interval.stringOrNull("endTime") ?: return emptyList()
         val stages =
             sleep["stages"]
                 ?.jsonArray
@@ -103,18 +104,68 @@ class GoogleHealthNormalizer {
                     )
                 }.orEmpty()
 
-        return SleepSession(
-            providerRecordId =
-                providerRecordId(
-                    dataType,
-                    point,
-                    startAt,
-                    endAt,
-                ),
-            startAt = startAt,
-            endAt = endAt,
-            stages = stages,
-        )
+        val session =
+            SleepSession(
+                providerRecordId =
+                    providerRecordId(
+                        dataType,
+                        point,
+                        startAt,
+                        endAt,
+                    ),
+                startAt = startAt,
+                endAt = endAt,
+                stages = stages,
+            )
+        return listOfNotNull(session, sleepSummary(session, sleep))
+    }
+
+    private fun sleepSummary(
+        session: SleepSession,
+        sleep: JsonObject,
+    ): SleepSummary? {
+        // canonical_sleep_summaries keeps one summary per UTC start date, so a nap would
+        // replace the night it shares a date with.
+        val isNap =
+            sleep
+                .objOrNull("metadata")
+                ?.get("nap")
+                ?.primitiveOrNull()
+                ?.booleanOrNull
+        if (isNap == true) return null
+        val summary = sleep.objOrNull("summary") ?: return null
+        val stageSummaries =
+            summary["stagesSummary"]
+                ?.jsonArray
+                ?.filterIsInstance<JsonObject>()
+                ?.associateBy { it.stringOrNull("type")?.uppercase() }
+                .orEmpty()
+        val minutesAsleep = summary.nonNegativeLong("minutesAsleep")
+        val minutesInSleepPeriod = summary.nonNegativeLong("minutesInSleepPeriod")
+        val record =
+            SleepSummary(
+                providerRecordId = "${session.providerRecordId}:summary",
+                startAt = session.startAt,
+                endAt = session.endAt,
+                timeInBedSeconds = minutesInSleepPeriod?.times(60),
+                totalSleepSeconds = minutesAsleep?.times(60),
+                lightSleepSeconds = stageSummaries["LIGHT"]?.nonNegativeLong("minutes")?.times(60),
+                deepSleepSeconds = stageSummaries["DEEP"]?.nonNegativeLong("minutes")?.times(60),
+                remSleepSeconds = stageSummaries["REM"]?.nonNegativeLong("minutes")?.times(60),
+                sleepEfficiencyPercent =
+                    if (minutesAsleep != null && minutesInSleepPeriod != null && minutesInSleepPeriod > 0) {
+                        (minutesAsleep * 100.0 / minutesInSleepPeriod).takeIf { it <= 100.0 }
+                    } else {
+                        null
+                    },
+                sleepLatencySeconds = summary.nonNegativeLong("minutesToFallAsleep")?.times(60),
+                wakeupLatencySeconds = summary.nonNegativeLong("minutesAfterWakeUp")?.times(60),
+                wakeupDurationSeconds = summary.nonNegativeLong("minutesAwake")?.times(60),
+                wakeupCount = stageSummaries["AWAKE"]?.nonNegativeLong("count")?.toInt(),
+                remEpisodesCount = stageSummaries["REM"]?.nonNegativeLong("count")?.toInt(),
+            )
+        val withoutMetrics = SleepSummary(record.providerRecordId, record.startAt, record.endAt)
+        return record.takeIf { it != withoutMetrics }
     }
 
     private fun normalizeHeartRate(
@@ -220,6 +271,8 @@ class GoogleHealthNormalizer {
             "SEDENTARY" -> "resting"
             else -> "unknown"
         }
+
+    private fun JsonObject.nonNegativeLong(key: String): Long? = longOrNull(key)?.takeIf { it >= 0 }
 
     private fun JsonObject.sha256(): String {
         val digest =

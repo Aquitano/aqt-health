@@ -236,6 +236,7 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
             assertEquals(1, countRows(fixture.dbPath, "step_samples"))
             assertEquals(1, countRows(fixture.dbPath, "sleep_sessions"))
             assertEquals(2, countRows(fixture.dbPath, "sleep_stages"))
+            assertEquals(1, countRows(fixture.dbPath, "sleep_summaries"))
             assertEquals(
                 1,
                 singleInt(fixture.dbPath, "SELECT COUNT(*) FROM scalar_samples WHERE metric_type = 'heart_rate'"),
@@ -813,6 +814,10 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
                             put("endTime", "2026-04-01T02:00:00Z")
                         },
                     )
+                }
+                putJsonObject("summary") {
+                    put("minutesInSleepPeriod", "480")
+                    put("minutesAsleep", "450")
                 }
             }
         }
