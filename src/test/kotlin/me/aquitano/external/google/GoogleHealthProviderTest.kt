@@ -229,13 +229,22 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
             fixture.client.fetchResults += allMetricFetchResults()
             val second = fixture.provider.sync(request, fixture.now.plusSeconds(60))
 
-            assertEquals(5, first.batches.size)
-            assertEquals(5, second.batches.size)
+            assertEquals(7, first.batches.size)
+            assertEquals(7, second.batches.size)
             assertTrue(second.batches.all { it.duplicateBatch })
-            assertEquals(5, fixture.client.fetchRequests.size)
+            assertEquals(7, fixture.client.fetchRequests.size)
             assertEquals(1, countRows(fixture.dbPath, "step_samples"))
             assertEquals(1, countRows(fixture.dbPath, "sleep_sessions"))
             assertEquals(2, countRows(fixture.dbPath, "sleep_stages"))
+            assertEquals(1, countRows(fixture.dbPath, "sleep_summaries"))
+            assertEquals(
+                1,
+                singleInt(fixture.dbPath, "SELECT COUNT(*) FROM scalar_samples WHERE metric_type = 'hrv_rmssd'"),
+            )
+            assertEquals(
+                1,
+                singleInt(fixture.dbPath, "SELECT COUNT(*) FROM scalar_samples WHERE metric_type = 'respiratory_rate'"),
+            )
             assertEquals(
                 1,
                 singleInt(fixture.dbPath, "SELECT COUNT(*) FROM scalar_samples WHERE metric_type = 'heart_rate'"),
@@ -753,6 +762,8 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
             fetchResult("heart-rate", heartRatePoint()),
             fetchResult("weight", weightPoint()),
             fetchResult("body-fat", bodyFatPoint()),
+            fetchResult("heart-rate-variability", heartRateVariabilityPoint()),
+            fetchResult("respiratory-rate-sleep-summary", respiratoryRatePoint()),
         )
 
     private fun stepsFetchResult(): GoogleHealthFetchResult = fetchResult("steps", stepsPoint())
@@ -814,6 +825,10 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
                         },
                     )
                 }
+                putJsonObject("summary") {
+                    put("minutesInSleepPeriod", "480")
+                    put("minutesAsleep", "450")
+                }
             }
         }
 
@@ -850,6 +865,30 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
                     put("physicalTime", "2026-04-01T07:00:00Z")
                 }
                 put("percentage", 18.2)
+            }
+        }
+
+    private fun heartRateVariabilityPoint(): JsonObject =
+        buildJsonObject {
+            put("name", "google-hrv-1")
+            putJsonObject("heartRateVariability") {
+                putJsonObject("sampleTime") {
+                    put("physicalTime", "2026-04-01T03:15:00Z")
+                }
+                put("rootMeanSquareOfSuccessiveDifferencesMilliseconds", 42.7)
+            }
+        }
+
+    private fun respiratoryRatePoint(): JsonObject =
+        buildJsonObject {
+            put("name", "google-respiratory-rate-1")
+            putJsonObject("respiratoryRateSleepSummary") {
+                putJsonObject("sampleTime") {
+                    put("physicalTime", "2026-04-01T06:00:00Z")
+                }
+                putJsonObject("fullSleepStats") {
+                    put("breathsPerMinute", 14.4)
+                }
             }
         }
 
