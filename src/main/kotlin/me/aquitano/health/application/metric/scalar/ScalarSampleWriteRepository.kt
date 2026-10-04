@@ -54,6 +54,7 @@ class ScalarSampleWriteRepository {
         toInsert.chunked(INSERT_CHUNK_SIZE).forEach { chunk ->
             ScalarSamplesTable.batchInsert(
                 chunk,
+                useMultiRowValues = true,
                 ignore = true,
                 shouldReturnGeneratedValues = false,
             ) { row ->

@@ -92,7 +92,12 @@ class CanonicalStepDerivationRepository : BaseMetricReadRepository() {
             (CanonicalStepSamplesTable.date eq output.date) and
                 (CanonicalStepSamplesTable.algorithmVersion eq output.algorithmVersion)
         }
-        CanonicalStepSamplesTable.batchInsert(output.samples, ignore = true) { sample ->
+        CanonicalStepSamplesTable.batchInsert(
+            output.samples,
+            useMultiRowValues = true,
+            ignore = true,
+            shouldReturnGeneratedValues = false,
+        ) { sample ->
             this[CanonicalStepSamplesTable.date] = output.date
             this[CanonicalStepSamplesTable.sourceInstanceId] = sample.sourceInstanceId
             this[CanonicalStepSamplesTable.stepSampleId] = sample.sampleId
@@ -102,7 +107,12 @@ class CanonicalStepDerivationRepository : BaseMetricReadRepository() {
             this[CanonicalStepSamplesTable.algorithmVersion] = output.algorithmVersion
             this[CanonicalStepSamplesTable.computedAt] = output.computedAt.toDbTimestamp()
         }
-        CanonicalStepDayBucketContributionsTable.batchInsert(output.bucketContributions, ignore = true) { contribution ->
+        CanonicalStepDayBucketContributionsTable.batchInsert(
+            output.bucketContributions,
+            useMultiRowValues = true,
+            ignore = true,
+            shouldReturnGeneratedValues = false,
+        ) { contribution ->
             this[CanonicalStepDayBucketContributionsTable.date] = contribution.date
             this[CanonicalStepDayBucketContributionsTable.sourceInstanceId] = contribution.sourceInstanceId
             this[CanonicalStepDayBucketContributionsTable.stepSampleId] = contribution.sampleId
