@@ -4,12 +4,6 @@ package me.aquitano.health.api
 
 import io.ktor.openapi.*
 import io.ktor.utils.io.*
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import me.aquitano.health.shared.AppJson
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.reflect.KType
@@ -66,51 +60,6 @@ internal fun openApiBaseDoc(): OpenApiDoc =
         externalDocs = null,
         extensions = emptyMap(),
     )
-
-internal fun stripInferredAuthorizationParameters(content: String): String {
-    val root =
-        runCatching { AppJson.parseToJsonElement(content).jsonObject }
-            .getOrElse { return content }
-    val paths = root["paths"]?.jsonObject ?: return content
-    val sanitizedPaths =
-        JsonObject(
-            paths.mapValues { (_, pathItem) ->
-                JsonObject(
-                    pathItem.jsonObject.mapValues { (_, operation) ->
-                        sanitizeOperation(operation)
-                    },
-                )
-            },
-        )
-    val sanitizedRoot =
-        JsonObject(
-            root.toMutableMap().also { it["paths"] = sanitizedPaths },
-        )
-    return sanitizedRoot.toString()
-}
-
-private fun sanitizeOperation(operation: JsonElement): JsonElement {
-    if (operation !is JsonObject) return operation
-    val operationObject = operation.jsonObject
-    val parameters = operationObject["parameters"]?.jsonArray ?: return operation
-    val sanitizedParameters =
-        JsonArray(
-            parameters.filterNot { parameter ->
-                val parameterObject = parameter.jsonObject
-                parameterObject["name"]?.jsonPrimitive?.content == "Authorization" &&
-                    parameterObject["in"]?.jsonPrimitive?.content == "header"
-            },
-        )
-    return JsonObject(
-        operationObject.toMutableMap().also { operation ->
-            if (sanitizedParameters.isEmpty()) {
-                operation.remove("parameters")
-            } else {
-                operation["parameters"] = sanitizedParameters
-            }
-        },
-    )
-}
 
 private fun openApiComponents(): Components =
     Components(

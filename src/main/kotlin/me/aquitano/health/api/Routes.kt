@@ -39,10 +39,7 @@ fun Application.configureRoutes(appConfig: AppConfig) {
 
             get("/openapi") {
                 val doc = openApiSource.read(application, openApiBaseDoc)
-                call.respondText(
-                    stripInferredAuthorizationParameters(doc.content),
-                    doc.contentType,
-                )
+                call.respondText(doc.content, doc.contentType)
             }.hide()
             swaggerUI(path = "swagger") {
                 info = openApiInfo
