@@ -47,21 +47,24 @@ class WithingsNormalizerTest {
                             addMeasure(type = 1, value = 80136, unit = -3)
                             addMeasure(type = 6, value = 214, unit = -1)
                             addMeasure(type = 76, value = 402, unit = -1)
-                            addMeasure(type = 77, value = 501, unit = -1)
+                            addMeasure(type = 77, value = 40068, unit = -3)
+                            addMeasure(type = 135, value = 98, unit = 0)
                             addMeasure(type = 170, value = 9, unit = 0)
+                            addMeasure(type = 226, value = 1650, unit = 0)
                         }
                     },
                 ),
             )
 
         val samples = result.records.filterIsInstance<ScalarSample>().associateBy { it.metricType }
-        assertEquals(5, samples.size)
+        assertEquals(setOf("weight", "body_fat", "muscle", "water", "visceral_fat", "basal_metabolic_rate"), samples.keys)
         assertEquals("withings:measure:123:weight", samples.getValue("weight").providerRecordId)
         assertEquals(80.136, samples.getValue("weight").value, 0.000001)
         assertEquals(21.4, samples.getValue("body_fat").value, 0.000001)
         assertEquals(40.2, samples.getValue("muscle").value, 0.000001)
-        assertEquals(50.1, samples.getValue("water").value, 0.000001)
+        assertEquals(50.0, samples.getValue("water").value, 0.000001)
         assertEquals(9.0, samples.getValue("visceral_fat").value, 0.000001)
+        assertEquals(1650.0, samples.getValue("basal_metabolic_rate").value, 0.000001)
     }
 
     @Test
@@ -98,9 +101,9 @@ class WithingsNormalizerTest {
                         put("grpid", 654)
                         put("date", 1775001600)
                         putJsonArray("measures") {
-                            addSegmentalMeasure(type = 137, value = 32, unit = -1, zone = "left_arm")
-                            addSegmentalMeasure(type = 137, value = 34, unit = -1, zone = "left_arm")
-                            addSegmentalMeasure(type = 137, value = 36, unit = -1, zone = "right_arm")
+                            addSegmentalMeasure(type = 175, value = 32, unit = -1, zone = "left_arm")
+                            addSegmentalMeasure(type = 175, value = 34, unit = -1, zone = "left_arm")
+                            addSegmentalMeasure(type = 175, value = 36, unit = -1, zone = "right_arm")
                         }
                     },
                 ),
@@ -130,7 +133,7 @@ class WithingsNormalizerTest {
                         putJsonArray("measures") {
                             add(
                                 buildJsonObject {
-                                    put("type", 137)
+                                    put("type", 175)
                                     put("value", 32)
                                     put("unit", -1)
                                     put("zone", "left_arm")

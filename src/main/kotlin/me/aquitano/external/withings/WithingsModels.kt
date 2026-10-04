@@ -36,15 +36,14 @@ val WITHINGS_MEASURE_TYPES =
         77,
         88,
         91,
-        130,
-        135,
-        136,
-        137,
-        138,
-        139,
         155,
+        168,
+        169,
         170,
         173,
+        174,
+        175,
+        226,
     )
 
 val WITHINGS_ACTIVITY_FIELDS =
