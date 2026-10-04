@@ -172,6 +172,10 @@ class GeneratedGoogleHealthClient(
 
             "body-fat" -> """body_fat.sample_time.physical_time >= "$from" AND body_fat.sample_time.physical_time < "$to""""
 
+            "heart-rate-variability" -> """heart_rate_variability.sample_time.physical_time >= "$from" AND heart_rate_variability.sample_time.physical_time < "$to""""
+
+            "respiratory-rate-sleep-summary" -> """respiratory_rate_sleep_summary.sample_time.physical_time >= "$from" AND respiratory_rate_sleep_summary.sample_time.physical_time < "$to""""
+
             else -> throw GoogleHealthHttpException(
                 "google_health_unsupported_data_type",
                 "Unsupported Google Health data type: $dataType",

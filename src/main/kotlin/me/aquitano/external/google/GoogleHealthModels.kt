@@ -18,6 +18,8 @@ val GOOGLE_HEALTH_DEFAULT_DATA_TYPES =
         "heart-rate",
         "weight",
         "body-fat",
+        "heart-rate-variability",
+        "respiratory-rate-sleep-summary",
     )
 
 data class GoogleHealthPage(

@@ -6,6 +6,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import me.aquitano.health.api.dto.IngestionBatchRequest
+import me.aquitano.health.api.dto.ScalarSample
 import me.aquitano.health.api.dto.SleepSession
 import me.aquitano.health.api.dto.SleepSummary
 import me.aquitano.health.application.IngestionMappingService
@@ -16,6 +17,56 @@ import kotlin.test.assertIs
 
 class GoogleHealthNormalizerTest {
     private val normalizer = GoogleHealthNormalizer()
+
+    @Test
+    fun heartRateVariabilityBecomesAnRmssdSample() {
+        val records =
+            normalize(
+                "heart-rate-variability",
+                """
+                {
+                  "name": "users/me/dataTypes/heart-rate-variability/dataPoints/8812734",
+                  "heartRateVariability": {
+                    "sampleTime": { "physicalTime": "2026-04-01T03:15:00Z" },
+                    "rootMeanSquareOfSuccessiveDifferencesMilliseconds": 42.7,
+                    "standardDeviationMilliseconds": 55.1
+                  }
+                }
+                """,
+            )
+
+        val sample = assertIs<ScalarSample>(records.single())
+        assertEquals("users/me/dataTypes/heart-rate-variability/dataPoints/8812734", sample.providerRecordId)
+        assertEquals("2026-04-01T03:15:00Z", sample.measuredAt)
+        assertEquals("hrv_rmssd", sample.metricType)
+        assertEquals(42.7, sample.value)
+    }
+
+    @Test
+    fun respiratoryRateSleepSummaryBecomesASleepRespiratoryRateSample() {
+        val records =
+            normalize(
+                "respiratory-rate-sleep-summary",
+                """
+                {
+                  "name": "users/me/dataTypes/respiratory-rate-sleep-summary/dataPoints/5521",
+                  "respiratoryRateSleepSummary": {
+                    "sampleTime": { "physicalTime": "2026-04-01T06:00:00Z" },
+                    "deepSleepStats": { "breathsPerMinute": 13.2 },
+                    "lightSleepStats": { "breathsPerMinute": 14.1 },
+                    "remSleepStats": { "breathsPerMinute": 15.0 },
+                    "fullSleepStats": { "breathsPerMinute": 14.4, "standardDeviation": 0.8 }
+                  }
+                }
+                """,
+            )
+
+        val sample = assertIs<ScalarSample>(records.single())
+        assertEquals("users/me/dataTypes/respiratory-rate-sleep-summary/dataPoints/5521", sample.providerRecordId)
+        assertEquals("respiratory_rate", sample.metricType)
+        assertEquals("sleep", sample.context)
+        assertEquals(14.4, sample.value)
+    }
 
     @Test
     fun sleepPointAlsoEmitsASummaryUnderItsOwnRecordId() {

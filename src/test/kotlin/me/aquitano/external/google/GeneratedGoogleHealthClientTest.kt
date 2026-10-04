@@ -45,6 +45,8 @@ class GeneratedGoogleHealthClientTest {
                     "heart-rate" to heartRatePoint(),
                     "weight" to weightPoint(),
                     "body-fat" to bodyFatPoint(),
+                    "heart-rate-variability" to heartRateVariabilityPoint(),
+                    "respiratory-rate-sleep-summary" to respiratoryRatePoint(),
                 )
 
             pointsByDataType.forEach { (dataType, point) ->
@@ -402,6 +404,38 @@ class GeneratedGoogleHealthClientTest {
               "physicalTime": "2026-04-01T07:00:00Z"
             },
             "percentage": 18.2
+          }
+        }
+        """,
+        )
+
+    private fun heartRateVariabilityPoint(): DataPoint =
+        dataPoint(
+            """
+        {
+          "name": "google-hrv-1",
+          "heartRateVariability": {
+            "sampleTime": {
+              "physicalTime": "2026-04-01T03:15:00Z"
+            },
+            "rootMeanSquareOfSuccessiveDifferencesMilliseconds": 42.7
+          }
+        }
+        """,
+        )
+
+    private fun respiratoryRatePoint(): DataPoint =
+        dataPoint(
+            """
+        {
+          "name": "google-respiratory-rate-1",
+          "respiratoryRateSleepSummary": {
+            "sampleTime": {
+              "physicalTime": "2026-04-01T06:00:00Z"
+            },
+            "fullSleepStats": {
+              "breathsPerMinute": 14.4
+            }
           }
         }
         """,

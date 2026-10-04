@@ -422,12 +422,12 @@ curl -X POST http://localhost:8080/api/v2/providers/google-health/sync-jobs \
   -d '{
     "from": "2026-04-01T00:00:00Z",
     "to": "2026-04-20T00:00:00Z",
-    "dataTypes": ["steps", "sleep", "heart-rate", "weight", "body-fat"],
+    "dataTypes": ["steps", "sleep", "heart-rate", "weight", "body-fat", "heart-rate-variability", "respiratory-rate-sleep-summary"],
     "pageSize": 10000
   }'
 ```
 
-If `dataTypes` is omitted, the sync reads `steps`, `sleep`, `heart-rate`, `weight`, and `body-fat`. Each `sleep` point also yields a sleep summary unless Google marks it as a nap. If both `from` and `to` are omitted, the sync defaults to the last seven days. Long explicit ranges are accepted for historical backfill and are split into UTC-day-aligned one-day windows before fetching. Completed days are skipped on repeated syncs over the same range; only the current, still-open day is re-fetched.
+If `dataTypes` is omitted, the sync reads `steps`, `sleep`, `heart-rate`, `weight`, `body-fat`, `heart-rate-variability`, and `respiratory-rate-sleep-summary`. Each `sleep` point also yields a sleep summary unless Google marks it as a nap. If both `from` and `to` are omitted, the sync defaults to the last seven days. Long explicit ranges are accepted for historical backfill and are split into UTC-day-aligned one-day windows before fetching. Completed days are skipped on repeated syncs over the same range; only the current, still-open day is re-fetched.
 
 Poll `/api/v2/providers/google-health/sync-jobs/{jobId}` for progress and the final summary. The backend owns the provider-safe sequential work after the job is accepted, so frontend reloads or browser closes do not stop the sync job.
 

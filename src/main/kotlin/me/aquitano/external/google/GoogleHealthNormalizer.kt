@@ -52,6 +52,8 @@ class GoogleHealthNormalizer {
             "heart-rate" -> listOfNotNull(normalizeHeartRate(dataType, point))
             "weight" -> listOfNotNull(normalizeWeight(dataType, point))
             "body-fat" -> listOfNotNull(normalizeBodyFat(dataType, point))
+            "heart-rate-variability" -> listOfNotNull(normalizeHeartRateVariability(dataType, point))
+            "respiratory-rate-sleep-summary" -> listOfNotNull(normalizeRespiratoryRate(dataType, point))
             else -> emptyList()
         }
     }
@@ -166,6 +168,41 @@ class GoogleHealthNormalizer {
             )
         val withoutMetrics = SleepSummary(record.providerRecordId, record.startAt, record.endAt)
         return record.takeIf { it != withoutMetrics }
+    }
+
+    private fun normalizeHeartRateVariability(
+        dataType: String,
+        point: JsonObject,
+    ): ScalarSample? {
+        val hrv = point.objOrNull("heartRateVariability") ?: return null
+        val measuredAt = hrv.objOrNull("sampleTime")?.stringOrNull("physicalTime") ?: return null
+        val rmssd = hrv.doubleOrNull("rootMeanSquareOfSuccessiveDifferencesMilliseconds") ?: return null
+        if (rmssd <= 0.0 || rmssd > 500.0) return null
+        return ScalarSample(
+            providerRecordId = providerRecordId(dataType, point, measuredAt, null),
+            measuredAt = measuredAt,
+            metricType = ScalarMetricTypes.HRV_RMSSD,
+            value = rmssd,
+            context = "unknown",
+        )
+    }
+
+    private fun normalizeRespiratoryRate(
+        dataType: String,
+        point: JsonObject,
+    ): ScalarSample? {
+        val summary = point.objOrNull("respiratoryRateSleepSummary") ?: return null
+        val measuredAt = summary.objOrNull("sampleTime")?.stringOrNull("physicalTime") ?: return null
+        val breathsPerMinute =
+            summary.objOrNull("fullSleepStats")?.doubleOrNull("breathsPerMinute") ?: return null
+        if (breathsPerMinute !in 5.0..80.0) return null
+        return ScalarSample(
+            providerRecordId = providerRecordId(dataType, point, measuredAt, null),
+            measuredAt = measuredAt,
+            metricType = ScalarMetricTypes.RESPIRATORY_RATE,
+            value = breathsPerMinute,
+            context = "sleep",
+        )
     }
 
     private fun normalizeHeartRate(
