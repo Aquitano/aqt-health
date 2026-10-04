@@ -10,7 +10,7 @@ import kotlin.test.assertTrue
 class PostgresTestDatabaseTest : PostgresIntegrationTest() {
     @Test
     fun droppingOneFixtureSchemaPreservesOtherFixturesAndTheirIndexes() {
-        val base = PostgresTestDatabase.config()
+        val base = PostgresTestDatabase.emptyConfig()
         val expectedExtensionSchema =
             PostgresTestDatabase.connection(base).use { connection ->
                 connection.createStatement().use { statement ->

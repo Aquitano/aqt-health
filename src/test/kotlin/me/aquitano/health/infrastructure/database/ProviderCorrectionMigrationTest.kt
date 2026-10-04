@@ -25,7 +25,7 @@ class ProviderCorrectionMigrationTest : PostgresIntegrationTest() {
     @Test
     fun backfillPreservesGoogleIdentityAcceptanceAndRawPayloadsThroughReplay() =
         runBlocking {
-            val config = PostgresTestDatabase.config()
+            val config = PostgresTestDatabase.emptyConfig()
             Flyway
                 .configure()
                 .dataSource(config.jdbcUrl, config.user, config.password)

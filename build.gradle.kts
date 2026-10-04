@@ -75,31 +75,6 @@ dependencies {
     testCompileOnly(libs.konsist.kotlin.compiler)
 }
 
-fun dockerIsAvailable(): Boolean =
-    listOf(
-        listOf("docker", "info"),
-        listOf("/usr/local/bin/docker", "info"),
-        listOf("/opt/homebrew/bin/docker", "info"),
-    ).any { command ->
-        try {
-            ProcessBuilder(command)
-                .redirectOutput(ProcessBuilder.Redirect.DISCARD)
-                .redirectError(ProcessBuilder.Redirect.DISCARD)
-                .start()
-                .waitFor() == 0
-        } catch (_: Exception) {
-            false
-        }
-    }
-
-fun requirePostgresIntegrationDatabase() {
-    if (System.getenv("AQT_HEALTH_TEST_JDBC_URL").isNullOrBlank() && !dockerIsAvailable()) {
-        throw GradleException(
-            "PostgreSQL integration tests require Docker/Testcontainers or AQT_HEALTH_TEST_JDBC_URL.",
-        )
-    }
-}
-
 ktlint {
     version.set(libs.versions.ktlint)
 }
@@ -134,9 +109,6 @@ tasks.register<Test>("integrationTest") {
         includeCategories("me.aquitano.health.test.PostgresIntegration")
     }
     exclude("**/OpenApiExportTest.class")
-    doFirst {
-        requirePostgresIntegrationDatabase()
-    }
 }
 
 tasks.check {
@@ -160,7 +132,4 @@ tasks.register<Test>("generateOpenApi") {
             .asFile.absolutePath,
     )
     outputs.file(layout.buildDirectory.file("openapi/openapi.json"))
-    doFirst {
-        requirePostgresIntegrationDatabase()
-    }
 }

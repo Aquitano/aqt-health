@@ -606,7 +606,7 @@ Run unit tests without a database:
 ```
 
 Run `./gradlew check` for both unit and integration tests, or `./gradlew integrationTest` for integration tests alone.
-Integration tests run against temporary PostgreSQL databases via Testcontainers and apply the same Flyway migrations as the application.
+Integration tests run against temporary PostgreSQL databases via Testcontainers, each cloned from one database that the application's Flyway migrations set up once per run.
 If Docker is unavailable, point tests at an existing PostgreSQL database; each test gets an isolated schema:
 
 ```bash

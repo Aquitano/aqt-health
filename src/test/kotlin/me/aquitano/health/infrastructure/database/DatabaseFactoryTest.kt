@@ -19,7 +19,7 @@ import kotlin.test.assertFailsWith
 class DatabaseFactoryTest : PostgresIntegrationTest() {
     @Test
     fun migrationsCreateExpectedTables() {
-        val database = openDatabase(tempDatabaseConfig())
+        val database = openDatabase(PostgresTestDatabase.emptyConfig())
 
         val tableNames =
             transaction(database) {
