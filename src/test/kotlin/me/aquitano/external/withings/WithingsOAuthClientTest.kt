@@ -279,7 +279,7 @@ class WithingsOAuthClientTest {
             client.fetchMeasures("access", from, to, listOf(1), 1)
             client.fetchSleep("access", from, to, listOf("hr"))
 
-            assertEquals(listOf("1775088000", "1775088000"), forms.map { it["enddate"]!!.single() })
+            assertEquals(listOf("1775088000", "1775087999", "1775088000"), forms.map { it["enddate"]!!.single() })
         }
 
     @Test
@@ -334,11 +334,10 @@ class WithingsOAuthClientTest {
                 dataFields = listOf("state"),
             )
 
-            // A multi-day range stays one request: window splitting is the sync adapter's job.
-            assertEquals(1, forms.size)
-            assertEquals(listOf("1775001600"), forms[0]["startdate"])
-            // Half-open window, inclusive Withings bounds: the last second belongs to the next window.
-            assertEquals(listOf("1775174399"), forms[0]["enddate"])
+            // Withings returns only the first 24h of a longer sleep range, so 48h takes two requests.
+            // Half-open windows, inclusive Withings bounds: the last second belongs to the next window.
+            assertEquals(listOf("1775001600", "1775088000"), forms.map { it["startdate"]!!.single() })
+            assertEquals(listOf("1775087999", "1775174399"), forms.map { it["enddate"]!!.single() })
             assertNull(forms[0]["meastypes"])
         }
 

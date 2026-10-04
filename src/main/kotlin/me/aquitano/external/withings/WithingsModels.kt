@@ -79,6 +79,8 @@ val WITHINGS_SLEEP_FIELDS =
  */
 val WITHINGS_SLEEP_LOOKBEHIND: Duration = Duration.ofDays(1)
 
+val WITHINGS_SLEEP_GET_MAX_RANGE: Duration = Duration.ofHours(24)
+
 val WITHINGS_SLEEP_SUMMARY_FIELDS =
     listOf(
         "total_timeinbed",

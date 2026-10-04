@@ -160,25 +160,40 @@ class KtorWithingsClient(
         )
     }
 
+    // Sleep v2 `get` silently returns only the first 24h of a longer range, so the range is
+    // fetched in 24h chunks. A segment crossing a chunk edge can come back twice.
     override suspend fun fetchSleep(
         accessToken: String,
         from: Instant,
         to: Instant,
         dataFields: List<String>,
-    ): WithingsFetchResult =
-        fetchPaged(
-            accessToken = accessToken,
+    ): WithingsFetchResult {
+        val chunks =
+            generateSequence(from) { it.plus(WITHINGS_SLEEP_GET_MAX_RANGE) }
+                .takeWhile { it.isBefore(to) }
+                .toList()
+                .map { start ->
+                    val end = minOf(start.plus(WITHINGS_SLEEP_GET_MAX_RANGE), to)
+                    fetchPaged(
+                        accessToken = accessToken,
+                        dataType = "sleep",
+                        endpoint = sleepEndpoint(),
+                        action = "get",
+                        recordsKey = "series",
+                        baseParameters =
+                            listOf(
+                                "startdate" to start.epochSecond.toString(),
+                                "enddate" to inclusiveEndSeconds(start, end).toString(),
+                                "data_fields" to dataFields.joinToString(","),
+                            ),
+                    )
+                }
+        return WithingsFetchResult(
             dataType = "sleep",
-            endpoint = sleepEndpoint(),
-            action = "get",
-            recordsKey = "series",
-            baseParameters =
-                listOf(
-                    "startdate" to from.epochSecond.toString(),
-                    "enddate" to inclusiveEndSeconds(from, to).toString(),
-                    "data_fields" to dataFields.joinToString(","),
-                ),
+            pages = chunks.flatMap { it.pages },
+            records = chunks.flatMap { it.records }.distinct(),
         )
+    }
 
     override suspend fun fetchSleepSummary(
         accessToken: String,
