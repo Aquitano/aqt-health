@@ -126,7 +126,7 @@ internal fun Operation.Builder.scalarDailySummaryQueryParameters() {
     )
 }
 
-internal fun Operation.Builder.dailyStepQueryParameters() {
+internal fun Operation.Builder.dailyQueryParameters(localDays: Boolean) {
     providerFilterParameters()
     orderParameter("Sort direction. Defaults to ${QueryParamSpecs.order.default}. Use desc for newest-first reads.")
     limitParameter(
@@ -135,8 +135,12 @@ internal fun Operation.Builder.dailyStepQueryParameters() {
         example = 100,
     )
     cursorParameter(CursorDescription, example = DateCursorExample)
-    dateRangeQueryParameters("local date")
-    timezoneParameter("IANA timezone that defines `today` and the local-day boundaries of each total. Defaults to UTC.")
+    if (localDays) {
+        dateRangeQueryParameters("local date")
+        timezoneParameter("IANA timezone that defines `today` and the local-day boundaries of each total. Defaults to UTC.")
+    } else {
+        dateRangeQueryParameters("UTC date")
+    }
 }
 
 internal fun Operation.Builder.sleepNightQueryParameters() {

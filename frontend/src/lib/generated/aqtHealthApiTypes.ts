@@ -3518,14 +3518,12 @@ export interface operations {
                 limit?: number;
                 /** @description Opaque cursor from `meta.nextCursor` for the next page. Must be used with the same order. */
                 cursor?: string;
-                /** @description Exact local date or `today`. Cannot be combined with fromDate or toDate. */
+                /** @description Exact UTC date or `today`. Cannot be combined with fromDate or toDate. */
                 date?: string;
-                /** @description Inclusive local date start date. */
+                /** @description Inclusive UTC date start date. */
                 fromDate?: string;
-                /** @description Inclusive local date end date. */
+                /** @description Inclusive UTC date end date. */
                 toDate?: string;
-                /** @description IANA timezone that defines `today` and the local-day boundaries of each total. Defaults to UTC. */
-                timezone?: string;
                 /** @description Return the latest matching activity summary when true. Defaults to false. Cannot be combined with limit, order, or cursor. */
                 latest?: boolean;
             };

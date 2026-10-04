@@ -172,6 +172,7 @@ private fun Route.describeDailyReadOperation(
     id: String,
     operationSummary: String,
     operationDescription: String,
+    localDays: Boolean = false,
     latestDescription: String? = null,
 ): Route =
     describe {
@@ -180,7 +181,7 @@ private fun Route.describeDailyReadOperation(
         summary = operationSummary
         description = operationDescription
         requiresBearerAuth()
-        dailyStepQueryParameters()
+        dailyQueryParameters(localDays)
         latestDescription?.let {
             parameters {
                 query("latest") {
@@ -198,6 +199,7 @@ internal fun Route.describeDailyStepReadOperation(): Route =
         operationSummary = "List daily step summaries",
         operationDescription =
             "Returns daily step totals for the local days of `timezone` (UTC by default). Use `date` for one day, or `fromDate` and `toDate` for an inclusive date range.",
+        localDays = true,
     )
 
 internal fun Route.describeActivitySummaryReadOperation(): Route =
