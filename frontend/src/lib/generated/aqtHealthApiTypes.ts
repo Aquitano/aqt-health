@@ -597,7 +597,7 @@ export interface paths {
         };
         /**
          * Get dashboard summary
-         * @description Returns aggregate dashboard data for an inclusive UTC date range, including total steps and latest matching weight, heart-rate, and sleep values.
+         * @description Returns aggregate dashboard data for an inclusive local date range in `timezone` (UTC by default), including total steps and latest matching weight, heart-rate, and sleep values. Step totals come from the stored UTC daily summaries.
          */
         get: operations["getDashboardSummary"];
         put?: never;
@@ -3798,10 +3798,12 @@ export interface operations {
     getDashboardSummary: {
         parameters: {
             query: {
-                /** @description Inclusive UTC start date for dashboard summaries. */
+                /** @description Inclusive local start date for dashboard summaries. */
                 fromDate: string;
-                /** @description Inclusive UTC end date for dashboard summaries. */
+                /** @description Inclusive local end date for dashboard summaries. */
                 toDate: string;
+                /** @description IANA timezone that defines the local-day boundaries of fromDate and toDate and the last sleep night. Defaults to UTC. */
+                timezone?: string;
                 /** @description Source provider filter applied to summary metric lookups. */
                 provider?: string;
                 /** @description Source provider account or instance filter applied to summary metric lookups. */
@@ -3868,6 +3870,8 @@ export interface operations {
                 periodDays?: number;
                 /** @description End date of current period (ISO-8601 date); defaults to today */
                 toDate?: string;
+                /** @description IANA timezone that defines today and the local-day boundaries of both periods. Defaults to UTC. */
+                timezone?: string;
             };
             header?: never;
             path?: never;

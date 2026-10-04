@@ -9,7 +9,9 @@ import { MetricHighlights } from "@/components/MetricHighlights";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBar } from "@/components/StatusBar";
 import { getHealthDataPageSources } from "@/lib/aqtHealthApi";
-import { addUtcDays, parseDateRange, startOfDayInstant } from "@/lib/dates";
+import { addUtcDays, parseDateRange, rangeDays, startOfDayInstant } from "@/lib/dates";
+import { buildHealthCharts } from "@/lib/healthCharts";
+import { serverConfig } from "@/lib/serverConfig";
 import type { HealthDataPageSources, ScalarSample } from "@/lib/types";
 import { Suspense } from "react";
 
@@ -19,13 +21,10 @@ type PageProps = {
 
 export default async function HealthDataPage({ searchParams }: PageProps) {
   const params = (await searchParams) ?? {};
-  const range = parseDateRange({
-    fromDate: params.fromDate,
-    toDate: params.toDate,
-    timezone: params.timezone,
-  });
+  const timezone = serverConfig.timeZone;
+  const range = parseDateRange(params, timezone);
 
-  const sources = getHealthDataPageSources(range.fromDate, range.toDate, range.timezone);
+  const sources = getHealthDataPageSources(range.fromDate, range.toDate, timezone);
 
   return (
     <>
@@ -47,7 +46,7 @@ export default async function HealthDataPage({ searchParams }: PageProps) {
           sources={sources}
           fromDate={range.fromDate}
           toDate={range.toDate}
-          timezone={range.timezone}
+          timezone={timezone}
         />
       </Suspense>
 
@@ -56,11 +55,11 @@ export default async function HealthDataPage({ searchParams }: PageProps) {
           sources={sources}
           fromDate={range.fromDate}
           toDate={range.toDate}
-          timezone={range.timezone}
+          timezone={timezone}
         />
       </Suspense>
 
-      <p><Link href={`/health-data/raw?${new URLSearchParams({ fromDate: range.fromDate, toDate: range.toDate, timezone: range.timezone })}`} prefetch={false}>Browse raw data</Link></p>
+      <p><Link href={`/health-data/raw?${new URLSearchParams({ fromDate: range.fromDate, toDate: range.toDate })}`} prefetch={false}>Browse raw data</Link></p>
     </>
   );
 }
@@ -122,6 +121,7 @@ async function OverviewSection({
       <DashboardCards
         summary={summary.ok ? summary.data : undefined}
         trends={trends.ok ? trends.data : undefined}
+        rangeDays={rangeDays(fromDate, toDate)}
       />
       <DayOverview
         day={healthDay.ok ? healthDay.data : undefined}
@@ -190,14 +190,19 @@ async function VisualizationsSection({
         </div>
       ) : null}
       <HealthDataVisualizations
-        activitySummaries={activitySummaries.ok ? activitySummaries.data : undefined}
-        bodyMeasurements={bodyMeasurements.ok ? bodyMeasurements.data : undefined}
-        dailySteps={dailySteps.ok ? dailySteps.data : undefined}
-        heartRateDaily={heartRateDaily}
-        hrvSamples={hrvSamples.ok ? hrvSamples.data : undefined}
-        sleepNights={sleepNights.ok ? sleepNights.data : undefined}
-        respiratoryRates={respiratoryRates.ok ? respiratoryRates.data : undefined}
-        sleepSummaries={sleepSummaries.ok ? sleepSummaries.data : undefined}
+        charts={buildHealthCharts(
+          {
+            activitySummaries: activitySummaries.ok ? activitySummaries.data : undefined,
+            bodyMeasurements: bodyMeasurements.ok ? bodyMeasurements.data : undefined,
+            dailySteps: dailySteps.ok ? dailySteps.data : undefined,
+            heartRateDaily,
+            hrvSamples: hrvSamples.ok ? hrvSamples.data : undefined,
+            sleepNights: sleepNights.ok ? sleepNights.data : undefined,
+            respiratoryRates: respiratoryRates.ok ? respiratoryRates.data : undefined,
+            sleepSummaries: sleepSummaries.ok ? sleepSummaries.data : undefined,
+          },
+          timezone,
+        )}
         fromDate={fromDate}
         toDate={toDate}
         timezone={timezone}

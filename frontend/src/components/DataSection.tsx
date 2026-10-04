@@ -3,17 +3,14 @@ import { ErrorNotice } from "./ErrorNotice";
 import type { ApiResult } from "@/lib/types";
 import styles from "./DataSection.module.css";
 
-type DataSectionProps<T> = {
+type DataSectionProps<T extends { items: unknown[] }> = {
   title: string;
   result: ApiResult<T>;
   children: (data: T) => ReactNode;
 };
 
-export function DataSection<T>({ title, result, children }: DataSectionProps<T>) {
-  const count = result.ok && typeof result.data === "object" && result.data !== null
-    && "items" in result.data && Array.isArray(result.data.items)
-    ? result.data.items.length
-    : undefined;
+export function DataSection<T extends { items: unknown[] }>({ title, result, children }: DataSectionProps<T>) {
+  const count = result.ok ? result.data.items.length : undefined;
 
   return (
     <section className={styles.section}>

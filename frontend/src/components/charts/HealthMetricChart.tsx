@@ -1,7 +1,7 @@
 "use client";
 
 import { Maximize2 } from "lucide-react";
-import { useId, useMemo, useState } from "react";
+import { useId, useState } from "react";
 import {
   CartesianGrid,
   Legend,
@@ -13,13 +13,14 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { formatChartValue, formatDateTime } from "@/lib/format";
+import { formatChartValue } from "@/lib/format";
 import { useHydrated } from "@/lib/useHydrated";
 import styles from "./HealthMetricChart.module.css";
 
 export type ChartPointDetail = {
   id: string;
   at: string;
+  atLabel: string;
   metricKey: string;
   label: string;
   value: number;
@@ -30,6 +31,7 @@ export type ChartPointDetail = {
 export type HealthChartDatum = {
   id: string;
   label: string;
+  title: string;
   timestamp: number;
   details: Record<string, ChartPointDetail>;
 } & Record<string, string | number | Record<string, ChartPointDetail>>;
@@ -75,11 +77,12 @@ export function HealthMetricChart({
 }: HealthMetricChartProps) {
   const titleId = useId();
   const isClient = useHydrated();
-  const initialVisible = useMemo(
-    () => new Set(defaultVisibleMetricKeys?.length ? defaultVisibleMetricKeys : series.map((item) => item.key)),
-    [defaultVisibleMetricKeys, series],
-  );
-  const [visibleMetricKeys, setVisibleMetricKeys] = useState(initialVisible);
+  const seriesKey = series.map((item) => item.key).join("|");
+  const [selection, setSelection] = useState<{ seriesKey: string; keys: Set<string> }>();
+  const visibleMetricKeys =
+    selection?.seriesKey === seriesKey
+      ? selection.keys
+      : new Set(defaultVisibleMetricKeys?.length ? defaultVisibleMetricKeys : series.map((item) => item.key));
   const visibleSeries = series.filter((item) => visibleMetricKeys.has(item.key));
   const numericValues = visibleSeries.flatMap((item) =>
     data.map((datum) => datum[item.key]).filter((value): value is number => typeof value === "number"),
@@ -89,15 +92,13 @@ export function HealthMetricChart({
     : undefined;
 
   function toggleMetric(metricKey: string) {
-    setVisibleMetricKeys((current) => {
-      const next = new Set(current);
-      if (next.has(metricKey) && next.size > 1) {
-        next.delete(metricKey);
-      } else {
-        next.add(metricKey);
-      }
-      return next;
-    });
+    const next = new Set(visibleMetricKeys);
+    if (next.has(metricKey) && next.size > 1) {
+      next.delete(metricKey);
+    } else {
+      next.add(metricKey);
+    }
+    setSelection({ seriesKey, keys: next });
   }
 
   if (data.length === 0 || series.length === 0) {
@@ -232,7 +233,7 @@ function ChartTooltip({ active, payload, series }: TooltipProps & { series: Heal
 
   return (
     <div className={styles.tooltip}>
-      <div className={styles.tooltipTitle}>{formatDateTime(datum.timestamp)}</div>
+      <div className={styles.tooltipTitle}>{datum.title}</div>
       {visiblePayload.map((item) => {
         const metricKey = String(item.dataKey);
         const detail = datum.details[metricKey];

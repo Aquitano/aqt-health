@@ -2,24 +2,21 @@ import { describe, expect, it } from "vitest";
 import { parseDateRange, startOfDayInstant } from "./dates";
 
 describe("date ranges", () => {
-  it("rejects impossible calendar dates and invalid timezone names", () => {
+  it("rejects impossible calendar dates", () => {
     expect(
-      parseDateRange({ fromDate: "2026-02-30", toDate: "2026-03-02" }).warning
+      parseDateRange({ fromDate: "2026-02-30", toDate: "2026-03-02" }, "UTC").warning
     ).toBeDefined();
     expect(
-      parseDateRange({
-        fromDate: "2026-03-01",
-        toDate: "2026-03-02",
-        timezone: "Fake/Zone",
-      }).warning
-    ).toBeDefined();
-    expect(
-      parseDateRange({
-        fromDate: "2024-02-29",
-        toDate: "2024-03-01",
-        timezone: "America/New_York",
-      }).warning
+      parseDateRange({ fromDate: "2024-02-29", toDate: "2024-03-01" }, "America/New_York").warning
     ).toBeUndefined();
+  });
+
+  it("clamps ranges longer than 366 days to the days ending at toDate", () => {
+    expect(parseDateRange({ fromDate: "2020-01-01", toDate: "2026-03-01" }, "UTC")).toEqual({
+      fromDate: "2025-03-01",
+      toDate: "2026-03-01",
+      warning: "Ranges are limited to 366 days, so this shows the 366 days ending 2026-03-01.",
+    });
   });
 
   it.each([

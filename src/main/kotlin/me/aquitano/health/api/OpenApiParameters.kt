@@ -183,18 +183,22 @@ internal fun Operation.Builder.sleepNightQueryParameters() {
 internal fun Operation.Builder.dashboardQueryParameters() {
     parameters {
         query("fromDate") {
-            description = "Inclusive UTC start date for dashboard summaries."
+            description = "Inclusive local start date for dashboard summaries."
             required = true
             schema =
                 stringSchema(format = JsonFormatDate, example = ExampleFromDate)
         }
         query("toDate") {
-            description = "Inclusive UTC end date for dashboard summaries."
+            description = "Inclusive local end date for dashboard summaries."
             required = true
             schema =
                 stringSchema(format = JsonFormatDate, example = ExampleToDate)
         }
     }
+    timezoneParameter(
+        description = "IANA timezone that defines the local-day boundaries of fromDate and toDate and the last sleep night. Defaults to UTC.",
+        default = "UTC",
+    )
     providerFilterParameters(
         providerDescription =
             "Source provider filter applied to summary metric lookups.",

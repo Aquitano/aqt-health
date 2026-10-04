@@ -3,7 +3,9 @@ import type {
   ProviderSyncResponse,
   ProviderSyncJobStatusResponse,
 } from "@/lib/types";
+import { formatDateTime } from "@/lib/format";
 import { ErrorNotice } from "../ErrorNotice";
+import { useTimeZone } from "../TimeZoneProvider";
 import { formatStatus } from "./labels";
 import styles from "../ProviderSyncPanel.module.css";
 
@@ -12,6 +14,7 @@ export function SyncProgressView({
 }: {
   job: ProviderSyncJobStatusResponse;
 }) {
+  const timeZone = useTimeZone();
   const completedPercent =
     job.totalItems > 0
       ? Math.round((job.completedItems / job.totalItems) * 100)
@@ -25,14 +28,16 @@ export function SyncProgressView({
   );
   const currentLabel = job.currentItem
     ? `${formatStatus(job.currentItem.dataType)} ${formatWindowLabel(
-        new Date(job.currentItem.from),
-        new Date(job.currentItem.to)
+        job.currentItem.from,
+        job.currentItem.to,
+        timeZone
       )}`
     : "Waiting for backend worker";
   const lastLabel = job.lastCompletedItem
     ? `${formatStatus(job.lastCompletedItem.dataType)} ${formatWindowLabel(
-        new Date(job.lastCompletedItem.from),
-        new Date(job.lastCompletedItem.to)
+        job.lastCompletedItem.from,
+        job.lastCompletedItem.to,
+        timeZone
       )}`
     : null;
 
@@ -104,10 +109,6 @@ export function SyncResult({
   );
 }
 
-function formatWindowLabel(from: Date, to: Date): string {
-  const formatter = new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
-  return `${formatter.format(from)} - ${formatter.format(to)}`;
+function formatWindowLabel(from: string, to: string, timeZone: string): string {
+  return `${formatDateTime(from, timeZone)} - ${formatDateTime(to, timeZone)}`;
 }

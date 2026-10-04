@@ -8,7 +8,7 @@ import {
   HealthMetricChart,
   type ChartPointDetail,
 } from "@/components/charts/HealthMetricChart";
-import { formatChartValue, formatDateTime } from "@/lib/format";
+import { formatChartValue } from "@/lib/format";
 import styles from "./ExpandedChartModal.module.css";
 
 export type ChartSummary = {
@@ -109,7 +109,7 @@ export function ExpandedChartModal({
               <tbody>
                 {details.map((detail) => (
                   <tr key={detail.id}>
-                    <td>{formatDateTime(detail.at)}</td>
+                    <td>{detail.atLabel}</td>
                     <td>{detail.label}</td>
                     <td>{formatChartValue(detail.value, detail.unit)}</td>
                     <td>{detail.source ?? "n/a"}</td>

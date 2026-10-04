@@ -1,47 +1,17 @@
-"use client";
-
-import gsap from "gsap";
-import { useEffect, useId, useRef } from "react";
+import { useId } from "react";
+import styles from "./PulseLine.module.css";
 
 type PulseLineProps = {
   className?: string;
-  /** Seconds for one sweep across the trace. Lower reads as more urgent/active. */
-  duration?: number;
-  /** Seconds to wait between sweeps. */
-  repeatDelay?: number;
 };
 
 /**
  * EKG trace: a dim baseline with a bright comet segment sweeping across a
  * heartbeat waveform. Decorative; hidden from assistive tech and static when
- * the user prefers reduced motion. Used as the app's loading affordance — a
- * quick sweep (small `duration`) reads as "working", a slow one as ambient.
+ * the user prefers reduced motion. Used as the app's loading affordance.
  */
-export function PulseLine({ className, duration = 5.2, repeatDelay = 0.8 }: PulseLineProps) {
-  const cometRef = useRef<SVGPathElement>(null);
+export function PulseLine({ className }: PulseLineProps) {
   const gradientId = useId();
-
-  useEffect(() => {
-    const comet = cometRef.current;
-    if (!comet) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-
-    const tween = gsap.fromTo(
-      comet,
-      { attr: { "stroke-dashoffset": 1.16 } },
-      {
-        attr: { "stroke-dashoffset": -1.16 },
-        duration,
-        ease: "none",
-        repeat: -1,
-        repeatDelay,
-      },
-    );
-
-    return () => {
-      tween.kill();
-    };
-  }, [duration, repeatDelay]);
 
   const waveform =
     "M0 20 H120 l6 -7 6 7 H190 l5 -16 6 26 5 -10 H320 l6 -5 6 5 H460 l5 -14 7 22 5 -8 H640";
@@ -63,7 +33,7 @@ export function PulseLine({ className, duration = 5.2, repeatDelay = 0.8 }: Puls
       </defs>
       <path d={waveform} stroke="currentColor" strokeOpacity="0.14" strokeWidth="1.5" />
       <path
-        ref={cometRef}
+        className={styles.comet}
         d={waveform}
         pathLength={1}
         stroke={`url(#${gradientId})`}

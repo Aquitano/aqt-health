@@ -11,11 +11,10 @@ import me.aquitano.health.application.metric.steps.repository.CanonicalStepDeriv
 import me.aquitano.health.domain.BodyMetricTypes
 import me.aquitano.health.domain.ScalarMetricTypes
 import me.aquitano.health.infrastructure.database.suspendDbTransaction
-import me.aquitano.health.shared.utcDate
 import org.jetbrains.exposed.v1.jdbc.Database
 import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneOffset
+import java.time.ZoneId
 import kotlin.math.roundToInt
 
 /** Dashboard trend aggregates. Every read goes through the canonical layer so the numbers agree
@@ -32,15 +31,16 @@ class TrendQueryService(
     ): DashboardTrendsResponse =
         suspendDbTransaction(db = database) {
             val periodDays = params.optional("periodDays")?.toIntOrNull()?.coerceIn(1, 90) ?: 7
-            val toDate = params.date("toDate") ?: now.utcDate()
+            val timezone = params.timezone()
+            val toDate = params.date("toDate") ?: now.atZone(timezone).toLocalDate()
             val fromDate = toDate.minusDays(periodDays.toLong() - 1)
             val previousToDate = fromDate.minusDays(1)
             val previousFromDate = previousToDate.minusDays(periodDays.toLong() - 1)
 
             val steps = stepsTrend(fromDate, toDate, previousFromDate, previousToDate)
-            val heartRate = heartRateTrend(fromDate, toDate, previousFromDate, previousToDate)
-            val sleep = sleepTrend(fromDate, toDate, previousFromDate, previousToDate)
-            val weight = weightTrend(toDate)
+            val heartRate = heartRateTrend(fromDate, toDate, previousFromDate, previousToDate, timezone)
+            val sleep = sleepTrend(fromDate, toDate, previousFromDate, previousToDate, timezone)
+            val weight = weightTrend(toDate, timezone)
 
             DashboardTrendsResponse(
                 periodDays = periodDays,
@@ -80,16 +80,17 @@ class TrendQueryService(
         currentTo: LocalDate,
         previousFrom: LocalDate,
         previousTo: LocalDate,
+        timezone: ZoneId,
     ): HeartRateTrend? {
         val currentSummary =
             scalarRepository.summarize(
-                readFilters(currentFrom, currentTo),
+                readFilters(currentFrom, currentTo, timezone),
                 setOf(ScalarMetricTypes.HEART_RATE),
                 canonical = true,
             )
         val previousSummary =
             scalarRepository.summarize(
-                readFilters(previousFrom, previousTo),
+                readFilters(previousFrom, previousTo, timezone),
                 setOf(ScalarMetricTypes.HEART_RATE),
                 canonical = true,
             )
@@ -108,14 +109,15 @@ class TrendQueryService(
         currentTo: LocalDate,
         previousFrom: LocalDate,
         previousTo: LocalDate,
+        timezone: ZoneId,
     ): SleepTrend? {
         val currentAvg =
             sleepRepository.avgCanonicalSleepDuration(
-                readFilters(currentFrom, currentTo),
+                readFilters(currentFrom, currentTo, timezone),
             )
         val previousAvg =
             sleepRepository.avgCanonicalSleepDuration(
-                readFilters(previousFrom, previousTo),
+                readFilters(previousFrom, previousTo, timezone),
             )
         if (currentAvg == null && previousAvg == null) return null
         val current = currentAvg ?: 0L
@@ -127,11 +129,14 @@ class TrendQueryService(
         )
     }
 
-    private fun weightTrend(toDate: LocalDate): WeightTrend? {
+    private fun weightTrend(
+        toDate: LocalDate,
+        timezone: ZoneId,
+    ): WeightTrend? {
         val metricTypes = setOf(BodyMetricTypes.WEIGHT)
         val (current, _) =
             scalarRepository.latestBefore(
-                latestBeforeFilters(toDate.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant()),
+                latestBeforeFilters(toDate.plusDays(1).atStartOfDay(timezone).toInstant()),
                 metricTypes,
                 canonical = true,
             )
@@ -195,10 +200,11 @@ class TrendQueryService(
     private fun readFilters(
         fromDate: LocalDate,
         toDate: LocalDate,
+        timezone: ZoneId,
     ): ReadFilters =
         ReadFilters(
-            from = fromDate.atStartOfDay(ZoneOffset.UTC).toInstant(),
-            to = toDate.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant(),
+            from = fromDate.atStartOfDay(timezone).toInstant(),
+            to = toDate.plusDays(1).atStartOfDay(timezone).toInstant(),
             provider = null,
             providerInstanceId = null,
             includeSource = false,

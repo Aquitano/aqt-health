@@ -1,11 +1,12 @@
 import { formatDateTime, formatDuration } from "@/lib/format";
+import { serverConfig } from "@/lib/serverConfig";
 import type { SleepSession } from "@/lib/types";
 import { DataTable, type Column } from "./DataTable";
 import { sourceLabel } from "./shared";
 
 const columns: Column<SleepSession>[] = [
-  { header: "Start", cell: (item) => formatDateTime(item.startAt) },
-  { header: "End", cell: (item) => formatDateTime(item.endAt) },
+  { header: "Start", cell: (item) => formatDateTime(item.startAt, serverConfig.timeZone) },
+  { header: "End", cell: (item) => formatDateTime(item.endAt, serverConfig.timeZone) },
   { header: "Duration", cell: (item) => formatDuration(item.durationSeconds) },
   {
     header: "Stages",

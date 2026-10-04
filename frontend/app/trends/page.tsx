@@ -5,6 +5,7 @@ import { TrendsBoard } from "@/components/trends/TrendsBoard";
 import { TrendsRangeTabs } from "@/components/trends/TrendsRangeTabs";
 import { getTrendsPageData } from "@/lib/aqtHealthApi";
 import { defaultDateRange } from "@/lib/dates";
+import { serverConfig } from "@/lib/serverConfig";
 import { buildTrendStats } from "@/lib/trends";
 import { Suspense } from "react";
 
@@ -24,7 +25,7 @@ function parseWindow(value: string | string[] | undefined): number {
 export default async function TrendsPage({ searchParams }: PageProps) {
   const params = (await searchParams) ?? {};
   const days = parseWindow(params.days);
-  const toDate = defaultDateRange().toDate;
+  const toDate = defaultDateRange(serverConfig.timeZone).toDate;
 
   return (
     <>
@@ -43,7 +44,7 @@ export default async function TrendsPage({ searchParams }: PageProps) {
 }
 
 async function TrendsContent({ days, toDate }: { days: number; toDate: string }) {
-  const data = await getTrendsPageData(toDate, days);
+  const data = await getTrendsPageData(toDate, days, serverConfig.timeZone);
   const stats = buildTrendStats({
     weight: data.weight.ok ? data.weight.data : undefined,
     steps: data.steps.ok ? data.steps.data : undefined,
@@ -51,7 +52,7 @@ async function TrendsContent({ days, toDate }: { days: number; toDate: string })
     hrv: data.hrv.ok ? data.hrv.data : undefined,
     activity: data.activity.ok ? data.activity.data : undefined,
     respiratory: data.respiratory.ok ? data.respiratory.data : undefined,
-  });
+  }, serverConfig.timeZone);
 
   return (
     <>

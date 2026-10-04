@@ -7,7 +7,7 @@ function steps(points: [string, number][]) {
       items: points.map(([date, steps]) => ({ date, steps, sampleCount: 1 })),
       meta: { count: points.length, limit: 5000, sort: "date", order: "asc" },
     },
-  })[0];
+  }, "UTC")[0];
 }
 
 describe("trend comparisons", () => {
@@ -45,11 +45,24 @@ describe("trend comparisons", () => {
         ],
         meta: { count: 2, limit: 2, sort: "date", order: "asc" },
       },
-    });
+    }, "UTC");
     expect(stat.points).toEqual([
       { date: "2026-03-01", value: 40 },
       { date: "2026-03-02", value: 60 },
     ]);
     expect(stat.latest).toBe(60);
+  });
+
+  it("groups timestamped readings by the app timezone's calendar day", () => {
+    const weight = buildTrendStats({
+      weight: {
+        items: [
+          { id: 1, metricType: "weight", measuredAt: "2026-10-04T14:00:00Z", value: 75, unit: "kg" },
+          { id: 2, metricType: "weight", measuredAt: "2026-10-05T01:00:00Z", value: 74.6, unit: "kg" },
+        ],
+        meta: { count: 2, limit: 5000, sort: "measuredAt", order: "asc" },
+      },
+    }, "America/Los_Angeles").find((stat) => stat.key === "weight");
+    expect(weight?.points).toEqual([{ date: "2026-10-04", value: 74.6 }]);
   });
 });

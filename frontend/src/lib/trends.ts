@@ -5,6 +5,7 @@ import type {
   SleepSummariesResponse,
   StepDailySummariesResponse,
 } from "./types";
+import { dateInTimeZone } from "./dates";
 
 export type TrendPoint = {
   /** Calendar day, YYYY-MM-DD. */
@@ -35,10 +36,6 @@ export type TrendStat = {
   change7d: TrendChange | null;
   change30d: TrendChange | null;
 };
-
-function dayKey(isoTimestamp: string): string {
-  return isoTimestamp.slice(0, 10);
-}
 
 /** Inputs arrive in ascending timestamp order; retain the final measurement each day. */
 function dailyLast(items: TrendPoint[]): TrendPoint[] {
@@ -109,8 +106,9 @@ export type TrendsInput = {
   respiratory?: ScalarDailySummariesResponse;
 };
 
-export function buildTrendStats(input: TrendsInput): TrendStat[] {
+export function buildTrendStats(input: TrendsInput, timeZone: string): TrendStat[] {
   const stats: TrendStat[] = [];
+  const dayKey = (isoTimestamp: string) => dateInTimeZone(Date.parse(isoTimestamp), timeZone);
 
   const weightItems = (input.weight?.items ?? []).filter((item) => item.metricType === "weight");
   const weightUnit = weightItems[0]?.unit ?? "kg";
