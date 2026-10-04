@@ -58,6 +58,8 @@ services:
       postgres:
         condition: service_healthy
     restart: unless-stopped
+    # Outlasts ktor.deployment.shutdownTimeout so in-flight requests can finish.
+    stop_grace_period: 35s
 
   frontend:
     image: ghcr.io/aquitano/aqt-health-frontend:${AQT_HEALTH_FRONTEND_TAG:-latest}
