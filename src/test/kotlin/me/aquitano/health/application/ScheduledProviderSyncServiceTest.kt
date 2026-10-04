@@ -4,6 +4,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
+import me.aquitano.health.api.dto.ScheduledSyncConfigUpdateRequest
 import me.aquitano.health.application.providersync.ProviderSyncProgressSink
 import me.aquitano.health.domain.ConflictException
 import me.aquitano.health.domain.HealthProvider
@@ -17,6 +18,7 @@ import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
 import me.aquitano.health.infrastructure.repositories.ScheduledSyncRepository
 import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.test.PostgresTestDatabase
+import org.jetbrains.exposed.v1.jdbc.Database
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
@@ -129,16 +131,93 @@ class ScheduledProviderSyncServiceTest : PostgresIntegrationTest() {
         }
 
     @Test
-    fun nonRetryableFailureParksConfigEvenWhenMessageIsReworded() =
+    fun nonRetryableFailureParksConfigOnlyAfterRepeatedFailures() =
         runBlocking {
-            // The ConflictException message deliberately avoids the old magic substrings;
-            // classification must come from the exception type, not the wording.
-            val provider =
-                ThrowingProvider(
-                    ConflictException("withings_needs_reauth", "token expired, reauthorize the account"),
-                )
+            val provider = ThrowingProvider(ConflictException("withings_account_not_found", "account is gone"))
             val (service, repository) = serviceWith(provider)
+            var runAt = Instant.parse("2026-05-31T10:00:00Z")
+            configureEnabled(repository, provider, runAt)
+
+            repeat(2) {
+                assertEquals(1, service.runDue(runAt))
+                runAt = assertNotNull(repository.getConfig(provider.providerCode, provider.defaultProviderInstanceId)?.nextRunAt)
+            }
+            assertEquals(1, service.runDue(runAt))
+
+            val config = repository.getConfig(provider.providerCode, provider.defaultProviderInstanceId)
+            assertNotNull(config)
+            assertNull(config.nextRunAt)
+            assertEquals(3, config.failureCount)
+        }
+
+    @Test
+    fun reschedulingParkedOrPausedConfigStartsFailureCountOver() =
+        runBlocking {
+            val provider = ThrowingProvider(ConflictException("withings_account_not_found", "account is gone"))
+            val database = openDatabase(PostgresTestDatabase.config())
             val now = Instant.parse("2026-05-31T10:00:00Z")
+            ProviderOAuthRepository(database).upsertAccount(
+                providerCode = provider.providerCode,
+                providerUserId = "throwing-user",
+                providerInstanceId = provider.defaultProviderInstanceId,
+                accessTokenCiphertext = "access",
+                refreshTokenCiphertext = "refresh",
+                tokenType = "Bearer",
+                expiresAt = now.plusSeconds(3600),
+                scope = "scope",
+                now = now,
+            )
+            val (service, repository) = serviceWith(provider, database)
+
+            for (wasEnabled in listOf(true, false)) {
+                val stopped =
+                    repository.upsertConfig(
+                        providerCode = provider.providerCode,
+                        providerInstanceId = provider.defaultProviderInstanceId,
+                        enabled = wasEnabled,
+                        dataTypes = listOf("steps"),
+                        cadenceMinutes = 1_440,
+                        lookbackDays = 7,
+                        nextRunAt = null,
+                        now = now,
+                    )
+                repository.markFailure(stopped.id, failureCount = 3, nextRunAt = null, errorMessage = "account is gone", now = now)
+
+                service.updateConfig(
+                    provider.providerCode,
+                    provider.defaultProviderInstanceId,
+                    ScheduledSyncConfigUpdateRequest(enabled = true),
+                    now,
+                )
+
+                val rescheduled = repository.getConfig(provider.providerCode, provider.defaultProviderInstanceId)
+                assertNotNull(rescheduled)
+                assertEquals(now, rescheduled.nextRunAt)
+                assertEquals(0, rescheduled.failureCount, "wasEnabled=$wasEnabled")
+            }
+        }
+
+    @Test
+    fun needsReauthAccountParksConfigOnFirstRetryableFailure() =
+        runBlocking {
+            val provider = ThrowingProvider(IllegalStateException("upstream timed out"))
+            val database = openDatabase(PostgresTestDatabase.config())
+            val now = Instant.parse("2026-05-31T10:00:00Z")
+            val accounts = ProviderOAuthRepository(database)
+            accounts.upsertAccount(
+                providerCode = provider.providerCode,
+                providerUserId = "throwing-user",
+                providerInstanceId = provider.defaultProviderInstanceId,
+                accessTokenCiphertext = "access",
+                refreshTokenCiphertext = "refresh",
+                tokenType = "Bearer",
+                expiresAt = now.plusSeconds(3600),
+                scope = "scope",
+                now = now,
+            )
+            val account = accounts.accountByProviderInstanceForStatus(provider.providerCode, provider.defaultProviderInstanceId)!!
+            accounts.markNeedsReauth(account.id, account.refreshTokenCiphertext, "withings_needs_reauth", "reconnect", now)
+            val (service, repository) = serviceWith(provider, database)
             configureEnabled(repository, provider, now)
 
             assertEquals(1, service.runDue(now))
@@ -170,8 +249,8 @@ class ScheduledProviderSyncServiceTest : PostgresIntegrationTest() {
 
     private fun serviceWith(
         provider: HealthProvider,
+        database: Database = openDatabase(PostgresTestDatabase.config()),
     ): Pair<ScheduledProviderSyncService, ScheduledSyncRepository> {
-        val database = openDatabase(PostgresTestDatabase.config())
         val repository = ScheduledSyncRepository(database)
         val service =
             ScheduledProviderSyncService(

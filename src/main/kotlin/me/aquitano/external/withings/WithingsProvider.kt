@@ -42,7 +42,7 @@ class WithingsProvider(
                     accounts = "/api/v2/providers/withings/accounts",
                     disconnect = "/api/v2/providers/withings/accounts/{providerInstanceId}/disconnect",
                     reconnect = "/api/v2/providers/withings/accounts/{providerInstanceId}/reconnect",
-                    sync = "/api/v2/providers/withings/sync",
+                    sync = "/api/v2/providers/withings/sync-jobs",
                 ),
         )
     override val defaultProviderInstanceId: String = "withings-me"

@@ -42,7 +42,7 @@ class GoogleHealthProviderRouteTest : PostgresIntegrationTest() {
             configureTestApplication()
 
             val response =
-                client.post("/api/v2/providers/google-health/sync") {
+                client.post("/api/v2/providers/google-health/sync-jobs") {
                     authorized()
                     contentType(ContentType.Application.Json)
                     setBody("""{"from":"2026-04-02T00:00:00Z","to":"2026-04-01T00:00:00Z"}""")
@@ -54,28 +54,12 @@ class GoogleHealthProviderRouteTest : PostgresIntegrationTest() {
         }
 
     @Test
-    fun syncMultiYearRangeWithinTheCeilingIsNotRejectedByRangeValidation() =
-        testApplication {
-            configureTestApplication()
-
-            val response =
-                client.post("/api/v2/providers/google-health/sync") {
-                    authorized()
-                    contentType(ContentType.Application.Json)
-                    setBody("""{"from":"2023-06-01T00:00:00Z","to":"2026-01-01T00:00:00Z","dataTypes":["steps"]}""")
-                }
-
-            assertEquals(HttpStatusCode.Conflict, response.status)
-            assertTrue(response.bodyAsText().contains("google_health_not_connected"))
-        }
-
-    @Test
     fun syncRangeBeyondTheCeilingIsRejected() =
         testApplication {
             configureTestApplication()
 
             val response =
-                client.post("/api/v2/providers/google-health/sync") {
+                client.post("/api/v2/providers/google-health/sync-jobs") {
                     authorized()
                     contentType(ContentType.Application.Json)
                     setBody("""{"from":"1970-01-01T00:00:00Z","to":"2026-01-01T00:00:00Z","dataTypes":["steps"]}""")
@@ -126,7 +110,7 @@ class GoogleHealthProviderRouteTest : PostgresIntegrationTest() {
             configureTestApplication()
 
             val response =
-                client.post("/api/v2/providers/google-health/sync") {
+                client.post("/api/v2/providers/google-health/sync-jobs") {
                     authorized()
                     contentType(ContentType.Application.Json)
                     setBody("""{"from":"2026-04-01T00:00:00Z","to":"2026-04-02T00:00:00Z","pageSize":0}""")

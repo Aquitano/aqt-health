@@ -188,6 +188,14 @@ export const aqtHealthClient = {
       }),
     ),
 
+  getLatestProviderSyncJob: (providerCode: ProviderCode) =>
+    call<ApiSchema<"ProviderSyncJobStatusResponse">>((headers) =>
+      rawClient.GET("/api/v2/providers/{providerCode}/sync-jobs/latest", {
+        headers,
+        params: { path: { providerCode } },
+      }),
+    ),
+
   getProviderSyncJob: (providerCode: ProviderCode, jobId: string) =>
     call<ApiSchema<"ProviderSyncJobStatusResponse">>((headers) =>
       rawClient.GET("/api/v2/providers/{providerCode}/sync-jobs/{jobId}", {

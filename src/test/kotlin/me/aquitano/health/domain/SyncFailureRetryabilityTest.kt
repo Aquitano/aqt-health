@@ -24,6 +24,7 @@ class SyncFailureRetryabilityTest {
     fun transientFailuresStayRetryableEvenWithSuspiciousWording() {
         assertTrue(isRetryableSyncFailure(RuntimeException("upstream schema validation hiccup, try again")))
         assertTrue(isRetryableSyncFailure(UpstreamProviderException("withings_http_503", "service unavailable")))
+        assertTrue(isRetryableSyncFailure(ConflictException("ingestion_batch_in_progress", "batch is processing", retryable = true)))
     }
 
     @Test

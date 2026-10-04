@@ -3,13 +3,9 @@ package me.aquitano.health.api
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.get
 import io.ktor.client.request.header
-import io.ktor.client.request.post
-import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
-import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
-import io.ktor.http.contentType
 import io.ktor.server.config.MapApplicationConfig
 import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
@@ -40,22 +36,6 @@ class WithingsProviderRouteTest : PostgresIntegrationTest() {
             assertTrue(url.contains("response_type=code"))
             assertTrue(url.contains("client_id=withings-client-id"))
             assertTrue(url.contains("scope=user.info%2Cuser.metrics%2Cuser.activity"))
-        }
-
-    @Test
-    fun syncReturnsNotConnectedConflict() =
-        testApplication {
-            configureTestApplication()
-
-            val response =
-                client.post("/api/v2/providers/withings/sync") {
-                    authorized()
-                    contentType(ContentType.Application.Json)
-                    setBody("""{"from":"2026-04-01T00:00:00Z","to":"2026-04-02T00:00:00Z"}""")
-                }
-
-            assertEquals(HttpStatusCode.Conflict, response.status)
-            assertTrue(response.bodyAsText().contains("withings_not_connected"))
         }
 
     @Test

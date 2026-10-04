@@ -122,7 +122,6 @@ class ApplicationTest : PostgresIntegrationTest() {
                 "/api/v2/providers/{providerCode}/accounts/{providerInstanceId}/reconnect",
                 "/api/v2/providers/{providerCode}/oauth/start",
                 "/api/v2/providers/{providerCode}/oauth/callback",
-                "/api/v2/providers/{providerCode}/sync",
                 "/api/v2/metrics",
                 "/api/v2/health/day",
                 "/api/v2/steps",

@@ -194,6 +194,8 @@ data class ProviderSyncJobStatusResponse(
     val requestedTo: String,
     val dataTypes: List<String>? = null,
     val status: SyncJobStatus,
+    /** True once the job reached a final status and polling can stop. */
+    val terminal: Boolean,
     val totalItems: Int,
     val completedItems: Int,
     val currentItem: ProviderSyncJobItemResponse? = null,
@@ -257,8 +259,9 @@ data class ScheduledSyncConfigUpdateRequest(
     val enabled: Boolean? = null,
     val dataTypes: List<String>? = null,
     @JsonSchema.Minimum(15.0)
+    @JsonSchema.Maximum(43_200.0)
     val cadenceMinutes: Int? = null,
-    @JsonSchema.Minimum(0.0)
+    @JsonSchema.Minimum(1.0)
     val lookbackDays: Int? = null,
 )
 

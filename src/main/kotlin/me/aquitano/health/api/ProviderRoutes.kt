@@ -246,33 +246,6 @@ internal fun Route.providerRoutes() {
         providerCodePath()
         errorResponses(notFound = true)
     }
-    post("/api/v2/providers/{providerCode}/sync") {
-        val code = call.providerCode()
-        call.respond<ProviderSyncResponse>(
-            HttpStatusCode.OK,
-            providerWorkflowService.sync(
-                providerCode = code,
-                request = call.receive<ProviderSyncRequest>(),
-                now = clock.now(),
-                idempotencyKey = call.idempotencyKey(),
-            ),
-        )
-    }.describe {
-        operationId = "syncProvider"
-        tag("Providers")
-        summary = "Synchronize provider data"
-        description =
-            "Fetches data from the selected provider for the requested range/data types, normalizes records, ingests resulting batches, and returns per-data-type batch, empty-result, and error details. Provider sync can return partial errors while still storing successful data types. Repeating a completed request with the same Idempotency-Key returns the stored response without syncing again; failed requests are not stored, so retrying them re-runs the sync."
-        requiresBearerAuth()
-        providerCodePath()
-        idempotencyKeyHeader()
-        jsonRequest<ProviderSyncRequest>(
-            "Provider sync request. Historical ranges up to 1095 days (3 years) are accepted for backfill; providers split work into safe internal windows and may enforce page-size constraints advertised by the provider catalog. Longer histories need several requests.",
-            "syncRequest",
-            providerSyncRequestExample(),
-        )
-        errorResponses(notFound = true, conflict = true, upstream = true)
-    }
     post("/api/v2/providers/{providerCode}/sync-jobs") {
         val code = call.providerCode()
         call.respond<ProviderSyncJobStartResponse>(
@@ -325,14 +298,15 @@ internal fun Route.providerRoutes() {
         errorResponses(notFound = true)
     }
     get("/api/v2/providers/{providerCode}/sync-jobs/{jobId}") {
+        val code = call.providerCode()
         val jobId = call.requiredPathParam("jobId")
-        call.respond(HttpStatusCode.OK, providerSyncJobService.get(jobId))
+        call.respond(HttpStatusCode.OK, providerSyncJobService.get(code, jobId))
     }.describe {
         operationId = "getProviderSyncJob"
         tag("Providers")
         summary = "Get provider sync job progress"
         description =
-            "Returns progress counters, the current provider-safe window, and the final sync summary when the background job has finished."
+            "Returns progress counters, the current provider-safe window, and the final sync summary when the background job has finished. `terminal` turns true once the job reached a final status. A job that belongs to another provider returns 404."
         requiresBearerAuth()
         providerCodePath()
         parameters {

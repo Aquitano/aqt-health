@@ -41,7 +41,6 @@ import me.aquitano.health.infrastructure.repositories.IngestionRepository
 import me.aquitano.health.infrastructure.repositories.PendingDerivedRebuildRepository
 import me.aquitano.health.infrastructure.repositories.ProjectionWipeRepository
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
-import me.aquitano.health.infrastructure.repositories.ProviderSyncIdempotencyRepository
 import me.aquitano.health.infrastructure.repositories.ProviderSyncJobRepository
 import me.aquitano.health.infrastructure.repositories.ReplayJobRepository
 import me.aquitano.health.infrastructure.repositories.ScheduledSyncRepository
@@ -181,7 +180,6 @@ fun providersModule(config: AppConfig) =
         // OAuth + sync persistence
         singleOf(::ProviderOAuthRepository)
         singleOf(::ProviderSyncJobRepository)
-        singleOf(::ProviderSyncIdempotencyRepository)
         singleOf(::ScheduledSyncRepository)
         singleOf(::ScheduledSyncRunGuard)
 

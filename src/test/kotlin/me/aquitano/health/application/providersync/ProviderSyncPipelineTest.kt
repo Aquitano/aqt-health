@@ -371,6 +371,18 @@ class ProviderSyncPipelineTest {
         }
 
     @Test
+    fun failedTokenSaveIsRetriedWithoutRefreshingAgain() =
+        runBlocking {
+            val store = FlakySaveStore(syncAccount(now.minusSeconds(1)))
+            val adapter = FakeAdapter()
+            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+            val summary = pipeline.sync(adapter, request, now)
+            assertEquals("processed", summary.status)
+            assertEquals(1, adapter.refreshCalls)
+            assertEquals("fresh-access", store.savedAccessToken)
+        }
+
+    @Test
     fun refreshFailureDoesNotExposeExceptionDetails() =
         runBlocking {
             val adapter = FakeAdapter(refreshFailure = IllegalStateException("secret upstream credentials"))
@@ -404,6 +416,21 @@ class ProviderSyncPipelineTest {
             tokens: RefreshedTokenSet,
             now: Instant,
         ): Boolean = false
+    }
+
+    private class FlakySaveStore(
+        account: SyncAccount,
+    ) : FakeStore(account = account) {
+        private var failuresLeft = 1
+
+        override suspend fun saveRefreshedToken(
+            account: SyncAccount,
+            tokens: RefreshedTokenSet,
+            now: Instant,
+        ): Boolean {
+            if (failuresLeft-- > 0) throw IllegalStateException("connection reset")
+            return super.saveRefreshedToken(account, tokens, now)
+        }
     }
 
     private open class FakeAdapter(

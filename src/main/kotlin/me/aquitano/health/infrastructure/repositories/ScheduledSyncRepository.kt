@@ -55,21 +55,23 @@ class ScheduledSyncRepository(
         lookbackDays: Int,
         nextRunAt: Instant?,
         now: Instant,
+        restartFailureCount: Boolean = false,
     ): ScheduledSyncConfigRecord =
         suspendDbTransaction(db = database) {
             val nowTimestamp = now.toDbTimestamp()
             // Run history (last success/attempt, failure count, last error) belongs to the
-            // scheduler, not to a config edit, so an update leaves those columns alone.
+            // scheduler, not to a config edit, so an update leaves those columns alone unless
+            // the edit reschedules a stopped config.
             ProviderScheduledSyncConfigsTable.upsert(
                 ProviderScheduledSyncConfigsTable.providerCode,
                 ProviderScheduledSyncConfigsTable.providerInstanceId,
                 onUpdateExclude =
-                    listOf(
+                    listOfNotNull(
                         ProviderScheduledSyncConfigsTable.lastSuccessfulFrom,
                         ProviderScheduledSyncConfigsTable.lastSuccessfulTo,
                         ProviderScheduledSyncConfigsTable.lastSuccessAt,
                         ProviderScheduledSyncConfigsTable.lastAttemptedAt,
-                        ProviderScheduledSyncConfigsTable.failureCount,
+                        ProviderScheduledSyncConfigsTable.failureCount.takeUnless { restartFailureCount },
                         ProviderScheduledSyncConfigsTable.lastErrorMessage,
                         ProviderScheduledSyncConfigsTable.createdAt,
                     ),
@@ -190,6 +192,25 @@ class ScheduledSyncRepository(
                 it[this.failureCount] = failureCount
                 it[this.nextRunAt] = nextRunAt?.toDbTimestamp()
                 it[lastErrorMessage] = errorMessage.take(2000)
+                it[updatedAt] = now.toDbTimestamp()
+            }
+        }
+    }
+
+    suspend fun resumeParked(
+        providerCode: String,
+        providerInstanceId: String,
+        now: Instant,
+    ) {
+        suspendDbTransaction(db = database) {
+            ProviderScheduledSyncConfigsTable.update({
+                (ProviderScheduledSyncConfigsTable.providerCode eq providerCode) and
+                    (ProviderScheduledSyncConfigsTable.providerInstanceId eq providerInstanceId) and
+                    (ProviderScheduledSyncConfigsTable.enabled eq true) and
+                    ProviderScheduledSyncConfigsTable.nextRunAt.isNull()
+            }) {
+                it[failureCount] = 0
+                it[nextRunAt] = now.toDbTimestamp()
                 it[updatedAt] = now.toDbTimestamp()
             }
         }

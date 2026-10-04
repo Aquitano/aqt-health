@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  useEffect,
-  useMemo,
-  useState,
-  useSyncExternalStore,
-  useTransition,
-} from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type {
   ApiResult,
@@ -17,80 +11,29 @@ import type {
 import { readSyncJobStart, readSyncJobStatus } from "@/lib/apiResponses";
 import { proxyFetch } from "./proxyFetch";
 
-const STORAGE_KEY = "aqt-health.provider-sync.active-job";
-const CHANGE_EVENT = "aqt-health:sync-job";
-let memorySnapshot: string | null | undefined;
+type ActiveSyncJob = Pick<ProviderSyncJobStatusResponse, "providerCode" | "jobId">;
 
-type ActiveSyncJob = { providerCode: string; jobId: string };
-
-function snapshot(): string | null {
-  if (memorySnapshot !== undefined) return memorySnapshot;
-  try {
-    return window.localStorage.getItem(STORAGE_KEY);
-  } catch {
-    return null;
-  }
-}
-
-function subscribe(onChange: () => void) {
-  window.addEventListener("storage", onChange);
-  window.addEventListener(CHANGE_EVENT, onChange);
-  return () => {
-    window.removeEventListener("storage", onChange);
-    window.removeEventListener(CHANGE_EVENT, onChange);
-  };
-}
-
-function store(job: ActiveSyncJob | null) {
-  memorySnapshot = job ? JSON.stringify(job) : null;
-  try {
-    if (memorySnapshot)
-      window.localStorage.setItem(STORAGE_KEY, memorySnapshot);
-    else window.localStorage.removeItem(STORAGE_KEY);
-    memorySnapshot = undefined;
-  } catch {
-    /* Keep this tab's job active when browser storage is unavailable. */
-  }
-  window.dispatchEvent(new Event(CHANGE_EVENT));
-}
-
-function parse(raw: string | null): ActiveSyncJob | null {
-  try {
-    const value: unknown = raw ? JSON.parse(raw) : null;
-    if (typeof value !== "object" || value === null) return null;
-    if (!("providerCode" in value) || !("jobId" in value)) return null;
-    return typeof value.providerCode === "string" &&
-      typeof value.jobId === "string"
-      ? { providerCode: value.providerCode, jobId: value.jobId }
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-function clearStoredJob(job: ActiveSyncJob) {
-  const current = parse(snapshot());
-  if (current?.providerCode === job.providerCode && current.jobId === job.jobId)
-    store(null);
-}
-
-export function isFinishedSyncJob(status: string): boolean {
-  return (
-    status === "processed" || status === "partial_failed" || status === "failed"
-  );
-}
-
-export function useProviderSyncJob() {
+export function useProviderSyncJob(runningSyncJob: ProviderSyncJobStatusResponse | null) {
   const router = useRouter();
-  const raw = useSyncExternalStore(subscribe, snapshot, () => null);
-  const activeSyncJob = useMemo(() => parse(raw), [raw]);
+  const [activeSyncJob, setActiveSyncJob] = useState<ActiveSyncJob | null>(runningSyncJob);
   const [result, setResult] = useState<ApiResult<ProviderSyncResponse> | null>(
     null
   );
   const [syncJob, setSyncJob] = useState<ProviderSyncJobStatusResponse | null>(
-    null
+    runningSyncJob
   );
   const [isPending, startTransition] = useTransition();
+  const runningSyncJobId = runningSyncJob?.jobId ?? null;
+  const [seenRunningSyncJobId, setSeenRunningSyncJobId] = useState(runningSyncJobId);
+
+  const pollingAnotherJob = activeSyncJob !== null && activeSyncJob.jobId !== runningSyncJobId;
+  if (runningSyncJobId !== seenRunningSyncJobId && !pollingAnotherJob) {
+    setSeenRunningSyncJobId(runningSyncJobId);
+    if (runningSyncJob && !activeSyncJob) {
+      setActiveSyncJob(runningSyncJob);
+      setSyncJob(runningSyncJob);
+    }
+  }
 
   useEffect(() => {
     if (!activeSyncJob) return;
@@ -110,11 +53,11 @@ export function useProviderSyncJob() {
         if (!body.ok) {
           setResult(body);
           setSyncJob(null);
-          clearStoredJob(pollingJob);
+          setActiveSyncJob(null);
           return;
         }
         setSyncJob(body.data);
-        if (isFinishedSyncJob(body.data.status)) {
+        if (body.data.terminal) {
           setResult(
             body.data.summary
               ? { ok: true, data: body.data.summary }
@@ -124,7 +67,7 @@ export function useProviderSyncJob() {
                     body.data.errorMessage ?? "Provider sync job failed.",
                 }
           );
-          clearStoredJob(pollingJob);
+          setActiveSyncJob(null);
           router.refresh();
           return;
         }
@@ -139,7 +82,7 @@ export function useProviderSyncJob() {
               : "Provider sync status check failed.",
         });
         setSyncJob(null);
-        clearStoredJob(pollingJob);
+        setActiveSyncJob(null);
       }
     }
     void poll();
@@ -163,7 +106,7 @@ export function useProviderSyncJob() {
             body: JSON.stringify(payload),
           }
         );
-        if (body.ok) store({ providerCode, jobId: body.data.jobId });
+        if (body.ok) setActiveSyncJob({ providerCode, jobId: body.data.jobId });
         else setResult(body);
       } catch (error) {
         setResult({
