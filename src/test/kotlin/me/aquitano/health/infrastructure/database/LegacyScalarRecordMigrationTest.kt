@@ -22,7 +22,7 @@ import kotlin.test.assertTrue
 class LegacyScalarRecordMigrationTest : PostgresIntegrationTest() {
     @Test
     fun legacyRecordsBecomeReplayableScalarRecords() {
-        val config = PostgresTestDatabase.config()
+        val config = PostgresTestDatabase.emptyConfig()
         migrate(config, MigrationVersion.fromVersion("20"))
         seedLegacyRecords(config)
 

@@ -9,7 +9,7 @@ import kotlin.test.assertEquals
 class DerivedRecoveryMigrationTest : PostgresIntegrationTest() {
     @Test
     fun rawStepsWithoutCanonicalRowsQueueEveryTouchedUtcDate() {
-        val config = PostgresTestDatabase.config()
+        val config = PostgresTestDatabase.emptyConfig()
         Flyway
             .configure()
             .dataSource(config.jdbcUrl, config.user, config.password)

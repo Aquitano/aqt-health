@@ -1,6 +1,7 @@
 package me.aquitano.health.test
 
 import me.aquitano.health.infrastructure.config.DatabaseConfig
+import me.aquitano.health.infrastructure.database.FlywayMigrator
 import org.testcontainers.postgresql.PostgreSQLContainer
 import java.sql.Connection
 import java.sql.DriverManager
@@ -29,7 +30,22 @@ object PostgresTestDatabase {
         }
     }
 
-    fun config(): DatabaseConfig {
+    // Migrating every fixture database dominated integration test time, so Testcontainers fixtures
+    // are cloned from one database migrated per JVM. Schema fixtures on an external server still
+    // migrate themselves.
+    private val migratedTemplate: String by lazy {
+        createContainerDatabase(TEMPLATE_DATABASE)
+        FlywayMigrator().migrate(containerConfig(TEMPLATE_DATABASE))
+        TEMPLATE_DATABASE
+    }
+
+    /** A fixture database that may already be migrated. */
+    fun config(): DatabaseConfig = fixtureConfig(migrated = true)
+
+    /** A fixture database with no migrations applied, for tests that migrate step by step. */
+    fun emptyConfig(): DatabaseConfig = fixtureConfig(migrated = false)
+
+    private fun fixtureConfig(migrated: Boolean): DatabaseConfig {
         val configuredJdbcUrl = System.getenv("AQT_HEALTH_TEST_JDBC_URL")
         val configuredUser = System.getenv("AQT_HEALTH_TEST_DB_USER") ?: "aqt_health"
         val configuredPassword = System.getenv("AQT_HEALTH_TEST_DB_PASSWORD") ?: "aqt_health"
@@ -46,22 +62,32 @@ object PostgresTestDatabase {
 
         val databaseName = "aqt_health_test_${UUID.randomUUID().toString().replace("-", "")}"
         try {
-            adminConnection().use { connection ->
-                connection.createStatement().use { statement ->
-                    statement.execute("CREATE DATABASE $databaseName")
-                }
-            }
+            createContainerDatabase(databaseName, template = if (migrated) migratedTemplate else null)
         } catch (exception: Exception) {
             throw IllegalStateException(MISSING_DATABASE_MESSAGE, exception)
         }
-        return DatabaseConfig(
+        return containerConfig(databaseName)
+    }
+
+    private fun createContainerDatabase(
+        name: String,
+        template: String? = null,
+    ) {
+        adminConnection().use { connection ->
+            connection.createStatement().use { statement ->
+                statement.execute("CREATE DATABASE $name" + (template?.let { " TEMPLATE $it" } ?: ""))
+            }
+        }
+    }
+
+    private fun containerConfig(databaseName: String): DatabaseConfig =
+        DatabaseConfig(
             jdbcUrl = "jdbc:postgresql://${container.host}:${container.getMappedPort(5432)}/$databaseName",
             driver = "org.postgresql.Driver",
             user = container.username,
             password = container.password,
             maxPoolSize = 1,
         )
-    }
 
     fun connection(config: DatabaseConfig): Connection = DriverManager.getConnection(config.jdbcUrl, config.user, config.password)
 
@@ -192,6 +218,8 @@ object PostgresTestDatabase {
     }
 
     internal const val EXTENSIONS_SCHEMA = "aqt_health_test_extensions"
+
+    private const val TEMPLATE_DATABASE = "aqt_health_template"
 
     private const val LOCAL_JDBC_URL =
         "jdbc:postgresql://localhost:5432/aqt_health"
