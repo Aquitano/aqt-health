@@ -35,21 +35,23 @@ class GeneratedGoogleHealthClientTest {
     }
 
     @Test
-    fun fetchDataPointsConvertsSupportedDataTypesToNormalizerShape() =
+    fun fetchDataPointsFiltersEachSupportedDataTypeAndConvertsItToNormalizerShape() =
         runBlocking {
             val fixture = Fixture()
             val pointsByDataType =
                 mapOf(
-                    "steps" to stepsPoint(),
-                    "sleep" to sleepPoint(),
-                    "heart-rate" to heartRatePoint(),
-                    "weight" to weightPoint(),
-                    "body-fat" to bodyFatPoint(),
-                    "heart-rate-variability" to heartRateVariabilityPoint(),
-                    "respiratory-rate-sleep-summary" to respiratoryRatePoint(),
+                    "steps" to (stepsPoint() to "steps.interval.start_time"),
+                    "sleep" to (sleepPoint() to "sleep.interval.end_time"),
+                    "heart-rate" to (heartRatePoint() to "heart_rate.sample_time.physical_time"),
+                    "weight" to (weightPoint() to "weight.sample_time.physical_time"),
+                    "body-fat" to (bodyFatPoint() to "body_fat.sample_time.physical_time"),
+                    "heart-rate-variability" to (heartRateVariabilityPoint() to "heart_rate_variability.sample_time.physical_time"),
+                    "respiratory-rate-sleep-summary" to
+                        (respiratoryRatePoint() to "respiratory_rate_sleep_summary.sample_time.physical_time"),
                 )
 
-            pointsByDataType.forEach { (dataType, point) ->
+            pointsByDataType.forEach { (dataType, pointAndFilterField) ->
+                val (point, filterField) = pointAndFilterField
                 fixture.service.responses +=
                     ListDataPointsResponse
                         .newBuilder()
@@ -65,6 +67,13 @@ class GeneratedGoogleHealthClientTest {
                         pageSize = 1000,
                     )
 
+                val request = fixture.service.requests.last()
+                assertEquals("users/me/dataTypes/$dataType", request.parent, dataType)
+                assertEquals(
+                    """$filterField >= "${fixture.from}" AND $filterField < "${fixture.to}"""",
+                    request.filter,
+                    dataType,
+                )
                 val normalized = GoogleHealthNormalizer().normalize(result)
                 assertEquals(1, normalized.records.size, dataType)
                 assertEquals(
