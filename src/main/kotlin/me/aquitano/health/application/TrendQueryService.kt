@@ -37,7 +37,7 @@ class TrendQueryService(
             val previousToDate = fromDate.minusDays(1)
             val previousFromDate = previousToDate.minusDays(periodDays.toLong() - 1)
 
-            val steps = stepsTrend(fromDate, toDate, previousFromDate, previousToDate)
+            val steps = stepsTrend(fromDate, toDate, previousFromDate, previousToDate, timezone)
             val heartRate = heartRateTrend(fromDate, toDate, previousFromDate, previousToDate, timezone)
             val sleep = sleepTrend(fromDate, toDate, previousFromDate, previousToDate, timezone)
             val weight = weightTrend(toDate, timezone)
@@ -56,14 +56,15 @@ class TrendQueryService(
         currentTo: LocalDate,
         previousFrom: LocalDate,
         previousTo: LocalDate,
+        timezone: ZoneId,
     ): StepsTrend? {
         val current =
             stepRepository.sumCanonicalStepDailySummaries(
-                dailyReadFilters(currentFrom, currentTo),
+                dailyReadFilters(currentFrom, currentTo, timezone),
             )
         val previous =
             stepRepository.sumCanonicalStepDailySummaries(
-                dailyReadFilters(previousFrom, previousTo),
+                dailyReadFilters(previousFrom, previousTo, timezone),
             )
         if (current.dayCount == 0 && previous.dayCount == 0) return null
         val dailyAverage = if (current.dayCount > 0) current.steps / current.dayCount else 0
@@ -173,10 +174,12 @@ class TrendQueryService(
     private fun dailyReadFilters(
         fromDate: LocalDate,
         toDate: LocalDate,
+        timezone: ZoneId,
     ): ReadFilters =
         ReadFilters(
             fromDate = fromDate,
             toDate = toDate,
+            timezone = timezone,
             provider = null,
             providerInstanceId = null,
             includeSource = false,

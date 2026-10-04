@@ -135,7 +135,8 @@ internal fun Operation.Builder.dailyStepQueryParameters() {
         example = 100,
     )
     cursorParameter(CursorDescription, example = DateCursorExample)
-    dateRangeQueryParameters("UTC date")
+    dateRangeQueryParameters("local date")
+    timezoneParameter("IANA timezone that defines `today` and the local-day boundaries of each total. Defaults to UTC.")
 }
 
 internal fun Operation.Builder.sleepNightQueryParameters() {

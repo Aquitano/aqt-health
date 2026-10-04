@@ -118,6 +118,33 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
         }
 
     @Test
+    fun canonicalStepTotalsAgreeAcrossEndpointsOnTimezoneDays() =
+        testApplication {
+            configureTestApplication()
+            val response =
+                client.post("/api/v2/ingestion/batches") {
+                    authorized()
+                    contentType(ContentType.Application.Json)
+                    setBody(
+                        """{"provider":"withings","providerInstanceId":"withings","batchExternalId":"berlin-steps","ingestedAt":"2026-04-20T10:00:00Z","sourcePayload":{},"records":[{"type":"step_interval","startAt":"2026-04-19T22:30:00Z","endAt":"2026-04-19T23:30:00Z","steps":100}]}""",
+                    )
+                }
+            assertEquals(HttpStatusCode.Created, response.status)
+
+            val zone = "timezone=Europe/Berlin"
+            val daily = authorizedGet("/api/v2/steps/daily?fromDate=2026-04-19&toDate=2026-04-20&$zone").items().single().jsonObject
+            val dashboard = authorizedGet("/api/v2/dashboard/summary?fromDate=2026-04-20&toDate=2026-04-20&$zone").jsonBody()
+            val day = authorizedGet("/api/v2/health/day?date=2026-04-20&$zone&modules=steps").jsonBody()
+            val trends = authorizedGet("/api/v2/dashboard/trends?toDate=2026-04-20&periodDays=1&$zone").jsonBody()
+            assertEquals("2026-04-20", daily["date"]!!.jsonPrimitive.content)
+            assertEquals(100, daily["steps"]!!.jsonPrimitive.int)
+            assertEquals(100, dashboard["steps"]!!.jsonObject["steps"]!!.jsonPrimitive.int)
+            assertEquals(100, day["steps"]!!.jsonObject["total"]!!.jsonPrimitive.int)
+            assertEquals(100, trends["steps"]!!.jsonObject["currentTotal"]!!.jsonPrimitive.int)
+            assertEquals(0, trends["steps"]!!.jsonObject["previousTotal"]!!.jsonPrimitive.int)
+        }
+
+    @Test
     fun readEndpointsReturnPersistedMetrics() =
         testApplication {
             configureTestApplication()

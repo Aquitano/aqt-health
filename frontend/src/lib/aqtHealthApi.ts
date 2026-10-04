@@ -43,7 +43,7 @@ export function getHealthDataPageSources(
       modules: ["steps", "heartRate", "weight", "sleep"],
       includeSource: true,
     }),
-    dailySteps: client.listDailyStepSummaries({ fromDate, toDate, includeSource: true }),
+    dailySteps: client.listDailyStepSummaries({ fromDate, toDate, timezone, includeSource: true }),
     activitySummaries: client.listActivitySummaries({
       fromDate,
       toDate,
@@ -109,7 +109,7 @@ export async function getTrendsPageData(
   const [health, weight, steps, sleep, hrv, activity, respiratory] = await Promise.all([
     client.getHealth(),
     readAllPages((cursor) => client.listScalarSamples("weight", { ...sampleQuery, cursor })),
-    readAllPages((cursor) => client.listDailyStepSummaries({ fromDate, toDate, limit: 5000, cursor })),
+    readAllPages((cursor) => client.listDailyStepSummaries({ fromDate, toDate, timezone, limit: 5000, cursor })),
     readAllPages((cursor) => client.listSleepSummaries({
       cursor,
       from,

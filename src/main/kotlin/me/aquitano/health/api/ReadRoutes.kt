@@ -223,7 +223,7 @@ internal fun Route.readRoutes() {
         tag("Read")
         summary = "Get dashboard summary"
         description =
-            "Returns aggregate dashboard data for an inclusive local date range in `timezone` (UTC by default), including total steps and latest matching weight, heart-rate, and sleep values. Step totals come from the stored UTC daily summaries."
+            "Returns aggregate dashboard data for an inclusive local date range in `timezone` (UTC by default), including total steps and latest matching weight, heart-rate, and sleep values."
         requiresBearerAuth()
         dashboardQueryParameters()
         errorResponses()

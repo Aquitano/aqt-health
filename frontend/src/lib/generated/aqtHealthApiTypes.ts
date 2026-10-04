@@ -497,7 +497,7 @@ export interface paths {
         };
         /**
          * List daily step summaries
-         * @description Returns daily UTC step totals. Use `date` for one day, or `fromDate` and `toDate` for an inclusive date range.
+         * @description Returns daily step totals for the local days of `timezone` (UTC by default). Use `date` for one day, or `fromDate` and `toDate` for an inclusive date range.
          */
         get: operations["listDailyStepSummaries"];
         put?: never;
@@ -617,7 +617,7 @@ export interface paths {
         };
         /**
          * Get dashboard summary
-         * @description Returns aggregate dashboard data for an inclusive local date range in `timezone` (UTC by default), including total steps and latest matching weight, heart-rate, and sleep values. Step totals come from the stored UTC daily summaries.
+         * @description Returns aggregate dashboard data for an inclusive local date range in `timezone` (UTC by default), including total steps and latest matching weight, heart-rate, and sleep values.
          */
         get: operations["getDashboardSummary"];
         put?: never;
@@ -3442,12 +3442,14 @@ export interface operations {
                 limit?: number;
                 /** @description Opaque cursor from `meta.nextCursor` for the next page. Must be used with the same order. */
                 cursor?: string;
-                /** @description Exact UTC date or `today`. Cannot be combined with fromDate or toDate. */
+                /** @description Exact local date or `today`. Cannot be combined with fromDate or toDate. */
                 date?: string;
-                /** @description Inclusive UTC date start date. */
+                /** @description Inclusive local date start date. */
                 fromDate?: string;
-                /** @description Inclusive UTC date end date. */
+                /** @description Inclusive local date end date. */
                 toDate?: string;
+                /** @description IANA timezone that defines `today` and the local-day boundaries of each total. Defaults to UTC. */
+                timezone?: string;
             };
             header?: never;
             path?: never;
@@ -3516,12 +3518,14 @@ export interface operations {
                 limit?: number;
                 /** @description Opaque cursor from `meta.nextCursor` for the next page. Must be used with the same order. */
                 cursor?: string;
-                /** @description Exact UTC date or `today`. Cannot be combined with fromDate or toDate. */
+                /** @description Exact local date or `today`. Cannot be combined with fromDate or toDate. */
                 date?: string;
-                /** @description Inclusive UTC date start date. */
+                /** @description Inclusive local date start date. */
                 fromDate?: string;
-                /** @description Inclusive UTC date end date. */
+                /** @description Inclusive local date end date. */
                 toDate?: string;
+                /** @description IANA timezone that defines `today` and the local-day boundaries of each total. Defaults to UTC. */
+                timezone?: string;
                 /** @description Return the latest matching activity summary when true. Defaults to false. Cannot be combined with limit, order, or cursor. */
                 latest?: boolean;
             };

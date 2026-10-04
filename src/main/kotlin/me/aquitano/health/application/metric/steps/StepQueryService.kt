@@ -40,7 +40,7 @@ class StepQueryService(
         now: Instant,
     ): StepDailySummariesResponse {
         params.rejectLatest()
-        val filters = params.dailyReadFilters(now)
+        val filters = params.dailyReadFilters(now, params.timezone())
         return pagedRead(database, filters, SortFields.DATE, { it.date }, { 0L }, ::StepDailySummariesResponse) {
             canonicalRepository.listCanonicalStepDailySummaries(filters)
         }

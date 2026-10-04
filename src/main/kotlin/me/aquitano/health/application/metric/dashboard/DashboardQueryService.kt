@@ -44,6 +44,7 @@ class DashboardQueryService(
                     to = toInstant,
                     fromDate = fromDate,
                     toDate = toDate,
+                    timezone = timezone,
                     provider = params.optional("provider"),
                     providerInstanceId = params.optional("providerInstanceId"),
                     includeSource = includeSource,

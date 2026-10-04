@@ -6,6 +6,8 @@ import me.aquitano.health.domain.ValidationIssue
 import me.aquitano.health.domain.ValidationIssueCodes
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
+import java.time.ZoneOffset
 
 internal fun QueryParams.readFilters(): ReadFilters {
     val latest = boolean(QueryParamSpecs.latest)
@@ -45,12 +47,16 @@ internal fun QueryParams.summaryFilters(): ReadFilters {
     )
 }
 
-internal fun QueryParams.dailyReadFilters(now: Instant): ReadFilters {
-    val (fromDate, toDate) = dailyDateRange(now)
+internal fun QueryParams.dailyReadFilters(
+    now: Instant,
+    timezone: ZoneId = ZoneOffset.UTC,
+): ReadFilters {
+    val (fromDate, toDate) = dailyDateRange(now, timezone)
     val order = order()
     return ReadFilters(
         fromDate = fromDate,
         toDate = toDate,
+        timezone = timezone,
         provider = optional("provider"),
         providerInstanceId = optional("providerInstanceId"),
         includeSource = boolean(QueryParamSpecs.includeSource),
@@ -62,7 +68,7 @@ internal fun QueryParams.dailyReadFilters(now: Instant): ReadFilters {
 
 internal fun QueryParams.dailyLatestReadFilters(now: Instant): ReadFilters {
     rejectLatestOverrides(message = "is not supported for latest endpoints")
-    val (fromDate, toDate) = dailyDateRange(now)
+    val (fromDate, toDate) = dailyDateRange(now, ZoneOffset.UTC)
     return ReadFilters(
         fromDate = fromDate,
         toDate = toDate,
@@ -106,8 +112,11 @@ internal fun QueryParams.sleepNightReadFilters(now: Instant): ReadFilters {
     )
 }
 
-private fun QueryParams.dailyDateRange(now: Instant): Pair<LocalDate?, LocalDate?> {
-    val exactDate = dateOrToday("date", now)
+private fun QueryParams.dailyDateRange(
+    now: Instant,
+    timezone: ZoneId,
+): Pair<LocalDate?, LocalDate?> {
+    val exactDate = dateOrToday("date", now, timezone)
     if (exactDate != null && (optional("fromDate") != null || optional("toDate") != null)) {
         throw RequestValidationException(
             listOf(
