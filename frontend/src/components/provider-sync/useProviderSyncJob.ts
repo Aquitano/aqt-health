@@ -26,7 +26,8 @@ export function useProviderSyncJob(runningSyncJob: ProviderSyncJobStatusResponse
   const runningSyncJobId = runningSyncJob?.jobId ?? null;
   const [seenRunningSyncJobId, setSeenRunningSyncJobId] = useState(runningSyncJobId);
 
-  if (runningSyncJobId !== seenRunningSyncJobId) {
+  const pollingAnotherJob = activeSyncJob !== null && activeSyncJob.jobId !== runningSyncJobId;
+  if (runningSyncJobId !== seenRunningSyncJobId && !pollingAnotherJob) {
     setSeenRunningSyncJobId(runningSyncJobId);
     if (runningSyncJob && !activeSyncJob) {
       setActiveSyncJob(runningSyncJob);

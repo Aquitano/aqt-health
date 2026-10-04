@@ -201,6 +201,39 @@ describe("ProviderSyncPanel polling", () => {
     });
   });
 
+  it("adopts a job supplied while another was polling once that one finishes", async () => {
+    let finishFirst!: (value: unknown) => void;
+    fetchMock.mockImplementation((url: string) =>
+      url.endsWith("/job-1")
+        ? new Promise((resolve) => {
+            finishFirst = resolve;
+          })
+        : new Promise(() => {}),
+    );
+    const view = renderRunningJob();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    view.rerender(
+      <ProviderSyncPanel
+        catalog={catalog()}
+        statuses={statuses()}
+        scheduledSyncConfigs={[]}
+        runningSyncJob={jobStatus({ jobId: "job-2" })}
+      />,
+    );
+    await act(async () => {
+      finishFirst({ json: async () => ({ ok: true, data: jobStatus({ status: "failed", terminal: true }) }) });
+    });
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/backend/providers/google-health/sync-jobs/job-2",
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
+    });
+    expect(screen.getByRole("button", { name: /syncing/i })).toBeDisabled();
+  });
+
   it("aborts and ignores a status response after unmount", async () => {
     let finish!: (value: unknown) => void;
     fetchMock.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
