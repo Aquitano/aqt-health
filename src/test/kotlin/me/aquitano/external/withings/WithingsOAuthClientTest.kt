@@ -76,8 +76,8 @@ class WithingsOAuthClientTest {
             assertEquals(listOf("client-id"), form["client_id"])
             assertEquals(listOf("auth-code"), form["code"])
             assertEquals(listOf("http://localhost:8080/api/v2/providers/withings/oauth/callback"), form["redirect_uri"])
-            assertEquals(listOf("test-nonce"), form["nonce"])
-            assertTrue(!form["signature"].isNullOrEmpty())
+            assertEquals(listOf("client-secret"), form["client_secret"])
+            assertNull(form["signature"])
             assertEquals("363", tokens.providerUserId)
             assertEquals("access-from-code", tokens.accessToken)
             assertEquals("refresh-from-code", tokens.refreshToken)
@@ -112,8 +112,8 @@ class WithingsOAuthClientTest {
             assertEquals(listOf("refresh_token"), form["grant_type"])
             assertEquals(listOf("client-id"), form["client_id"])
             assertEquals(listOf("existing-refresh"), form["refresh_token"])
-            assertEquals(listOf("test-nonce"), form["nonce"])
-            assertTrue(!form["signature"].isNullOrEmpty())
+            assertEquals(listOf("client-secret"), form["client_secret"])
+            assertNull(form["signature"])
             assertEquals("fresh-access", tokens.accessToken)
             assertEquals("existing-refresh", tokens.refreshToken)
             assertEquals("", tokens.providerUserId)
@@ -402,13 +402,7 @@ class WithingsOAuthClientTest {
     private fun client(handler: MockRequestHandler): KtorWithingsClient {
         val httpClient =
             HttpClient(
-                MockEngine { request ->
-                    if (request.url.encodedPath == "/v2/signature") {
-                        respondJson("""{"status": 0, "body": {"nonce": "test-nonce"}}""")
-                    } else {
-                        handler(request)
-                    }
-                },
+                MockEngine { request -> handler(request) },
             ) {
                 install(ContentNegotiation) {
                     json(AppJson)
