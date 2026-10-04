@@ -4,6 +4,8 @@ ktor:
       - me.aquitano.health.api.ApplicationKt.module
   deployment:
     port: "$PORT:8080"
+    shutdownGracePeriod: 10000
+    shutdownTimeout: 30000
 
 aqtHealth:
   environment: "$AQT_HEALTH_ENV:local"
