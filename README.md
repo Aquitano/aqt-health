@@ -8,8 +8,8 @@ The service accepts normalized health batches from trusted scripts or provider a
 
 ## Stack
 
-- Kotlin 2.3
-- Ktor 3.5
+- Kotlin 2.4
+- Ktor 3.6
 - PostgreSQL via JDBC and HikariCP
 - Exposed DAO for support entities only
 - Exposed DSL for ingestion and metric reads/writes
