@@ -22,7 +22,7 @@ class SleepQueryService(
         val filters = params.readFilters()
         return pagedRead(database, filters, SortFields.START_AT, { it.startAt }, { it.id.toLong() }, ::SleepSessionsResponse) {
             val (sessions, sourceMetadata) = canonicalSessionRepository.listCanonicalSleepSessions(filters)
-            val stagesBySession = canonicalSessionRepository.listRawStagesForSessions(sessions.mapTo(HashSet()) { it.id })
+            val stagesBySession = sleepRepository.stagesForSessions(sessions.map { it.id })
             sessions.map { it.toResponse(stagesBySession, sourceMetadata) }
         }
     }

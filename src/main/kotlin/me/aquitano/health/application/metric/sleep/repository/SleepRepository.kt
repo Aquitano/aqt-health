@@ -49,7 +49,7 @@ class SleepRepository : BaseMetricReadRepository() {
                         session = session,
                     )
                 }
-        val stagesBySession = sleepStagesBySession(nights.map { it.session.id })
+        val stagesBySession = stagesForSessions(nights.map { it.session.id })
         val metadata =
             sourceMetadata(
                 nights.map { it.session.sourceInstanceId }.toSet(),
@@ -66,7 +66,7 @@ class SleepRepository : BaseMetricReadRepository() {
             durationSeconds = row[SleepStagesTable.durationSeconds],
         )
 
-    private fun sleepStagesBySession(sessionIds: List<Int>): Map<Int, List<SleepStageRow>> {
+    fun stagesForSessions(sessionIds: Collection<Int>): Map<Int, List<SleepStageRow>> {
         if (sessionIds.isEmpty()) return emptyMap()
         return SleepStagesTable
             .selectAll()
