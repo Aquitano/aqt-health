@@ -16,10 +16,12 @@ import me.aquitano.health.application.metric.sleep.repository.SleepRepository
 import me.aquitano.health.application.metric.steps.StepQueryService
 import me.aquitano.health.application.metric.steps.derived.CanonicalStepDerivationService
 import me.aquitano.health.application.metric.steps.repository.CanonicalStepDerivationRepository
+import me.aquitano.health.domain.NewIngestionRecord
 import me.aquitano.health.domain.ReplayJobStatus
 import me.aquitano.health.infrastructure.database.suspendDbTransaction
 import me.aquitano.health.infrastructure.repositories.*
 import me.aquitano.health.infrastructure.time.UtcClock
+import me.aquitano.health.shared.AppJson
 import me.aquitano.health.test.*
 import org.junit.After
 import java.time.Instant
@@ -363,16 +365,18 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
                 val batches =
                     values.chunked(1000).map { chunk ->
                         val batchId = records.insertBatch(source.id, null, "{}", now, now)
-                        batchId to records.insertRecords(batchId, chunk.map { mapping.mapRecord(it)!! }, now)
+                        batchId to records.insertRecords(batchId, chunk.map { it.toNewIngestionRecord() }, now)
                     }
                 batches.forEach { (batchId, _) -> records.markProcessed(batchId, now) }
                 writer.writeAll(provider, source.id, batches.flatMap { (_, inserted) -> inserted.map { MetricWrite(it.id, it.record) } }, now)
             }
 
+        private fun IngestionRecord.toNewIngestionRecord() = NewIngestionRecord(mapping.mapRecord(this)!!, AppJson.encodeToString(IngestionRecord.serializer(), this))
+
         suspend fun appendFailed(value: IngestionRecord) =
             suspendDbTransaction(db = database) {
                 val batchId = records.insertBatch(config.queryInt("SELECT id FROM source_instances LIMIT 1"), null, "{}", now, now)
-                records.insertRecords(batchId, listOf(mapping.mapRecord(value)!!), now)
+                records.insertRecords(batchId, listOf(value.toNewIngestionRecord()), now)
                 records.markFailed(batchId, now, "test failed projection write")
             }
 

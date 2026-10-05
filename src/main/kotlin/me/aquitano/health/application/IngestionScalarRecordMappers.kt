@@ -95,7 +95,6 @@ internal fun mapScalarSample(
     return if (valid) {
         ScalarSampleRecord(
             providerRecordId = dto.providerRecordId,
-            normalizedRecordJson = dto.toNormalizedJsonObject(),
             measuredAt = measuredAt,
             value =
                 ScalarValue(

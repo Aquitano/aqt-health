@@ -56,7 +56,6 @@ internal fun mapStepInterval(
     ) {
         StepIntervalRecord(
             providerRecordId = dto.providerRecordId,
-            normalizedRecordJson = dto.toNormalizedJsonObject(),
             startAt = startAt,
             endAt = endAt,
             steps = steps,
@@ -98,7 +97,6 @@ internal fun mapSleepSession(
     return if (startAt != null && endAt != null && startAt.isBefore(endAt)) {
         SleepSessionRecord(
             providerRecordId = dto.providerRecordId,
-            normalizedRecordJson = dto.toNormalizedJsonObject(),
             startAt = startAt,
             endAt = endAt,
             stages = stages,
@@ -261,7 +259,6 @@ internal fun mapActivitySummary(
     return if (date != null && hasAnyMetric) {
         ActivitySummaryRecord(
             providerRecordId = dto.providerRecordId,
-            normalizedRecordJson = dto.toNormalizedJsonObject(),
             date = date,
             distanceMeters = dto.distanceMeters,
             activeEnergyKcal = dto.activeEnergyKcal,
@@ -427,7 +424,6 @@ internal fun mapSleepSummary(
     return if (startAt != null && endAt != null && startAt.isBefore(endAt) && hasAnyMetric) {
         SleepSummaryRecord(
             providerRecordId = dto.providerRecordId,
-            normalizedRecordJson = dto.toNormalizedJsonObject(),
             startAt = startAt,
             endAt = endAt,
             timeInBedSeconds = dto.timeInBedSeconds,
@@ -503,7 +499,6 @@ internal fun mapBloodPressure(
     return if (measuredAt != null && dto.systolicMmhg in 60..300 && dto.diastolicMmhg in 30..200 && dto.systolicMmhg > dto.diastolicMmhg) {
         BloodPressureRecord(
             providerRecordId = dto.providerRecordId,
-            normalizedRecordJson = dto.toNormalizedJsonObject(),
             measuredAt = measuredAt,
             systolicMmhg = dto.systolicMmhg,
             diastolicMmhg = dto.diastolicMmhg,

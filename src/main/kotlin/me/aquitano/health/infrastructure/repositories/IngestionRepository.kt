@@ -3,6 +3,7 @@ package me.aquitano.health.infrastructure.repositories
 import me.aquitano.health.domain.BatchStatus
 import me.aquitano.health.domain.HealthRecord
 import me.aquitano.health.domain.IngestionSnapshot
+import me.aquitano.health.domain.NewIngestionRecord
 import me.aquitano.health.domain.RequestValidationException
 import me.aquitano.health.domain.ValidationIssue
 import me.aquitano.health.domain.ValidationIssueCodes
@@ -12,7 +13,6 @@ import me.aquitano.health.infrastructure.database.tables.SourceInstancesTable
 import me.aquitano.health.infrastructure.database.tables.SourcesTable
 import me.aquitano.health.infrastructure.database.toApiString
 import me.aquitano.health.infrastructure.database.toDbTimestamp
-import me.aquitano.health.shared.AppJson
 import me.aquitano.health.shared.Cursor
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.core.eq
@@ -193,23 +193,22 @@ class IngestionRepository {
 
     fun insertRecords(
         batchId: Int,
-        records: List<HealthRecord>,
+        records: List<NewIngestionRecord>,
         now: Instant,
     ): List<IngestionRecordRef> =
         records.chunked(INSERT_CHUNK_SIZE).flatMap { chunk ->
             val rows =
-                IngestionRecordsTable.batchInsert(chunk) { record ->
+                IngestionRecordsTable.batchInsert(chunk) { (record, normalizedJson) ->
                     this[IngestionRecordsTable.batchId] = batchId
                     this[IngestionRecordsTable.recordType] = record.recordType
                     this[IngestionRecordsTable.providerRecordId] = record.providerRecordId
-                    this[IngestionRecordsTable.normalizedRecordJson] =
-                        AppJson.encodeToString(record.normalizedRecordJson)
+                    this[IngestionRecordsTable.normalizedRecordJson] = normalizedJson
                     this[IngestionRecordsTable.recordStartAt] = record.recordStartAt?.toDbTimestamp()
                     this[IngestionRecordsTable.recordEndAt] = record.recordEndAt?.toDbTimestamp()
                     this[IngestionRecordsTable.createdAt] = now.toDbTimestamp()
                 }
-            chunk.zip(rows) { record, row ->
-                IngestionRecordRef(id = row[IngestionRecordsTable.id].value, record = record)
+            chunk.zip(rows) { inserted, row ->
+                IngestionRecordRef(id = row[IngestionRecordsTable.id].value, record = inserted.record)
             }
         }
 

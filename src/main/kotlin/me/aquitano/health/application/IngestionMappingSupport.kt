@@ -1,11 +1,7 @@
 package me.aquitano.health.application
 
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonObject
-import me.aquitano.health.api.dto.IngestionRecord
 import me.aquitano.health.domain.ValidationIssue
 import me.aquitano.health.domain.ValidationIssueCodes
-import me.aquitano.health.shared.AppJson
 import me.aquitano.health.shared.normalizeProviderCode
 import java.time.Instant
 import java.time.LocalDate
@@ -15,8 +11,6 @@ import java.time.LocalDate
  * per-record mappers. Each helper records issues on the shared list and returns
  * null (or nothing) for invalid input so the caller can keep collecting issues.
  */
-
-internal fun IngestionRecord.toNormalizedJsonObject(): JsonObject = AppJson.encodeToJsonElement(IngestionRecord.serializer(), this).jsonObject
 
 internal fun normalizeProvider(
     value: String?,

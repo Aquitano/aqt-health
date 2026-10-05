@@ -14,7 +14,13 @@ data class ValidatedIngestionBatch(
     val batchExternalId: String?,
     val ingestedAt: Instant,
     val sourcePayload: JsonElement,
-    val records: List<HealthRecord>,
+    val records: List<NewIngestionRecord>,
+)
+
+/** A validated record and the normalized JSON stored for it in ingestion_records. */
+data class NewIngestionRecord(
+    val record: HealthRecord,
+    val normalizedJson: String,
 )
 
 /**
