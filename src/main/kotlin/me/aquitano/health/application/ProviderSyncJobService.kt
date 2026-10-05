@@ -24,6 +24,7 @@ import me.aquitano.health.infrastructure.logging.*
 import me.aquitano.health.infrastructure.repositories.ProviderSyncJobRecord
 import me.aquitano.health.infrastructure.repositories.ProviderSyncJobRepository
 import me.aquitano.health.shared.AppJson
+import java.time.Clock
 import java.time.Instant
 import java.util.UUID
 import me.aquitano.health.domain.ProviderSyncRequest as DomainProviderSyncRequest
@@ -34,7 +35,7 @@ class ProviderSyncJobService(
     private val providerRegistry: HealthProviderRegistry,
     private val workflowService: ProviderWorkflowService,
     private val repository: ProviderSyncJobRepository,
-    private val clock: me.aquitano.health.infrastructure.time.UtcClock,
+    private val clock: Clock,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
 ) {
     /**
@@ -152,7 +153,7 @@ class ProviderSyncJobService(
         providerCode: String,
         request: DomainProviderSyncRequest,
     ) {
-        repository.markRunning(jobId, clock.now())
+        repository.markRunning(jobId, clock.instant())
         providerSyncJobLogger.infoWithContext(
             "provider_sync_job_started",
             "provider" to providerCode,
@@ -164,7 +165,7 @@ class ProviderSyncJobService(
                 workflowService.sync(
                     providerCode = providerCode,
                     request = request,
-                    now = clock.now(),
+                    now = clock.instant(),
                     progress = JobProgressSink(jobId, repository, clock),
                 )
             repository.finish(
@@ -178,7 +179,7 @@ class ProviderSyncJobService(
                     summary.errors
                         .joinToString("; ") { "${it.dataType}: ${it.message}" }
                         .ifBlank { null },
-                now = clock.now(),
+                now = clock.instant(),
             )
             providerSyncJobLogger.infoWithContext(
                 "provider_sync_job_completed",
@@ -196,7 +197,7 @@ class ProviderSyncJobService(
                 errorCount = 1,
                 summaryJson = null,
                 errorMessage = exception.message ?: "Provider sync failed.",
-                now = clock.now(),
+                now = clock.instant(),
             )
             providerSyncJobLogger.warnWithContext(
                 "provider_sync_job_failed",
@@ -210,21 +211,21 @@ class ProviderSyncJobService(
     private class JobProgressSink(
         private val jobId: String,
         private val repository: ProviderSyncJobRepository,
-        private val clock: me.aquitano.health.infrastructure.time.UtcClock,
+        private val clock: Clock,
     ) : ProviderSyncProgressSink {
         override suspend fun started(
             totalItems: Int,
             providerInstanceId: String,
         ) {
-            repository.markStarted(jobId, providerInstanceId, totalItems, clock.now())
+            repository.markStarted(jobId, providerInstanceId, totalItems, clock.instant())
         }
 
         override suspend fun itemStarted(item: ProviderSyncItem) {
-            repository.markItemStarted(jobId, item.dataType, item.from, item.to, clock.now())
+            repository.markItemStarted(jobId, item.dataType, item.from, item.to, clock.instant())
         }
 
         override suspend fun itemCompleted(item: ProviderSyncItem) {
-            repository.markItemCompleted(jobId, item.dataType, item.from, item.to, clock.now())
+            repository.markItemCompleted(jobId, item.dataType, item.from, item.to, clock.instant())
         }
     }
 

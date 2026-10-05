@@ -6,7 +6,7 @@ import me.aquitano.health.infrastructure.logging.*
 import me.aquitano.health.infrastructure.repositories.BootstrapApiClientOutcome
 import me.aquitano.health.infrastructure.repositories.SupportRepository
 import me.aquitano.health.infrastructure.security.ApiKeyHasher
-import me.aquitano.health.infrastructure.time.UtcClock
+import java.time.Clock
 
 private val logger = KotlinLogging.logger {}
 
@@ -14,7 +14,7 @@ class ApiClientBootstrapService(
     private val authConfig: AuthConfig,
     private val supportRepository: SupportRepository,
     private val apiKeyHasher: ApiKeyHasher,
-    private val clock: UtcClock,
+    private val clock: Clock,
 ) {
     fun bootstrap() {
         val bootstrapApiKey = authConfig.bootstrapApiKey
@@ -30,7 +30,7 @@ class ApiClientBootstrapService(
             supportRepository.upsertBootstrapApiClient(
                 name = authConfig.bootstrapClientName,
                 apiKeyHash = apiKeyHasher.hash(bootstrapApiKey),
-                now = clock.now(),
+                now = clock.instant(),
             )
         logger.infoWithContext(
             when (outcome) {

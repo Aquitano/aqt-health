@@ -20,12 +20,12 @@ import me.aquitano.health.domain.RequestValidationException
 import me.aquitano.health.domain.ValidationIssue
 import me.aquitano.health.domain.ValidationIssueCodes
 import me.aquitano.health.infrastructure.config.AppConfig
-import me.aquitano.health.infrastructure.time.UtcClock
 import org.koin.ktor.ext.inject
+import java.time.Clock
 import kotlin.reflect.typeOf
 
 fun Application.configureRoutes(appConfig: AppConfig) {
-    val clock by inject<UtcClock>()
+    val clock by inject<Clock>()
     val ingestionService by inject<IngestionService>()
     val providerWorkflowService by inject<ProviderWorkflowService>()
 
@@ -54,7 +54,7 @@ fun Application.configureRoutes(appConfig: AppConfig) {
                 HealthResponse(
                     status = "ok",
                     service = "aqt-health",
-                    time = clock.now().toString(),
+                    time = clock.instant().toString(),
                 ),
             )
         }.describe {
@@ -85,7 +85,7 @@ fun Application.configureRoutes(appConfig: AppConfig) {
                     code = call.request.queryParameters["code"],
                     state = call.request.queryParameters["state"],
                     error = call.request.queryParameters["error"],
-                    now = clock.now(),
+                    now = clock.instant(),
                 ),
             )
         }.describe {
@@ -125,7 +125,7 @@ fun Application.configureRoutes(appConfig: AppConfig) {
                     val response =
                         ingestionService.ingestBatch(
                             request = call.receive<IngestionBatchRequest>(),
-                            now = clock.now(),
+                            now = clock.instant(),
                         )
                     val status =
                         if (response.duplicateBatch) HttpStatusCode.OK else HttpStatusCode.Created

@@ -5,7 +5,7 @@ import io.ktor.server.auth.*
 import io.ktor.server.plugins.BadRequestException
 import me.aquitano.health.infrastructure.repositories.SupportRepository
 import me.aquitano.health.infrastructure.security.ApiKeyHasher
-import me.aquitano.health.infrastructure.time.UtcClock
+import java.time.Clock
 
 /** Matches the OpenAPI security scheme name so inferred route security stays consistent. */
 const val ApiKeyAuthProviderName = BearerApiKeySecurityScheme
@@ -13,7 +13,7 @@ const val ApiKeyAuthProviderName = BearerApiKeySecurityScheme
 fun Application.configureAuthentication(
     supportRepository: SupportRepository,
     apiKeyHasher: ApiKeyHasher,
-    clock: UtcClock,
+    clock: Clock,
 ) {
     install(Authentication) {
         bearer(
@@ -29,7 +29,7 @@ fun Application.configureAuthentication(
                 }
             }
             authenticate { credential ->
-                supportRepository.findEnabledApiClientByHash(apiKeyHasher.hash(credential.token), clock.now())
+                supportRepository.findEnabledApiClientByHash(apiKeyHasher.hash(credential.token), clock.instant())
             }
         }
     }

@@ -2,15 +2,15 @@ package me.aquitano.health.application
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.aquitano.health.infrastructure.logging.*
-import me.aquitano.health.infrastructure.time.UtcClock
 import me.aquitano.health.shared.PollingWorker
+import java.time.Clock
 import java.time.Duration
 
 private val schedulerLogger = KotlinLogging.logger {}
 
 class ScheduledProviderSyncScheduler(
     private val service: ScheduledProviderSyncService,
-    private val clock: UtcClock,
+    private val clock: Clock,
     pollInterval: Duration = Duration.ofMinutes(1),
 ) {
     private val worker =
@@ -19,7 +19,7 @@ class ScheduledProviderSyncScheduler(
             failureEvent = "scheduled_provider_sync_tick_failed",
             interval = pollInterval,
         ) {
-            val processed = service.runDue(clock.now())
+            val processed = service.runDue(clock.instant())
             if (processed > 0) {
                 schedulerLogger.infoWithContext(
                     "scheduled_provider_sync_due_processed",

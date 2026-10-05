@@ -13,7 +13,6 @@ import me.aquitano.health.domain.IngestionSnapshot
 import me.aquitano.health.domain.RequestValidationException
 import me.aquitano.health.domain.ScalarMetricTypes
 import me.aquitano.health.infrastructure.repositories.PendingDerivedRebuildRepository
-import me.aquitano.health.infrastructure.time.UtcClock
 import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.test.PostgresTestDatabase
 import me.aquitano.health.test.countRows
@@ -22,6 +21,7 @@ import me.aquitano.health.test.ingestionService
 import me.aquitano.health.test.queryInt
 import me.aquitano.health.test.queryString
 import me.aquitano.health.test.realDerivedRebuildExecutor
+import java.time.Clock
 import java.time.Instant
 import java.util.concurrent.CancellationException
 import kotlin.test.Test
@@ -157,7 +157,7 @@ class IngestionServiceTest : PostgresIntegrationTest() {
                 PendingDerivedRebuildSweeper(
                     pending,
                     realDerivedRebuildExecutor(database),
-                    UtcClock(),
+                    Clock.systemUTC(),
                 )
             assertEquals(1, sweeper.sweep(now))
             assertEquals(0, pending.due(now, 10).size)

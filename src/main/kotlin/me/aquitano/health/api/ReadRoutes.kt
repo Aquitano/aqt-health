@@ -18,13 +18,13 @@ import me.aquitano.health.application.metric.dashboard.DashboardQueryService
 import me.aquitano.health.application.metric.scalar.ScalarMetricQueryService
 import me.aquitano.health.application.metric.sleep.SleepQueryService
 import me.aquitano.health.application.metric.steps.StepQueryService
-import me.aquitano.health.infrastructure.time.UtcClock
 import org.koin.ktor.ext.inject
+import java.time.Clock
 import kotlin.reflect.typeOf
 
 /** Metric catalog, scalar/structural metric, health-day, and dashboard read routes. */
 internal fun Route.readRoutes() {
-    val clock by application.inject<UtcClock>()
+    val clock by application.inject<Clock>()
     val scalarMetricQueryService by application.inject<ScalarMetricQueryService>()
     val healthDayQueryService by application.inject<HealthDayQueryService>()
     val stepQueryService by application.inject<StepQueryService>()
@@ -109,7 +109,7 @@ internal fun Route.readRoutes() {
             HttpStatusCode.OK,
             healthDayQueryService.getHealthDay(
                 call.queryParams(),
-                clock.now(),
+                clock.instant(),
             ),
         )
     }.describe {
@@ -147,7 +147,7 @@ internal fun Route.readRoutes() {
             HttpStatusCode.OK,
             stepQueryService.listStepDailySummaries(
                 call.queryParams(),
-                clock.now(),
+                clock.instant(),
             ),
         )
     }.describeDailyStepReadOperation()
@@ -156,7 +156,7 @@ internal fun Route.readRoutes() {
             HttpStatusCode.OK,
             activityQueryService.listActivitySummaries(
                 call.queryParams(),
-                clock.now(),
+                clock.instant(),
             ),
         )
     }.describeActivitySummaryReadOperation()
@@ -177,7 +177,7 @@ internal fun Route.readRoutes() {
             HttpStatusCode.OK,
             sleepQueryService.listSleepNights(
                 call.queryParams(),
-                clock.now(),
+                clock.instant(),
             ),
         )
     }.describeSleepNightReadOperation()
@@ -209,7 +209,7 @@ internal fun Route.readRoutes() {
             HttpStatusCode.OK,
             dashboardQueryService.dashboardSummary(
                 call.queryParams(),
-                clock.now(),
+                clock.instant(),
             ),
         )
     }.describe {
@@ -226,7 +226,7 @@ internal fun Route.readRoutes() {
             HttpStatusCode.OK,
             trendQueryService.dashboardTrends(
                 call.queryParams(),
-                clock.now(),
+                clock.instant(),
             ),
         )
     }.describe {

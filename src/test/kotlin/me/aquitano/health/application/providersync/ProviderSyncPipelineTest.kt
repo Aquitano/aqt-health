@@ -10,9 +10,10 @@ import kotlinx.serialization.json.put
 import me.aquitano.health.api.dto.IngestionRecord
 import me.aquitano.health.api.dto.StepInterval
 import me.aquitano.health.domain.*
-import me.aquitano.health.infrastructure.time.UtcClock
+import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -36,7 +37,7 @@ class ProviderSyncPipelineTest {
                     existingBatch = ExistingProviderBatch(id = 42, status = BatchStatus.Processed),
                 )
             val adapter = FakeAdapter()
-            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+            val pipeline = ProviderSyncPipeline(store, clock = Clock.fixed(now, ZoneOffset.UTC))
 
             val summary = pipeline.sync(adapter, request, now)
 
@@ -51,7 +52,7 @@ class ProviderSyncPipelineTest {
         runBlocking {
             val store = FakeStore(existingBatch = ExistingProviderBatch(id = 42, status = BatchStatus.Failed))
             val adapter = FakeAdapter()
-            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+            val pipeline = ProviderSyncPipeline(store, clock = Clock.fixed(now, ZoneOffset.UTC))
 
             val summary = pipeline.sync(adapter, request, now)
 
@@ -82,7 +83,7 @@ class ProviderSyncPipelineTest {
                 FakeAdapter(
                     refreshFailure = InvalidRefreshToken(),
                 )
-            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+            val pipeline = ProviderSyncPipeline(store, clock = Clock.fixed(now, ZoneOffset.UTC))
 
             val error =
                 assertFailsWith<ConflictException> {
@@ -102,7 +103,7 @@ class ProviderSyncPipelineTest {
             val pipeline =
                 ProviderSyncPipeline(
                     store,
-                    clock = UtcClock.fixed(now),
+                    clock = Clock.fixed(now, ZoneOffset.UTC),
                 )
 
             val summary = pipeline.sync(adapter, request, now)
@@ -127,7 +128,7 @@ class ProviderSyncPipelineTest {
                 ProviderSyncPipeline(
                     FakeStore(),
                     throttleDelay = { delays += it },
-                    clock = UtcClock.fixed(now),
+                    clock = Clock.fixed(now, ZoneOffset.UTC),
                 )
 
             val summary = pipeline.sync(adapter, request, now)
@@ -154,7 +155,7 @@ class ProviderSyncPipelineTest {
             val pipeline =
                 ProviderSyncPipeline(
                     store,
-                    clock = UtcClock.fixed(now),
+                    clock = Clock.fixed(now, ZoneOffset.UTC),
                 )
 
             val summary = pipeline.sync(adapter, request, now)
@@ -169,7 +170,7 @@ class ProviderSyncPipelineTest {
         runBlocking {
             val store = FakeStore()
             val adapter = FakeAdapter(emptyFetch = true)
-            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+            val pipeline = ProviderSyncPipeline(store, clock = Clock.fixed(now, ZoneOffset.UTC))
 
             val summary = pipeline.sync(adapter, request, now)
 
@@ -190,7 +191,7 @@ class ProviderSyncPipelineTest {
         runBlocking {
             val store = FakeStore(existingBatch = ExistingProviderBatch(42, BatchStatus.Processed))
             val adapter = FakeAdapter(emptyFetch = true)
-            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+            val pipeline = ProviderSyncPipeline(store, clock = Clock.fixed(now, ZoneOffset.UTC))
             val refresh = request.copy(refresh = true)
 
             repeat(2) { pipeline.sync(adapter, refresh, now) }
@@ -224,7 +225,7 @@ class ProviderSyncPipelineTest {
             // a normalizer fix could never bring the dropped records back.
             val store = FakeStore()
             val adapter = FakeAdapter(normalizedAwayFetch = true)
-            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+            val pipeline = ProviderSyncPipeline(store, clock = Clock.fixed(now, ZoneOffset.UTC))
 
             val summary = pipeline.sync(adapter, request, now)
 
@@ -248,7 +249,7 @@ class ProviderSyncPipelineTest {
                             stepInterval(steps = 1500),
                         ),
                 )
-            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+            val pipeline = ProviderSyncPipeline(store, clock = Clock.fixed(now, ZoneOffset.UTC))
 
             pipeline.sync(adapter, request, now)
 
@@ -264,7 +265,7 @@ class ProviderSyncPipelineTest {
             val first = stepInterval(steps = 1200)
             val last = stepInterval(steps = 1500)
             val adapter = FakeAdapter(records = listOf(first, last))
-            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+            val pipeline = ProviderSyncPipeline(store, clock = Clock.fixed(now, ZoneOffset.UTC))
             val refresh = request.copy(refresh = true)
 
             pipeline.sync(adapter, refresh, now)
@@ -290,7 +291,7 @@ class ProviderSyncPipelineTest {
             val pipeline =
                 ProviderSyncPipeline(
                     FakeStore(),
-                    clock = UtcClock.fixed(now),
+                    clock = Clock.fixed(now, ZoneOffset.UTC),
                 )
 
             val error =
@@ -307,7 +308,7 @@ class ProviderSyncPipelineTest {
         runBlocking {
             val store = FakeStore(existingBatch = ExistingProviderBatch(42, BatchStatus.Processed))
             val adapter = FakeAdapter()
-            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+            val pipeline = ProviderSyncPipeline(store, clock = Clock.fixed(now, ZoneOffset.UTC))
             repeat(2) { pipeline.sync(adapter, request.copy(refresh = true), now) }
             assertEquals(2, adapter.fetchCalls)
             assertEquals(1, store.ingested.size)
@@ -318,7 +319,7 @@ class ProviderSyncPipelineTest {
         runBlocking {
             val store = FakeStore()
             val adapter = FakeAdapter()
-            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+            val pipeline = ProviderSyncPipeline(store, clock = Clock.fixed(now, ZoneOffset.UTC))
             val morning = request.copy(to = Instant.parse("2026-04-01T10:00:00Z"), refresh = true)
             pipeline.sync(adapter, morning, now)
             val later = pipeline.sync(adapter, morning.copy(to = Instant.parse("2026-04-01T10:15:00Z")), now)
@@ -334,7 +335,7 @@ class ProviderSyncPipelineTest {
         runBlocking {
             val store = FakeStore()
             val adapter = FakeAdapter()
-            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+            val pipeline = ProviderSyncPipeline(store, clock = Clock.fixed(now, ZoneOffset.UTC))
             val refresh = request.copy(refresh = true)
             adapter.sourceRecords =
                 listOf(
@@ -371,7 +372,7 @@ class ProviderSyncPipelineTest {
             val releaseRefresh = CompletableDeferred<Unit>()
             val adapter = BlockingRefreshAdapter(refreshStarted, releaseRefresh)
             val store = FakeStore(account = syncAccount(now.minusSeconds(1)))
-            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+            val pipeline = ProviderSyncPipeline(store, clock = Clock.fixed(now, ZoneOffset.UTC))
             val first = async { pipeline.sync(adapter, request, now) }
             refreshStarted.await()
             val second = async(start = CoroutineStart.UNDISPATCHED) { pipeline.sync(adapter, request, now) }
@@ -388,7 +389,7 @@ class ProviderSyncPipelineTest {
         runBlocking {
             val store = RejectingSaveStore(syncAccount(now.minusSeconds(1)))
             val adapter = FakeAdapter()
-            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+            val pipeline = ProviderSyncPipeline(store, clock = Clock.fixed(now, ZoneOffset.UTC))
             val error = assertFailsWith<UpstreamProviderException> { pipeline.sync(adapter, request, now) }
             assertEquals("provider_account_changed", error.code)
             assertEquals(0, adapter.fetchCalls)
@@ -400,7 +401,7 @@ class ProviderSyncPipelineTest {
         runBlocking {
             val store = FlakySaveStore(syncAccount(now.minusSeconds(1)))
             val adapter = FakeAdapter()
-            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+            val pipeline = ProviderSyncPipeline(store, clock = Clock.fixed(now, ZoneOffset.UTC))
             val summary = pipeline.sync(adapter, request, now)
             assertEquals("processed", summary.status)
             assertEquals(1, adapter.refreshCalls)
@@ -412,7 +413,7 @@ class ProviderSyncPipelineTest {
         runBlocking {
             val adapter = FakeAdapter(refreshFailure = IllegalStateException("secret upstream credentials"))
             val store = FakeStore(account = syncAccount(now.minusSeconds(1)))
-            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+            val pipeline = ProviderSyncPipeline(store, clock = Clock.fixed(now, ZoneOffset.UTC))
             val error = assertFailsWith<UpstreamProviderException> { pipeline.sync(adapter, request, now) }
             assertEquals("Fake refresh failed", error.message)
             assertEquals("Fake refresh failed", store.refreshFailureMessage)

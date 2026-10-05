@@ -4,8 +4,8 @@ import kotlinx.coroutines.runBlocking
 import me.aquitano.health.infrastructure.database.suspendDbTransaction
 import me.aquitano.health.infrastructure.repositories.PendingDerivedRebuildRepository
 import me.aquitano.health.infrastructure.repositories.SupportRepository
-import me.aquitano.health.infrastructure.time.UtcClock
 import me.aquitano.health.test.PostgresIntegrationTest
+import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
 import java.util.concurrent.atomic.AtomicInteger
@@ -51,7 +51,7 @@ class PendingDerivedRebuildSweeperTest : PostgresIntegrationTest() {
                         rebuilt += requests
                     }
                 }
-            val sweeper = PendingDerivedRebuildSweeper(repository, executor, UtcClock())
+            val sweeper = PendingDerivedRebuildSweeper(repository, executor, Clock.systemUTC())
 
             assertEquals(2, sweeper.sweep(now))
             assertEquals(sources.toSet(), rebuilt.map { it.sourceInstanceId }.toSet())
@@ -92,7 +92,7 @@ class PendingDerivedRebuildSweeperTest : PostgresIntegrationTest() {
                 PendingDerivedRebuildSweeper(
                     repository = repository,
                     derivedRebuildExecutor = executor,
-                    clock = UtcClock(),
+                    clock = Clock.systemUTC(),
                 )
             val now = Instant.parse("2026-06-01T10:00:00Z")
             val date = LocalDate.parse("2026-05-31")

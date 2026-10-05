@@ -11,13 +11,13 @@ import me.aquitano.health.api.dto.*
 import me.aquitano.health.application.AdminService
 import me.aquitano.health.application.ReplayService
 import me.aquitano.health.domain.NotFoundException
-import me.aquitano.health.infrastructure.time.UtcClock
 import org.koin.ktor.ext.inject
+import java.time.Clock
 import kotlin.reflect.typeOf
 
 /** Ingestion batch inspection and replay administration routes. */
 internal fun Route.adminRoutes() {
-    val clock by application.inject<UtcClock>()
+    val clock by application.inject<Clock>()
     val adminService by application.inject<AdminService>()
     val replayService by application.inject<ReplayService>()
 
@@ -78,7 +78,7 @@ internal fun Route.adminRoutes() {
             HttpStatusCode.Accepted,
             replayService.create(
                 request = call.receive<ReplayRequest>(),
-                now = clock.now(),
+                now = clock.instant(),
                 idempotencyKey = call.idempotencyKey(),
             ),
         )

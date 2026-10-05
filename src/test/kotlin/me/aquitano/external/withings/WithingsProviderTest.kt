@@ -17,7 +17,6 @@ import me.aquitano.health.infrastructure.config.ProviderOAuthConfig
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
 import me.aquitano.health.infrastructure.repositories.ScheduledSyncRepository
 import me.aquitano.health.infrastructure.security.TokenCipher
-import me.aquitano.health.infrastructure.time.UtcClock
 import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.test.PostgresTestDatabase
 import me.aquitano.health.test.TEST_TOKEN_ENCRYPTION_KEY
@@ -27,7 +26,9 @@ import me.aquitano.health.test.ingestionService
 import me.aquitano.health.test.queryInt
 import me.aquitano.health.test.queryString
 import org.jetbrains.exposed.v1.jdbc.Database
+import java.time.Clock
 import java.time.Instant
+import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -586,7 +587,7 @@ class WithingsProviderTest : PostgresIntegrationTest() {
                                 ingestionService = ingestionService(database),
                                 tokenEncryptionKeys = mapOf(WITHINGS_PROVIDER_CODE to config.tokenEncryptionKey),
                             ),
-                        clock = UtcClock.fixed(now),
+                        clock = Clock.fixed(now, ZoneOffset.UTC),
                     ),
             )
         private val providerRegistry = HealthProviderRegistry(listOf(provider))

@@ -14,10 +14,10 @@ import me.aquitano.health.domain.SyncJobStatus
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
 import me.aquitano.health.infrastructure.repositories.ProviderSyncJobRepository
 import me.aquitano.health.infrastructure.repositories.ScheduledSyncRepository
-import me.aquitano.health.infrastructure.time.UtcClock
 import me.aquitano.health.test.BlockingProvider
 import me.aquitano.health.test.FakeProvider
 import me.aquitano.health.test.PostgresIntegrationTest
+import java.time.Clock
 import java.time.Instant
 import java.util.UUID
 import kotlin.test.Test
@@ -229,7 +229,7 @@ class ProviderSyncJobServiceTest : PostgresIntegrationTest() {
                 providerRegistry = registry,
                 workflowService = workflowService,
                 repository = ProviderSyncJobRepository(database),
-                clock = UtcClock(),
+                clock = Clock.systemUTC(),
             )
 
         suspend fun awaitTerminal(

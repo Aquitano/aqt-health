@@ -14,13 +14,13 @@ import me.aquitano.health.application.ProviderSyncJobService
 import me.aquitano.health.application.ProviderWorkflowService
 import me.aquitano.health.application.ScheduledProviderSyncService
 import me.aquitano.health.domain.NotFoundException
-import me.aquitano.health.infrastructure.time.UtcClock
 import org.koin.ktor.ext.inject
+import java.time.Clock
 import kotlin.reflect.typeOf
 
 /** Provider discovery, OAuth account, scheduled-sync, and sync-job routes. */
 internal fun Route.providerRoutes() {
-    val clock by application.inject<UtcClock>()
+    val clock by application.inject<Clock>()
     val providerDiscoveryService by application.inject<ProviderDiscoveryService>()
     val providerStatusService by application.inject<ProviderStatusService>()
     val providerWorkflowService by application.inject<ProviderWorkflowService>()
@@ -40,7 +40,7 @@ internal fun Route.providerRoutes() {
     get("/api/v2/providers/status") {
         call.respond<ProviderStatusCatalogResponse>(
             providerStatusService.listProviderStatuses(
-                clock.now(),
+                clock.instant(),
             ),
         )
     }.describe {
@@ -71,7 +71,7 @@ internal fun Route.providerRoutes() {
         call.respond<ProviderStatusResponse>(
             providerStatusService.getProviderStatus(
                 code,
-                clock.now(),
+                clock.instant(),
             ),
         )
     }.describe {
@@ -88,7 +88,7 @@ internal fun Route.providerRoutes() {
         call.respond<ProviderAccountListResponse>(
             providerWorkflowService.listAccounts(
                 code,
-                clock.now(),
+                clock.instant(),
             ),
         )
     }.describe {
@@ -107,7 +107,7 @@ internal fun Route.providerRoutes() {
             providerWorkflowService.getAccount(
                 code,
                 providerInstanceId,
-                clock.now(),
+                clock.instant(),
             ),
         )
     }.describe {
@@ -145,7 +145,7 @@ internal fun Route.providerRoutes() {
                 providerCode = code,
                 providerInstanceId = providerInstanceId,
                 request = call.receive<ScheduledSyncConfigUpdateRequest>(),
-                now = clock.now(),
+                now = clock.instant(),
             ),
         )
     }.describe {
@@ -167,7 +167,7 @@ internal fun Route.providerRoutes() {
             scheduledProviderSyncService.runNow(
                 providerCode = code,
                 providerInstanceId = providerInstanceId,
-                now = clock.now(),
+                now = clock.instant(),
             ),
         )
     }.describe {
@@ -186,7 +186,7 @@ internal fun Route.providerRoutes() {
             providerWorkflowService.disconnect(
                 code,
                 providerInstanceId,
-                clock.now(),
+                clock.instant(),
             ),
         )
     }.describe {
@@ -205,7 +205,7 @@ internal fun Route.providerRoutes() {
             providerWorkflowService.reconnect(
                 code,
                 providerInstanceId,
-                clock.now(),
+                clock.instant(),
             ),
         )
     }.describe {
@@ -222,7 +222,7 @@ internal fun Route.providerRoutes() {
         call.respond<ProviderOAuthStartResponse>(
             providerWorkflowService.startOAuth(
                 code,
-                clock.now(),
+                clock.instant(),
             ),
         )
     }.describe {
@@ -241,7 +241,7 @@ internal fun Route.providerRoutes() {
             providerSyncJobService.create(
                 providerCode = code,
                 request = call.receive<ProviderSyncRequest>(),
-                now = clock.now(),
+                now = clock.instant(),
                 idempotencyKey = call.idempotencyKey(),
             ),
         )

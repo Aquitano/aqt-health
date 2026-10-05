@@ -20,12 +20,13 @@ import me.aquitano.health.domain.NewIngestionRecord
 import me.aquitano.health.domain.ReplayJobStatus
 import me.aquitano.health.infrastructure.database.suspendDbTransaction
 import me.aquitano.health.infrastructure.repositories.*
-import me.aquitano.health.infrastructure.time.UtcClock
 import me.aquitano.health.shared.AppJson
 import me.aquitano.health.test.*
 import org.junit.After
+import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneOffset
 import kotlin.test.*
 
 class ProviderCorrectionTest : PostgresIntegrationTest() {
@@ -340,7 +341,7 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
                 PendingDerivedRebuildRepository(database),
                 ReplayJobRepository(database),
                 ProjectionWipeRepository(),
-                UtcClock.fixed(now),
+                Clock.fixed(now, ZoneOffset.UTC),
             ).also { replayServices += it }
 
         suspend fun ingest(

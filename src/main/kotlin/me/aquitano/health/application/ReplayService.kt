@@ -30,10 +30,10 @@ import me.aquitano.health.infrastructure.repositories.ProjectionWipeRepository
 import me.aquitano.health.infrastructure.repositories.ReplayJobRecord
 import me.aquitano.health.infrastructure.repositories.ReplayJobRepository
 import me.aquitano.health.infrastructure.repositories.ReplayRecordRow
-import me.aquitano.health.infrastructure.time.UtcClock
 import me.aquitano.health.shared.AppJson
 import me.aquitano.health.shared.utcDate
 import org.jetbrains.exposed.v1.jdbc.Database
+import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -67,7 +67,7 @@ class ReplayService(
     private val pendingDerivedRebuildRepository: PendingDerivedRebuildRepository,
     private val replayJobRepository: ReplayJobRepository,
     private val projectionWipeRepository: ProjectionWipeRepository,
-    private val clock: UtcClock,
+    private val clock: Clock,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
 ) {
     fun start(now: Instant) {
@@ -154,7 +154,7 @@ class ReplayService(
     ) {
         try {
             val days = planDays(plan)
-            replayJobRepository.markRunning(jobId, days.size, clock.now())
+            replayJobRepository.markRunning(jobId, days.size, clock.instant())
             replayLogger.infoWithContext(
                 "replay_job_started",
                 "jobId" to jobId,
@@ -164,7 +164,7 @@ class ReplayService(
             )
 
             days.forEach { day ->
-                replayJobRepository.markItemStarted(jobId, day.toString(), clock.now())
+                replayJobRepository.markItemStarted(jobId, day.toString(), clock.instant())
                 val result = replayDay(day, plan)
                 replayJobRepository.markItemCompleted(
                     id = jobId,
@@ -172,11 +172,11 @@ class ReplayService(
                     metricsWritten = result.metricsWritten,
                     duplicatesSkipped = result.duplicatesSkipped,
                     mappingFailures = result.mappingFailures,
-                    now = clock.now(),
+                    now = clock.instant(),
                 )
             }
 
-            replayJobRepository.finish(jobId, ReplayJobStatus.Completed, null, clock.now())
+            replayJobRepository.finish(jobId, ReplayJobStatus.Completed, null, clock.instant())
             replayLogger.infoWithContext(
                 "replay_job_completed",
                 "jobId" to jobId,
@@ -188,7 +188,7 @@ class ReplayService(
                 jobId,
                 ReplayJobStatus.Failed,
                 exception.message ?: "Replay failed.",
-                clock.now(),
+                clock.instant(),
             )
             replayLogger.warnWithContext(
                 "replay_job_failed",
@@ -227,7 +227,7 @@ class ReplayService(
     ): DayReplayResult? {
         val dayStart = day.atStartOfDay(ZoneOffset.UTC).toInstant()
         val dayEnd = day.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant()
-        val now = clock.now()
+        val now = clock.instant()
         val affectedBySource = mutableMapOf<Int, MutableSet<LocalDate>>()
 
         val rows =
@@ -308,7 +308,7 @@ class ReplayService(
                 )
             } ?: return null
 
-        derivedRebuildExecutor.rebuild(replayed.rebuildRequests, clock.now())
+        derivedRebuildExecutor.rebuild(replayed.rebuildRequests, clock.instant())
         pendingDerivedRebuildRepository.deleteCompleted(replayed.queuedRebuilds)
 
         return replayed.result

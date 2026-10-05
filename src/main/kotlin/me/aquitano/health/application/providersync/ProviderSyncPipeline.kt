@@ -8,7 +8,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import me.aquitano.health.domain.*
 import me.aquitano.health.infrastructure.logging.*
-import me.aquitano.health.infrastructure.time.UtcClock
+import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.CancellationException
@@ -19,7 +19,7 @@ private val logger = KotlinLogging.logger {}
 class ProviderSyncPipeline(
     private val store: ProviderSyncStore,
     private val throttleDelay: suspend (Duration) -> Unit = { delay(it.toMillis()) },
-    private val clock: UtcClock = UtcClock(),
+    private val clock: Clock = Clock.systemUTC(),
 ) {
     // Serializes the token-refresh critical section per account so a manual + scheduled + sync-job
     // run for the same account can't interleave refreshAccessToken/saveRefreshedToken and invalidate
@@ -51,7 +51,7 @@ class ProviderSyncPipeline(
                 store.findAnyForStatusHint(adapter.providerCode, plan.providerInstanceId),
             )
 
-        var token = freshAccessToken(adapter, account, clock.now())
+        var token = freshAccessToken(adapter, account, clock.instant())
         val runId =
             store.startRun(
                 providerCode = adapter.providerCode,
@@ -124,7 +124,7 @@ class ProviderSyncPipeline(
                             accessToken = token.accessToken,
                             account = account,
                             item = item,
-                            now = clock.now(),
+                            now = clock.instant(),
                         ).also { lastProviderRequestCompletedAtNanos = it.completedAtNanos }.batch
                     } catch (exception: Throwable) {
                         if (exception is CancellationException) throw exception
@@ -133,7 +133,7 @@ class ProviderSyncPipeline(
                             obtainAccessToken(
                                 adapter = adapter,
                                 providerInstanceId = account.providerInstanceId,
-                                now = clock.now(),
+                                now = clock.instant(),
                                 forceRefresh = true,
                                 usedRefreshToken = token.refreshToken,
                             )
@@ -143,7 +143,7 @@ class ProviderSyncPipeline(
                             accessToken = token.accessToken,
                             account = account,
                             item = item,
-                            now = clock.now(),
+                            now = clock.instant(),
                         ).also { lastProviderRequestCompletedAtNanos = it.completedAtNanos }.batch
                     }
 
@@ -206,7 +206,7 @@ class ProviderSyncPipeline(
                     )
                 // A backfill runs for minutes, so `now` (captured when the run started) would
                 // stamp every batch with the start time. Each batch records when it was ingested.
-                val ingestedAt = clock.now()
+                val ingestedAt = clock.instant()
                 val batch =
                     store.ingest(
                         ProviderIngestionCommand(
@@ -279,7 +279,7 @@ class ProviderSyncPipeline(
         store.finishRun(
             runId = runId,
             status = status,
-            finishedAt = clock.now(),
+            finishedAt = clock.instant(),
             errorMessage =
                 errors
                     .joinToString("; ") { "${it.dataType}: ${it.message}" }
