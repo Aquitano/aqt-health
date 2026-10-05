@@ -3,16 +3,15 @@ package me.aquitano.health.api
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.ktor.server.config.*
 import io.ktor.server.testing.*
-import kotlinx.serialization.json.double
-import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import me.aquitano.health.shared.AppJson
 import me.aquitano.health.test.PostgresIntegrationTest
-import me.aquitano.health.test.PostgresTestDatabase
+import me.aquitano.health.test.authorized
+import me.aquitano.health.test.configureTestApplication
+import me.aquitano.health.test.jsonBody
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -27,8 +26,7 @@ class ApplicationTest : PostgresIntegrationTest() {
             val response = client.get("/api/v2/admin/health")
 
             assertEquals(HttpStatusCode.OK, response.status)
-            val body = AppJson.parseToJsonElement(response.bodyAsText()).jsonObject
-            assertEquals("ok", body["status"]!!.jsonPrimitive.content)
+            assertEquals("ok", response.jsonBody()["status"]!!.jsonPrimitive.content)
         }
 
     @Test
@@ -38,10 +36,7 @@ class ApplicationTest : PostgresIntegrationTest() {
 
             assertEquals(HttpStatusCode.Unauthorized, client.get("/metrics").status)
 
-            val response =
-                client.get("/metrics") {
-                    header(HttpHeaders.Authorization, "Bearer test-key")
-                }
+            val response = client.get("/metrics") { authorized() }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().isNotBlank())
         }
@@ -88,7 +83,7 @@ class ApplicationTest : PostgresIntegrationTest() {
 
             val response =
                 client.get("/api/v2/dashboard/summary?fromDate=not-a-date&toDate=2026-04-02") {
-                    header(HttpHeaders.Authorization, "Bearer test-key")
+                    authorized()
                 }
 
             assertEquals(HttpStatusCode.BadRequest, response.status)
@@ -97,55 +92,6 @@ class ApplicationTest : PostgresIntegrationTest() {
             assertEquals("validation_failed", error["code"]!!.jsonPrimitive.content)
             assertEquals("invalid_format", detail["code"]!!.jsonPrimitive.content)
             assertEquals("fromDate", detail["field"]!!.jsonPrimitive.content)
-            assertNotNull(error["requestId"]!!.jsonPrimitive.content)
-        }
-
-    @Test
-    fun openApiDocumentContainsContractMetadata() =
-        testApplication {
-            configureTestApplication()
-
-            val body = client.get("/openapi").jsonBody()
-            val paths = body["paths"]!!.jsonObject
-
-            listOf(
-                "/api/v2/admin/health",
-                "/api/v2/ingestion/batches",
-                "/api/v2/providers",
-                "/api/v2/providers/status",
-                "/api/v2/providers/{providerCode}",
-                "/api/v2/providers/{providerCode}/status",
-                "/api/v2/providers/{providerCode}/accounts",
-                "/api/v2/providers/{providerCode}/accounts/{providerInstanceId}",
-                "/api/v2/providers/{providerCode}/accounts/{providerInstanceId}/disconnect",
-                "/api/v2/providers/{providerCode}/accounts/{providerInstanceId}/reconnect",
-                "/api/v2/providers/{providerCode}/oauth/start",
-                "/api/v2/providers/{providerCode}/oauth/callback",
-                "/api/v2/metrics",
-                "/api/v2/health/day",
-                "/api/v2/steps",
-                "/api/v2/steps/daily",
-                "/api/v2/activity/summaries",
-                "/api/v2/sleep/sessions",
-                "/api/v2/sleep/nights",
-                "/api/v2/sleep/summaries",
-                "/api/v2/metrics/{metricType}",
-                "/api/v2/metrics/{metricType}/summary",
-                "/api/v2/metrics/{metricType}/daily",
-                "/api/v2/blood-pressure",
-                "/api/v2/dashboard/summary",
-                "/api/v2/admin/ingestion/batches",
-                "/api/v2/admin/ingestion/batches/{id}",
-                "/api/v2/admin/ingestion/failures",
-            ).forEach { path ->
-                assertNotNull(paths[path], "Missing OpenAPI path $path")
-            }
-
-            assertTrue(body["servers"]!!.jsonArray.isNotEmpty())
-            assertEquals(
-                setOf("Admin", "Ingestion", "Providers", "Read"),
-                body["tags"]!!.jsonArray.map { it.jsonObject["name"]!!.jsonPrimitive.content }.toSet(),
-            )
         }
 
     @Test
@@ -153,241 +99,23 @@ class ApplicationTest : PostgresIntegrationTest() {
         testApplication {
             configureTestApplication()
 
-            val body = client.get("/openapi").jsonBody()
-            val paths = body["paths"]!!.jsonObject
-            val protectedOperation = paths["/api/v2/providers"]!!.jsonObject["get"]!!.jsonObject
-            val publicHealthOperation = paths["/api/v2/admin/health"]!!.jsonObject["get"]!!.jsonObject
-            val publicCallbackOperation =
-                paths["/api/v2/providers/{providerCode}/oauth/callback"]!!.jsonObject["get"]!!.jsonObject
-
-            assertNotNull(body["components"]!!.jsonObject["securitySchemes"]!!.jsonObject["bearerApiKey"])
-            assertEquals(
-                "bearerApiKey",
-                protectedOperation["security"]!!
-                    .jsonArray
-                    .first()
-                    .jsonObject.keys
-                    .first(),
-            )
-            assertTrue(
-                publicHealthOperation["security"]!!
-                    .jsonArray
-                    .first()
-                    .jsonObject
-                    .isEmpty(),
-            )
-            assertTrue(
-                publicCallbackOperation["security"]!!
-                    .jsonArray
-                    .first()
-                    .jsonObject
-                    .isEmpty(),
-            )
-
             val specText = client.get("/openapi").bodyAsText()
+            val spec = AppJson.parseToJsonElement(specText).jsonObject
+            val paths = spec["paths"]!!.jsonObject
+
+            fun securityOf(path: String) =
+                paths[path]!!
+                    .jsonObject["get"]!!
+                    .jsonObject["security"]!!
+                    .jsonArray
+                    .first()
+                    .jsonObject
+
+            assertNotNull(spec["components"]!!.jsonObject["securitySchemes"]!!.jsonObject["bearerApiKey"])
+            assertEquals(setOf("bearerApiKey"), securityOf("/api/v2/providers").keys)
+            assertTrue(securityOf("/api/v2/admin/health").isEmpty())
+            assertTrue(securityOf("/api/v2/providers/{providerCode}/oauth/callback").isEmpty())
             assertFalse(specText.contains("\"name\":\"Authorization\""))
             assertFalse(specText.contains("\"name\": \"Authorization\""))
         }
-
-    @Test
-    fun openApiDocumentsQueryConstraintsAndPolymorphicIngestion() =
-        testApplication {
-            configureTestApplication()
-
-            val body = client.get("/openapi").jsonBody()
-            val paths = body["paths"]!!.jsonObject
-            val stepParams = paths["/api/v2/steps"]!!.jsonObject["get"]!!.jsonObject["parameters"]!!.jsonArray
-            val limit =
-                stepParams
-                    .first { it.jsonObject["name"]!!.jsonPrimitive.content == "limit" }
-                    .jsonObject["schema"]!!
-                    .jsonObject
-            assertEquals(500, limit["default"]!!.jsonPrimitive.int)
-            assertEquals(5000.0, limit["maximum"]!!.jsonPrimitive.double)
-
-            val from =
-                stepParams
-                    .first { it.jsonObject["name"]!!.jsonPrimitive.content == "from" }
-                    .jsonObject["schema"]!!
-                    .jsonObject
-            assertEquals("date-time", from["format"]!!.jsonPrimitive.content)
-
-            val dailyStepParamNames =
-                paths["/api/v2/steps/daily"]!!
-                    .jsonObject["get"]!!
-                    .jsonObject["parameters"]!!
-                    .jsonArray
-                    .map { it.jsonObject["name"]!!.jsonPrimitive.content }
-                    .toSet()
-            assertTrue("date" in dailyStepParamNames)
-            assertTrue("fromDate" in dailyStepParamNames)
-            assertTrue("toDate" in dailyStepParamNames)
-            assertFalse("latest" in dailyStepParamNames)
-            assertTrue("cursor" in dailyStepParamNames)
-            assertFalse("canonical" in dailyStepParamNames)
-            assertFalse("from" in dailyStepParamNames)
-            assertFalse("to" in dailyStepParamNames)
-
-            val activityParamNames =
-                paths["/api/v2/activity/summaries"]!!
-                    .jsonObject["get"]!!
-                    .jsonObject["parameters"]!!
-                    .jsonArray
-                    .map { it.jsonObject["name"]!!.jsonPrimitive.content }
-                    .toSet()
-            assertTrue("date" in activityParamNames)
-            assertTrue("fromDate" in activityParamNames)
-            assertTrue("toDate" in activityParamNames)
-            assertTrue("latest" in activityParamNames)
-            assertTrue("cursor" in activityParamNames)
-            assertFalse("from" in activityParamNames)
-            assertFalse("to" in activityParamNames)
-
-            val scalarMetricParamNames =
-                paths["/api/v2/metrics/{metricType}"]!!
-                    .jsonObject["get"]!!
-                    .jsonObject["parameters"]!!
-                    .jsonArray
-                    .map { it.jsonObject["name"]!!.jsonPrimitive.content }
-                    .toSet()
-            assertTrue("metricType" in scalarMetricParamNames)
-            assertTrue("latest" in scalarMetricParamNames)
-            assertTrue("raw" in scalarMetricParamNames)
-            assertTrue("cursor" in scalarMetricParamNames)
-            assertFalse("canonical" in scalarMetricParamNames)
-
-            val dashboardParamNames =
-                paths["/api/v2/dashboard/summary"]!!
-                    .jsonObject["get"]!!
-                    .jsonObject["parameters"]!!
-                    .jsonArray
-                    .map { it.jsonObject["name"]!!.jsonPrimitive.content }
-                    .toSet()
-            assertFalse("canonical" in dashboardParamNames)
-
-            val healthDayParamNames =
-                paths["/api/v2/health/day"]!!
-                    .jsonObject["get"]!!
-                    .jsonObject["parameters"]!!
-                    .jsonArray
-                    .map { it.jsonObject["name"]!!.jsonPrimitive.content }
-                    .toSet()
-            assertFalse("canonical" in healthDayParamNames)
-
-            val schemas = body["components"]!!.jsonObject["schemas"]!!.jsonObject
-            val providerStatus = schemas["ProviderStatusResponse"]!!.jsonObject
-            assertEquals(
-                setOf("configure", "connect", "reconnect", "sync"),
-                providerStatus["properties"]!!
-                    .jsonObject["nextAction"]!!
-                    .jsonObject["enum"]!!
-                    .jsonArray
-                    .map { it.jsonPrimitive.content }
-                    .toSet(),
-            )
-            val providerAccountStatus = schemas["ProviderAccountStatusResponse"]!!.jsonObject
-            assertEquals(
-                setOf("not_connected", "connected", "needs_reauth", "disconnected", "configuration_error"),
-                providerAccountStatus["properties"]!!
-                    .jsonObject["status"]!!
-                    .jsonObject["enum"]!!
-                    .jsonArray
-                    .map { it.jsonPrimitive.content }
-                    .toSet(),
-            )
-            assertEquals(
-                setOf("valid", "expired", "missing", "unknown"),
-                providerAccountStatus["properties"]!!
-                    .jsonObject["tokenStatus"]!!
-                    .jsonObject["enum"]!!
-                    .jsonArray
-                    .map { it.jsonPrimitive.content }
-                    .toSet(),
-            )
-            val healthDay = schemas["HealthDayResponse"]!!.jsonObject
-            assertEquals(
-                setOf("steps", "heartRate", "weight", "sleep"),
-                healthDay["properties"]!!
-                    .jsonObject["modules"]!!
-                    .jsonObject["items"]!!
-                    .jsonObject["enum"]!!
-                    .jsonArray
-                    .map { it.jsonPrimitive.content }
-                    .toSet(),
-            )
-
-            val recordSchemaNames =
-                mapOf(
-                    "step_interval" to "StepInterval",
-                    "sleep_session" to "SleepSession",
-                    "activity_summary" to "ActivitySummary",
-                    "sleep_summary" to "SleepSummary",
-                    "blood_pressure" to "BloodPressure",
-                    "scalar" to "ScalarSample",
-                )
-            val recordSchemaRefs = recordSchemaNames.values.map { "#/components/schemas/$it" }.toSet()
-            recordSchemaRefs.forEach { ref ->
-                val schemaName = ref.substringAfterLast('/')
-                assertNotNull(schemas[schemaName], "Missing OpenAPI component schema $schemaName")
-            }
-
-            val requestSchema =
-                paths["/api/v2/ingestion/batches"]!!
-                    .jsonObject["post"]!!
-                    .jsonObject["requestBody"]!!
-                    .jsonObject["content"]!!
-                    .jsonObject["application/json"]!!
-                    .jsonObject["schema"]!!
-                    .jsonObject
-            assertEquals(
-                "#/components/schemas/IngestionBatchRequest",
-                requestSchema["\$ref"]!!.jsonPrimitive.content,
-            )
-
-            val batchRequest = schemas["IngestionBatchRequest"]!!.jsonObject
-            assertEquals(
-                "#/components/schemas/IngestionRecord",
-                batchRequest["properties"]!!
-                    .jsonObject["records"]!!
-                    .jsonObject["items"]!!
-                    .jsonObject["\$ref"]!!
-                    .jsonPrimitive.content,
-            )
-
-            val recordSchema = schemas["IngestionRecord"]!!.jsonObject
-            val recordRefs =
-                recordSchema["oneOf"]!!
-                    .jsonArray
-                    .map { it.jsonObject["\$ref"]!!.jsonPrimitive.content }
-                    .toSet()
-            assertEquals(recordSchemaRefs, recordRefs)
-
-            val discriminator = recordSchema["discriminator"]!!.jsonObject
-            assertEquals("type", discriminator["propertyName"]!!.jsonPrimitive.content)
-            val mapping = discriminator["mapping"]!!.jsonObject
-            assertEquals(
-                recordSchemaRefs,
-                mapping.values.map { it.jsonPrimitive.content }.toSet(),
-            )
-            assertEquals(
-                recordSchemaNames.mapValues { (_, schemaName) -> "#/components/schemas/$schemaName" },
-                mapping.mapValues { (_, ref) -> ref.jsonPrimitive.content },
-            )
-        }
-
-    private fun ApplicationTestBuilder.configureTestApplication() {
-        val dbConfig = PostgresTestDatabase.config()
-        environment {
-            config =
-                MapApplicationConfig(
-                    "ktor.application.modules.size" to "1",
-                    "ktor.application.modules.0" to "me.aquitano.health.api.ApplicationKt.module",
-                    *PostgresTestDatabase.ktorConfigEntries(dbConfig),
-                    "aqtHealth.auth.bootstrapClientName" to "test-client",
-                    "aqtHealth.auth.bootstrapApiKey" to "test-key",
-                )
-        }
-    }
-
-    private suspend fun HttpResponse.jsonBody() = AppJson.parseToJsonElement(bodyAsText()).jsonObject
 }

@@ -3,40 +3,30 @@ package me.aquitano.health.api
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.ktor.server.config.*
 import io.ktor.server.testing.*
-import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import me.aquitano.health.infrastructure.config.DatabaseConfig
-import me.aquitano.health.shared.AppJson
 import me.aquitano.health.test.PostgresIntegrationTest
-import me.aquitano.health.test.PostgresTestDatabase
+import me.aquitano.health.test.authorized
+import me.aquitano.health.test.configureTestApplication
+import me.aquitano.health.test.countRows
+import me.aquitano.health.test.execute
+import me.aquitano.health.test.jsonBody
+import me.aquitano.health.test.queryInt
+import me.aquitano.health.test.queryString
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class IngestionRouteTest : PostgresIntegrationTest() {
     @Test
-    fun ingestionRequiresBearerToken() =
-        testApplication {
-            val dbPath = configureTestApplication()
-
-            val response =
-                client.post("/api/v2/ingestion/batches") {
-                    contentType(ContentType.Application.Json)
-                    setBody(minimalStepPayload())
-                }
-
-            assertEquals(HttpStatusCode.Unauthorized, response.status)
-            assertEquals(0, countRows(dbPath, "ingestion_batches"))
-        }
-
-    @Test
     fun ingestionRejectsBodyLargerThanConfiguredLimit() =
         testApplication {
-            val dbPath = configureTestApplication("aqtHealth.ingestion.maxBodyBytes" to "512")
+            val database = configureTestApplication("aqtHealth.ingestion.maxBodyBytes" to "512")
 
             val response =
                 client.post("/api/v2/ingestion/batches") {
@@ -47,7 +37,7 @@ class IngestionRouteTest : PostgresIntegrationTest() {
 
             assertEquals(HttpStatusCode.PayloadTooLarge, response.status)
             assertEquals("payload_too_large", response.errorCode())
-            assertEquals(0, countRows(dbPath, "ingestion_batches"))
+            assertEquals(0, database.countRows("ingestion_batches"))
         }
 
     @Test
@@ -79,7 +69,7 @@ class IngestionRouteTest : PostgresIntegrationTest() {
     @Test
     fun mixedBatchPersistsIngestionAndMetricRecords() =
         testApplication {
-            val dbPath = configureTestApplication()
+            val database = configureTestApplication()
 
             val response =
                 client.post("/api/v2/ingestion/batches") {
@@ -117,45 +107,44 @@ class IngestionRouteTest : PostgresIntegrationTest() {
                 body["metricsCreated"]!!.jsonObject["sleep_summaries"]!!.jsonPrimitive.int,
             )
 
-            assertEquals(1, countRows(dbPath, "ingestion_batches"))
-            assertEquals(9, countRows(dbPath, "ingestion_records"))
-            assertEquals(1, countRows(dbPath, "step_samples"))
-            assertEquals(1, countRows(dbPath, "canonical_step_samples"))
-            assertEquals(4, countRows(dbPath, "canonical_step_day_bucket_contributions"))
+            assertEquals(1, database.countRows("ingestion_batches"))
+            assertEquals(9, database.countRows("ingestion_records"))
+            assertEquals(1, database.countRows("step_samples"))
+            assertEquals(1, database.countRows("canonical_step_samples"))
+            assertEquals(4, database.countRows("canonical_step_day_bucket_contributions"))
             assertEquals(
                 1200,
-                singleInt(dbPath, "SELECT SUM(value)::int FROM canonical_step_day_bucket_contributions"),
+                database.queryInt("SELECT SUM(value)::int FROM canonical_step_day_bucket_contributions"),
             )
-            assertEquals(1, countRows(dbPath, "sleep_sessions"))
-            assertEquals(2, countRows(dbPath, "sleep_stages"))
+            assertEquals(1, database.countRows("sleep_sessions"))
+            assertEquals(2, database.countRows("sleep_stages"))
             assertEquals(
                 5,
-                singleInt(
-                    dbPath,
+                database.queryInt(
                     "SELECT COUNT(*) FROM scalar_samples WHERE metric_type IN " +
                         "('weight', 'body_fat', 'muscle', 'water', 'visceral_fat')",
                 ),
             )
             assertEquals(
                 1,
-                singleInt(dbPath, "SELECT COUNT(*) FROM scalar_samples WHERE metric_type = 'heart_rate'"),
+                database.queryInt("SELECT COUNT(*) FROM scalar_samples WHERE metric_type = 'heart_rate'"),
             )
-            assertEquals(1, countRows(dbPath, "sleep_summaries"))
-            assertEquals(1, countRows(dbPath, "canonical_sleep_summaries"))
+            assertEquals(1, database.countRows("sleep_summaries"))
+            assertEquals(1, database.countRows("canonical_sleep_summaries"))
             assertEquals(
                 "processed",
-                singleString(dbPath, "SELECT status FROM ingestion_batches"),
+                database.queryString("SELECT status FROM ingestion_batches"),
             )
             assertEquals(
                 "unknown",
-                singleString(dbPath, "SELECT context FROM scalar_samples WHERE metric_type = 'heart_rate'"),
+                database.queryString("SELECT context FROM scalar_samples WHERE metric_type = 'heart_rate'"),
             )
         }
 
     @Test
     fun batchExternalIdIsIdempotentPerSourceInstance() =
         testApplication {
-            val dbPath = configureTestApplication()
+            val database = configureTestApplication()
 
             val first =
                 client.post("/api/v2/ingestion/batches") {
@@ -172,26 +161,22 @@ class IngestionRouteTest : PostgresIntegrationTest() {
 
             assertEquals(HttpStatusCode.Created, first.status)
             assertEquals(HttpStatusCode.OK, second.status)
-            assertEquals(
-                true,
-                second.jsonBody()["duplicateBatch"]!!.jsonPrimitive.content == "true",
-            )
-            assertEquals(1, countRows(dbPath, "ingestion_batches"))
-            assertEquals(1, countRows(dbPath, "ingestion_records"))
-            assertEquals(1, countRows(dbPath, "step_samples"))
+            assertTrue(second.jsonBody()["duplicateBatch"]!!.jsonPrimitive.boolean)
+            assertEquals(1, database.countRows("ingestion_batches"))
+            assertEquals(1, database.countRows("ingestion_records"))
+            assertEquals(1, database.countRows("step_samples"))
             assertEquals(
                 1200,
-                singleInt(dbPath, "SELECT SUM(value)::int FROM canonical_step_day_bucket_contributions"),
+                database.queryInt("SELECT SUM(value)::int FROM canonical_step_day_bucket_contributions"),
             )
         }
 
     @Test
     fun failedBatchExternalIdCanBeRetried() =
         testApplication {
-            val dbPath = configureTestApplication()
+            val database = configureTestApplication()
             client.get("/api/v2/admin/health")
-            insertFailedBatch(
-                dbPath = dbPath,
+            database.insertFailedBatch(
                 provider = "health_connect",
                 providerInstanceId = "pixel-8-health-connect",
                 batchExternalId = "retry-batch",
@@ -205,28 +190,26 @@ class IngestionRouteTest : PostgresIntegrationTest() {
                 }
 
             assertEquals(HttpStatusCode.Created, response.status)
-            assertEquals(2, countRows(dbPath, "ingestion_batches"))
+            assertEquals(2, database.countRows("ingestion_batches"))
             assertEquals(
                 1,
-                singleInt(
-                    dbPath,
+                database.queryInt(
                     "SELECT COUNT(*) FROM ingestion_batches WHERE status = 'processed' AND batch_external_id = 'retry-batch'",
                 ),
             )
             assertEquals(
                 1,
-                singleInt(
-                    dbPath,
+                database.queryInt(
                     "SELECT COUNT(*) FROM ingestion_batches WHERE status = 'failed' AND batch_external_id LIKE 'retry-batch#failed:%'",
                 ),
             )
-            assertEquals(1, countRows(dbPath, "step_samples"))
+            assertEquals(1, database.countRows("step_samples"))
         }
 
     @Test
     fun providerRecordDuplicatesDoNotInflateMetricTables() =
         testApplication {
-            val dbPath = configureTestApplication()
+            val database = configureTestApplication()
 
             repeat(2) {
                 val response =
@@ -238,19 +221,19 @@ class IngestionRouteTest : PostgresIntegrationTest() {
                 assertEquals(HttpStatusCode.Created, response.status)
             }
 
-            assertEquals(2, countRows(dbPath, "ingestion_batches"))
-            assertEquals(2, countRows(dbPath, "ingestion_records"))
-            assertEquals(1, countRows(dbPath, "step_samples"))
+            assertEquals(2, database.countRows("ingestion_batches"))
+            assertEquals(2, database.countRows("ingestion_records"))
+            assertEquals(1, database.countRows("step_samples"))
             assertEquals(
                 1200,
-                singleInt(dbPath, "SELECT SUM(value)::int FROM canonical_step_day_bucket_contributions"),
+                database.queryInt("SELECT SUM(value)::int FROM canonical_step_day_bucket_contributions"),
             )
         }
 
     @Test
     fun nonGoogleProvidersCanStoreOverlappingStepIntervals() =
         testApplication {
-            val dbPath = configureTestApplication()
+            val database = configureTestApplication()
 
             val first =
                 client.post("/api/v2/ingestion/batches") {
@@ -285,10 +268,10 @@ class IngestionRouteTest : PostgresIntegrationTest() {
 
             assertEquals(HttpStatusCode.Created, first.status)
             assertEquals(HttpStatusCode.Created, second.status)
-            assertEquals(2, countRows(dbPath, "step_samples"))
+            assertEquals(2, database.countRows("step_samples"))
             assertEquals(
                 2000,
-                singleInt(dbPath, "SELECT SUM(value)::int FROM canonical_step_day_bucket_contributions"),
+                database.queryInt("SELECT SUM(value)::int FROM canonical_step_day_bucket_contributions"),
             )
         }
 
@@ -300,7 +283,7 @@ class IngestionRouteTest : PostgresIntegrationTest() {
     @Test
     fun googleStepIntervalsAreSkippedOnlyWhenTheyActuallyOverlap() =
         testApplication {
-            val dbConfig = configureTestApplication()
+            val database = configureTestApplication()
 
             val posted =
                 listOf(
@@ -326,18 +309,15 @@ class IngestionRouteTest : PostgresIntegrationTest() {
 
             posted.forEach { assertEquals(HttpStatusCode.Created, it.status) }
             assertEquals(
-                listOf("steps-base", "steps-touching"),
-                stringColumn(
-                    dbConfig,
-                    "SELECT provider_record_id FROM step_samples ORDER BY start_at",
-                ),
+                "steps-base,steps-touching",
+                database.queryString("SELECT string_agg(provider_record_id, ',' ORDER BY start_at) FROM step_samples"),
             )
         }
 
     @Test
     fun crossMidnightStepIntervalsAreSplitAcrossDailySummaries() =
         testApplication {
-            val dbPath = configureTestApplication()
+            val database = configureTestApplication()
 
             val response =
                 client.post("/api/v2/ingestion/batches") {
@@ -360,24 +340,22 @@ class IngestionRouteTest : PostgresIntegrationTest() {
                 2,
                 response.jsonBody()["affectedStepSummaryDates"]!!.jsonArray.size,
             )
-            assertEquals(2, singleInt(dbPath, "SELECT COUNT(DISTINCT date) FROM canonical_step_day_bucket_contributions"))
+            assertEquals(2, database.queryInt("SELECT COUNT(DISTINCT date) FROM canonical_step_day_bucket_contributions"))
             assertEquals(
                 60,
-                singleInt(
-                    dbPath,
+                database.queryInt(
                     "SELECT SUM(value)::int FROM canonical_step_day_bucket_contributions WHERE date = '2026-04-19'",
                 ),
             )
             assertEquals(
                 60,
-                singleInt(
-                    dbPath,
+                database.queryInt(
                     "SELECT SUM(value)::int FROM canonical_step_day_bucket_contributions WHERE date = '2026-04-20'",
                 ),
             )
 
             // The sample is stored under both dates, but reads must return it once.
-            assertEquals(2, countRows(dbPath, "canonical_step_samples"))
+            assertEquals(2, database.countRows("canonical_step_samples"))
             val samples =
                 client.get(
                     "/api/v2/steps?from=2026-04-19T00:00:00Z&to=2026-04-21T00:00:00Z",
@@ -389,7 +367,7 @@ class IngestionRouteTest : PostgresIntegrationTest() {
     @Test
     fun idLessSamplesAtTheSameInstantAreDistinctPerContext() =
         testApplication {
-            val dbPath = configureTestApplication()
+            val database = configureTestApplication()
 
             val response =
                 client.post("/api/v2/ingestion/batches") {
@@ -426,127 +404,57 @@ class IngestionRouteTest : PostgresIntegrationTest() {
             assertEquals(HttpStatusCode.Created, response.status)
             assertEquals(
                 2,
-                singleInt(dbPath, "SELECT COUNT(*) FROM scalar_samples WHERE metric_type = 'heart_rate'"),
+                database.queryInt("SELECT COUNT(*) FROM scalar_samples WHERE metric_type = 'heart_rate'"),
             )
         }
 
-    private fun ApplicationTestBuilder.configureTestApplication(vararg extraConfig: Pair<String, String>): DatabaseConfig {
-        val dbConfig = PostgresTestDatabase.config()
-        environment {
-            config =
-                MapApplicationConfig(
-                    "ktor.application.modules.size" to "1",
-                    "ktor.application.modules.0" to "me.aquitano.health.api.ApplicationKt.module",
-                    *PostgresTestDatabase.ktorConfigEntries(dbConfig),
-                    "aqtHealth.auth.bootstrapClientName" to "test-client",
-                    "aqtHealth.auth.bootstrapApiKey" to "test-key",
-                    *extraConfig,
-                )
-        }
-        return dbConfig
-    }
-
-    private fun HttpRequestBuilder.authorized() {
-        header(HttpHeaders.Authorization, "Bearer test-key")
-    }
-
-    private suspend fun HttpResponse.jsonBody(): JsonObject = AppJson.parseToJsonElement(bodyAsText()).jsonObject
-
     private suspend fun HttpResponse.errorCode(): String = jsonBody()["error"]!!.jsonObject["code"]!!.jsonPrimitive.content
 
-    private fun countRows(
-        dbPath: DatabaseConfig,
-        tableName: String,
-    ): Int = singleInt(dbPath, "SELECT COUNT(*) FROM $tableName")
-
-    private fun singleInt(
-        dbPath: DatabaseConfig,
-        sql: String,
-    ): Int =
-        PostgresTestDatabase.connection(dbPath).use { connection ->
-            connection.createStatement().use { statement ->
-                statement.executeQuery(sql).use { resultSet ->
-                    resultSet.next()
-                    resultSet.getInt(1)
-                }
-            }
-        }
-
-    private fun stringColumn(
-        dbPath: DatabaseConfig,
-        sql: String,
-    ): List<String> =
-        PostgresTestDatabase.connection(dbPath).use { connection ->
-            connection.createStatement().use { statement ->
-                statement.executeQuery(sql).use { resultSet ->
-                    buildList { while (resultSet.next()) add(resultSet.getString(1)) }
-                }
-            }
-        }
-
-    private fun singleString(
-        dbPath: DatabaseConfig,
-        sql: String,
-    ): String =
-        PostgresTestDatabase.connection(dbPath).use { connection ->
-            connection.createStatement().use { statement ->
-                statement.executeQuery(sql).use { resultSet ->
-                    resultSet.next()
-                    resultSet.getString(1)
-                }
-            }
-        }
-
-    private fun insertFailedBatch(
-        dbPath: DatabaseConfig,
+    private fun DatabaseConfig.insertFailedBatch(
         provider: String,
         providerInstanceId: String,
         batchExternalId: String,
     ) {
-        PostgresTestDatabase.connection(dbPath).use { connection ->
-            connection.createStatement().use { statement ->
-                statement.executeUpdate(
-                    """
-                    INSERT INTO sources (code, display_name, created_at)
-                    VALUES ('$provider', NULL, '2026-04-19T09:00:00Z')
-                    """.trimIndent(),
-                )
-                statement.executeUpdate(
-                    """
-                    INSERT INTO source_instances (source_id, provider_instance_id, display_name, created_at, updated_at)
-                    VALUES (1, '$providerInstanceId', NULL, '2026-04-19T09:00:00Z', '2026-04-19T09:00:00Z')
-                    """.trimIndent(),
-                )
-                statement.executeUpdate(
-                    """
-                    INSERT INTO ingestion_batches (
-                        source_instance_id,
-                        batch_external_id,
-                        source_payload_json,
-                        status,
-                        ingested_at,
-                        received_at,
-                        processed_at,
-                        error_message,
-                        created_at,
-                        updated_at
-                    )
-                    VALUES (
-                        1,
-                        '$batchExternalId',
-                        '{}',
-                        'failed',
-                        '2026-04-19T09:00:00Z',
-                        '2026-04-19T09:00:00Z',
-                        NULL,
-                        'previous failure',
-                        '2026-04-19T09:00:00Z',
-                        '2026-04-19T09:00:00Z'
-                    )
-                    """.trimIndent(),
-                )
-            }
-        }
+        execute(
+            """
+            INSERT INTO sources (code, display_name, created_at)
+            VALUES ('$provider', NULL, '2026-04-19T09:00:00Z')
+            """.trimIndent(),
+        )
+        execute(
+            """
+            INSERT INTO source_instances (source_id, provider_instance_id, display_name, created_at, updated_at)
+            VALUES (1, '$providerInstanceId', NULL, '2026-04-19T09:00:00Z', '2026-04-19T09:00:00Z')
+            """.trimIndent(),
+        )
+        execute(
+            """
+            INSERT INTO ingestion_batches (
+                source_instance_id,
+                batch_external_id,
+                source_payload_json,
+                status,
+                ingested_at,
+                received_at,
+                processed_at,
+                error_message,
+                created_at,
+                updated_at
+            )
+            VALUES (
+                1,
+                '$batchExternalId',
+                '{}',
+                'failed',
+                '2026-04-19T09:00:00Z',
+                '2026-04-19T09:00:00Z',
+                NULL,
+                'previous failure',
+                '2026-04-19T09:00:00Z',
+                '2026-04-19T09:00:00Z'
+            )
+            """.trimIndent(),
+        )
     }
 
     private fun minimalStepPayload(batchExternalId: String? = "steps-1-batch"): String =

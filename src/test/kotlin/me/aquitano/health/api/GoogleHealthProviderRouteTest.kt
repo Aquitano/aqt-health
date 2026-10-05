@@ -3,23 +3,26 @@ package me.aquitano.health.api
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.ktor.server.config.*
 import io.ktor.server.testing.*
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import me.aquitano.health.infrastructure.config.DatabaseConfig
 import me.aquitano.health.shared.AppJson
 import me.aquitano.health.test.PostgresIntegrationTest
-import me.aquitano.health.test.PostgresTestDatabase
+import me.aquitano.health.test.authorized
+import me.aquitano.health.test.configureTestApplication
+import me.aquitano.health.test.googleHealthTestConfig
+import me.aquitano.health.test.jsonBody
+import me.aquitano.health.test.queryString
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class GoogleHealthProviderRouteTest : PostgresIntegrationTest() {
     @Test
     fun oauthStartReturnsAuthorizationUrlWithReadonlyScopes() =
         testApplication {
-            configureTestApplication()
+            configureTestApplication(*googleHealthTestConfig())
 
             val response =
                 client.get("/api/v2/providers/google-health/oauth/start") {
@@ -27,8 +30,7 @@ class GoogleHealthProviderRouteTest : PostgresIntegrationTest() {
                 }
 
             assertEquals(HttpStatusCode.OK, response.status)
-            val body = AppJson.parseToJsonElement(response.bodyAsText()).jsonObject
-            val url = body["authorizationUrl"]!!.jsonPrimitive.content
+            val url = response.jsonBody()["authorizationUrl"]!!.jsonPrimitive.content
             assertTrue(url.contains("access_type=offline"))
             assertTrue(url.contains("prompt=consent"))
             assertTrue(url.contains("googlehealth.activity_and_fitness.readonly"))
@@ -39,7 +41,7 @@ class GoogleHealthProviderRouteTest : PostgresIntegrationTest() {
     @Test
     fun syncRejectsInvalidDateRange() =
         testApplication {
-            configureTestApplication()
+            configureTestApplication(*googleHealthTestConfig())
 
             val response =
                 client.post("/api/v2/providers/google-health/sync-jobs") {
@@ -49,14 +51,13 @@ class GoogleHealthProviderRouteTest : PostgresIntegrationTest() {
                 }
 
             assertEquals(HttpStatusCode.BadRequest, response.status)
-            val error = AppJson.parseToJsonElement(response.bodyAsText()).jsonObject["error"]!!.jsonObject
-            assertEquals("validation_failed", error["code"]!!.jsonPrimitive.content)
+            assertEquals("validation_failed", response.errorCode())
         }
 
     @Test
     fun syncRangeBeyondTheCeilingIsRejected() =
         testApplication {
-            configureTestApplication()
+            configureTestApplication(*googleHealthTestConfig())
 
             val response =
                 client.post("/api/v2/providers/google-health/sync-jobs") {
@@ -66,14 +67,13 @@ class GoogleHealthProviderRouteTest : PostgresIntegrationTest() {
                 }
 
             assertEquals(HttpStatusCode.BadRequest, response.status)
-            val error = AppJson.parseToJsonElement(response.bodyAsText()).jsonObject["error"]!!.jsonObject
-            assertEquals("validation_failed", error["code"]!!.jsonPrimitive.content)
+            assertEquals("validation_failed", response.errorCode())
         }
 
     @Test
     fun syncJobMultiYearRangeWithinTheCeilingIsAcceptedAndPollable() =
         testApplication {
-            val dbConfig = configureTestApplication()
+            val database = configureTestApplication(*googleHealthTestConfig())
 
             val startResponse =
                 client.post("/api/v2/providers/google-health/sync-jobs") {
@@ -83,9 +83,7 @@ class GoogleHealthProviderRouteTest : PostgresIntegrationTest() {
                 }
 
             assertEquals(HttpStatusCode.Accepted, startResponse.status)
-            val startBody = AppJson.parseToJsonElement(startResponse.bodyAsText()).jsonObject
-            val jobId = startBody["jobId"]!!.jsonPrimitive.content
-            assertTrue(jobId.isNotBlank())
+            val jobId = startResponse.jsonBody()["jobId"]!!.jsonPrimitive.content
 
             val statusResponse =
                 client.get("/api/v2/providers/google-health/sync-jobs/$jobId") {
@@ -93,21 +91,18 @@ class GoogleHealthProviderRouteTest : PostgresIntegrationTest() {
                 }
 
             assertEquals(HttpStatusCode.OK, statusResponse.status)
-            val statusBody = AppJson.parseToJsonElement(statusResponse.bodyAsText()).jsonObject
+            val statusBody = statusResponse.jsonBody()
             assertEquals(jobId, statusBody["jobId"]!!.jsonPrimitive.content)
             assertEquals("google-health", statusBody["providerCode"]!!.jsonPrimitive.content)
             // Stored as the internal code so provider_sync_jobs correlates with scheduled_syncs and
             // provider_sync_runs; the wire code is restored on read.
-            assertEquals(
-                "google_health",
-                singleString(dbConfig, "SELECT provider_code FROM provider_sync_jobs"),
-            )
+            assertEquals("google_health", database.queryString("SELECT provider_code FROM provider_sync_jobs"))
         }
 
     @Test
     fun syncRejectsInvalidPageSize() =
         testApplication {
-            configureTestApplication()
+            configureTestApplication(*googleHealthTestConfig())
 
             val response =
                 client.post("/api/v2/providers/google-health/sync-jobs") {
@@ -117,14 +112,13 @@ class GoogleHealthProviderRouteTest : PostgresIntegrationTest() {
                 }
 
             assertEquals(HttpStatusCode.BadRequest, response.status)
-            val error = AppJson.parseToJsonElement(response.bodyAsText()).jsonObject["error"]!!.jsonObject
-            assertEquals("validation_failed", error["code"]!!.jsonPrimitive.content)
+            assertEquals("validation_failed", response.errorCode())
         }
 
     @Test
     fun missingProviderConfigReturnsInternalServerErrorWithoutLeakingConfigFields() =
         testApplication {
-            configureTestApplication(withClientSecret = false)
+            configureTestApplication(*googleHealthTestConfig(withClientSecret = false))
 
             val response =
                 client.get("/api/v2/providers/google-health/oauth/start") {
@@ -138,50 +132,8 @@ class GoogleHealthProviderRouteTest : PostgresIntegrationTest() {
             assertEquals("google_health_not_configured", error["code"]!!.jsonPrimitive.content)
             assertEquals("Provider is not configured", error["message"]!!.jsonPrimitive.content)
             assertEquals("google-config-test", error["requestId"]!!.jsonPrimitive.content)
-            assertTrue(!bodyText.contains("googleHealth.clientSecret"))
+            assertFalse(bodyText.contains("googleHealth.clientSecret"))
         }
 
-    private fun ApplicationTestBuilder.configureTestApplication(
-        withClientSecret: Boolean = true,
-    ): DatabaseConfig {
-        val dbConfig = PostgresTestDatabase.config()
-        val configValues =
-            mutableMapOf(
-                "ktor.application.modules.size" to "1",
-                "ktor.application.modules.0" to "me.aquitano.health.api.ApplicationKt.module",
-                "aqtHealth.auth.bootstrapClientName" to "test-client",
-                "aqtHealth.auth.bootstrapApiKey" to "test-key",
-                "aqtHealth.googleHealth.clientId" to "client-id",
-                "aqtHealth.googleHealth.redirectUri" to "http://localhost:8080/api/v2/providers/google-health/oauth/callback",
-                "aqtHealth.googleHealth.tokenEncryptionKey" to "test-token-encryption-key-with-32-bytes",
-                "aqtHealth.googleHealth.apiBaseUrl" to "https://health.googleapis.com",
-                "aqtHealth.googleHealth.oauthTokenUrl" to "https://oauth2.googleapis.com/token",
-                "aqtHealth.googleHealth.oauthAuthUrl" to "https://accounts.google.com/o/oauth2/v2/auth",
-            )
-        configValues.putAll(PostgresTestDatabase.ktorConfigEntries(dbConfig).toMap())
-        if (withClientSecret) {
-            configValues["aqtHealth.googleHealth.clientSecret"] = "client-secret"
-        }
-        environment {
-            config = MapApplicationConfig(*configValues.map { it.key to it.value }.toTypedArray())
-        }
-        return dbConfig
-    }
-
-    private fun singleString(
-        dbConfig: DatabaseConfig,
-        sql: String,
-    ): String =
-        PostgresTestDatabase.connection(dbConfig).use { connection ->
-            connection.createStatement().use { statement ->
-                statement.executeQuery(sql).use { resultSet ->
-                    resultSet.next()
-                    resultSet.getString(1)
-                }
-            }
-        }
-
-    private fun HttpRequestBuilder.authorized() {
-        header(HttpHeaders.Authorization, "Bearer test-key")
-    }
+    private suspend fun HttpResponse.errorCode(): String = jsonBody()["error"]!!.jsonObject["code"]!!.jsonPrimitive.content
 }

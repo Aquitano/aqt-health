@@ -3,13 +3,14 @@ package me.aquitano.health.api
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.ktor.server.config.*
 import io.ktor.server.testing.*
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import me.aquitano.health.shared.AppJson
 import me.aquitano.health.test.PostgresIntegrationTest
-import me.aquitano.health.test.PostgresTestDatabase
+import me.aquitano.health.test.authorized
+import me.aquitano.health.test.configureTestApplication
+import me.aquitano.health.test.googleHealthTestConfig
+import me.aquitano.health.test.jsonBody
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
@@ -18,7 +19,7 @@ class IdempotencyKeyRouteTest : PostgresIntegrationTest() {
     @Test
     fun syncJobSameKeyReturnsSameJob() =
         testApplication {
-            configureTestApplication()
+            configureTestApplication(*googleHealthTestConfig())
 
             val first = startSyncJob(key = "sync-job-key-1")
             val second = startSyncJob(key = "sync-job-key-1")
@@ -31,7 +32,7 @@ class IdempotencyKeyRouteTest : PostgresIntegrationTest() {
     @Test
     fun syncJobDifferentKeysCreateDistinctJobs() =
         testApplication {
-            configureTestApplication()
+            configureTestApplication(*googleHealthTestConfig())
 
             val first = startSyncJob(key = "sync-job-key-a")
             val second = startSyncJob(key = "sync-job-key-b")
@@ -42,7 +43,7 @@ class IdempotencyKeyRouteTest : PostgresIntegrationTest() {
     @Test
     fun syncJobSameKeyWithDifferentRequestReturnsConflict() =
         testApplication {
-            configureTestApplication()
+            configureTestApplication(*googleHealthTestConfig())
 
             val first = startSyncJob(key = "sync-job-key-conflict")
             val second =
@@ -61,7 +62,7 @@ class IdempotencyKeyRouteTest : PostgresIntegrationTest() {
     @Test
     fun syncJobWithoutKeyCreatesNewJobEachTime() =
         testApplication {
-            configureTestApplication()
+            configureTestApplication(*googleHealthTestConfig())
 
             val first = startSyncJob(key = null)
             val second = startSyncJob(key = null)
@@ -74,7 +75,7 @@ class IdempotencyKeyRouteTest : PostgresIntegrationTest() {
     @Test
     fun replaySameKeyReturnsSameJob() =
         testApplication {
-            configureTestApplication()
+            configureTestApplication(*googleHealthTestConfig())
 
             val first =
                 client.post("/api/v2/admin/replay") {
@@ -99,7 +100,7 @@ class IdempotencyKeyRouteTest : PostgresIntegrationTest() {
     @Test
     fun replaySameKeyWithDifferentRequestReturnsConflict() =
         testApplication {
-            configureTestApplication()
+            configureTestApplication(*googleHealthTestConfig())
 
             val first =
                 client.post("/api/v2/admin/replay") {
@@ -131,42 +132,7 @@ class IdempotencyKeyRouteTest : PostgresIntegrationTest() {
             setBody("""{"from":"2026-04-01T00:00:00Z","to":"2026-04-02T00:00:00Z","dataTypes":["steps"]}""")
         }
 
-    private suspend fun HttpResponse.jobId(): String =
-        AppJson
-            .parseToJsonElement(bodyAsText())
-            .jsonObject["jobId"]!!
-            .jsonPrimitive.content
+    private suspend fun HttpResponse.jobId(): String = jsonBody()["jobId"]!!.jsonPrimitive.content
 
-    private suspend fun HttpResponse.errorCode(): String =
-        AppJson
-            .parseToJsonElement(bodyAsText())
-            .jsonObject["error"]!!
-            .jsonObject["code"]!!
-            .jsonPrimitive.content
-
-    private fun ApplicationTestBuilder.configureTestApplication() {
-        val dbConfig = PostgresTestDatabase.config()
-        val configValues =
-            mutableMapOf(
-                "ktor.application.modules.size" to "1",
-                "ktor.application.modules.0" to "me.aquitano.health.api.ApplicationKt.module",
-                "aqtHealth.auth.bootstrapClientName" to "test-client",
-                "aqtHealth.auth.bootstrapApiKey" to "test-key",
-                "aqtHealth.googleHealth.clientId" to "client-id",
-                "aqtHealth.googleHealth.clientSecret" to "client-secret",
-                "aqtHealth.googleHealth.redirectUri" to "http://localhost:8080/api/v2/providers/google-health/oauth/callback",
-                "aqtHealth.googleHealth.tokenEncryptionKey" to "test-token-encryption-key-with-32-bytes",
-                "aqtHealth.googleHealth.apiBaseUrl" to "https://health.googleapis.com",
-                "aqtHealth.googleHealth.oauthTokenUrl" to "https://oauth2.googleapis.com/token",
-                "aqtHealth.googleHealth.oauthAuthUrl" to "https://accounts.google.com/o/oauth2/v2/auth",
-            )
-        configValues.putAll(PostgresTestDatabase.ktorConfigEntries(dbConfig).toMap())
-        environment {
-            config = MapApplicationConfig(*configValues.map { it.key to it.value }.toTypedArray())
-        }
-    }
-
-    private fun HttpRequestBuilder.authorized() {
-        header(HttpHeaders.Authorization, "Bearer test-key")
-    }
+    private suspend fun HttpResponse.errorCode(): String = jsonBody()["error"]!!.jsonObject["code"]!!.jsonPrimitive.content
 }
