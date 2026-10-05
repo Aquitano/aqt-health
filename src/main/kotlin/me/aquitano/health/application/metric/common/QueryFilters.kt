@@ -4,6 +4,7 @@ import me.aquitano.health.application.metric.common.repository.ReadFilters
 import me.aquitano.health.domain.RequestValidationException
 import me.aquitano.health.domain.ValidationIssue
 import me.aquitano.health.domain.ValidationIssueCodes
+import me.aquitano.health.shared.SortDirection
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -17,7 +18,7 @@ internal fun QueryParams.readFilters(): ReadFilters {
     val from = instant("from")
     val to = instant("to")
     validateRange(from, to, "from", "to")
-    val order = if (latest) Orders.DESC else order()
+    val order = if (latest) SortDirection.Desc else order()
     return ReadFilters(
         from = from,
         to = to,
@@ -43,7 +44,7 @@ internal fun QueryParams.summaryFilters(): ReadFilters {
         providerInstanceId = optional("providerInstanceId"),
         includeSource = boolean("includeSource", default = false),
         limit = 1,
-        order = Orders.DESC,
+        order = SortDirection.Desc,
     )
 }
 
@@ -76,7 +77,7 @@ internal fun QueryParams.dailyLatestReadFilters(now: Instant): ReadFilters {
         providerInstanceId = optional("providerInstanceId"),
         includeSource = boolean("includeSource", default = false),
         limit = 1,
-        order = Orders.DESC,
+        order = SortDirection.Desc,
         latest = true,
     )
 }
@@ -143,9 +144,4 @@ internal object SortFields {
     const val END_AT = "endAt"
     const val DATE = "date"
     const val MEASURED_AT = "measuredAt"
-}
-
-internal object Orders {
-    const val ASC = "asc"
-    const val DESC = "desc"
 }

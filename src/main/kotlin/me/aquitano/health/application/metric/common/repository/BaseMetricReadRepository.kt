@@ -8,6 +8,7 @@ import me.aquitano.health.infrastructure.database.tables.SourceInstancesTable
 import me.aquitano.health.infrastructure.database.tables.SourcesTable
 import me.aquitano.health.infrastructure.database.toDbTimestamp
 import me.aquitano.health.shared.Cursor
+import me.aquitano.health.shared.SortDirection
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.select
 import java.time.Instant
@@ -154,7 +155,7 @@ abstract class BaseMetricReadRepository {
      */
     protected fun timestampKeyset(
         cursor: Cursor?,
-        order: String,
+        order: SortDirection,
         sortColumn: Column<OffsetDateTime>,
         idExpression: Expression<*>,
     ): Op<Boolean>? {
@@ -169,7 +170,7 @@ abstract class BaseMetricReadRepository {
     /** Keyset predicate for cursor pagination over a date sort column or expression. */
     protected fun dateKeyset(
         cursor: Cursor?,
-        order: String,
+        order: SortDirection,
         sortExpression: ExpressionWithColumnType<LocalDate>,
         idExpression: Expression<*>,
     ): Op<Boolean>? {
@@ -181,14 +182,14 @@ abstract class BaseMetricReadRepository {
     }
 
     private fun keyset(
-        order: String,
+        order: SortDirection,
         sortExpression: Expression<*>,
         sortValue: Expression<*>,
         idExpression: Expression<*>,
         lastId: Long,
     ): Op<Boolean> {
         val idValue = longParam(lastId)
-        return if (sortOrder(order) == SortOrder.DESC) {
+        return if (order == SortDirection.Desc) {
             LessOp(sortExpression, sortValue) or
                 (EqOp(sortExpression, sortValue) and LessOp(idExpression, idValue))
         } else {
@@ -199,21 +200,11 @@ abstract class BaseMetricReadRepository {
 
     private fun invalidCursor(): RequestValidationException = RequestValidationException(field = "cursor", code = ValidationIssueCodes.InvalidFormat, message = "is not a valid cursor")
 
-    /**
-     * Converts a string order ("asc" / "desc") into an Exposed [SortOrder].
-     */
-    protected fun sortOrder(order: String): SortOrder =
-        if (order.equals(
-                "desc",
-                ignoreCase = true,
-            )
-        ) {
-            SortOrder.DESC
-        } else {
-            SortOrder.ASC
+    protected fun ReadFilters.sortOrder(): SortOrder =
+        when (order) {
+            SortDirection.Asc -> SortOrder.ASC
+            SortDirection.Desc -> SortOrder.DESC
         }
-
-    protected fun ReadFilters.sortOrder(): SortOrder = sortOrder(order)
 }
 
 sealed interface TimeFilterMode {

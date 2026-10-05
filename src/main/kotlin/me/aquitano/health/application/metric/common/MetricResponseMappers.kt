@@ -6,6 +6,7 @@ import me.aquitano.health.application.metric.sleep.repository.SleepNightRow
 import me.aquitano.health.application.metric.sleep.repository.SleepSessionRow
 import me.aquitano.health.application.metric.sleep.repository.SleepStageRow
 import me.aquitano.health.shared.Cursor
+import me.aquitano.health.shared.SortDirection
 
 /**
  * Source attribution for an aggregate: reported only when every contributing row came from the
@@ -64,14 +65,14 @@ internal fun keysetFetchLimit(limit: Int): Int = if (limit == Int.MAX_VALUE) Int
 
 internal fun <T> List<T>.keysetPage(
     limit: Int,
-    order: String,
+    order: SortDirection,
     sortValue: (T) -> String,
     id: (T) -> Long,
 ): KeysetPage<T> =
     if (size > limit) {
         val items = take(limit)
         val last = items.last()
-        KeysetPage(items, Cursor.encode(sortValue(last), id(last), order = order))
+        KeysetPage(items, Cursor(sortValue(last), id(last), order).encode())
     } else {
         KeysetPage(this, null)
     }

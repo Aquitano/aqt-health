@@ -3,6 +3,7 @@ package me.aquitano.health.api.dto
 import io.ktor.openapi.*
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import me.aquitano.health.shared.SortDirection
 
 @Serializable
 data class SourceMetadataResponse(
@@ -15,7 +16,7 @@ data class ReadResponseMeta(
     val count: Int,
     val limit: Int,
     val sort: String,
-    val order: String,
+    val order: SortDirection,
     val nextCursor: String? = null,
 )
 

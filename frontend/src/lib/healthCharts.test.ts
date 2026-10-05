@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { buildHealthCharts } from "./healthCharts";
 
-const meta = { count: 1, limit: 5000, sort: "date", order: "asc" };
+const meta = { count: 1, limit: 5000, sort: "date", order: "asc" as const };
 
 it("keeps daily points on their calendar day and labels instants in the app zone", () => {
   const charts = buildHealthCharts(

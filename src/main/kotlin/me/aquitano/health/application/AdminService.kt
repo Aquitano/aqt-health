@@ -21,6 +21,7 @@ import me.aquitano.health.domain.ValidationIssueCodes
 import me.aquitano.health.infrastructure.database.suspendDbTransaction
 import me.aquitano.health.infrastructure.repositories.IngestionRepository
 import me.aquitano.health.shared.AppJson
+import me.aquitano.health.shared.SortDirection
 import org.jetbrains.exposed.v1.jdbc.Database
 
 class AdminService(
@@ -45,7 +46,7 @@ class AdminService(
         val from = params.instant("from")
         val to = params.instant("to")
         validateRange(from, to, "from", "to")
-        val order = "desc"
+        val order = SortDirection.Desc
         val cursor = params.cursor(order)
         val limit = params.int(QueryParamSpecs.adminLimit)
         return suspendDbTransaction(db = database) {

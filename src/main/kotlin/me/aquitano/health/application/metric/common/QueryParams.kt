@@ -4,6 +4,7 @@ import me.aquitano.health.domain.RequestValidationException
 import me.aquitano.health.domain.ValidationIssue
 import me.aquitano.health.domain.ValidationIssueCodes
 import me.aquitano.health.shared.Cursor
+import me.aquitano.health.shared.SortDirection
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -59,17 +60,19 @@ class QueryParams(
             }
         }
 
-    fun order(default: String = Orders.ASC): String {
-        val value = optional("order") ?: return default
-        val normalized = value.lowercase()
-        if (normalized != Orders.ASC && normalized != Orders.DESC) {
-            throw RequestValidationException(field = "order", code = ValidationIssueCodes.UnsupportedValue, message = "must be asc or desc")
-        }
-        return normalized
+    fun order(): SortDirection {
+        val spec = QueryParamSpecs.order
+        val value = optional(spec.name) ?: return spec.default
+        return SortDirection.fromWireName(value.lowercase())
+            ?: throw RequestValidationException(
+                field = spec.name,
+                code = ValidationIssueCodes.UnsupportedValue,
+                message = "must be ${SortDirection.entries.joinToString(" or ") { it.wireName }}",
+            )
     }
 
     /** Decodes the cursor parameter, rejecting cursors issued under a different order. */
-    fun cursor(order: String): Cursor? = optional("cursor")?.let { Cursor.decode(it, expectedOrder = order) }
+    fun cursor(order: SortDirection): Cursor? = optional("cursor")?.let { Cursor.decode(it, expectedOrder = order) }
 
     fun rejectLatest() {
         if (boolean("latest", default = false)) {

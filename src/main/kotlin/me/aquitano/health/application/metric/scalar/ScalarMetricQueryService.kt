@@ -7,7 +7,6 @@ import me.aquitano.health.api.dto.ScalarDailySummariesResponse
 import me.aquitano.health.api.dto.ScalarDailySummaryResponse
 import me.aquitano.health.api.dto.ScalarSamplesResponse
 import me.aquitano.health.api.dto.ScalarSummaryResponse
-import me.aquitano.health.application.metric.common.Orders
 import me.aquitano.health.application.metric.common.QueryParamSpecs
 import me.aquitano.health.application.metric.common.QueryParams
 import me.aquitano.health.application.metric.common.SortFields
@@ -20,6 +19,7 @@ import me.aquitano.health.domain.ScalarMetricRegistry
 import me.aquitano.health.domain.ValidationIssue
 import me.aquitano.health.domain.ValidationIssueCodes
 import me.aquitano.health.infrastructure.database.suspendDbTransaction
+import me.aquitano.health.shared.SortDirection
 import org.jetbrains.exposed.v1.jdbc.Database
 
 /**
@@ -140,7 +140,7 @@ class ScalarMetricQueryService(
                         count = items.size,
                         limit = items.size,
                         sort = SortFields.DATE,
-                        order = Orders.ASC,
+                        order = SortDirection.Asc,
                     ),
             )
         }

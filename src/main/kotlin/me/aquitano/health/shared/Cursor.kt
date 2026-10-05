@@ -3,9 +3,27 @@ package me.aquitano.health.shared
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import me.aquitano.health.domain.RequestValidationException
-import me.aquitano.health.domain.ValidationIssue
 import me.aquitano.health.domain.ValidationIssueCodes
 import java.util.Base64
+
+@Serializable
+enum class SortDirection {
+    @SerialName("asc")
+    Asc,
+
+    @SerialName("desc")
+    Desc,
+    ;
+
+    val wireName: String get() = serializer().descriptor.getElementName(ordinal)
+
+    companion object {
+        // Lazy because the plugin-generated serializer behind wireName is initialised after this companion.
+        private val byWireName by lazy { entries.associateBy { it.wireName } }
+
+        fun fromWireName(value: String): SortDirection? = byWireName[value]
+    }
+}
 
 /**
  * Opaque keyset-pagination cursor. Encodes the sort value and row id of the last item of a
@@ -18,7 +36,7 @@ data class Cursor(
     @SerialName("s") val sortValue: String,
     /** Row id of the last row; tie-break for equal sort values. */
     @SerialName("id") val lastId: Long,
-    @SerialName("o") val order: String,
+    @SerialName("o") val order: SortDirection,
 ) {
     fun encode(): String =
         Base64
@@ -27,15 +45,9 @@ data class Cursor(
             .encodeToString(AppJson.encodeToString(serializer(), this).toByteArray(Charsets.UTF_8))
 
     companion object {
-        fun encode(
-            sortValue: String,
-            lastId: Long,
-            order: String,
-        ): String = Cursor(sortValue, lastId, order).encode()
-
         fun decode(
             value: String,
-            expectedOrder: String,
+            expectedOrder: SortDirection,
         ): Cursor {
             val cursor =
                 runCatching {
@@ -45,7 +57,7 @@ data class Cursor(
                     throw RequestValidationException(field = "cursor", code = ValidationIssueCodes.InvalidFormat, message = "is not a valid cursor")
                 }
             if (cursor.order != expectedOrder) {
-                throw RequestValidationException(field = "cursor", code = ValidationIssueCodes.InvalidState, message = "was issued for order=${cursor.order} and cannot be used with this request")
+                throw RequestValidationException(field = "cursor", code = ValidationIssueCodes.InvalidState, message = "was issued for order=${cursor.order.wireName} and cannot be used with this request")
             }
             return cursor
         }

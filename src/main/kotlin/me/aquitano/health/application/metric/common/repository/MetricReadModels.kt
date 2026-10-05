@@ -1,6 +1,7 @@
 package me.aquitano.health.application.metric.common.repository
 
 import me.aquitano.health.shared.Cursor
+import me.aquitano.health.shared.SortDirection
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -20,7 +21,7 @@ data class ReadFilters(
     val providerInstanceId: String?,
     val includeSource: Boolean,
     val limit: Int,
-    val order: String,
+    val order: SortDirection,
     val cursor: Cursor? = null,
     val latest: Boolean = false,
 )

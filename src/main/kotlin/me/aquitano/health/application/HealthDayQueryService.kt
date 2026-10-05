@@ -15,6 +15,7 @@ import me.aquitano.health.domain.ScalarMetricTypes
 import me.aquitano.health.domain.ValidationIssue
 import me.aquitano.health.domain.ValidationIssueCodes
 import me.aquitano.health.infrastructure.database.suspendDbTransaction
+import me.aquitano.health.shared.SortDirection
 import org.jetbrains.exposed.v1.jdbc.Database
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -203,7 +204,7 @@ class HealthDayQueryService(
                 providerInstanceId = context.providerInstanceId,
                 includeSource = context.includeSource,
                 limit = Int.MAX_VALUE,
-                order = "asc",
+                order = SortDirection.Asc,
             )
         val (nights, stagesBySession, sourceMetadata) =
             sleepRepository.listCanonicalSleepNights(filters)
@@ -274,7 +275,7 @@ private fun HealthDayQueryContext.filters(): ReadFilters =
         providerInstanceId = providerInstanceId,
         includeSource = includeSource,
         limit = Int.MAX_VALUE,
-        order = "asc",
+        order = SortDirection.Asc,
     )
 
 private val BUCKET_SIZE = Duration.ofMinutes(15)

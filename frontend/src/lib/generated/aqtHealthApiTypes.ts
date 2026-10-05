@@ -1247,7 +1247,8 @@ export interface components {
             count: number;
             limit: number;
             sort: string;
-            order: string;
+            /** @enum {string} */
+            order: "asc" | "desc";
             nextCursor?: string | null;
         };
         /** ScalarSamplesResponse */
