@@ -35,7 +35,6 @@ internal fun Route.providerRoutes() {
         summary = "List provider discovery metadata"
         description =
             "Returns provider capabilities, supported data types, default sync selections, and workflow endpoint paths for client discovery."
-        requiresBearerAuth()
         errorResponses()
     }
     get("/api/v2/providers/status") {
@@ -50,7 +49,6 @@ internal fun Route.providerRoutes() {
         summary = "List provider authentication and account status"
         description =
             "Returns provider configuration, OAuth connection state, available accounts, token status, and the next suggested workflow action."
-        requiresBearerAuth()
         errorResponses()
     }
     get("/api/v2/providers/{providerCode}") {
@@ -65,7 +63,6 @@ internal fun Route.providerRoutes() {
         tag("Providers")
         summary = "Get provider discovery metadata"
         description = "Returns discovery metadata for one provider code."
-        requiresBearerAuth()
         providerCodePath()
         errorResponses(notFound = true)
     }
@@ -83,7 +80,6 @@ internal fun Route.providerRoutes() {
         summary = "Get provider authentication and account status"
         description =
             "Returns configuration, connection, account, and token status for one provider code."
-        requiresBearerAuth()
         providerCodePath()
         errorResponses(notFound = true)
     }
@@ -101,7 +97,6 @@ internal fun Route.providerRoutes() {
         summary = "List provider OAuth accounts"
         description =
             "Returns lifecycle status for OAuth accounts for one provider without exposing stored token material."
-        requiresBearerAuth()
         providerCodePath()
         errorResponses(notFound = true)
     }
@@ -121,7 +116,6 @@ internal fun Route.providerRoutes() {
         summary = "Get provider OAuth account status"
         description =
             "Returns lifecycle status for one OAuth account without exposing stored token material."
-        requiresBearerAuth()
         providerCodePath()
         errorResponses(notFound = true)
     }
@@ -140,7 +134,6 @@ internal fun Route.providerRoutes() {
         summary = "Get scheduled provider sync configuration"
         description =
             "Returns the background sync configuration for one provider account, including cadence, lookback window, selected data types, per-data-type checkpoints, and last success/failure state. Accounts without stored configuration return the disabled defaults."
-        requiresBearerAuth()
         providerCodePath()
         errorResponses(notFound = true)
     }
@@ -161,7 +154,6 @@ internal fun Route.providerRoutes() {
         summary = "Update scheduled provider sync configuration"
         description =
             "Upserts the background sync configuration for one provider account. Omitted fields keep their current (or default) values; enabling the schedule sets the next run to now."
-        requiresBearerAuth()
         providerCodePath()
         jsonRequest<ScheduledSyncConfigUpdateRequest>(
             "Scheduled sync configuration fields to update.",
@@ -184,7 +176,6 @@ internal fun Route.providerRoutes() {
         summary = "Run scheduled provider sync immediately"
         description =
             "Executes the configured scheduled sync for one provider account right away using the stored data types and checkpoints. Returns 409 when scheduled sync is not configured or a run is already in progress."
-        requiresBearerAuth()
         providerCodePath()
         errorResponses(notFound = true, conflict = true, upstream = true)
     }
@@ -204,7 +195,6 @@ internal fun Route.providerRoutes() {
         summary = "Disconnect a provider OAuth account locally"
         description =
             "Clears locally stored OAuth token material and marks the provider account disconnected. This does not revoke tokens upstream."
-        requiresBearerAuth()
         providerCodePath()
         errorResponses(notFound = true, conflict = true)
     }
@@ -224,7 +214,6 @@ internal fun Route.providerRoutes() {
         summary = "Start provider OAuth reconnect flow"
         description =
             "Validates an existing local provider account and starts the provider OAuth flow again for re-consent."
-        requiresBearerAuth()
         providerCodePath()
         errorResponses(notFound = true)
     }
@@ -242,7 +231,6 @@ internal fun Route.providerRoutes() {
         summary = "Start provider OAuth flow"
         description =
             "Creates provider OAuth state and returns the authorization URL clients should open to connect an account. The state expires at the returned `expiresAt` timestamp."
-        requiresBearerAuth()
         providerCodePath()
         errorResponses(notFound = true)
     }
@@ -263,7 +251,6 @@ internal fun Route.providerRoutes() {
         summary = "Start a background provider sync job"
         description =
             "Creates a durable manual provider sync job and returns immediately. The backend processes provider-safe chunks sequentially; clients can poll the job endpoint for progress and final summary after page reloads. Repeating the request with the same Idempotency-Key returns the already-created job instead of starting a new one."
-        requiresBearerAuth()
         providerCodePath()
         idempotencyKeyHeader()
         jsonRequest<ProviderSyncRequest>(
@@ -293,7 +280,6 @@ internal fun Route.providerRoutes() {
         tag("Providers")
         summary = "Get latest provider sync job"
         description = "Returns the latest manual provider sync job for a provider."
-        requiresBearerAuth()
         providerCodePath()
         errorResponses(notFound = true)
     }
@@ -307,7 +293,6 @@ internal fun Route.providerRoutes() {
         summary = "Get provider sync job progress"
         description =
             "Returns progress counters, the current provider-safe window, and the final sync summary when the background job has finished. `terminal` turns true once the job reached a final status. A job that belongs to another provider returns 404."
-        requiresBearerAuth()
         providerCodePath()
         parameters {
             path("jobId") {

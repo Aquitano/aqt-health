@@ -25,10 +25,6 @@ class NotFoundException(
     cause: Throwable? = null,
 ) : RuntimeException(message, cause)
 
-class UnauthorizedException(
-    cause: Throwable? = null,
-) : RuntimeException("Missing or invalid API key", cause)
-
 class ConflictException(
     val code: String,
     message: String,
@@ -60,7 +56,6 @@ fun isRetryableSyncFailure(error: Throwable): Boolean =
     when (error) {
         is RequestValidationException,
         is NotFoundException,
-        is UnauthorizedException,
         is ServerConfigurationException,
         -> false
 

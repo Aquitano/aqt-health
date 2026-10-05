@@ -37,14 +37,14 @@ fun Application.configureErrorHandling() {
                 ),
             )
         }
-        exception<UnauthorizedException> { call, _ ->
+        status(HttpStatusCode.Unauthorized) { call, status ->
             logger.infoWithContext(
                 "request_unauthorized",
                 "errorCode" to "unauthorized",
                 "requestId" to call.requestId(),
             )
             call.respond(
-                HttpStatusCode.Unauthorized,
+                status,
                 ErrorResponse(
                     ErrorBody(
                         code = "unauthorized",

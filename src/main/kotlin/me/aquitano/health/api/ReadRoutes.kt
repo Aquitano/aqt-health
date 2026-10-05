@@ -43,7 +43,6 @@ internal fun Route.readRoutes() {
         summary = "List readable scalar metric types"
         description =
             "Returns every scalar metric type the API can serve, with family, unit, segment support, and allowed context values. Structural metrics (steps, sleep, activity, blood pressure) have dedicated endpoints."
-        requiresBearerAuth()
         errorResponses()
     }
     get("/api/v2/metrics/samples") {
@@ -54,7 +53,6 @@ internal fun Route.readRoutes() {
         summary = "List scalar samples across several metric types"
         description =
             "Returns one canonical (or `raw=true`) sample list for every metric type in `metricTypes`, ordered by `measuredAt` with the same filters, `latest=true` and cursor pagination as the single-type list. Unknown metric types return 400."
-        requiresBearerAuth()
         multiScalarMetricQueryParameters()
         errorResponses()
     }
@@ -71,7 +69,6 @@ internal fun Route.readRoutes() {
         summary = "List scalar samples for one metric type"
         description =
             "Returns canonical (cross-provider deduplicated) samples for the metric type; `raw=true` returns every stored sample instead. Supports `latest=true` for the newest matching sample and opaque `cursor` keyset pagination via `meta.nextCursor`. Unknown metric types return 404."
-        requiresBearerAuth()
         scalarMetricQueryParameters()
         errorResponses(notFound = true)
     }
@@ -88,7 +85,6 @@ internal fun Route.readRoutes() {
         summary = "Summarize scalar samples for one metric type"
         description =
             "Returns count, minimum, maximum, average, and the latest canonical sample for the metric type within the requested timestamp and source filters. Unknown metric types return 404."
-        requiresBearerAuth()
         scalarSummaryQueryParameters()
         errorResponses(notFound = true)
     }
@@ -105,7 +101,6 @@ internal fun Route.readRoutes() {
         summary = "Summarize scalar samples per calendar day"
         description =
             "Returns one count/min/max/avg bucket per calendar day for the metric type within the requested timestamp range, grouped by the `timezone` day boundaries (UTC by default). At least one of `from`/`to` is required to bound the scan. Replaces per-day summary fan-out with a single ranged read. Unknown metric types return 404."
-        requiresBearerAuth()
         scalarDailySummaryQueryParameters()
         errorResponses(notFound = true)
     }
@@ -123,7 +118,6 @@ internal fun Route.readRoutes() {
         summary = "Get modular one-day health data"
         description =
             "Returns only the requested one-day health modules for a local day. The `timezone` parameter defines the local-day UTC boundaries. Normalized data is merged across providers by default; provider and providerInstanceId narrow the source set, and includeSource attaches provider metadata to point-level objects where available."
-        requiresBearerAuth()
         healthDayQueryParameters()
         responses {
             HttpStatusCode.OK {
@@ -224,7 +218,6 @@ internal fun Route.readRoutes() {
         summary = "Get dashboard summary"
         description =
             "Returns aggregate dashboard data for an inclusive local date range in `timezone` (UTC by default), including total steps and latest matching weight, heart-rate, and sleep values."
-        requiresBearerAuth()
         dashboardQueryParameters()
         errorResponses()
     }
@@ -242,7 +235,6 @@ internal fun Route.readRoutes() {
         summary = "Get dashboard trends"
         description =
             "Returns trend comparisons for steps, heart rate, sleep, and weight over a configurable period compared to the preceding period."
-        requiresBearerAuth()
         parameters {
             val periodDays = QueryParamSpecs.periodDays
             query(periodDays.name) {

@@ -2,9 +2,11 @@ package me.aquitano.health.api
 
 import io.ktor.http.*
 import io.ktor.server.application.*
+import io.ktor.server.auth.*
 import io.ktor.server.plugins.callid.*
 import io.ktor.server.plugins.calllogging.*
 import io.ktor.server.request.*
+import me.aquitano.health.infrastructure.repositories.ApiClientRef
 import org.slf4j.event.Level
 import java.util.*
 
@@ -32,15 +34,15 @@ fun Application.configureRequestLogging() {
         }
         mdc("durationMs") { call -> call.processingTimeMillis().toString() }
         mdc("clientId") { call ->
-            call.attributes
-                .getOrNull(ApiClientAttributeKey)
+            call
+                .principal<ApiClientRef>()
                 ?.id
                 ?.toString()
                 .orEmpty()
         }
         mdc("clientName") { call ->
-            call.attributes
-                .getOrNull(ApiClientAttributeKey)
+            call
+                .principal<ApiClientRef>()
                 ?.name
                 .orEmpty()
         }

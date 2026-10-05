@@ -33,7 +33,6 @@ internal fun Route.adminRoutes() {
         summary = "List ingestion batches"
         description =
             "Lists ingestion batches by received timestamp and optional status for administrative inspection."
-        requiresBearerAuth()
         adminQueryParameters()
         errorResponses()
     }
@@ -51,7 +50,6 @@ internal fun Route.adminRoutes() {
         summary = "Get ingestion batch detail"
         description =
             "Returns one ingestion batch with stored record-level detail for audit and debugging."
-        requiresBearerAuth()
         parameters {
             path("id") {
                 description = "Ingestion batch id"
@@ -72,7 +70,6 @@ internal fun Route.adminRoutes() {
         summary = "List failed ingestion batches"
         description =
             "Lists ingestion batches with failure status for administrative inspection."
-        requiresBearerAuth()
         adminQueryParameters()
         errorResponses()
     }
@@ -91,7 +88,6 @@ internal fun Route.adminRoutes() {
         summary = "Replay projections from the raw event log"
         description =
             "Starts a background job that rebuilds metric projections and/or derived tables from stored ingestion records for the requested date range. Replay is idempotent; with wipe=true the affected projection rows are deleted and rewritten, without it the job acts as a verification pass whose counters report how many writes would have been missing. Repeating the request with the same Idempotency-Key returns the already-created job instead of starting a new one."
-        requiresBearerAuth()
         idempotencyKeyHeader()
         jsonRequest<ReplayRequest>(
             "Replay request. scope selects the projections stage, the derived rebuild stage, or both; metricTypes limits the replay to specific record types; omitting the date range replays all stored history.",
@@ -117,7 +113,6 @@ internal fun Route.adminRoutes() {
         tag("Admin")
         summary = "Get latest replay job"
         description = "Returns the most recently created replay job."
-        requiresBearerAuth()
         errorResponses(notFound = true)
     }
     get("/api/v2/admin/replay/{jobId}") {
@@ -129,7 +124,6 @@ internal fun Route.adminRoutes() {
         summary = "Get replay job progress"
         description =
             "Returns progress counters (records replayed, metrics written, duplicates skipped, mapping failures) and the current day item of a replay job."
-        requiresBearerAuth()
         parameters {
             path("jobId") {
                 description = "Replay job id returned by startReplay"
