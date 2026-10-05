@@ -29,18 +29,19 @@ class AdminService(
 ) {
     suspend fun listBatches(params: QueryParams): IngestionBatchesResponse = listBatches(params, statusOverride = null)
 
-    suspend fun listFailures(params: QueryParams): IngestionBatchesResponse = listBatches(params, statusOverride = "failed")
+    suspend fun listFailures(params: QueryParams): IngestionBatchesResponse = listBatches(params, statusOverride = BatchStatus.Failed)
 
     /** [statusOverride] pins the status filter for the failures endpoint; the rest of the
      * filters, paging, and sorting are identical either way. */
     private suspend fun listBatches(
         params: QueryParams,
-        statusOverride: String?,
+        statusOverride: BatchStatus?,
     ): IngestionBatchesResponse {
-        val status = statusOverride ?: params.optional("status")
-        if (status != null && BatchStatus.entries.none { it.stored == status }) {
-            throw RequestValidationException(field = "status", code = ValidationIssueCodes.UnsupportedValue, message = "unsupported batch status")
-        }
+        val status =
+            statusOverride ?: params.optional("status")?.let {
+                BatchStatus.fromStoredOrNull(it)
+                    ?: throw RequestValidationException(field = "status", code = ValidationIssueCodes.UnsupportedValue, message = "unsupported batch status")
+            }
         val from = params.instant("from")
         val to = params.instant("to")
         validateRange(from, to, "from", "to")
@@ -66,7 +67,7 @@ class AdminService(
                                 provider = it.provider,
                                 providerInstanceId = it.providerInstanceId,
                                 batchExternalId = it.batchExternalId,
-                                status = BatchStatus.fromStored(it.status),
+                                status = it.status,
                                 ingestedAt = it.ingestedAt,
                                 receivedAt = it.receivedAt,
                                 processedAt = it.processedAt,
@@ -117,7 +118,7 @@ class AdminService(
             provider = batch.provider,
             providerInstanceId = batch.providerInstanceId,
             batchExternalId = batch.batchExternalId,
-            status = BatchStatus.fromStored(batch.status),
+            status = batch.status,
             ingestedAt = batch.ingestedAt,
             receivedAt = batch.receivedAt,
             processedAt = batch.processedAt,

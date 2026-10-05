@@ -205,9 +205,7 @@ class OAuthProviderSyncStore(
                 providerInstanceId = providerInstanceId,
                 batchExternalId = batchExternalId,
                 now = now,
-            )?.let { batch ->
-                batch.status?.let { ExistingProviderBatch(batch.id, it) }
-            }
+            )?.let { batch -> ExistingProviderBatch(batch.id, batch.status) }
 
     override suspend fun reusableBatchId(
         providerCode: String,

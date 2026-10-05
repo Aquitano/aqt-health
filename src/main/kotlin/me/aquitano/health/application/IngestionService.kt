@@ -144,7 +144,7 @@ class IngestionService(
                 } else if (existingBatch != null) {
                     throw ConflictException(
                         "ingestion_batch_in_progress",
-                        "Batch '${validated.batchExternalId}' already exists with status '${existingBatch.storedStatus}'",
+                        "Batch '${validated.batchExternalId}' already exists with status '${existingBatch.status.stored}'",
                         retryable = true,
                     )
                 }

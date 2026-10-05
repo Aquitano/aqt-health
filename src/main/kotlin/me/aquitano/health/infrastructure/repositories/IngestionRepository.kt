@@ -25,8 +25,7 @@ import java.time.ZoneOffset
 
 data class ExistingBatch(
     val id: Int,
-    val status: BatchStatus?,
-    val storedStatus: String,
+    val status: BatchStatus,
     val batchExternalId: String?,
 )
 
@@ -40,7 +39,7 @@ data class AdminBatchRow(
     val provider: String,
     val providerInstanceId: String,
     val batchExternalId: String?,
-    val status: String,
+    val status: BatchStatus,
     val ingestedAt: String,
     val receivedAt: String,
     val processedAt: String?,
@@ -53,7 +52,7 @@ data class AdminBatchDetailRow(
     val provider: String,
     val providerInstanceId: String,
     val batchExternalId: String?,
-    val status: String,
+    val status: BatchStatus,
     val ingestedAt: String,
     val receivedAt: String,
     val processedAt: String?,
@@ -106,7 +105,7 @@ class IngestionRepository {
             .where {
                 (IngestionBatchesTable.sourceInstanceId eq sourceInstanceId) and
                     (IngestionBatchesTable.syncWindowKey eq windowKey) and
-                    (IngestionBatchesTable.status eq "processed")
+                    (IngestionBatchesTable.status eq BatchStatus.Processed)
             }.orderBy(IngestionBatchesTable.id to SortOrder.DESC)
             .limit(1)
             .singleOrNull()
@@ -169,7 +168,7 @@ class IngestionRepository {
                 it[syncWindowKey] = snapshot?.windowKey
                 it[syncContentHash] = snapshot?.contentHash
                 it[this.sourcePayloadJson] = sourcePayloadJson
-                it[status] = "received"
+                it[status] = BatchStatus.Received
                 it[this.ingestedAt] = ingestedAt.toDbTimestamp()
                 it[this.receivedAt] = receivedAt.toDbTimestamp()
                 it[processedAt] = null
@@ -185,7 +184,7 @@ class IngestionRepository {
     ) {
         IngestionBatchesTable.update({
             (IngestionBatchesTable.id eq batchId) and
-                (IngestionBatchesTable.status eq "failed")
+                (IngestionBatchesTable.status eq BatchStatus.Failed)
         }) {
             it[this.batchExternalId] = "$batchExternalId#failed:$batchId"
             it[updatedAt] = releasedAt.toDbTimestamp()
@@ -219,7 +218,7 @@ class IngestionRepository {
         processedAt: Instant,
     ) {
         IngestionBatchesTable.update({ IngestionBatchesTable.id eq batchId }) {
-            it[status] = "processed"
+            it[status] = BatchStatus.Processed
             it[this.processedAt] = processedAt.toDbTimestamp()
             it[updatedAt] = processedAt.toDbTimestamp()
             it[errorMessage] = null
@@ -232,7 +231,7 @@ class IngestionRepository {
         error: String,
     ) {
         IngestionBatchesTable.update({ IngestionBatchesTable.id eq batchId }) {
-            it[status] = "failed"
+            it[status] = BatchStatus.Failed
             it[processedAt] = null
             it[updatedAt] = failedAt.toDbTimestamp()
             it[errorMessage] = error.take(2000)
@@ -251,7 +250,7 @@ class IngestionRepository {
     }
 
     fun listBatches(
-        status: String?,
+        status: BatchStatus?,
         from: Instant?,
         to: Instant?,
         limit: Int,
@@ -356,7 +355,7 @@ class IngestionRepository {
         val maxStart = IngestionRecordsTable.recordStartAt.max()
         val conditions =
             mutableListOf<Op<Boolean>>(
-                IngestionBatchesTable.status eq "processed",
+                IngestionBatchesTable.status eq BatchStatus.Processed,
             )
         recordTypes?.let { conditions.add(IngestionRecordsTable.recordType inList it) }
         return IngestionRecordsTable
@@ -415,7 +414,7 @@ class IngestionRepository {
     ): Op<Boolean> {
         val conditions =
             mutableListOf<Op<Boolean>>(
-                IngestionBatchesTable.status eq "processed",
+                IngestionBatchesTable.status eq BatchStatus.Processed,
                 IngestionRecordsTable.recordStartAt greaterEq dayStart.toDbTimestamp(),
                 IngestionRecordsTable.recordStartAt less dayEnd.toDbTimestamp(),
             )
@@ -438,8 +437,7 @@ class IngestionRepository {
     private fun toExistingBatch(row: ResultRow): ExistingBatch =
         ExistingBatch(
             id = row[IngestionBatchesTable.id].value,
-            status = BatchStatus.fromStoredOrNull(row[IngestionBatchesTable.status]),
-            storedStatus = row[IngestionBatchesTable.status],
+            status = row[IngestionBatchesTable.status],
             batchExternalId = row[IngestionBatchesTable.batchExternalId],
         )
 }
