@@ -75,6 +75,25 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
         }
 
     @Test
+    fun healthDayWeightComparesAgainstTheMostRecentEarlierMeasurement() =
+        testApplication {
+            configureTestApplication()
+            listOf("2026-04-18" to 80.0, "2026-04-19" to 81.0, "2026-04-20" to 81.5).forEach { (date, kg) ->
+                val response =
+                    client.post("/api/v2/ingestion/batches") {
+                        authorized()
+                        contentType(ContentType.Application.Json)
+                        setBody("""{"provider":"withings","providerInstanceId":"withings","batchExternalId":"$date","ingestedAt":"${date}T10:00:00Z","sourcePayload":{},"records":[{"type":"scalar","metricType":"weight","measuredAt":"${date}T08:00:00Z","value":$kg}]}""")
+                    }
+                assertEquals(HttpStatusCode.Created, response.status)
+            }
+            val weight =
+                authorizedGet("/api/v2/health/day?date=2026-04-20&timezone=UTC&modules=weight").jsonBody()["weight"]!!.jsonObject
+            assertEquals(81.0, weight["previous"]!!.jsonObject["value"]!!.jsonPrimitive.double)
+            assertEquals(0.5, weight["delta"]!!.jsonPrimitive.double)
+        }
+
+    @Test
     fun canonicalStepTotalsAgreeAcrossEndpointsAndPreserveMidnightRemainders() =
         testApplication {
             configureTestApplication()
