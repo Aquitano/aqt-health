@@ -86,7 +86,7 @@ internal fun Route.providerRoutes() {
     get("/api/v2/providers/{providerCode}/accounts") {
         val code = call.providerCode()
         call.respond<ProviderAccountListResponse>(
-            providerWorkflowService.listAccounts(
+            providerStatusService.listAccounts(
                 code,
                 clock.instant(),
             ),
@@ -104,7 +104,7 @@ internal fun Route.providerRoutes() {
         val code = call.providerCode()
         val providerInstanceId = call.requiredPathParam("providerInstanceId")
         call.respond<ProviderAccountStatusResponse>(
-            providerWorkflowService.getAccount(
+            providerStatusService.getAccountStatus(
                 code,
                 providerInstanceId,
                 clock.instant(),

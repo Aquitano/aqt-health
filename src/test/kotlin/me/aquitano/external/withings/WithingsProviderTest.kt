@@ -6,7 +6,6 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import me.aquitano.health.application.HealthProviderRegistry
-import me.aquitano.health.application.ProviderStatusService
 import me.aquitano.health.application.ProviderWorkflowService
 import me.aquitano.health.domain.ConflictException
 import me.aquitano.health.domain.ProviderSyncRequest
@@ -591,16 +590,10 @@ class WithingsProviderTest : PostgresIntegrationTest() {
                     ),
             )
         private val providerRegistry = HealthProviderRegistry(listOf(provider))
-        val providerStatusService =
-            ProviderStatusService(
-                providerRegistry = providerRegistry,
-                providerOAuthRepository = providerRepository,
-            )
         val providerWorkflowService =
             ProviderWorkflowService(
                 providerRegistry = providerRegistry,
                 providerOAuthRepository = providerRepository,
-                providerStatusService = providerStatusService,
                 scheduledSyncRepository = ScheduledSyncRepository(database),
             )
 

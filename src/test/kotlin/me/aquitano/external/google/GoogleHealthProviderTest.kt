@@ -3,7 +3,6 @@ package me.aquitano.external.google
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.*
 import me.aquitano.health.application.HealthProviderRegistry
-import me.aquitano.health.application.ProviderStatusService
 import me.aquitano.health.application.ProviderWorkflowService
 import me.aquitano.health.application.providersync.RefreshedTokenSet
 import me.aquitano.health.domain.ConflictException
@@ -510,16 +509,10 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
                     ),
             )
         private val providerRegistry = HealthProviderRegistry(listOf(provider))
-        val providerStatusService =
-            ProviderStatusService(
-                providerRegistry = providerRegistry,
-                providerOAuthRepository = providerRepository,
-            )
         val providerWorkflowService =
             ProviderWorkflowService(
                 providerRegistry = providerRegistry,
                 providerOAuthRepository = providerRepository,
-                providerStatusService = providerStatusService,
                 scheduledSyncRepository = ScheduledSyncRepository(database),
             )
 

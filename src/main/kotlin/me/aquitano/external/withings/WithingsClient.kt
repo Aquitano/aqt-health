@@ -14,7 +14,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
 
-interface WithingsOAuthClient {
+interface WithingsClient {
     suspend fun exchangeCode(
         code: String,
         now: Instant,
@@ -24,9 +24,7 @@ interface WithingsOAuthClient {
         refreshToken: String,
         now: Instant,
     ): WithingsTokenSet
-}
 
-interface WithingsClient : WithingsOAuthClient {
     suspend fun fetchMeasures(
         accessToken: String,
         from: Instant,

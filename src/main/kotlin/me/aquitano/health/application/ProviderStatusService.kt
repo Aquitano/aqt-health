@@ -1,6 +1,7 @@
 package me.aquitano.health.application
 
 import me.aquitano.health.api.dto.ProviderAccountLifecycleStatus
+import me.aquitano.health.api.dto.ProviderAccountListResponse
 import me.aquitano.health.api.dto.ProviderAccountStatusResponse
 import me.aquitano.health.api.dto.ProviderNextAction
 import me.aquitano.health.api.dto.ProviderStatusCatalogResponse
@@ -37,17 +38,21 @@ class ProviderStatusService(
             ?.toStatusDto(now)
             ?: throw NotFoundException("Provider '$providerCode' not found")
 
-    suspend fun listAccountStatuses(
+    suspend fun listAccounts(
         providerCode: String,
         now: Instant,
-    ): List<ProviderAccountStatusResponse> {
+    ): ProviderAccountListResponse {
         val provider =
             providerRegistry.getProvider(providerCode)
                 ?: throw NotFoundException("Provider '$providerCode' not found")
-        val normalizedCode = normalizeProviderCode(providerCode)
-        return providerOAuthRepository
-            .accountsByProvider(normalizedCode)
-            .map { it.toStatusDto(now, configured = provider.isConfigured()) }
+        val configured = provider.isConfigured()
+        return ProviderAccountListResponse(
+            provider = provider.descriptor.providerCode,
+            accounts =
+                providerOAuthRepository
+                    .accountsByProvider(normalizeProviderCode(providerCode))
+                    .map { it.toStatusDto(now, configured) },
+        )
     }
 
     suspend fun getAccountStatus(

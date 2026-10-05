@@ -221,7 +221,6 @@ class ProviderSyncJobServiceTest : PostgresIntegrationTest() {
             ProviderWorkflowService(
                 providerRegistry = registry,
                 providerOAuthRepository = oAuthRepository,
-                providerStatusService = ProviderStatusService(registry, oAuthRepository),
                 scheduledSyncRepository = ScheduledSyncRepository(database),
             )
         val service =
