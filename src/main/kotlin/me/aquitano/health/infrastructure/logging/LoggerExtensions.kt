@@ -8,7 +8,7 @@ fun KLogger.infoWithContext(
     context: Map<String, Any?>,
 ) {
     withLoggingContext(context.mapValues { it.value?.toString() }) {
-        info { "$message ${context.entries.joinToString(" ") { "${it.key}=${it.value}" }}" }
+        info { context.describe(message) }
     }
 }
 
@@ -25,11 +25,7 @@ fun KLogger.warnWithContext(
     throwable: Throwable? = null,
 ) {
     withLoggingContext(context.mapValues { it.value?.toString() }) {
-        if (throwable != null) {
-            warn(throwable) { "$message ${context.entries.joinToString(" ") { "${it.key}=${it.value}" }}" }
-        } else {
-            warn { "$message ${context.entries.joinToString(" ") { "${it.key}=${it.value}" }}" }
-        }
+        warn(throwable) { context.describe(message) }
     }
 }
 
@@ -47,11 +43,7 @@ fun KLogger.errorWithContext(
     throwable: Throwable? = null,
 ) {
     withLoggingContext(context.mapValues { it.value?.toString() }) {
-        if (throwable != null) {
-            error(throwable) { "$message ${context.entries.joinToString(" ") { "${it.key}=${it.value}" }}" }
-        } else {
-            error { "$message ${context.entries.joinToString(" ") { "${it.key}=${it.value}" }}" }
-        }
+        error(throwable) { context.describe(message) }
     }
 }
 
@@ -62,3 +54,5 @@ fun KLogger.errorWithContext(
 ) {
     errorWithContext(message, pairs.toMap(), throwable)
 }
+
+private fun Map<String, Any?>.describe(message: String): String = "$message ${entries.joinToString(" ") { "${it.key}=${it.value}" }}"

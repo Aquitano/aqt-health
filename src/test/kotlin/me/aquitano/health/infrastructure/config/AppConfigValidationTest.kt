@@ -76,7 +76,6 @@ class AppConfigValidationTest {
             googleHealth = providerConfig("https://api.aqt-health.app/api/v2/providers/google-health/oauth/callback"),
             withings = providerConfig("https://api.aqt-health.app/api/v2/providers/withings/oauth/callback"),
             ingestion = IngestionConfig(maxBodyBytes = maxBodyBytes),
-            openObserve = OpenObserveConfig(url = "", org = "", user = "", password = ""),
         )
 
     private fun providerConfig(redirectUri: String): ProviderOAuthConfig =

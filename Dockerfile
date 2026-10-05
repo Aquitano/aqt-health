@@ -30,17 +30,11 @@ WORKDIR /app
 
 COPY --from=builder /app/build/libs/*-all.jar app.jar
 
-# File logging is off unless AQT_HEALTH_LOG_APPENDER selects it; keep a directory
-# appuser can write to so turning it on needs no image change.
-RUN mkdir logs && chown appuser:appgroup logs
-
 USER appuser
 
 EXPOSE 8080
 
-ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0" \
-    AQT_HEALTH_LOG_FILE="/app/logs/aqt-health.jsonl" \
-    AQT_HEALTH_LOG_FILE_ROLLOVER="/app/logs/aqt-health.%d{yyyy-MM-dd}.%i.jsonl.gz"
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0"
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
   CMD curl -fsS http://127.0.0.1:8080/api/v2/admin/health || exit 1

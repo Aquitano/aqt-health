@@ -97,11 +97,8 @@ Environment variables:
 - `AQT_HEALTH_WITHINGS_OAUTH_TOKEN_URL`: Withings OAuth token URL, default `https://wbsapi.withings.net/v2/oauth2`
 - `AQT_HEALTH_WITHINGS_OAUTH_AUTH_URL`: Withings OAuth authorization URL, default `https://account.withings.com/oauth2_user/authorize2`
 - `AQT_HEALTH_LOG_FORMAT`: stdout log format, `text` by default or `json` for production JSON lines
-- `AQT_HEALTH_LOG_FILE`: JSON lines log file for local inspection, default `build/logs/aqt-health.jsonl`
-- `AQT_HEALTH_LOG_FILE_ROLLOVER`: rolling JSON log archive pattern, default `build/logs/aqt-health.%d{yyyy-MM-dd}.%i.jsonl.gz`
-- `OPENOBSERVE_LOG_URL`: optional OpenObserve HTTP ingestion endpoint for direct app log delivery
-- `OPENOBSERVE_AUTHORIZATION`: optional full OpenObserve authorization header value, for example `Basic ...`
-- `OPENOBSERVE_URL`, `OPENOBSERVE_ORG`, `OPENOBSERVE_USER`, `OPENOBSERVE_PASSWORD`: optional OpenObserve Prometheus remote-write target for the metrics pusher; `OPENOBSERVE_ORG` is not needed when the URL already contains the full `/prometheus/api/v1/write` path
+- `OTEL_EXPORTER_OTLP_ENDPOINT`: optional OTLP/HTTP endpoint; when set, metrics and logs are exported there (see [Telemetry](#telemetry))
+- `OTEL_EXPORTER_OTLP_HEADERS`, `OTEL_RESOURCE_ATTRIBUTES` and the other standard `OTEL_*` variables: exporter headers, resource attributes and overrides
 
 If `AQT_HEALTH_BOOTSTRAP_API_KEY` is set, the app hashes it with SHA-256 and stores only `sha256:<hex>` in `api_clients`. If it is blank, startup still succeeds, but protected endpoints require a client row to exist in PostgreSQL.
 
@@ -152,42 +149,19 @@ sh scripts/secrets.sh push backend dev
 
 Replace `dev` with the required environment. Pulls replace the corresponding local `.env` atomically and refuse empty exports. Pushes require confirmation. The diff command prints secret values, so keep its output out of shared logs. Deployment uses this repository's Compose files; the script does not contact the VPS.
 
-## OpenObserve Logs
+## Telemetry
 
-Application logs stay on the normal Logback stdout path. The app also writes JSON lines to `AQT_HEALTH_LOG_FILE` for local inspection and posts logs directly to OpenObserve when `OPENOBSERVE_LOG_URL` and `OPENOBSERVE_AUTHORIZATION` are set.
+Logs always go to stdout, as readable text by default or JSON lines with `AQT_HEALTH_LOG_FORMAT=json`.
 
-Local stdout logs default to readable text. Production can use JSON lines on stdout:
+Setting `OTEL_EXPORTER_OTLP_ENDPOINT` also exports HTTP server metrics and every log event over OTLP/HTTP through the OpenTelemetry SDK. The SDK reads the standard `OTEL_*` environment variables; the app only defaults the service name to `aqt-health`, the protocol to `http/protobuf` and traces to off. For OpenObserve:
 
-```powershell
-$env:AQT_HEALTH_LOG_FORMAT = "json"
+```sh
+OTEL_EXPORTER_OTLP_ENDPOINT=https://openobserve.example.com/api/<organization>
+OTEL_EXPORTER_OTLP_HEADERS=Authorization=Basic%20<base64 user:password>
+OTEL_RESOURCE_ATTRIBUTES=deployment.environment.name=production
 ```
 
-With the default local path, IntelliJ and Gradle runs write JSONL logs to:
-
-```text
-build/logs/aqt-health.jsonl
-```
-
-Set the OpenObserve environment variables before starting the app:
-
-```powershell
-$env:OPENOBSERVE_LOG_URL = "https://openobserve.example.com/api/<organization>/<stream>/_json"
-$env:OPENOBSERVE_AUTHORIZATION = "Basic replace-with-rotated-openobserve-token"
-$env:AQT_HEALTH_ENV = "local"
-$env:AQT_HEALTH_LOG_FILE = "build/logs/aqt-health.jsonl"
-```
-
-Start the app from IntelliJ or Gradle:
-
-```powershell
-.\gradlew.bat run
-```
-
-The app sends each log event asynchronously as a one-record JSON batch to the OpenObserve `_json` endpoint. If either OpenObserve environment variable is blank, direct delivery is disabled and local stdout/file logging still works.
-
-Do not hardcode the `Authorization` header in committed files; rotate any OpenObserve credential that has been pasted into chat, issue trackers, shell history, or logs.
-
-For production, either keep direct OpenObserve delivery enabled with deployment secrets or route stdout/JSONL logs through a platform collector.
+Keep the `Authorization` value in deployment secrets, and rotate any OpenObserve credential that has been pasted into chat, issue trackers, shell history, or logs.
 
 ## Frontend Proxy
 

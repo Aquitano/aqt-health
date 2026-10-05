@@ -10,7 +10,6 @@ data class AppConfig(
     val googleHealth: ProviderOAuthConfig,
     val withings: ProviderOAuthConfig,
     val ingestion: IngestionConfig,
-    val openObserve: OpenObserveConfig,
 )
 
 enum class RuntimeEnvironment {
@@ -30,13 +29,6 @@ enum class RuntimeEnvironment {
             }
     }
 }
-
-data class OpenObserveConfig(
-    val url: String,
-    val org: String,
-    val user: String,
-    val password: String,
-)
 
 data class IngestionConfig(
     val maxBodyBytes: Long,
@@ -120,13 +112,6 @@ fun ApplicationConfig.toAppConfig(): AppConfig =
         ingestion =
             IngestionConfig(
                 maxBodyBytes = optional("aqtHealth.ingestion.maxBodyBytes", "33554432").toLong(),
-            ),
-        openObserve =
-            OpenObserveConfig(
-                url = optional("aqtHealth.openObserve.url"),
-                org = optional("aqtHealth.openObserve.org"),
-                user = optional("aqtHealth.openObserve.user"),
-                password = optional("aqtHealth.openObserve.password"),
             ),
     ).also { it.validateForStartup() }
 

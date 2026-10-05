@@ -30,18 +30,6 @@ class ApplicationTest : PostgresIntegrationTest() {
         }
 
     @Test
-    fun metricsEndpointRequiresApiKeyAndReturnsRegistryScrape() =
-        testApplication {
-            configureTestApplication()
-
-            assertEquals(HttpStatusCode.Unauthorized, client.get("/metrics").status)
-
-            val response = client.get("/metrics") { authorized() }
-            assertEquals(HttpStatusCode.OK, response.status)
-            assertTrue(response.bodyAsText().isNotBlank())
-        }
-
-    @Test
     fun requestIdIsEchoedFromHeaderOrGeneratedWhenAbsent() =
         testApplication {
             configureTestApplication()
