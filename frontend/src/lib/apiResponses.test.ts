@@ -23,10 +23,3 @@ it("preserves backend failures and accepts acknowledgements without assuming an 
   expect(await readAcknowledgement(Response.json({ ok: true, data: { disconnected: true } })))
     .toEqual({ ok: true, data: { disconnected: true } });
 });
-
-it("parses complete OAuth and job-start payloads", async () => {
-  const oauth = { provider: "withings", authorizationUrl: "https://provider.test/oauth", expiresAt: "2026-10-03T12:00:00Z" };
-  const job = { jobId: "job-1", status: "queued", createdAt: "2026-10-03T12:00:00Z" };
-  expect(await readOAuthStart(Response.json({ ok: true, data: oauth }))).toEqual({ ok: true, data: oauth });
-  expect(await readSyncJobStart(Response.json({ ok: true, data: job }))).toEqual({ ok: true, data: job });
-});

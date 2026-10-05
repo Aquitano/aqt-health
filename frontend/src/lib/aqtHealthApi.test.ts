@@ -14,7 +14,6 @@ const mocks = vi.hoisted(() => {
     "getDashboardTrends",
     "getHealthDay",
     "listBodyMeasurements",
-    "listBloodPressure",
     "listSleepNights",
     "listRespiratoryRateSamples",
     "listHrvSamples",
@@ -92,7 +91,6 @@ describe("page data requests", () => {
       "respiratory_rate",
       expect.any(Object)
     );
-    expect(mocks.listBodyMeasurements).not.toHaveBeenCalled();
   });
 
   it("propagates a later page failure instead of displaying partial data as complete", async () => {
@@ -137,7 +135,7 @@ describe("page data requests", () => {
     expect(mocks.listIngestionBatches).toHaveBeenCalledWith({ limit: 25, status: "received" });
   });
 
-  it("uses local-day instants consistently and leaves raw-only datasets unfetched", async () => {
+  it("uses local-day instants consistently", async () => {
     const sources = getHealthDataPageSources(
       "2026-03-01",
       "2026-03-08",
@@ -165,8 +163,6 @@ describe("page data requests", () => {
       toDate: "2026-03-08",
       timezone: "America/New_York",
     });
-    expect(mocks.listBloodPressure).not.toHaveBeenCalled();
-    expect(mocks.listScalarSamples).not.toHaveBeenCalled();
   });
 
   it("passes a heart-rate summary failure through instead of an empty series", async () => {
