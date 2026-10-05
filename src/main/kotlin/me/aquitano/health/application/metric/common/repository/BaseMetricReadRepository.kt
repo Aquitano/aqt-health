@@ -240,16 +240,7 @@ abstract class BaseMetricReadRepository {
         }
     }
 
-    private fun invalidCursor(): RequestValidationException =
-        RequestValidationException(
-            listOf(
-                ValidationIssue(
-                    field = "cursor",
-                    code = ValidationIssueCodes.InvalidFormat,
-                    message = "is not a valid cursor",
-                ),
-            ),
-        )
+    private fun invalidCursor(): RequestValidationException = RequestValidationException(field = "cursor", code = ValidationIssueCodes.InvalidFormat, message = "is not a valid cursor")
 
     /**
      * Converts a string order ("asc" / "desc") into an Exposed [SortOrder].

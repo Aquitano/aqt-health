@@ -300,15 +300,7 @@ class IngestionRepository {
             runCatching {
                 Instant.parse(cursor.sortValue).atOffset(ZoneOffset.UTC)
             }.getOrElse {
-                throw RequestValidationException(
-                    listOf(
-                        ValidationIssue(
-                            field = "cursor",
-                            code = ValidationIssueCodes.InvalidFormat,
-                            message = "is not a valid cursor",
-                        ),
-                    ),
-                )
+                throw RequestValidationException(field = "cursor", code = ValidationIssueCodes.InvalidFormat, message = "is not a valid cursor")
             }
         val sortValue = LiteralOp(IngestionBatchesTable.receivedAt.columnType, receivedAt)
         val idValue = intParam(cursor.lastId.toInt())

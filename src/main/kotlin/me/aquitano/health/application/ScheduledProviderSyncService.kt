@@ -325,9 +325,7 @@ class ScheduledProviderSyncService(
         max: Int,
     ): Int {
         if (value < min || value > max) {
-            throw RequestValidationException(
-                listOf(ValidationIssue(field, ValidationIssueCodes.OutOfRange, "must be between $min and $max")),
-            )
+            throw RequestValidationException(field, ValidationIssueCodes.OutOfRange, "must be between $min and $max")
         }
         return value
     }

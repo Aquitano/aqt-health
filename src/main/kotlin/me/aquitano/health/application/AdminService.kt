@@ -39,15 +39,7 @@ class AdminService(
     ): IngestionBatchesResponse {
         val status = statusOverride ?: params.optional("status")
         if (status != null && BatchStatus.entries.none { it.stored == status }) {
-            throw RequestValidationException(
-                listOf(
-                    ValidationIssue(
-                        field = "status",
-                        code = ValidationIssueCodes.UnsupportedValue,
-                        message = "unsupported batch status",
-                    ),
-                ),
-            )
+            throw RequestValidationException(field = "status", code = ValidationIssueCodes.UnsupportedValue, message = "unsupported batch status")
         }
         val from = params.instant("from")
         val to = params.instant("to")
@@ -100,15 +92,7 @@ class AdminService(
     ): IngestionBatchDetailResponse {
         val batchId = batchIdValue?.toIntOrNull()
         if (batchId == null || batchId <= 0) {
-            throw RequestValidationException(
-                listOf(
-                    ValidationIssue(
-                        field = "id",
-                        code = ValidationIssueCodes.InvalidFormat,
-                        message = "must be a positive integer",
-                    ),
-                ),
-            )
+            throw RequestValidationException(field = "id", code = ValidationIssueCodes.InvalidFormat, message = "must be a positive integer")
         }
         val includeSourcePayload =
             params.boolean("includeSourcePayload", default = false)

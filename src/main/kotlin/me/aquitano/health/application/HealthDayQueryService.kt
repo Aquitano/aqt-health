@@ -75,15 +75,7 @@ class HealthDayQueryService(
         val timezone = params.timezone()
         val date =
             params.dateOrToday("date", now, timezone)
-                ?: throw RequestValidationException(
-                    listOf(
-                        ValidationIssue(
-                            field = "date",
-                            code = ValidationIssueCodes.Required,
-                            message = "is required",
-                        ),
-                    ),
-                )
+                ?: throw RequestValidationException(field = "date", code = ValidationIssueCodes.Required, message = "is required")
         val moduleNames = parseModules(params.required("modules"))
         val modules = registry.resolve(moduleNames)
         val from = date.atStartOfDay(timezone).toInstant()
@@ -126,15 +118,7 @@ class HealthDayQueryService(
                 .filter { it.isNotEmpty() }
                 .distinct()
         if (modules.isEmpty()) {
-            throw RequestValidationException(
-                listOf(
-                    ValidationIssue(
-                        field = "modules",
-                        code = ValidationIssueCodes.Required,
-                        message = "must contain at least one module",
-                    ),
-                ),
-            )
+            throw RequestValidationException(field = "modules", code = ValidationIssueCodes.Required, message = "must contain at least one module")
         }
         val unsupported = modules.filter { HealthDayModuleName.fromWireName(it) == null }
         if (unsupported.isNotEmpty()) {

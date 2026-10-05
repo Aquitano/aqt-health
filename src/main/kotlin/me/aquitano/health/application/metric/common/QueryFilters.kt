@@ -85,15 +85,7 @@ internal fun QueryParams.sleepNightReadFilters(now: Instant): ReadFilters {
     val timezone = timezone()
     val exactDate = dateOrToday("date", now, timezone)
     if (exactDate != null && (optional("fromDate") != null || optional("toDate") != null)) {
-        throw RequestValidationException(
-            listOf(
-                ValidationIssue(
-                    field = "date",
-                    code = ValidationIssueCodes.InvalidState,
-                    message = "cannot be combined with fromDate or toDate",
-                ),
-            ),
-        )
+        throw RequestValidationException(field = "date", code = ValidationIssueCodes.InvalidState, message = "cannot be combined with fromDate or toDate")
     }
     val fromDate = exactDate ?: date("fromDate")
     val toDate = exactDate ?: date("toDate")
@@ -118,15 +110,7 @@ private fun QueryParams.dailyDateRange(
 ): Pair<LocalDate?, LocalDate?> {
     val exactDate = dateOrToday("date", now, timezone)
     if (exactDate != null && (optional("fromDate") != null || optional("toDate") != null)) {
-        throw RequestValidationException(
-            listOf(
-                ValidationIssue(
-                    field = "date",
-                    code = ValidationIssueCodes.InvalidState,
-                    message = "cannot be combined with fromDate or toDate",
-                ),
-            ),
-        )
+        throw RequestValidationException(field = "date", code = ValidationIssueCodes.InvalidState, message = "cannot be combined with fromDate or toDate")
     }
     val fromDate = exactDate ?: date("fromDate")
     val toDate = exactDate ?: date("toDate")
@@ -141,15 +125,7 @@ internal fun validateRange(
     toField: String,
 ) {
     if (from != null && to != null && !from.isBefore(to)) {
-        throw RequestValidationException(
-            listOf(
-                ValidationIssue(
-                    field = fromField,
-                    code = ValidationIssueCodes.InvalidRange,
-                    message = "must be before $toField",
-                ),
-            ),
-        )
+        throw RequestValidationException(field = fromField, code = ValidationIssueCodes.InvalidRange, message = "must be before $toField")
     }
 }
 
@@ -158,15 +134,7 @@ internal fun validateDateRange(
     toDate: LocalDate?,
 ) {
     if (fromDate != null && toDate != null && fromDate.isAfter(toDate)) {
-        throw RequestValidationException(
-            listOf(
-                ValidationIssue(
-                    field = "fromDate",
-                    code = ValidationIssueCodes.InvalidRange,
-                    message = "must be on or before toDate",
-                ),
-            ),
-        )
+        throw RequestValidationException(field = "fromDate", code = ValidationIssueCodes.InvalidRange, message = "must be on or before toDate")
     }
 }
 

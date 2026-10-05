@@ -18,7 +18,9 @@ object ValidationIssueCodes {
 class RequestValidationException(
     val issues: List<ValidationIssue>,
     cause: Throwable? = null,
-) : RuntimeException("Request validation failed", cause)
+) : RuntimeException("Request validation failed", cause) {
+    constructor(field: String, code: String, message: String) : this(listOf(ValidationIssue(field, code, message)))
+}
 
 class NotFoundException(
     message: String,

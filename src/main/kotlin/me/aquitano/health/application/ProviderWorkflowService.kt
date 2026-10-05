@@ -73,15 +73,7 @@ class ProviderWorkflowService(
                 "provider" to provider.providerCode,
                 "error" to error,
             )
-            throw RequestValidationException(
-                listOf(
-                    ValidationIssue(
-                        field = "error",
-                        code = ValidationIssueCodes.InvalidState,
-                        message = error,
-                    ),
-                ),
-            )
+            throw RequestValidationException(field = "error", code = ValidationIssueCodes.InvalidState, message = error)
         }
 
         val authCode = code?.takeIf { it.isNotBlank() }
@@ -103,9 +95,7 @@ class ProviderWorkflowService(
                 ProviderOAuthStateConsumeResult.NotFound -> "is invalid"
             }
         if (stateError != null) {
-            throw RequestValidationException(
-                listOf(ValidationIssue("state", ValidationIssueCodes.InvalidState, stateError)),
-            )
+            throw RequestValidationException("state", ValidationIssueCodes.InvalidState, stateError)
         }
 
         val connection = provider.connect(authCode, now)

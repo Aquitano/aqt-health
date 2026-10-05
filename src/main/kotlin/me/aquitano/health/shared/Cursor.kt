@@ -42,26 +42,10 @@ data class Cursor(
                     val json = String(Base64.getUrlDecoder().decode(value), Charsets.UTF_8)
                     AppJson.decodeFromString(serializer(), json)
                 }.getOrElse {
-                    throw RequestValidationException(
-                        listOf(
-                            ValidationIssue(
-                                field = "cursor",
-                                code = ValidationIssueCodes.InvalidFormat,
-                                message = "is not a valid cursor",
-                            ),
-                        ),
-                    )
+                    throw RequestValidationException(field = "cursor", code = ValidationIssueCodes.InvalidFormat, message = "is not a valid cursor")
                 }
             if (cursor.order != expectedOrder) {
-                throw RequestValidationException(
-                    listOf(
-                        ValidationIssue(
-                            field = "cursor",
-                            code = ValidationIssueCodes.InvalidState,
-                            message = "was issued for order=${cursor.order} and cannot be used with this request",
-                        ),
-                    ),
-                )
+                throw RequestValidationException(field = "cursor", code = ValidationIssueCodes.InvalidState, message = "was issued for order=${cursor.order} and cannot be used with this request")
             }
             return cursor
         }

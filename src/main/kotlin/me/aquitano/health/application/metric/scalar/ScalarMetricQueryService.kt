@@ -76,18 +76,14 @@ class ScalarMetricQueryService(
         val unknown = metricTypes.filter { ScalarMetricRegistry.find(it) == null }
         if (metricTypes.isEmpty() || unknown.isNotEmpty()) {
             throw RequestValidationException(
-                listOf(
-                    ValidationIssue(
-                        field = "metricTypes",
-                        code = ValidationIssueCodes.UnsupportedValue,
-                        message =
-                            if (unknown.isEmpty()) {
-                                "must contain at least one metric type"
-                            } else {
-                                "unknown metric types ${unknown.joinToString(", ")}"
-                            },
-                    ),
-                ),
+                field = "metricTypes",
+                code = ValidationIssueCodes.UnsupportedValue,
+                message =
+                    if (unknown.isEmpty()) {
+                        "must contain at least one metric type"
+                    } else {
+                        "unknown metric types ${unknown.joinToString(", ")}"
+                    },
             )
         }
         return metricTypes
@@ -122,15 +118,7 @@ class ScalarMetricQueryService(
         return suspendDbTransaction(db = database) {
             val filters = params.summaryFilters()
             if (filters.from == null && filters.to == null) {
-                throw RequestValidationException(
-                    listOf(
-                        ValidationIssue(
-                            field = "from",
-                            code = ValidationIssueCodes.Required,
-                            message = "at least one of from or to is required",
-                        ),
-                    ),
-                )
+                throw RequestValidationException(field = "from", code = ValidationIssueCodes.Required, message = "at least one of from or to is required")
             }
             val zone = params.timezone()
             val items =

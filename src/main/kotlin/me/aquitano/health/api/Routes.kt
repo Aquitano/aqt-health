@@ -204,9 +204,7 @@ internal fun ApplicationCall.requiredPathParam(
 ): String {
     val value = parameters[name]
     if (value.isNullOrBlank()) {
-        throw RequestValidationException(
-            listOf(ValidationIssue(field = name, code = code, message = message)),
-        )
+        throw RequestValidationException(field = name, code = code, message = message)
     }
     return value
 }
