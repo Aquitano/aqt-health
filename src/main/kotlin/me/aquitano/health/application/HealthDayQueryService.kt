@@ -6,7 +6,6 @@ import me.aquitano.health.application.metric.common.repository.ReadFilters
 import me.aquitano.health.application.metric.common.singleSource
 import me.aquitano.health.application.metric.common.toResponse
 import me.aquitano.health.application.metric.scalar.ScalarSampleReadRepository
-import me.aquitano.health.application.metric.scalar.ScalarSampleRow
 import me.aquitano.health.application.metric.scalar.toScalarResponse
 import me.aquitano.health.application.metric.sleep.repository.SleepRepository
 import me.aquitano.health.application.metric.steps.derived.CANONICAL_STEP_ALGORITHM_VERSION
@@ -18,13 +17,15 @@ import me.aquitano.health.domain.ValidationIssue
 import me.aquitano.health.domain.ValidationIssueCodes
 import me.aquitano.health.infrastructure.database.suspendDbTransaction
 import org.jetbrains.exposed.v1.jdbc.Database
+import java.math.BigDecimal
+import java.math.RoundingMode
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.math.roundToInt
 
-data class HealthDayQueryContext(
+private data class HealthDayQueryContext(
     val date: LocalDate,
     val timezone: ZoneId,
     val from: Instant,
@@ -32,41 +33,13 @@ data class HealthDayQueryContext(
     val provider: String?,
     val providerInstanceId: String?,
     val includeSource: Boolean,
-    val computedAt: Instant,
 )
-
-interface HealthDayModule<T> {
-    val name: HealthDayModuleName
-
-    suspend fun read(context: HealthDayQueryContext): T
-
-    fun apply(
-        response: HealthDayResponse,
-        result: T,
-    ): HealthDayResponse
-
-    suspend fun appendTo(
-        context: HealthDayQueryContext,
-        response: HealthDayResponse,
-    ): HealthDayResponse = apply(response, read(context))
-}
-
-class HealthDayModuleRegistry(
-    modules: List<HealthDayModule<*>>,
-) {
-    private val byName = modules.associateBy { it.name }
-
-    init {
-        require(byName.size == modules.size) { "Duplicate health-day modules" }
-        require(byName.keys == HealthDayModuleName.entries.toSet()) { "Missing health-day modules" }
-    }
-
-    fun resolve(names: List<HealthDayModuleName>): List<HealthDayModule<*>> = names.map { byName.getValue(it) }
-}
 
 class HealthDayQueryService(
     private val database: Database,
-    private val registry: HealthDayModuleRegistry,
+    private val canonicalStepRepository: CanonicalStepDerivationRepository,
+    private val scalarRepository: ScalarSampleReadRepository,
+    private val sleepRepository: SleepRepository,
 ) {
     suspend fun getHealthDay(
         params: QueryParams,
@@ -76,8 +49,7 @@ class HealthDayQueryService(
         val date =
             params.dateOrToday("date", now, timezone)
                 ?: throw RequestValidationException(field = "date", code = ValidationIssueCodes.Required, message = "is required")
-        val moduleNames = parseModules(params.required("modules"))
-        val modules = registry.resolve(moduleNames)
+        val modules = parseModules(params.required("modules"))
         val from = date.atStartOfDay(timezone).toInstant()
         val to = date.plusDays(1).atStartOfDay(timezone).toInstant()
         val context =
@@ -89,38 +61,40 @@ class HealthDayQueryService(
                 provider = params.optional("provider"),
                 providerInstanceId = params.optional("providerInstanceId"),
                 includeSource = params.boolean("includeSource", default = false),
-                computedAt = now,
             )
 
         return suspendDbTransaction(db = database) {
-            var response =
+            val empty =
                 HealthDayResponse(
                     date = date.toString(),
                     timezone = timezone.id,
                     from = from.toString(),
                     to = to.toString(),
-                    modules = moduleNames,
-                    steps = null,
-                    heartRate = null,
-                    weight = null,
-                    sleep = null,
+                    modules = modules,
                 )
-            modules.forEach { response = it.appendTo(context, response) }
-            response
+            modules.fold(empty) { response, module ->
+                when (module) {
+                    HealthDayModuleName.Steps -> response.copy(steps = steps(context))
+                    HealthDayModuleName.HeartRate -> response.copy(heartRate = heartRate(context))
+                    HealthDayModuleName.Weight -> response.copy(weight = weight(context))
+                    HealthDayModuleName.Sleep -> response.copy(sleep = sleep(context))
+                }
+            }
         }
     }
 
     private fun parseModules(value: String): List<HealthDayModuleName> {
-        val modules =
+        val names =
             value
                 .split(",")
                 .map { it.trim() }
                 .filter { it.isNotEmpty() }
                 .distinct()
-        if (modules.isEmpty()) {
+        if (names.isEmpty()) {
             throw RequestValidationException(field = "modules", code = ValidationIssueCodes.Required, message = "must contain at least one module")
         }
-        val unsupported = modules.filter { HealthDayModuleName.fromWireName(it) == null }
+        val modules = names.associateWith(HealthDayModuleName::fromWireName)
+        val unsupported = modules.filterValues { it == null }.keys
         if (unsupported.isNotEmpty()) {
             throw RequestValidationException(
                 unsupported.map {
@@ -132,34 +106,19 @@ class HealthDayQueryService(
                 },
             )
         }
-        return modules.map { HealthDayModuleName.fromWireName(it)!! }
+        return modules.values.filterNotNull()
     }
-}
 
-class StepsDayModule(
-    private val canonicalRepository: CanonicalStepDerivationRepository,
-) : HealthDayModule<HealthDayStepsResponse> {
-    override val name = HealthDayModuleName.Steps
-
-    override fun apply(
-        response: HealthDayResponse,
-        result: HealthDayStepsResponse,
-    ) = response.copy(steps = result)
-
-    override suspend fun read(context: HealthDayQueryContext): HealthDayStepsResponse {
+    private fun steps(context: HealthDayQueryContext): HealthDayStepsResponse {
         val filters = context.filters()
-        val (rows, sourceMetadata) =
-            canonicalRepository.listCanonicalStepSamples(
-                filters,
-                CANONICAL_STEP_ALGORITHM_VERSION,
-                overlapsWindow = true,
-            )
-        val buckets = buckets(context)
+        val (samplesBySource, sourceMetadata) =
+            canonicalStepRepository.countCanonicalStepSamplesBySource(filters, CANONICAL_STEP_ALGORITHM_VERSION)
+        val buckets = context.buckets()
         val values = DoubleArray(buckets.size)
         val counts = IntArray(buckets.size)
 
-        val byStart = buckets.mapIndexed { index, bucket -> bucket.first to index }.toMap()
-        canonicalRepository
+        val byStart = buckets.withIndex().associate { (index, bucket) -> bucket.first to index }
+        canonicalStepRepository
             .listBucketContributions(filters, CANONICAL_STEP_ALGORITHM_VERSION)
             .forEach { contribution ->
                 val index = byStart[contribution.bucketStartAt]
@@ -171,7 +130,7 @@ class StepsDayModule(
 
         return HealthDayStepsResponse(
             total = values.sum().roundToInt(),
-            sampleCount = rows.size,
+            sampleCount = samplesBySource.values.sum(),
             buckets =
                 buckets.mapIndexed { index, (start, end) ->
                     HealthDayBucketResponse(
@@ -181,34 +140,15 @@ class StepsDayModule(
                         count = counts[index],
                     )
                 },
-            source = rows.singleSource(sourceMetadata) { it.sourceInstanceId },
+            source = samplesBySource.keys.singleSource(sourceMetadata) { it },
         )
     }
-}
 
-class HeartRateDayModule(
-    private val scalarRepository: ScalarSampleReadRepository,
-) : HealthDayModule<HealthDayHeartRateResponse> {
-    override val name = HealthDayModuleName.HeartRate
-
-    override fun apply(
-        response: HealthDayResponse,
-        result: HealthDayHeartRateResponse,
-    ) = response.copy(heartRate = result)
-
-    private val metricTypes = setOf(ScalarMetricTypes.HEART_RATE)
-
-    override suspend fun read(context: HealthDayQueryContext): HealthDayHeartRateResponse {
-        val filters = context.filters()
+    private fun heartRate(context: HealthDayQueryContext): HealthDayHeartRateResponse {
         val (samples, sourceMetadata) =
-            scalarRepository.list(
-                filters.copy(limit = Int.MAX_VALUE, order = "asc"),
-                metricTypes,
-                canonical = true,
-            )
-        val summary = scalarRepository.summarize(filters, metricTypes, canonical = true)
-        val latest = samples.maxWithOrNull(compareBy<ScalarSampleRow> { it.measuredAt }.thenBy { it.id })
-        val buckets = buckets(context)
+            scalarRepository.list(context.filters(), setOf(ScalarMetricTypes.HEART_RATE), canonical = true)
+        val values = samples.map { it.value }
+        val buckets = context.buckets()
         val totals = DoubleArray(buckets.size)
         val counts = IntArray(buckets.size)
 
@@ -221,11 +161,11 @@ class HeartRateDayModule(
         }
 
         return HealthDayHeartRateResponse(
-            count = summary.count,
-            minBpm = summary.minValue?.roundToInt(),
-            maxBpm = summary.maxValue?.roundToInt(),
-            avgBpm = summary.avgValue,
-            latest = latest?.toScalarResponse(sourceMetadata),
+            count = values.size,
+            minBpm = values.minOrNull()?.roundToInt(),
+            maxBpm = values.maxOrNull()?.roundToInt(),
+            avgBpm = values.takeIf { it.isNotEmpty() }?.average()?.toTwoDecimals(),
+            latest = samples.lastOrNull()?.toScalarResponse(sourceMetadata),
             buckets =
                 buckets.mapIndexed { index, (start, end) ->
                     HealthDayBucketResponse(
@@ -237,26 +177,13 @@ class HeartRateDayModule(
                 },
         )
     }
-}
 
-class WeightDayModule(
-    private val scalarRepository: ScalarSampleReadRepository,
-) : HealthDayModule<HealthDayWeightResponse> {
-    override val name = HealthDayModuleName.Weight
-
-    override fun apply(
-        response: HealthDayResponse,
-        result: HealthDayWeightResponse,
-    ) = response.copy(weight = result)
-
-    private val metricTypes = setOf(BodyMetricTypes.WEIGHT)
-
-    override suspend fun read(context: HealthDayQueryContext): HealthDayWeightResponse {
+    private fun weight(context: HealthDayQueryContext): HealthDayWeightResponse {
         val filters = context.filters()
+        val metricTypes = setOf(BodyMetricTypes.WEIGHT)
         val (points, pointSourceMetadata) = scalarRepository.list(filters, metricTypes, canonical = true)
-        val (previous, previousSourceMetadata) =
-            scalarRepository.latestBefore(filters, metricTypes, canonical = true)
-        val latest = points.maxWithOrNull(compareBy<ScalarSampleRow> { it.measuredAt }.thenBy { it.id })
+        val (previous, previousSourceMetadata) = scalarRepository.latestBefore(filters, metricTypes, canonical = true)
+        val latest = points.lastOrNull()
         val sourceMetadata = pointSourceMetadata + previousSourceMetadata
 
         return HealthDayWeightResponse(
@@ -266,19 +193,8 @@ class WeightDayModule(
             points = points.map { it.toScalarResponse(sourceMetadata) },
         )
     }
-}
 
-class SleepDayModule(
-    private val sleepRepository: SleepRepository,
-) : HealthDayModule<HealthDaySleepResponse> {
-    override val name = HealthDayModuleName.Sleep
-
-    override fun apply(
-        response: HealthDayResponse,
-        result: HealthDaySleepResponse,
-    ) = response.copy(sleep = result)
-
-    override suspend fun read(context: HealthDayQueryContext): HealthDaySleepResponse {
+    private fun sleep(context: HealthDayQueryContext): HealthDaySleepResponse {
         val filters =
             ReadFilters(
                 fromDate = context.date,
@@ -362,13 +278,13 @@ private fun HealthDayQueryContext.filters(): ReadFilters =
         order = "asc",
     )
 
-private fun buckets(context: HealthDayQueryContext): List<Pair<Instant, Instant>> {
-    val result = mutableListOf<Pair<Instant, Instant>>()
-    var start = context.from
-    while (start.isBefore(context.to)) {
-        val end = minOf(start.plus(Duration.ofMinutes(15)), context.to)
-        result += start to end
-        start = end
-    }
-    return result
-}
+private val BUCKET_SIZE = Duration.ofMinutes(15)
+
+private fun HealthDayQueryContext.buckets(): List<Pair<Instant, Instant>> =
+    generateSequence(from) { it.plus(BUCKET_SIZE) }
+        .takeWhile { it < to }
+        .map { it to minOf(it.plus(BUCKET_SIZE), to) }
+        .toList()
+
+// The scale SQL AVG yields through Exposed, which the scalar summary endpoints report.
+private fun Double.toTwoDecimals(): Double = BigDecimal(toString()).setScale(2, RoundingMode.HALF_EVEN).toDouble()

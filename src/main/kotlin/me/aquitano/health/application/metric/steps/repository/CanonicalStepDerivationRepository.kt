@@ -127,15 +127,12 @@ class CanonicalStepDerivationRepository : BaseMetricReadRepository() {
     fun listCanonicalStepSamples(
         filters: ReadFilters,
         algorithmVersion: Int,
-        overlapsWindow: Boolean = false,
     ): Pair<List<StepSampleRow>, Map<Int, SourceMetadata>> {
         val where =
             timestampConditions(
                 filters = filters,
                 sourceInstanceIdColumn = CanonicalStepSamplesTable.sourceInstanceId,
                 fromColumn = CanonicalStepSamplesTable.startAt,
-                toColumn = CanonicalStepSamplesTable.endAt,
-                mode = if (overlapsWindow) TimeFilterMode.OVERLAPS_WINDOW else TimeFilterMode.START_AT_IN_RANGE,
             ).whereOrNull() ?: return emptyReadResult()
 
         val keyset =
@@ -158,6 +155,32 @@ class CanonicalStepDerivationRepository : BaseMetricReadRepository() {
                 ).limit(keysetFetchLimit(filters.limit))
                 .map(::toStepSampleRow)
         return rows to sourceMetadata(rows.map { it.sourceInstanceId }.toSet(), filters.includeSource)
+    }
+
+    /** Canonical samples overlapping the filter window, counted per source instance. */
+    fun countCanonicalStepSamplesBySource(
+        filters: ReadFilters,
+        algorithmVersion: Int,
+    ): Pair<Map<Int, Int>, Map<Int, SourceMetadata>> {
+        val where =
+            timestampConditions(
+                filters = filters,
+                sourceInstanceIdColumn = CanonicalStepSamplesTable.sourceInstanceId,
+                fromColumn = CanonicalStepSamplesTable.startAt,
+                toColumn = CanonicalStepSamplesTable.endAt,
+                mode = TimeFilterMode.OVERLAPS_WINDOW,
+            ).whereOrNull() ?: return emptyMap<Int, Int>() to emptyMap()
+
+        val count = CanonicalStepSamplesTable.id.count()
+        val counts =
+            CanonicalStepSamplesTable
+                .select(CanonicalStepSamplesTable.sourceInstanceId, count)
+                .where(
+                    where and (CanonicalStepSamplesTable.algorithmVersion eq algorithmVersion) and
+                        firstDateForSample(algorithmVersion),
+                ).groupBy(CanonicalStepSamplesTable.sourceInstanceId)
+                .associate { it[CanonicalStepSamplesTable.sourceInstanceId] to it[count].toInt() }
+        return counts to sourceMetadata(counts.keys, filters.includeSource)
     }
 
     /**

@@ -130,8 +130,8 @@ fun ingestionModule() =
     }
 
 /**
- * Read side: read repositories, the health-day module registry, and the query services that back
- * the metric, structural, dashboard, and trend read routes.
+ * Read side: read repositories and the query services that back the metric, structural,
+ * dashboard, and trend read routes.
  */
 fun metricsReadModule() =
     module {
@@ -143,17 +143,6 @@ fun metricsReadModule() =
         singleOf(::CanonicalStepDerivationRepository)
         singleOf(::CanonicalSleepSessionDerivationRepository)
         singleOf(::CanonicalSleepSummaryDerivationRepository)
-
-        single {
-            HealthDayModuleRegistry(
-                listOf(
-                    StepsDayModule(get()),
-                    HeartRateDayModule(get()),
-                    WeightDayModule(get()),
-                    SleepDayModule(get()),
-                ),
-            )
-        }
 
         // Query services
         singleOf(::ActivityQueryService)

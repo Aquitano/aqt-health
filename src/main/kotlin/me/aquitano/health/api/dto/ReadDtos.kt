@@ -274,24 +274,27 @@ data class HealthDayResponse(
 )
 
 @Serializable
-enum class HealthDayModuleName(
-    val wireName: String,
-) {
+enum class HealthDayModuleName {
     @SerialName("steps")
-    Steps("steps"),
+    Steps,
 
     @SerialName("heartRate")
-    HeartRate("heartRate"),
+    HeartRate,
 
     @SerialName("weight")
-    Weight("weight"),
+    Weight,
 
     @SerialName("sleep")
-    Sleep("sleep"),
+    Sleep,
     ;
 
+    val wireName: String get() = serializer().descriptor.getElementName(ordinal)
+
     companion object {
-        fun fromWireName(value: String): HealthDayModuleName? = entries.firstOrNull { it.wireName == value }
+        // Lazy because the plugin-generated serializer behind wireName is initialised after this companion.
+        private val byWireName by lazy { entries.associateBy { it.wireName } }
+
+        fun fromWireName(value: String): HealthDayModuleName? = byWireName[value]
     }
 }
 
