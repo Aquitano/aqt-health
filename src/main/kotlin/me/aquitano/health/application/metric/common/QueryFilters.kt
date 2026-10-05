@@ -82,29 +82,6 @@ internal fun QueryParams.dailyLatestReadFilters(now: Instant): ReadFilters {
     )
 }
 
-internal fun QueryParams.sleepNightReadFilters(now: Instant): ReadFilters {
-    val timezone = timezone()
-    val exactDate = dateOrToday("date", now, timezone)
-    if (exactDate != null && (optional("fromDate") != null || optional("toDate") != null)) {
-        throw RequestValidationException(field = "date", code = ValidationIssueCodes.InvalidState, message = "cannot be combined with fromDate or toDate")
-    }
-    val fromDate = exactDate ?: date("fromDate")
-    val toDate = exactDate ?: date("toDate")
-    validateDateRange(fromDate, toDate)
-    val order = order()
-    return ReadFilters(
-        fromDate = fromDate,
-        toDate = toDate,
-        timezone = timezone,
-        provider = optional("provider"),
-        providerInstanceId = optional("providerInstanceId"),
-        includeSource = boolean(QueryParamSpecs.includeSource),
-        limit = if (exactDate != null) 1 else int(QueryParamSpecs.readLimit),
-        order = order,
-        cursor = cursor(order),
-    )
-}
-
 private fun QueryParams.dailyDateRange(
     now: Instant,
     timezone: ZoneId,

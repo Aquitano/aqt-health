@@ -2,6 +2,7 @@ package me.aquitano.health.application.metric.dashboard
 
 import me.aquitano.health.api.dto.DashboardStepsSummaryResponse
 import me.aquitano.health.api.dto.DashboardSummaryResponse
+import me.aquitano.health.api.dto.ScalarSampleResponse
 import me.aquitano.health.application.metric.common.QueryParams
 import me.aquitano.health.application.metric.common.repository.ReadFilters
 import me.aquitano.health.application.metric.common.singleSource
@@ -66,8 +67,8 @@ class DashboardQueryService(
                 fromDate = fromDate.toString(),
                 toDate = toDate.toString(),
                 steps = stepsSummary(filters),
-                latestWeight = latestWeight(filters),
-                latestHeartRate = latestHeartRate(filters),
+                latestWeight = latest(filters, BodyMetricTypes.WEIGHT),
+                latestHeartRate = latest(filters, ScalarMetricTypes.HEART_RATE),
                 lastSleepSession = lastSleepSession(sleepNightFilters),
             )
         }
@@ -85,28 +86,12 @@ class DashboardQueryService(
         )
     }
 
-    private fun latestWeight(
+    private fun latest(
         filters: ReadFilters,
-    ) = run {
-        val (row, metadata) =
-            scalarRepository.latest(
-                filters,
-                setOf(BodyMetricTypes.WEIGHT),
-                canonical = true,
-            )
-        row?.toScalarResponse(metadata)
-    }
-
-    private fun latestHeartRate(
-        filters: ReadFilters,
-    ) = run {
-        val (row, metadata) =
-            scalarRepository.latest(
-                filters,
-                setOf(ScalarMetricTypes.HEART_RATE),
-                canonical = true,
-            )
-        row?.toScalarResponse(metadata)
+        metricType: String,
+    ): ScalarSampleResponse? {
+        val (row, metadata) = scalarRepository.latest(filters, setOf(metricType), canonical = true)
+        return row?.toScalarResponse(metadata)
     }
 
     private fun lastSleepSession(
