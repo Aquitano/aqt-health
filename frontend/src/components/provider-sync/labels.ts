@@ -24,13 +24,9 @@ export function actionDetail(
     case "configure":
       return `Set the ${descriptor.displayName} credentials and token encryption key on the backend.`;
     case "connect":
-      return descriptor.workflowEndpoints.oauthStart
-        ? "Login before syncing this provider."
-        : "Connect this provider before syncing.";
+      return "Login before syncing this provider.";
     case "reconnect":
-      return descriptor.workflowEndpoints.oauthStart
-        ? "Restart OAuth if provider access was revoked."
-        : "Reconnect this provider before syncing.";
+      return "Restart OAuth if provider access was revoked.";
     case "sync":
       return status.accounts.length === 1
         ? `Connected as ${status.accounts[0].providerInstanceId}.`

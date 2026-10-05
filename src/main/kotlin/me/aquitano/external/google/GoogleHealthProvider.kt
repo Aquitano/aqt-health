@@ -27,21 +27,10 @@ class GoogleHealthProvider(
         HealthProviderDescriptor(
             providerCode = "google-health",
             displayName = GOOGLE_HEALTH_DISPLAY_NAME,
-            authType = ProviderAuthType.OAUTH,
-            requiresAuthentication = true,
             supportedDataTypes = GoogleHealthDataType.codes,
             defaultDataTypes = GoogleHealthDataType.codes,
             maxSyncRangeDays = 31,
             supportsPageSize = true,
-            workflowEndpoints =
-                ProviderWorkflowEndpoints(
-                    oauthStart = "/api/v2/providers/google-health/oauth/start",
-                    oauthCallback = "/api/v2/providers/google-health/oauth/callback",
-                    accounts = "/api/v2/providers/google-health/accounts",
-                    disconnect = "/api/v2/providers/google-health/accounts/{providerInstanceId}/disconnect",
-                    reconnect = "/api/v2/providers/google-health/accounts/{providerInstanceId}/reconnect",
-                    sync = "/api/v2/providers/google-health/sync-jobs",
-                ),
         )
     override val defaultProviderInstanceId: String = "google-health-me"
 

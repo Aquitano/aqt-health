@@ -53,27 +53,10 @@ interface HealthProvider {
 data class HealthProviderDescriptor(
     val providerCode: String,
     val displayName: String,
-    val authType: ProviderAuthType,
-    val requiresAuthentication: Boolean,
     val supportedDataTypes: List<String>,
     val defaultDataTypes: List<String>,
     val maxSyncRangeDays: Int,
     val supportsPageSize: Boolean,
-    val workflowEndpoints: ProviderWorkflowEndpoints,
-)
-
-enum class ProviderAuthType {
-    OAUTH,
-    NONE,
-}
-
-data class ProviderWorkflowEndpoints(
-    val oauthStart: String? = null,
-    val oauthCallback: String? = null,
-    val accounts: String? = null,
-    val disconnect: String? = null,
-    val reconnect: String? = null,
-    val sync: String,
 )
 
 data class ProviderConnection(

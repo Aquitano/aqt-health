@@ -28,21 +28,10 @@ class WithingsProvider(
         HealthProviderDescriptor(
             providerCode = WITHINGS_PROVIDER_CODE,
             displayName = WITHINGS_DISPLAY_NAME,
-            authType = ProviderAuthType.OAUTH,
-            requiresAuthentication = true,
             supportedDataTypes = WithingsDataType.codes,
             defaultDataTypes = WithingsDataType.codes,
             maxSyncRangeDays = 31,
             supportsPageSize = false,
-            workflowEndpoints =
-                ProviderWorkflowEndpoints(
-                    oauthStart = "/api/v2/providers/withings/oauth/start",
-                    oauthCallback = "/api/v2/providers/withings/oauth/callback",
-                    accounts = "/api/v2/providers/withings/accounts",
-                    disconnect = "/api/v2/providers/withings/accounts/{providerInstanceId}/disconnect",
-                    reconnect = "/api/v2/providers/withings/accounts/{providerInstanceId}/reconnect",
-                    sync = "/api/v2/providers/withings/sync-jobs",
-                ),
         )
     override val defaultProviderInstanceId: String = "withings-me"
 

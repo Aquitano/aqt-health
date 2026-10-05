@@ -34,7 +34,7 @@ internal fun Route.providerRoutes() {
         tag("Providers")
         summary = "List provider discovery metadata"
         description =
-            "Returns provider capabilities, supported data types, default sync selections, and workflow endpoint paths for client discovery."
+            "Returns provider capabilities, supported data types, and default sync selections for client discovery."
         errorResponses()
     }
     get("/api/v2/providers/status") {

@@ -89,7 +89,7 @@ export function ProviderSyncPanel({ catalog, statuses, scheduledSyncConfigs, run
   }
 
   function onStartOAuth() {
-    if (!selectedProvider?.descriptor.workflowEndpoints.oauthStart) return;
+    if (!selectedProvider) return;
     clearResult();
     setOAuthError(null);
 
@@ -235,16 +235,14 @@ function ProviderStatusSummary({
         <strong>{actionLabel(provider.descriptor, status)}</strong>
         <span>{actionDetail(provider.descriptor, status)}</span>
       </div>
-      {provider.descriptor.workflowEndpoints.oauthStart ? (
-        <button
-          className={styles.oauthButton}
-          disabled={!status.configured || isOAuthPending}
-          onClick={onStartOAuth}
-          type="button"
-        >
-          {isOAuthPending ? "Starting OAuth..." : primaryOAuthLabel(status)}
-        </button>
-      ) : null}
+      <button
+        className={styles.oauthButton}
+        disabled={!status.configured || isOAuthPending}
+        onClick={onStartOAuth}
+        type="button"
+      >
+        {isOAuthPending ? "Starting OAuth..." : primaryOAuthLabel(status)}
+      </button>
       {oauthError ? <div className={styles.errorNotice}>{oauthError}</div> : null}
       {status.accounts.length > 0 ? (
         <div className={styles.accountGrid}>

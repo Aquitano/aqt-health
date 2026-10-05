@@ -315,7 +315,7 @@ curl "http://localhost:8080/api/v2/providers/google-health" \
   -H "Authorization: Bearer local-dev-key"
 ```
 
-Discovery responses return canonical route provider codes. Google Health is returned as `google-health`; `google_health` is accepted as an alias for compatibility with internal source naming and older clients. Each provider descriptor includes OAuth requirements, supported and default `dataTypes`, max sync range, page-size support, and workflow endpoint paths for OAuth and sync.
+Discovery responses return canonical route provider codes. Google Health is returned as `google-health`; `google_health` is accepted as an alias for compatibility with internal source naming and older clients. Each provider descriptor includes its display name, supported and default `dataTypes`, max sync range, and page-size support. Every provider connects through the OAuth routes below.
 
 ## Provider Account Lifecycle
 
