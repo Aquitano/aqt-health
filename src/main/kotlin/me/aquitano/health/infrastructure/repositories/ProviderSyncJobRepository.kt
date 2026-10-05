@@ -99,7 +99,8 @@ class ProviderSyncJobRepository(
                     }.insertedCount > 0
             val record =
                 getByIdInTransaction(id)
-                    ?: findByIdempotencyKeyInTransaction(providerCode, idempotencyKey!!)!!
+                    ?: idempotencyKey?.let { findByIdempotencyKeyInTransaction(providerCode, it) }
+                    ?: error("Provider sync job '$id' was neither inserted nor found by its idempotency key")
             ProviderSyncJobCreateResult(record, created = inserted)
         }
 

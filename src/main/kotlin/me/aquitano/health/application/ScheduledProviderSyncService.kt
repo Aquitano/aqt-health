@@ -7,6 +7,7 @@ import me.aquitano.health.api.dto.*
 import me.aquitano.health.domain.*
 import me.aquitano.health.domain.ProviderSyncRequest
 import me.aquitano.health.infrastructure.logging.*
+import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
 import me.aquitano.health.infrastructure.repositories.ScheduledSyncCheckpointRecord
 import me.aquitano.health.infrastructure.repositories.ScheduledSyncConfigRecord
 import me.aquitano.health.infrastructure.repositories.ScheduledSyncRepository
@@ -41,7 +42,7 @@ class ScheduledSyncRunGuard {
 
 class ScheduledProviderSyncService(
     private val providerRegistry: HealthProviderRegistry,
-    private val providerOAuthRepository: me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository,
+    private val providerOAuthRepository: ProviderOAuthRepository,
     private val repository: ScheduledSyncRepository,
     private val runGuard: ScheduledSyncRunGuard = ScheduledSyncRunGuard(),
 ) {
@@ -305,14 +306,14 @@ class ScheduledProviderSyncService(
         dataTypes: List<String>,
     ): List<String> {
         val selected = dataTypes.map { it.trim() }.filter { it.isNotBlank() }.distinct()
-        val unsupported = selected.filterNot { provider.descriptor.supportedDataTypes.contains(it) }
-        val issues = mutableListOf<ValidationIssue>()
-        if (selected.isEmpty()) {
-            issues += ValidationIssue("dataTypes", ValidationIssueCodes.Required, "must include at least one data type")
-        }
-        unsupported.forEach {
-            issues += ValidationIssue("dataTypes", ValidationIssueCodes.UnsupportedValue, "'$it' is not supported")
-        }
+        val issues =
+            listOfNotNull(
+                ValidationIssue("dataTypes", ValidationIssueCodes.Required, "must include at least one data type")
+                    .takeIf { selected.isEmpty() },
+            ) +
+                selected
+                    .filterNot { it in provider.descriptor.supportedDataTypes }
+                    .map { ValidationIssue("dataTypes", ValidationIssueCodes.UnsupportedValue, "'$it' is not supported") }
         if (issues.isNotEmpty()) throw RequestValidationException(issues)
         return selected
     }

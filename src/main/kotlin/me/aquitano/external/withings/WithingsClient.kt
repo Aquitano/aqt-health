@@ -351,23 +351,28 @@ class KtorWithingsClient(
                 body["more"]?.jsonPrimitive?.booleanOrNull
                     ?: body["more"]?.jsonPrimitive?.intOrNull?.let { it == 1 }
                     ?: false
-            if (hasMore && nextOffset.isNullOrBlank()) {
-                throw WithingsHttpException(
-                    "withings_malformed_response",
-                    "Withings $action response did not include next offset",
-                    providerAction = action,
-                    providerEndpoint = endpoint,
-                )
-            }
-            if (hasMore && !seenOffsets.add(nextOffset!!)) {
-                throw WithingsHttpException(
-                    "withings_pagination_loop",
-                    "Withings $action returned a repeated offset",
-                    providerAction = action,
-                    providerEndpoint = endpoint,
-                )
-            }
-            offset = nextOffset.takeIf { hasMore }
+            offset =
+                if (hasMore) {
+                    if (nextOffset.isNullOrBlank()) {
+                        throw WithingsHttpException(
+                            "withings_malformed_response",
+                            "Withings $action response did not include next offset",
+                            providerAction = action,
+                            providerEndpoint = endpoint,
+                        )
+                    }
+                    if (!seenOffsets.add(nextOffset)) {
+                        throw WithingsHttpException(
+                            "withings_pagination_loop",
+                            "Withings $action returned a repeated offset",
+                            providerAction = action,
+                            providerEndpoint = endpoint,
+                        )
+                    }
+                    nextOffset
+                } else {
+                    null
+                }
             pageIndex += 1
         } while (offset != null)
 

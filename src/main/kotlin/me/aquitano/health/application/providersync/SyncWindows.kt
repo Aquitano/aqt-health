@@ -12,25 +12,8 @@ data class SyncWindow(
     val to: Instant,
 )
 
-/** Splits [from]..[to] into consecutive windows of at most [windowSize], clamping the last one. */
-fun syncWindows(
-    from: Instant,
-    to: Instant,
-    windowSize: Duration,
-): List<SyncWindow> {
-    require(!windowSize.isZero && !windowSize.isNegative) { "windowSize must be positive" }
-    val windows = mutableListOf<SyncWindow>()
-    var windowFrom = from
-    while (windowFrom.isBefore(to)) {
-        val windowTo = minOf(windowFrom.plus(windowSize), to)
-        windows += SyncWindow(windowFrom, windowTo)
-        windowFrom = windowTo
-    }
-    return windows
-}
-
 /**
- * Splits [from]..[to] into one-day windows anchored to UTC midnight.
+ * Splits [from]..[to] into one-day windows anchored to UTC midnight, clamping the last one.
  *
  * Completed days share a stable window key. Manual backfills cache processed batches;
  * scheduled refreshes fetch again and compare content with the latest successful snapshot.
@@ -38,4 +21,8 @@ fun syncWindows(
 fun dailySyncWindows(
     from: Instant,
     to: Instant,
-): List<SyncWindow> = syncWindows(from.truncatedTo(ChronoUnit.DAYS), to, Duration.ofDays(1))
+): List<SyncWindow> =
+    generateSequence(from.truncatedTo(ChronoUnit.DAYS)) { it.plus(1, ChronoUnit.DAYS) }
+        .takeWhile { it.isBefore(to) }
+        .map { SyncWindow(it, minOf(it.plus(1, ChronoUnit.DAYS), to)) }
+        .toList()
