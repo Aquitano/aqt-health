@@ -31,7 +31,7 @@ fun main(args: Array<String>) {
 fun Application.module() {
     configureObservability()
     val appConfig = environment.config.toAppConfig()
-    logger.infoWithContext("app_starting", "databaseDriver" to appConfig.database.driver)
+    logger.info { "app_starting" }
 
     val databaseFactory = DatabaseFactory()
     val database = databaseFactory.initialize(appConfig.database)

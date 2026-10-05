@@ -36,7 +36,6 @@ data class IngestionConfig(
 
 data class DatabaseConfig(
     val jdbcUrl: String,
-    val driver: String,
     val user: String,
     val password: String,
     val maxPoolSize: Int,
@@ -80,7 +79,6 @@ fun ApplicationConfig.toAppConfig(): AppConfig =
         database =
             DatabaseConfig(
                 jdbcUrl = property("aqtHealth.database.jdbcUrl").getString(),
-                driver = property("aqtHealth.database.driver").getString(),
                 user = property("aqtHealth.database.user").getString(),
                 password = property("aqtHealth.database.password").getString(),
                 maxPoolSize =
