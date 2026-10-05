@@ -1,6 +1,5 @@
 package me.aquitano.health.infrastructure.repositories
 
-import me.aquitano.health.infrastructure.database.dao.ApiClientDao
 import me.aquitano.health.infrastructure.database.suspendDbTransaction
 import me.aquitano.health.infrastructure.database.tables.ApiClientsTable
 import me.aquitano.health.infrastructure.database.tables.SourceInstancesTable
@@ -10,9 +9,11 @@ import me.aquitano.health.shared.normalizeProviderCode
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertIgnoreAndGetId
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import java.time.Instant
 import java.time.OffsetDateTime
 
@@ -49,27 +50,32 @@ class SupportRepository(
         now: Instant,
     ): BootstrapApiClientOutcome =
         transaction(database) {
-            val existing =
-                ApiClientDao.find { ApiClientsTable.name eq name }.firstOrNull()
-            when {
-                existing == null -> {
-                    ApiClientDao.new {
-                        this.name = name
-                        this.apiKeyHash = apiKeyHash
-                        enabled = true
-                        createdAt = now.toDbTimestamp()
-                        lastUsedAt = null
+            val existingHash =
+                ApiClientsTable
+                    .select(ApiClientsTable.apiKeyHash)
+                    .where { ApiClientsTable.name eq name }
+                    .singleOrNull()
+                    ?.get(ApiClientsTable.apiKeyHash)
+            when (existingHash) {
+                null -> {
+                    ApiClientsTable.insert {
+                        it[ApiClientsTable.name] = name
+                        it[ApiClientsTable.apiKeyHash] = apiKeyHash
+                        it[enabled] = true
+                        it[createdAt] = now.toDbTimestamp()
                     }
                     BootstrapApiClientOutcome.CREATED
                 }
 
-                existing.apiKeyHash != apiKeyHash -> {
-                    existing.apiKeyHash = apiKeyHash
-                    BootstrapApiClientOutcome.ROTATED
+                apiKeyHash -> {
+                    BootstrapApiClientOutcome.UNCHANGED
                 }
 
                 else -> {
-                    BootstrapApiClientOutcome.UNCHANGED
+                    ApiClientsTable.update({ ApiClientsTable.name eq name }) {
+                        it[ApiClientsTable.apiKeyHash] = apiKeyHash
+                    }
+                    BootstrapApiClientOutcome.ROTATED
                 }
             }
         }
@@ -80,14 +86,16 @@ class SupportRepository(
     ): ApiClientRef? =
         suspendDbTransaction(db = database) {
             val client =
-                ApiClientDao
-                    .find { (ApiClientsTable.apiKeyHash eq apiKeyHash) and (ApiClientsTable.enabled eq true) }
-                    .firstOrNull()
+                ApiClientsTable
+                    .select(ApiClientsTable.id, ApiClientsTable.name, ApiClientsTable.lastUsedAt)
+                    .where { (ApiClientsTable.apiKeyHash eq apiKeyHash) and (ApiClientsTable.enabled eq true) }
+                    .singleOrNull()
                     ?: return@suspendDbTransaction null
-            if (shouldUpdateLastUsedAt(client.lastUsedAt, now)) {
-                client.lastUsedAt = now.toDbTimestamp()
+            val id = client[ApiClientsTable.id]
+            if (shouldUpdateLastUsedAt(client[ApiClientsTable.lastUsedAt], now)) {
+                ApiClientsTable.update({ ApiClientsTable.id eq id }) { it[lastUsedAt] = now.toDbTimestamp() }
             }
-            ApiClientRef(id = client.id.value, name = client.name)
+            ApiClientRef(id = id.value, name = client[ApiClientsTable.name])
         }
 
     /**
