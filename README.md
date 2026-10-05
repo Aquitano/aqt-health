@@ -285,15 +285,15 @@ Default source priorities are code-based in `MetricCatalogBootstrap.providerRank
 - Steps and activity: Google Health or Health Connect first, then Withings.
 - Body measurements: Withings first, then Google Health or Health Connect.
 - Sleep sessions and sleep summaries: Withings first, then Google Health or Health Connect.
-- Heart rate: same-timestamp conflicts prefer the denser source; ties prefer Withings for sleep context and Google Health or Health Connect for general/active context.
+- Heart rate: Google Health, then Health Connect, then Withings; sleep-context samples use the sleep ranking, so Withings wins there.
 - Respiratory rate and HRV: Withings first, then Google Health or Health Connect.
 
 Overlap handling:
 
 - Steps: overlapping intervals from different sources keep the higher-priority interval; non-overlapping intervals are preserved.
-- Sleep: overlapping sessions or summaries from different sources are grouped; richer staged sessions or more complete summaries win before provider priority.
-- Heart rate, respiratory rate, and HRV: samples from different sources at the same or near-identical timestamp are de-duplicated within a 30-second tolerance.
-- Body measurements: rows with the same metric type and timestamp from different sources resolve by provider priority.
+- Sleep sessions: per UTC start date, every session from the best-ranked provider is kept and other providers' sessions are hidden, so naps from the winning device survive.
+- Sleep summaries: one per UTC start date, from the best-ranked provider.
+- Scalar samples (heart rate, HRV, respiratory rate, body measurements, cardiovascular): within each 30-second bin per metric type, context and segment, only the best-ranked provider's samples are kept.
 
 Inspect raw provider-specific rows directly in the database when auditing ingestion output.
 
@@ -544,32 +544,15 @@ Sleep reads have two modes:
 
 ## Storage Model
 
-Ingestion tables:
+- Ingestion log: `ingestion_batches`, `ingestion_records`
+- Raw metrics: `step_samples`, `sleep_sessions`, `sleep_stages`, `sleep_summaries`, `activity_summaries`, `blood_pressure_measurements`, `scalar_samples`
+- Derived steps: `canonical_step_samples`, `canonical_step_day_bucket_contributions`, and the `pending_derived_rebuilds` retry queue
+- Canonical views: `canonical_scalar_samples`, `canonical_sleep_sessions`, `canonical_sleep_summaries`, `canonical_activity_summaries`
+- Reference data: `metric_catalog`, `provider_ranks` (both re-seeded from code at startup)
+- Sources and access: `sources`, `source_instances`, `api_clients`
+- Providers and jobs: `provider_oauth_accounts`, `provider_oauth_states`, `provider_sync_jobs`, `provider_sync_runs`, `provider_scheduled_sync_configs`, `provider_scheduled_sync_checkpoints`, `replay_jobs`
 
-- `ingestion_batches`
-- `ingestion_records`
-
-Metric tables:
-
-- `step_samples`
-- `sleep_sessions`
-- `sleep_stages`
-- `sleep_summaries`
-- `activity_summaries`
-- `blood_pressure_measurements`
-- `scalar_samples`
-
-Support tables:
-
-- `sources`
-- `source_instances`
-- `api_clients`
-- `provider_oauth_accounts`
-- `provider_oauth_states`
-- `provider_sync_jobs`
-- `provider_sync_runs`
-
-Timestamps are stored as PostgreSQL `timestamptz` values and returned as UTC ISO-8601 strings. Daily step summaries use UTC dates and assign each interval to the date of `startAt`.
+Timestamps are stored as PostgreSQL `timestamptz` values and returned as UTC ISO-8601 strings. Step totals are summed from the canonical bucket contributions over the requested timezone's local days.
 
 ## Tests
 
