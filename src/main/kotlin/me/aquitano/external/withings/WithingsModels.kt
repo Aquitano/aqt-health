@@ -1,11 +1,14 @@
 package me.aquitano.external.withings
 
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import me.aquitano.health.application.providersync.RefreshedTokenSet
 import java.time.Duration
 import java.time.Instant
 
 const val WITHINGS_PROVIDER_CODE = "withings"
+
+const val WITHINGS_DISPLAY_NAME = "Withings"
 
 val WITHINGS_SCOPES =
     listOf(
@@ -133,6 +136,7 @@ data class WithingsTokenSet(
         )
 }
 
+@Serializable
 data class WithingsPage(
     val endpoint: String,
     val action: String,

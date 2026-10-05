@@ -4,6 +4,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -119,11 +120,7 @@ class ProviderSyncPipelineTest {
     fun providerFetchesAreThrottledBetweenUncachedItems() =
         runBlocking {
             val delays = mutableListOf<Duration>()
-            val adapter =
-                FakeAdapter(
-                    itemCount = 2,
-                    providerRequestInterval = Duration.ofSeconds(5),
-                )
+            val adapter = FakeAdapter(providerRequestInterval = Duration.ofSeconds(5))
             val pipeline =
                 ProviderSyncPipeline(
                     FakeStore(),
@@ -131,7 +128,7 @@ class ProviderSyncPipelineTest {
                     clock = Clock.fixed(now, ZoneOffset.UTC),
                 )
 
-            val summary = pipeline.sync(adapter, request, now)
+            val summary = pipeline.sync(adapter, request.copy(dataTypes = listOf("steps", "heart-rate")), now)
 
             assertEquals(2, adapter.fetchCalls)
             assertEquals(2, summary.batches.size)
@@ -415,8 +412,8 @@ class ProviderSyncPipelineTest {
             val store = FakeStore(account = syncAccount(now.minusSeconds(1)))
             val pipeline = ProviderSyncPipeline(store, clock = Clock.fixed(now, ZoneOffset.UTC))
             val error = assertFailsWith<UpstreamProviderException> { pipeline.sync(adapter, request, now) }
-            assertEquals("Fake refresh failed", error.message)
-            assertEquals("Fake refresh failed", store.refreshFailureMessage)
+            assertEquals("Fake OAuth token refresh failed", error.message)
+            assertEquals("Fake OAuth token refresh failed", store.refreshFailureMessage)
         }
 
     private class BlockingRefreshAdapter(
@@ -425,12 +422,11 @@ class ProviderSyncPipelineTest {
     ) : FakeAdapter() {
         override suspend fun refreshAccessToken(
             refreshToken: String,
-            account: SyncAccount,
             now: Instant,
         ): RefreshedTokenSet {
             started.complete(Unit)
             release.await()
-            return super.refreshAccessToken(refreshToken, account, now)
+            return super.refreshAccessToken(refreshToken, now)
         }
     }
 
@@ -462,7 +458,6 @@ class ProviderSyncPipelineTest {
     private open class FakeAdapter(
         private val refreshFailure: RuntimeException? = null,
         private var throwUnauthorizedOnce: Boolean = false,
-        private val itemCount: Int = 1,
         private val fetchFailure: RuntimeException? = null,
         var emptyFetch: Boolean = false,
         private val normalizedAwayFetch: Boolean = false,
@@ -474,38 +469,14 @@ class ProviderSyncPipelineTest {
         var fetchCalls = 0
         var refreshCalls = 0
         var steps = 1200
-        var sourceRecords = emptyList<JsonObject>()
+        var sourceRecords = listOf(buildJsonObject { put("steps", 1200) })
 
         override val providerCode = "fake"
-        override val defaultSyncFailureMessage = "Fake sync failed"
-        override val tokenRefreshFailureCode = "fake_refresh_failed"
-        override val tokenRefreshFailureMessage = "Fake refresh failed"
-        override val needsReauthCode = "fake_needs_reauth"
-        override val needsReauthMessage = "Fake needs reconnect"
-
-        override fun validate(request: ProviderSyncRequest): ProviderSyncPlan =
-            ProviderSyncPlan(
-                providerInstanceId = request.providerInstanceId,
-                requestedFrom = request.from,
-                requestedTo = request.to,
-                items =
-                    (1..itemCount).map { index ->
-                        ProviderSyncItem(
-                            dataType = "steps",
-                            from = request.from.plusSeconds((index - 1).toLong()),
-                            to = request.to.plusSeconds((index - 1).toLong()),
-                        )
-                    },
-            )
-
-        override fun accountUnavailable(
-            providerInstanceId: String?,
-            statusHint: SyncAccount?,
-        ): Throwable = ConflictException("fake_not_connected", "Fake is not connected")
+        override val displayName = "Fake"
+        override val dataTypes = listOf("steps", "heart-rate")
 
         override suspend fun refreshAccessToken(
             refreshToken: String,
-            account: SyncAccount,
             now: Instant,
         ): RefreshedTokenSet {
             refreshCalls += 1
@@ -521,9 +492,7 @@ class ProviderSyncPipelineTest {
 
         override suspend fun fetch(
             accessToken: String,
-            account: SyncAccount,
             item: ProviderSyncItem,
-            now: Instant,
         ): ProviderFetchedBatch {
             fetchCalls += 1
             if (throwUnauthorizedOnce) {
@@ -532,11 +501,8 @@ class ProviderSyncPipelineTest {
             }
             fetchFailure?.let { throw it }
             return ProviderFetchedBatch(
-                dataType = item.dataType,
-                pagesFetched = 1,
-                sourceRecordsReceived = if (emptyFetch) 0 else 1,
-                sourcePayload = buildJsonObject { put("requestId", fetchCalls) },
-                sourceRecords = sourceRecords,
+                pages = JsonArray(listOf(buildJsonObject { put("requestId", fetchCalls) })),
+                sourceRecords = if (emptyFetch) emptyList() else sourceRecords,
                 records =
                     if (emptyFetch || normalizedAwayFetch) {
                         emptyList()
@@ -550,12 +516,7 @@ class ProviderSyncPipelineTest {
 
         override fun isInvalidRefreshToken(error: Throwable): Boolean = error is InvalidRefreshToken
 
-        override fun batchExternalId(
-            providerInstanceId: String,
-            item: ProviderSyncItem,
-        ): String = "fake:$providerInstanceId:${item.dataType}:${item.from}:${item.to}"
-
-        override fun errorCode(error: Throwable): String = "fake_sync_failed"
+        override fun providerErrorCode(error: Throwable): String? = null
     }
 
     /** In-memory [ProviderSyncStore] with counters for the interactions the tests assert on. */

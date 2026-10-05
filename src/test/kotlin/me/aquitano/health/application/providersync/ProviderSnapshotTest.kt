@@ -1,5 +1,6 @@
 package me.aquitano.health.application.providersync
 
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import me.aquitano.health.api.dto.StepInterval
@@ -24,12 +25,9 @@ class ProviderSnapshotTest {
             }
         val original =
             ProviderFetchedBatch(
-                dataType = "steps",
-                pagesFetched = 1,
-                sourceRecordsReceived = 2,
-                sourcePayload = buildJsonObject { put("requestId", "first-request") },
-                records = listOf(first, second),
+                pages = JsonArray(listOf(buildJsonObject { put("requestId", "first-request") })),
                 sourceRecords = listOf(rawFirst, rawSecond),
+                records = listOf(first, second),
             )
         assertEquals(
             original.contentHash(),
@@ -37,8 +35,13 @@ class ProviderSnapshotTest {
                 .copy(
                     records = listOf(second, first),
                     sourceRecords = listOf(rawSecond, rawFirst),
-                    sourcePayload = buildJsonObject { put("requestId", "another-request") },
-                    pagesFetched = 2,
+                    pages =
+                        JsonArray(
+                            listOf(
+                                buildJsonObject { put("requestId", "another-request") },
+                                buildJsonObject { put("requestId", "next-page") },
+                            ),
+                        ),
                 ).contentHash(),
         )
         assertNotEquals(original.contentHash(), original.copy(records = listOf(first, second, second)).contentHash())

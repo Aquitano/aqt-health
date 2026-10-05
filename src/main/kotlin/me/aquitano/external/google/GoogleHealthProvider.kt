@@ -5,7 +5,6 @@ import io.ktor.http.*
 import me.aquitano.external.oauthConfigurationIssues
 import me.aquitano.external.persistOAuthConnection
 import me.aquitano.external.requireProviderConfigured
-import me.aquitano.health.application.providersync.ProviderSyncAdapter
 import me.aquitano.health.application.providersync.ProviderSyncPipeline
 import me.aquitano.health.domain.*
 import me.aquitano.health.infrastructure.config.ProviderOAuthConfig
@@ -21,13 +20,13 @@ class GoogleHealthProvider(
     private val client: GoogleHealthClient,
     normalizer: GoogleHealthNormalizer,
     private val syncPipeline: ProviderSyncPipeline,
-    private val syncAdapter: ProviderSyncAdapter = GoogleHealthSyncAdapter(client, normalizer),
 ) : HealthProvider {
+    private val syncAdapter = GoogleHealthSyncAdapter(client, normalizer)
     override val providerCode: String = GOOGLE_HEALTH_PROVIDER_CODE
     override val descriptor: HealthProviderDescriptor =
         HealthProviderDescriptor(
             providerCode = "google-health",
-            displayName = "Google Health",
+            displayName = GOOGLE_HEALTH_DISPLAY_NAME,
             authType = ProviderAuthType.OAUTH,
             requiresAuthentication = true,
             supportedDataTypes = GOOGLE_HEALTH_DEFAULT_DATA_TYPES,

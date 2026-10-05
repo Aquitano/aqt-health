@@ -75,7 +75,7 @@ class GeneratedGoogleHealthClientTest {
                     dataType,
                 )
                 val normalized = GoogleHealthNormalizer().normalize(result)
-                assertEquals(1, normalized.records.size, dataType)
+                assertEquals(1, normalized.size, dataType)
                 assertEquals(
                     point.name,
                     result.dataPoints

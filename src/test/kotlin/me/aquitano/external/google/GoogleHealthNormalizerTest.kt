@@ -108,7 +108,6 @@ class GoogleHealthNormalizerTest {
         protoJson: String,
     ) = normalizer
         .normalize(GoogleHealthFetchResult(dataType, emptyList(), listOf(dataPointJson(protoJson))))
-        .records
 
     /** Round-trips through the generated proto so a misspelled field fails the test, as the API would. */
     private fun dataPointJson(protoJson: String): JsonObject {

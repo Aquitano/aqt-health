@@ -5,7 +5,6 @@ import io.ktor.http.URLBuilder
 import me.aquitano.external.oauthConfigurationIssues
 import me.aquitano.external.persistOAuthConnection
 import me.aquitano.external.requireProviderConfigured
-import me.aquitano.health.application.providersync.ProviderSyncAdapter
 import me.aquitano.health.application.providersync.ProviderSyncPipeline
 import me.aquitano.health.domain.*
 import me.aquitano.health.infrastructure.config.ProviderOAuthConfig
@@ -21,14 +20,14 @@ class WithingsProvider(
     private val client: WithingsClient,
     normalizer: WithingsNormalizer,
     private val syncPipeline: ProviderSyncPipeline,
-    private val syncAdapter: ProviderSyncAdapter = WithingsSyncAdapter(client, normalizer),
 ) : HealthProvider {
+    private val syncAdapter = WithingsSyncAdapter(client, normalizer)
     override val providerCode: String = WITHINGS_PROVIDER_CODE
 
     override val descriptor: HealthProviderDescriptor =
         HealthProviderDescriptor(
             providerCode = WITHINGS_PROVIDER_CODE,
-            displayName = "Withings",
+            displayName = WITHINGS_DISPLAY_NAME,
             authType = ProviderAuthType.OAUTH,
             requiresAuthentication = true,
             supportedDataTypes = WITHINGS_DEFAULT_DATA_TYPES,

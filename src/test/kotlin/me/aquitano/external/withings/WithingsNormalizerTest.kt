@@ -1,7 +1,6 @@
 package me.aquitano.external.withings
 
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
@@ -58,7 +57,7 @@ class WithingsNormalizerTest {
                 ),
             )
 
-        val samples = result.records.filterIsInstance<ScalarSample>().associateBy { it.metricType }
+        val samples = result.filterIsInstance<ScalarSample>().associateBy { it.metricType }
         assertEquals(
             setOf("weight", "body_fat", "muscle", "water", "extracellular_water", "intracellular_water", "visceral_fat", "basal_metabolic_rate"),
             samples.keys,
@@ -91,11 +90,11 @@ class WithingsNormalizerTest {
                 ),
             )
 
-        val sample = assertIs<ScalarSample>(result.records.single())
+        val sample = assertIs<ScalarSample>(result.single())
         assertEquals("withings:measure:987:weight", sample.providerRecordId)
         // Last value wins, matching how the per-field accumulators used to resolve repeats.
         assertEquals(80.5, sample.value, 0.000001)
-        assertAcceptedByIngestion(result.records)
+        assertAcceptedByIngestion(result)
     }
 
     @Test
@@ -116,7 +115,7 @@ class WithingsNormalizerTest {
                 ),
             )
 
-        val samples = result.records.filterIsInstance<ScalarSample>()
+        val samples = result.filterIsInstance<ScalarSample>()
         assertEquals(
             listOf(
                 "withings:measure:654:segmental_muscle_mass:left_arm",
@@ -126,7 +125,7 @@ class WithingsNormalizerTest {
         )
         assertEquals(listOf("left_arm", "right_arm"), samples.map { it.segment })
         assertEquals(3.4, samples[0].value, 0.000001)
-        assertAcceptedByIngestion(result.records)
+        assertAcceptedByIngestion(result)
     }
 
     @Test
@@ -155,7 +154,7 @@ class WithingsNormalizerTest {
                 ),
             )
 
-        val records = result.records.collapseDuplicateProviderRecordIds()
+        val records = result.collapseDuplicateProviderRecordIds()
         assertEquals(
             listOf("withings:activity:2026-04-01", "withings:activity:2026-04-01:summary"),
             records.map { it.providerRecordId },
@@ -188,12 +187,12 @@ class WithingsNormalizerTest {
                 ),
             )
 
-        val steps = result.records.filterIsInstance<StepInterval>().single()
+        val steps = result.filterIsInstance<StepInterval>().single()
         assertEquals("withings:activity:2026-04-01", steps.providerRecordId)
         assertEquals("2026-04-01T00:00:00Z", steps.startAt)
         assertEquals("2026-04-02T00:00:00Z", steps.endAt)
         assertEquals(1234, steps.steps)
-        val summary = result.records.filterIsInstance<ActivitySummary>().single()
+        val summary = result.filterIsInstance<ActivitySummary>().single()
         assertEquals("withings:activity:2026-04-01:summary", summary.providerRecordId)
         assertEquals(800.5, summary.distanceMeters!!, 0.000001)
         assertEquals(310.0, summary.activeEnergyKcal!!, 0.000001)
@@ -219,7 +218,7 @@ class WithingsNormalizerTest {
                 ),
             )
 
-        val heartRate = assertIs<ScalarSample>(result.records.single())
+        val heartRate = assertIs<ScalarSample>(result.single())
         assertEquals("withings:measure:456:heart_rate", heartRate.providerRecordId)
         assertEquals("2026-04-01T00:00:00Z", heartRate.measuredAt)
         assertEquals("heart_rate", heartRate.metricType)
@@ -247,16 +246,16 @@ class WithingsNormalizerTest {
                     ),
                 )
 
-            val bloodPressure = assertIs<BloodPressure>(result.records.single())
+            val bloodPressure = assertIs<BloodPressure>(result.single())
             assertEquals(120, bloodPressure.systolicMmhg)
             assertEquals(80, bloodPressure.diastolicMmhg)
             assertEquals(62, bloodPressure.heartRateBpm)
-            assertTrue(result.records.filterIsInstance<ScalarSample>().isEmpty())
+            assertTrue(result.filterIsInstance<ScalarSample>().isEmpty())
         }
     }
 
     @Test
-    fun incompleteBloodPressureIsDroppedButItsRawPageIsKept() {
+    fun incompleteBloodPressureIsDropped() {
         val result =
             normalize(
                 fetchResult(
@@ -271,8 +270,7 @@ class WithingsNormalizerTest {
                 ),
             )
 
-        assertTrue(result.records.isEmpty())
-        assertEquals(1, result.sourcePayload["pages"]!!.jsonArray.size)
+        assertTrue(result.isEmpty())
     }
 
     @Test
@@ -302,7 +300,7 @@ class WithingsNormalizerTest {
                 ),
             )
 
-        val summary = assertIs<SleepSummary>(result.records.single())
+        val summary = assertIs<SleepSummary>(result.single())
         assertEquals("withings:sleep-summary:1775001600:1775023200:summary", summary.providerRecordId)
         assertEquals(21600, summary.timeInBedSeconds)
         assertEquals(18000, summary.totalSleepSeconds)
@@ -334,10 +332,10 @@ class WithingsNormalizerTest {
                 ),
             )
 
-        val sleep = assertIs<SleepSession>(result.records.first())
+        val sleep = assertIs<SleepSession>(result.first())
         assertEquals(1, sleep.stages.size)
         assertEquals("light", sleep.stages[0].stage)
-        val samples = result.records.filterIsInstance<ScalarSample>()
+        val samples = result.filterIsInstance<ScalarSample>()
         val heartRates = samples.filter { it.metricType == "heart_rate" }
         assertEquals(listOf(58.0, 57.0, 56.0), heartRates.map { it.value })
         assertEquals("withings:sleep:hr:1775001660", heartRates[1].providerRecordId)
@@ -368,7 +366,7 @@ class WithingsNormalizerTest {
                 ),
             )
 
-        val sessions = result.records.filterIsInstance<SleepSession>()
+        val sessions = result.filterIsInstance<SleepSession>()
         assertEquals(1, sessions.size)
         assertEquals(1, sessions.first().stages.size)
         assertEquals(
@@ -403,7 +401,7 @@ class WithingsNormalizerTest {
                 ),
             )
 
-        val sessions = result.records.filterIsInstance<SleepSession>()
+        val sessions = result.filterIsInstance<SleepSession>()
         assertEquals(1, sessions.size)
         assertEquals(
             "light",
@@ -432,7 +430,7 @@ class WithingsNormalizerTest {
                 ),
             )
 
-        val sessions = result.records.filterIsInstance<SleepSession>()
+        val sessions = result.filterIsInstance<SleepSession>()
         assertEquals(1, sessions.size)
         assertEquals(1, sessions.first().stages.size)
         assertEquals(
@@ -467,15 +465,15 @@ class WithingsNormalizerTest {
         val nightStarted = normalizer.normalize(night, dayWindow("2026-04-01"))
         val nightEnded = normalizer.normalize(night, dayWindow("2026-04-02"))
 
-        assertTrue(nightStarted.records.filterIsInstance<SleepSession>().isEmpty())
-        val session = nightEnded.records.filterIsInstance<SleepSession>().single()
+        assertTrue(nightStarted.filterIsInstance<SleepSession>().isEmpty())
+        val session = nightEnded.filterIsInstance<SleepSession>().single()
         assertEquals("withings:sleep:1775077200:1775106000", session.providerRecordId)
         assertEquals("2026-04-01T21:00:00Z", session.startAt)
         assertEquals("2026-04-02T05:00:00Z", session.endAt)
         assertEquals(listOf("light", "deep"), session.stages.map { it.stage })
         assertEquals(
             listOf("2026-04-02T00:00:00Z"),
-            nightEnded.records.filterIsInstance<ScalarSample>().map { it.measuredAt },
+            nightEnded.filterIsInstance<ScalarSample>().map { it.measuredAt },
         )
     }
 
@@ -504,7 +502,7 @@ class WithingsNormalizerTest {
                 ),
             )
 
-        val sessions = result.records.filterIsInstance<SleepSession>()
+        val sessions = result.filterIsInstance<SleepSession>()
         assertEquals(2, sessions.size)
         assertEquals("2026-04-01T00:00:00Z", sessions[0].startAt)
         assertEquals("2026-04-01T01:00:00Z", sessions[0].endAt)
@@ -527,7 +525,7 @@ class WithingsNormalizerTest {
                 ),
             )
 
-        assertTrue(result.records.isEmpty())
+        assertTrue(result.isEmpty())
     }
 
     /** Ingestion rejects a whole batch that repeats a providerRecordId, so prove it takes these. */

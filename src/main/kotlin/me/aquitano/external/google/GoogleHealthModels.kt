@@ -1,8 +1,11 @@
 package me.aquitano.external.google
 
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 
 const val GOOGLE_HEALTH_PROVIDER_CODE = "google_health"
+
+const val GOOGLE_HEALTH_DISPLAY_NAME = "Google Health"
 
 val GOOGLE_HEALTH_SCOPES =
     listOf(
@@ -22,6 +25,7 @@ val GOOGLE_HEALTH_DEFAULT_DATA_TYPES =
         "respiratory-rate-sleep-summary",
     )
 
+@Serializable
 data class GoogleHealthPage(
     val pageIndex: Int,
     val payload: JsonObject,

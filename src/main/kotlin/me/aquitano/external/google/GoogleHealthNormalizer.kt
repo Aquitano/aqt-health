@@ -2,7 +2,6 @@ package me.aquitano.external.google
 
 import kotlinx.serialization.json.*
 import me.aquitano.health.api.dto.*
-import me.aquitano.health.application.providersync.NormalizedProviderBatch
 import me.aquitano.health.domain.BodyMetricTypes
 import me.aquitano.health.domain.ScalarMetricTypes
 import me.aquitano.health.shared.AppJson
@@ -15,31 +14,7 @@ import java.security.MessageDigest
 import java.util.*
 
 class GoogleHealthNormalizer {
-    fun normalize(fetchResult: GoogleHealthFetchResult): NormalizedProviderBatch {
-        val records =
-            fetchResult.dataPoints.flatMap {
-                normalizeDataPoint(
-                    fetchResult.dataType,
-                    it,
-                )
-            }
-        val sourcePayload =
-            buildJsonObject {
-                put("dataType", fetchResult.dataType)
-                put(
-                    "pages",
-                    JsonArray(
-                        fetchResult.pages.map {
-                            buildJsonObject {
-                                put("pageIndex", it.pageIndex)
-                                put("payload", it.payload)
-                            }
-                        },
-                    ),
-                )
-            }
-        return NormalizedProviderBatch(sourcePayload, records)
-    }
+    fun normalize(fetchResult: GoogleHealthFetchResult): List<IngestionRecord> = fetchResult.dataPoints.flatMap { normalizeDataPoint(fetchResult.dataType, it) }
 
     private fun normalizeDataPoint(
         dataType: String,
