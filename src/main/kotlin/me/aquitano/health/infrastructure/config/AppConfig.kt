@@ -91,22 +91,8 @@ fun ApplicationConfig.toAppConfig(): AppConfig =
                 bootstrapClientName = property("aqtHealth.auth.bootstrapClientName").getString(),
                 bootstrapApiKey = property("aqtHealth.auth.bootstrapApiKey").getString(),
             ),
-        googleHealth =
-            providerOAuthConfig(
-                prefix = "aqtHealth.googleHealth",
-                defaultRedirectUri = "http://localhost:8080/api/v2/providers/google-health/oauth/callback",
-                defaultApiBaseUrl = "https://health.googleapis.com",
-                defaultOauthTokenUrl = "https://oauth2.googleapis.com/token",
-                defaultOauthAuthUrl = "https://accounts.google.com/o/oauth2/v2/auth",
-            ),
-        withings =
-            providerOAuthConfig(
-                prefix = "aqtHealth.withings",
-                defaultRedirectUri = "http://localhost:8080/api/v2/providers/withings/oauth/callback",
-                defaultApiBaseUrl = "https://wbsapi.withings.net",
-                defaultOauthTokenUrl = "https://wbsapi.withings.net/v2/oauth2",
-                defaultOauthAuthUrl = "https://account.withings.com/oauth2_user/authorize2",
-            ),
+        googleHealth = providerOAuthConfig("aqtHealth.googleHealth"),
+        withings = providerOAuthConfig("aqtHealth.withings"),
         ingestion =
             IngestionConfig(
                 maxBodyBytes = optional("aqtHealth.ingestion.maxBodyBytes", "33554432").toLong(),
@@ -282,19 +268,14 @@ private fun ApplicationConfig.optional(
     default: String = "",
 ): String = propertyOrNull(path)?.getString() ?: default
 
-private fun ApplicationConfig.providerOAuthConfig(
-    prefix: String,
-    defaultRedirectUri: String,
-    defaultApiBaseUrl: String,
-    defaultOauthTokenUrl: String,
-    defaultOauthAuthUrl: String,
-): ProviderOAuthConfig =
+/** Endpoint defaults live in application.yaml; a missing value leaves the provider unconfigured. */
+private fun ApplicationConfig.providerOAuthConfig(prefix: String): ProviderOAuthConfig =
     ProviderOAuthConfig(
         clientId = optional("$prefix.clientId"),
         clientSecret = optional("$prefix.clientSecret"),
-        redirectUri = optional("$prefix.redirectUri", defaultRedirectUri),
+        redirectUri = optional("$prefix.redirectUri"),
         tokenEncryptionKey = optional("$prefix.tokenEncryptionKey"),
-        apiBaseUrl = optional("$prefix.apiBaseUrl", defaultApiBaseUrl),
-        oauthTokenUrl = optional("$prefix.oauthTokenUrl", defaultOauthTokenUrl),
-        oauthAuthUrl = optional("$prefix.oauthAuthUrl", defaultOauthAuthUrl),
+        apiBaseUrl = optional("$prefix.apiBaseUrl"),
+        oauthTokenUrl = optional("$prefix.oauthTokenUrl"),
+        oauthAuthUrl = optional("$prefix.oauthAuthUrl"),
     )

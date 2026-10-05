@@ -32,7 +32,7 @@ class WithingsProviderRouteTest : PostgresIntegrationTest() {
 
             assertEquals(HttpStatusCode.OK, response.status)
             val url = response.jsonBody()["authorizationUrl"]!!.jsonPrimitive.content
-            assertTrue(url.startsWith("https://account.withings.com/oauth2_user/authorize2?"))
+            assertTrue(url.startsWith("https://withings.test/oauth/authorize?"))
             assertTrue(url.contains("response_type=code"))
             assertTrue(url.contains("client_id=withings-client-id"))
             assertTrue(url.contains("scope=user.info%2Cuser.metrics%2Cuser.activity"))
