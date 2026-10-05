@@ -1,9 +1,8 @@
 package me.aquitano.health.infrastructure.repositories
 
 import kotlinx.coroutines.runBlocking
+import me.aquitano.health.infrastructure.security.TokenCipher
 import me.aquitano.health.test.PostgresIntegrationTest
-import me.aquitano.health.test.PostgresTestDatabase
-import org.jetbrains.exposed.v1.jdbc.Database
 import java.time.Instant
 import kotlin.test.*
 
@@ -14,26 +13,13 @@ class ProviderOAuthRepositoryTest : PostgresIntegrationTest() {
     @Test
     fun staleRefreshCannotUndoDisconnectOrOverwriteReconnect() =
         runBlocking {
-            val repo = ProviderOAuthRepository(freshDatabase())
-            val cipher =
-                me.aquitano.health.infrastructure.security
-                    .TokenCipher("test-key", "google_health")
+            val repo = repository()
+            val cipher = TokenCipher("test-key", PROVIDER)
 
-            suspend fun connect() =
-                repo.upsertAccount(
-                    "google_health",
-                    "user-1",
-                    "google-health-user-1",
-                    cipher.encrypt("access"),
-                    cipher.encrypt("same-refresh-token"),
-                    "Bearer",
-                    later,
-                    "health.read",
-                    now,
-                )
+            suspend fun connect() = repo.connect(accessToken = cipher.encrypt("access"), refreshToken = cipher.encrypt("same-refresh-token"))
             connect()
-            val original = repo.latestAccount("google_health")!!
-            repo.disconnectAccount("google_health", original.providerInstanceId, now)
+            val original = repo.latestAccount(PROVIDER)!!
+            repo.disconnectAccount(PROVIDER, original.providerInstanceId, now)
 
             suspend fun assertStaleWritesRejected() {
                 assertFalse(
@@ -52,38 +38,23 @@ class ProviderOAuthRepositoryTest : PostgresIntegrationTest() {
                 assertFalse(repo.markTokenRefreshFailed(original.id, original.refreshTokenCiphertext, "stale", "stale", later))
             }
             assertStaleWritesRejected()
-            assertEquals(
-                ACCOUNT_STATUS_DISCONNECTED,
-                repo.accountByProviderInstanceForStatus("google_health", original.providerInstanceId)!!.accountStatus,
-            )
+            assertEquals(ACCOUNT_STATUS_DISCONNECTED, repo.account().accountStatus)
             connect()
-            val reconnected = repo.latestAccount("google_health")!!
+            val reconnected = repo.latestAccount(PROVIDER)!!
             assertNotEquals(original.refreshTokenCiphertext, reconnected.refreshTokenCiphertext)
             assertEquals(cipher.decrypt(original.refreshTokenCiphertext), cipher.decrypt(reconnected.refreshTokenCiphertext))
             assertStaleWritesRejected()
-            assertEquals(reconnected, repo.latestAccount("google_health"))
+            assertEquals(reconnected, repo.latestAccount(PROVIDER))
         }
 
     @Test
     fun upsertAccountInsertsNewConnectedAccount() =
         runBlocking {
-            val db = freshDatabase()
-            val repo = ProviderOAuthRepository(db)
+            val repo = repository()
 
-            repo.upsertAccount(
-                providerCode = "google_health",
-                providerUserId = "user-1",
-                providerInstanceId = "google-health-user-1",
-                accessTokenCiphertext = "enc-access",
-                refreshTokenCiphertext = "enc-refresh",
-                tokenType = "Bearer",
-                expiresAt = Instant.parse("2099-01-01T00:00:00Z"),
-                scope = "health.read",
-                now = now,
-            )
+            repo.connect()
 
-            val account = repo.accountByProviderInstanceForStatus("google_health", "google-health-user-1")
-            assertNotNull(account)
+            val account = repo.account()
             assertEquals(ACCOUNT_STATUS_CONNECTED, account.accountStatus)
             assertEquals("enc-access", account.accessTokenCiphertext)
             assertEquals("enc-refresh", account.refreshTokenCiphertext)
@@ -96,36 +67,13 @@ class ProviderOAuthRepositoryTest : PostgresIntegrationTest() {
     @Test
     fun upsertAccountReconnectsDisconnectedAccount() =
         runBlocking {
-            val db = freshDatabase()
-            val repo = ProviderOAuthRepository(db)
+            val repo = repository()
+            repo.connect()
+            repo.disconnectAccount(PROVIDER, INSTANCE, now)
 
-            repo.upsertAccount(
-                providerCode = "google_health",
-                providerUserId = "user-1",
-                providerInstanceId = "google-health-user-1",
-                accessTokenCiphertext = "enc-access",
-                refreshTokenCiphertext = "enc-refresh",
-                tokenType = "Bearer",
-                expiresAt = Instant.parse("2099-01-01T00:00:00Z"),
-                scope = "health.read",
-                now = now,
-            )
-            repo.disconnectAccount("google_health", "google-health-user-1", now)
+            repo.connect(accessToken = "new-access", refreshToken = "new-refresh", at = later)
 
-            repo.upsertAccount(
-                providerCode = "google_health",
-                providerUserId = "user-1",
-                providerInstanceId = "google-health-user-1",
-                accessTokenCiphertext = "new-access",
-                refreshTokenCiphertext = "new-refresh",
-                tokenType = "Bearer",
-                expiresAt = Instant.parse("2099-01-01T00:00:00Z"),
-                scope = "health.read",
-                now = later,
-            )
-
-            val account = repo.accountByProviderInstanceForStatus("google_health", "google-health-user-1")
-            assertNotNull(account)
+            val account = repo.account()
             assertEquals(ACCOUNT_STATUS_CONNECTED, account.accountStatus)
             assertEquals("new-access", account.accessTokenCiphertext)
             assertEquals(later, account.connectedAt)
@@ -136,36 +84,13 @@ class ProviderOAuthRepositoryTest : PostgresIntegrationTest() {
     @Test
     fun upsertAccountReconnectsNeedsReauthAccount() =
         runBlocking {
-            val db = freshDatabase()
-            val repo = ProviderOAuthRepository(db)
+            val repo = repository()
+            repo.connect()
+            repo.markNeedsReauth(repo.account().id, "enc-refresh", "test_error", "Test error message", now)
 
-            repo.upsertAccount(
-                providerCode = "google_health",
-                providerUserId = "user-1",
-                providerInstanceId = "google-health-user-1",
-                accessTokenCiphertext = "enc-access",
-                refreshTokenCiphertext = "enc-refresh",
-                tokenType = "Bearer",
-                expiresAt = Instant.parse("2099-01-01T00:00:00Z"),
-                scope = "health.read",
-                now = now,
-            )
-            repo.markNeedsReauth(1, "enc-refresh", "test_error", "Test error message", now)
+            repo.connect(accessToken = "new-access", refreshToken = "new-refresh", at = later)
 
-            repo.upsertAccount(
-                providerCode = "google_health",
-                providerUserId = "user-1",
-                providerInstanceId = "google-health-user-1",
-                accessTokenCiphertext = "new-access",
-                refreshTokenCiphertext = "new-refresh",
-                tokenType = "Bearer",
-                expiresAt = Instant.parse("2099-01-01T00:00:00Z"),
-                scope = "health.read",
-                now = later,
-            )
-
-            val account = repo.accountByProviderInstanceForStatus("google_health", "google-health-user-1")
-            assertNotNull(account)
+            val account = repo.account()
             assertEquals(ACCOUNT_STATUS_CONNECTED, account.accountStatus)
             assertEquals(later, account.connectedAt)
             assertNull(account.lastAuthErrorCode)
@@ -174,26 +99,12 @@ class ProviderOAuthRepositoryTest : PostgresIntegrationTest() {
     @Test
     fun disconnectAccountClearsTokensAndSetsStatus() =
         runBlocking {
-            val db = freshDatabase()
-            val repo = ProviderOAuthRepository(db)
+            val repo = repository()
+            repo.connect()
 
-            repo.upsertAccount(
-                providerCode = "google_health",
-                providerUserId = "user-1",
-                providerInstanceId = "google-health-user-1",
-                accessTokenCiphertext = "enc-access",
-                refreshTokenCiphertext = "enc-refresh",
-                tokenType = "Bearer",
-                expiresAt = Instant.parse("2099-01-01T00:00:00Z"),
-                scope = "health.read",
-                now = now,
-            )
+            assertTrue(repo.disconnectAccount(PROVIDER, INSTANCE, later))
 
-            val result = repo.disconnectAccount("google_health", "google-health-user-1", later)
-            assertTrue(result)
-
-            val account = repo.accountByProviderInstanceForStatus("google_health", "google-health-user-1")
-            assertNotNull(account)
+            val account = repo.account()
             assertEquals(ACCOUNT_STATUS_DISCONNECTED, account.accountStatus)
             assertEquals("", account.accessTokenCiphertext)
             assertEquals("", account.refreshTokenCiphertext)
@@ -207,36 +118,18 @@ class ProviderOAuthRepositoryTest : PostgresIntegrationTest() {
     @Test
     fun disconnectAccountReturnsFalseForUnknownInstance() =
         runBlocking {
-            val db = freshDatabase()
-            val repo = ProviderOAuthRepository(db)
-
-            val result = repo.disconnectAccount("google_health", "nonexistent", now)
-            assertFalse(result)
+            assertFalse(repository().disconnectAccount(PROVIDER, "nonexistent", now))
         }
 
     @Test
     fun markNeedsReauthSetsStatusAndErrorCode() =
         runBlocking {
-            val db = freshDatabase()
-            val repo = ProviderOAuthRepository(db)
+            val repo = repository()
+            repo.connect()
 
-            repo.upsertAccount(
-                providerCode = "google_health",
-                providerUserId = "user-1",
-                providerInstanceId = "google-health-user-1",
-                accessTokenCiphertext = "enc-access",
-                refreshTokenCiphertext = "enc-refresh",
-                tokenType = "Bearer",
-                expiresAt = Instant.parse("2099-01-01T00:00:00Z"),
-                scope = "health.read",
-                now = now,
-            )
-            val accountId = repo.accountByProviderInstanceForStatus("google_health", "google-health-user-1")!!.id
+            repo.markNeedsReauth(repo.account().id, "enc-refresh", "google_health_needs_reauth", "Consent was revoked", later)
 
-            repo.markNeedsReauth(accountId, "enc-refresh", "google_health_needs_reauth", "Consent was revoked", later)
-
-            val account = repo.accountByProviderInstanceForStatus("google_health", "google-health-user-1")
-            assertNotNull(account)
+            val account = repo.account()
             assertEquals(ACCOUNT_STATUS_NEEDS_REAUTH, account.accountStatus)
             assertEquals(later, account.lastTokenRefreshAt)
             assertEquals(TOKEN_REFRESH_STATUS_FAILED, account.lastTokenRefreshStatus)
@@ -247,27 +140,12 @@ class ProviderOAuthRepositoryTest : PostgresIntegrationTest() {
     @Test
     fun markNeedsReauthTruncatesLongErrorFields() =
         runBlocking {
-            val db = freshDatabase()
-            val repo = ProviderOAuthRepository(db)
+            val repo = repository()
+            repo.connect()
 
-            repo.upsertAccount(
-                providerCode = "google_health",
-                providerUserId = "user-1",
-                providerInstanceId = "google-health-user-1",
-                accessTokenCiphertext = "enc-access",
-                refreshTokenCiphertext = "enc-refresh",
-                tokenType = "Bearer",
-                expiresAt = Instant.parse("2099-01-01T00:00:00Z"),
-                scope = "health.read",
-                now = now,
-            )
-            val accountId = repo.accountByProviderInstanceForStatus("google_health", "google-health-user-1")!!.id
+            repo.markNeedsReauth(repo.account().id, "enc-refresh", "x".repeat(300), "y".repeat(2000), later)
 
-            val longCode = "x".repeat(300)
-            val longMessage = "y".repeat(2000)
-            repo.markNeedsReauth(accountId, "enc-refresh", longCode, longMessage, later)
-
-            val account = repo.accountByProviderInstanceForStatus("google_health", "google-health-user-1")!!
+            val account = repo.account()
             assertEquals(200, account.lastAuthErrorCode!!.length)
             assertEquals(1000, account.lastAuthErrorMessage!!.length)
         }
@@ -275,26 +153,12 @@ class ProviderOAuthRepositoryTest : PostgresIntegrationTest() {
     @Test
     fun markTokenRefreshFailedRecordsErrorWithoutChangingStatus() =
         runBlocking {
-            val db = freshDatabase()
-            val repo = ProviderOAuthRepository(db)
+            val repo = repository()
+            repo.connect()
 
-            repo.upsertAccount(
-                providerCode = "google_health",
-                providerUserId = "user-1",
-                providerInstanceId = "google-health-user-1",
-                accessTokenCiphertext = "enc-access",
-                refreshTokenCiphertext = "enc-refresh",
-                tokenType = "Bearer",
-                expiresAt = Instant.parse("2099-01-01T00:00:00Z"),
-                scope = "health.read",
-                now = now,
-            )
-            val accountId = repo.accountByProviderInstanceForStatus("google_health", "google-health-user-1")!!.id
+            repo.markTokenRefreshFailed(repo.account().id, "enc-refresh", "transient_error", "Network timeout", later)
 
-            repo.markTokenRefreshFailed(accountId, "enc-refresh", "transient_error", "Network timeout", later)
-
-            val account = repo.accountByProviderInstanceForStatus("google_health", "google-health-user-1")
-            assertNotNull(account)
+            val account = repo.account()
             assertEquals(ACCOUNT_STATUS_CONNECTED, account.accountStatus, "status should remain connected")
             assertEquals(later, account.lastTokenRefreshAt)
             assertEquals(TOKEN_REFRESH_STATUS_FAILED, account.lastTokenRefreshStatus)
@@ -305,26 +169,14 @@ class ProviderOAuthRepositoryTest : PostgresIntegrationTest() {
     @Test
     fun updateAccessTokenClearsTransientErrors() =
         runBlocking {
-            val db = freshDatabase()
-            val repo = ProviderOAuthRepository(db)
-
-            repo.upsertAccount(
-                providerCode = "google_health",
-                providerUserId = "user-1",
-                providerInstanceId = "google-health-user-1",
-                accessTokenCiphertext = "old-access",
-                refreshTokenCiphertext = "old-refresh",
-                tokenType = "Bearer",
-                expiresAt = Instant.parse("2026-05-15T09:00:00Z"),
-                scope = "health.read",
-                now = now,
-            )
-            val accountId = repo.accountByProviderInstanceForStatus("google_health", "google-health-user-1")!!.id
-            repo.markTokenRefreshFailed(accountId, "old-refresh", "some_error", "some message", now)
+            val repo = repository()
+            repo.connect()
+            val accountId = repo.account().id
+            repo.markTokenRefreshFailed(accountId, "enc-refresh", "some_error", "some message", now)
 
             repo.updateAccessToken(
                 accountId = accountId,
-                expectedRefreshTokenCiphertext = "old-refresh",
+                expectedRefreshTokenCiphertext = "enc-refresh",
                 accessTokenCiphertext = "new-access",
                 refreshTokenCiphertext = "new-refresh",
                 tokenType = "Bearer",
@@ -333,8 +185,7 @@ class ProviderOAuthRepositoryTest : PostgresIntegrationTest() {
                 now = later,
             )
 
-            val account = repo.accountByProviderInstanceForStatus("google_health", "google-health-user-1")
-            assertNotNull(account)
+            val account = repo.account()
             assertEquals(ACCOUNT_STATUS_CONNECTED, account.accountStatus)
             assertEquals("new-access", account.accessTokenCiphertext)
             assertEquals("new-refresh", account.refreshTokenCiphertext)
@@ -345,222 +196,56 @@ class ProviderOAuthRepositoryTest : PostgresIntegrationTest() {
         }
 
     @Test
-    fun latestAccountExcludesDisconnectedAndNeedsReauth() =
+    fun latestAccountSkipsDisconnectedNeedsReauthAndTokenlessAccounts() =
         runBlocking {
-            val db = freshDatabase()
-            val repo = ProviderOAuthRepository(db)
+            val repo = repository()
+            repo.connect(providerUserId = "connected", providerInstanceId = "connected")
+            repo.connect(providerUserId = "disconnected", providerInstanceId = "disconnected", at = later)
+            repo.disconnectAccount(PROVIDER, "disconnected", later)
+            repo.connect(providerUserId = "needs-reauth", providerInstanceId = "needs-reauth", at = later)
+            repo.markNeedsReauth(repo.account("needs-reauth").id, "enc-refresh", "error", "msg", later)
+            repo.connect(providerUserId = "tokenless", providerInstanceId = "tokenless", accessToken = "", refreshToken = "", at = later)
 
-            repo.upsertAccount(
-                providerCode = "google_health",
-                providerUserId = "user-1",
-                providerInstanceId = "google-health-user-1",
-                accessTokenCiphertext = "enc-access",
-                refreshTokenCiphertext = "enc-refresh",
-                tokenType = "Bearer",
-                expiresAt = Instant.parse("2099-01-01T00:00:00Z"),
-                scope = "health.read",
-                now = now,
-            )
-
-            assertNotNull(repo.latestAccount("google_health"))
-
-            repo.disconnectAccount("google_health", "google-health-user-1", later)
-            assertNull(repo.latestAccount("google_health"))
+            assertEquals("connected", repo.latestAccount(PROVIDER)?.providerInstanceId)
         }
 
     @Test
-    fun latestAccountExcludesNeedsReauth() =
+    fun disconnectedAccountStaysListedButIsNoLongerSyncable() =
         runBlocking {
-            val db = freshDatabase()
-            val repo = ProviderOAuthRepository(db)
+            val repo = repository()
+            repo.connect()
+            assertNotNull(repo.accountByProviderInstance(PROVIDER, INSTANCE))
 
-            repo.upsertAccount(
-                providerCode = "google_health",
-                providerUserId = "user-1",
-                providerInstanceId = "google-health-user-1",
-                accessTokenCiphertext = "enc-access",
-                refreshTokenCiphertext = "enc-refresh",
-                tokenType = "Bearer",
-                expiresAt = Instant.parse("2099-01-01T00:00:00Z"),
-                scope = "health.read",
-                now = now,
-            )
-            val accountId = repo.accountByProviderInstanceForStatus("google_health", "google-health-user-1")!!.id
-            repo.markNeedsReauth(accountId, "enc-refresh", "error", "msg", later)
+            repo.disconnectAccount(PROVIDER, INSTANCE, later)
 
-            assertNull(repo.latestAccount("google_health"))
+            assertNull(repo.accountByProviderInstance(PROVIDER, INSTANCE))
+            assertEquals(listOf(ACCOUNT_STATUS_DISCONNECTED), repo.accountsByProvider(PROVIDER).map { it.accountStatus })
         }
 
-    @Test
-    fun latestAccountExcludesEmptyTokens() =
-        runBlocking {
-            val db = freshDatabase()
-            val repo = ProviderOAuthRepository(db)
+    private fun repository() = ProviderOAuthRepository(openDatabase())
 
-            repo.upsertAccount(
-                providerCode = "google_health",
-                providerUserId = "user-1",
-                providerInstanceId = "google-health-user-1",
-                accessTokenCiphertext = "",
-                refreshTokenCiphertext = "",
-                tokenType = "Bearer",
-                expiresAt = Instant.parse("2099-01-01T00:00:00Z"),
-                scope = "health.read",
-                now = now,
-            )
+    private suspend fun ProviderOAuthRepository.connect(
+        providerUserId: String = "user-1",
+        providerInstanceId: String = INSTANCE,
+        accessToken: String = "enc-access",
+        refreshToken: String = "enc-refresh",
+        at: Instant = now,
+    ) = upsertAccount(
+        providerCode = PROVIDER,
+        providerUserId = providerUserId,
+        providerInstanceId = providerInstanceId,
+        accessTokenCiphertext = accessToken,
+        refreshTokenCiphertext = refreshToken,
+        tokenType = "Bearer",
+        expiresAt = Instant.parse("2099-01-01T00:00:00Z"),
+        scope = "health.read",
+        now = at,
+    )
 
-            assertNull(repo.latestAccount("google_health"))
-        }
+    private suspend fun ProviderOAuthRepository.account(providerInstanceId: String = INSTANCE) = assertNotNull(accountByProviderInstanceForStatus(PROVIDER, providerInstanceId))
 
-    @Test
-    fun accountsByProviderIncludesDisconnectedByDefault() =
-        runBlocking {
-            val db = freshDatabase()
-            val repo = ProviderOAuthRepository(db)
-
-            repo.upsertAccount(
-                providerCode = "google_health",
-                providerUserId = "user-1",
-                providerInstanceId = "google-health-user-1",
-                accessTokenCiphertext = "enc-access",
-                refreshTokenCiphertext = "enc-refresh",
-                tokenType = "Bearer",
-                expiresAt = Instant.parse("2099-01-01T00:00:00Z"),
-                scope = "health.read",
-                now = now,
-            )
-            repo.disconnectAccount("google_health", "google-health-user-1", later)
-
-            val all = repo.accountsByProvider("google_health")
-            assertEquals(1, all.size)
-            assertEquals(ACCOUNT_STATUS_DISCONNECTED, all[0].accountStatus)
-        }
-
-    @Test
-    fun accountByProviderInstanceExcludesDisconnected() =
-        runBlocking {
-            val db = freshDatabase()
-            val repo = ProviderOAuthRepository(db)
-
-            repo.upsertAccount(
-                providerCode = "google_health",
-                providerUserId = "user-1",
-                providerInstanceId = "google-health-user-1",
-                accessTokenCiphertext = "enc-access",
-                refreshTokenCiphertext = "enc-refresh",
-                tokenType = "Bearer",
-                expiresAt = Instant.parse("2099-01-01T00:00:00Z"),
-                scope = "health.read",
-                now = now,
-            )
-
-            assertNotNull(repo.accountByProviderInstance("google_health", "google-health-user-1"))
-
-            repo.disconnectAccount("google_health", "google-health-user-1", later)
-            assertNull(repo.accountByProviderInstance("google_health", "google-health-user-1"))
-        }
-
-    @Test
-    fun accountByProviderInstanceForStatusReturnsDisconnectedAccounts() =
-        runBlocking {
-            val db = freshDatabase()
-            val repo = ProviderOAuthRepository(db)
-
-            repo.upsertAccount(
-                providerCode = "google_health",
-                providerUserId = "user-1",
-                providerInstanceId = "google-health-user-1",
-                accessTokenCiphertext = "enc-access",
-                refreshTokenCiphertext = "enc-refresh",
-                tokenType = "Bearer",
-                expiresAt = Instant.parse("2099-01-01T00:00:00Z"),
-                scope = "health.read",
-                now = now,
-            )
-            repo.disconnectAccount("google_health", "google-health-user-1", later)
-
-            val account = repo.accountByProviderInstanceForStatus("google_health", "google-health-user-1")
-            assertNotNull(account)
-            assertEquals(ACCOUNT_STATUS_DISCONNECTED, account.accountStatus)
-        }
-
-    @Test
-    fun fullLifecycleTransitionSequence() =
-        runBlocking {
-            val db = freshDatabase()
-            val repo = ProviderOAuthRepository(db)
-
-            // 1. Connect
-            repo.upsertAccount(
-                providerCode = "google_health",
-                providerUserId = "user-1",
-                providerInstanceId = "google-health-user-1",
-                accessTokenCiphertext = "access-v1",
-                refreshTokenCiphertext = "refresh-v1",
-                tokenType = "Bearer",
-                expiresAt = Instant.parse("2026-05-15T11:00:00Z"),
-                scope = "health.read",
-                now = now,
-            )
-            var account = repo.accountByProviderInstanceForStatus("google_health", "google-health-user-1")!!
-            assertEquals(ACCOUNT_STATUS_CONNECTED, account.accountStatus)
-            assertEquals(now, account.connectedAt)
-
-            // 2. Token refresh succeeds
-            val t2 = Instant.parse("2026-05-15T10:30:00Z")
-            repo.updateAccessToken(
-                accountId = account.id,
-                expectedRefreshTokenCiphertext = account.refreshTokenCiphertext,
-                accessTokenCiphertext = "access-v2",
-                refreshTokenCiphertext = "refresh-v2",
-                tokenType = "Bearer",
-                expiresAt = Instant.parse("2026-05-15T12:00:00Z"),
-                scope = "health.read",
-                now = t2,
-            )
-            account = repo.accountByProviderInstanceForStatus("google_health", "google-health-user-1")!!
-            assertEquals(ACCOUNT_STATUS_CONNECTED, account.accountStatus)
-            assertEquals(TOKEN_REFRESH_STATUS_SUCCESS, account.lastTokenRefreshStatus)
-
-            // 3. Token refresh fails with invalid refresh token -> needs_reauth
-            val t3 = Instant.parse("2026-05-15T11:00:00Z")
-            repo.markNeedsReauth(account.id, account.refreshTokenCiphertext, "google_health_needs_reauth", "Token was revoked", t3)
-            account = repo.accountByProviderInstanceForStatus("google_health", "google-health-user-1")!!
-            assertEquals(ACCOUNT_STATUS_NEEDS_REAUTH, account.accountStatus)
-            assertNull(repo.latestAccount("google_health"), "needs_reauth should be excluded from sync")
-
-            // 4. Reconnect via upsertAccount
-            val t4 = Instant.parse("2026-05-15T12:00:00Z")
-            repo.upsertAccount(
-                providerCode = "google_health",
-                providerUserId = "user-1",
-                providerInstanceId = "google-health-user-1",
-                accessTokenCiphertext = "access-v3",
-                refreshTokenCiphertext = "refresh-v3",
-                tokenType = "Bearer",
-                expiresAt = Instant.parse("2026-05-16T00:00:00Z"),
-                scope = "health.read",
-                now = t4,
-            )
-            account = repo.accountByProviderInstanceForStatus("google_health", "google-health-user-1")!!
-            assertEquals(ACCOUNT_STATUS_CONNECTED, account.accountStatus)
-            assertEquals(t4, account.connectedAt, "connected_at should reset on reconnect")
-            assertNull(account.lastAuthErrorCode)
-            assertNotNull(repo.latestAccount("google_health"), "should be syncable again")
-
-            // 5. Disconnect
-            val t5 = Instant.parse("2026-05-15T13:00:00Z")
-            repo.disconnectAccount("google_health", "google-health-user-1", t5)
-            account = repo.accountByProviderInstanceForStatus("google_health", "google-health-user-1")!!
-            assertEquals(ACCOUNT_STATUS_DISCONNECTED, account.accountStatus)
-            assertEquals(t5, account.disconnectedAt)
-            assertEquals("", account.accessTokenCiphertext)
-            assertEquals("", account.refreshTokenCiphertext)
-            assertNull(repo.latestAccount("google_health"))
-        }
-
-    private fun freshDatabase(): Database {
-        val config = PostgresTestDatabase.config()
-        return openDatabase(config)
+    private companion object {
+        const val PROVIDER = "google_health"
+        const val INSTANCE = "google-health-user-1"
     }
 }

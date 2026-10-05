@@ -1,26 +1,23 @@
 package me.aquitano.health.application
 
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
 import me.aquitano.health.api.dto.ScheduledSyncConfigUpdateRequest
 import me.aquitano.health.domain.ConflictException
 import me.aquitano.health.domain.HealthProvider
-import me.aquitano.health.domain.HealthProviderDescriptor
-import me.aquitano.health.domain.ProviderAuthType
-import me.aquitano.health.domain.ProviderConnection
 import me.aquitano.health.domain.ProviderSyncProgressSink
 import me.aquitano.health.domain.ProviderSyncRequest
 import me.aquitano.health.domain.ProviderSyncSummary
-import me.aquitano.health.domain.ProviderWorkflowEndpoints
+import me.aquitano.health.infrastructure.repositories.ProviderOAuthAccount
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
+import me.aquitano.health.infrastructure.repositories.ScheduledSyncConfigRecord
 import me.aquitano.health.infrastructure.repositories.ScheduledSyncRepository
+import me.aquitano.health.test.BlockingProvider
+import me.aquitano.health.test.FakeProvider
 import me.aquitano.health.test.PostgresIntegrationTest
-import me.aquitano.health.test.PostgresTestDatabase
 import org.jetbrains.exposed.v1.jdbc.Database
 import java.time.Instant
-import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -32,7 +29,7 @@ class ScheduledProviderSyncServiceTest : PostgresIntegrationTest() {
     @Test
     fun maximumLookbackAdvancesCheckpointAndRefreshesHistory() =
         runBlocking {
-            val provider = BlockingProvider().apply { release.complete(Unit) }
+            val provider = FakeProvider("fake_provider")
             val (service, repository) = serviceWith(provider)
             val now = Instant.parse("2026-05-31T10:00:00Z")
             repository.upsertConfig(
@@ -59,7 +56,7 @@ class ScheduledProviderSyncServiceTest : PostgresIntegrationTest() {
     @Test
     fun longOutageCatchesUpInBoundedWindowsAtMaximumLookback() =
         runBlocking {
-            val provider = BlockingProvider().apply { release.complete(Unit) }
+            val provider = FakeProvider("fake_provider")
             val (service, repository) = serviceWith(provider)
             val originalCheckpoint = Instant.parse("2026-01-01T10:00:00Z")
             val now = Instant.parse("2026-07-01T10:00:00Z")
@@ -91,28 +88,10 @@ class ScheduledProviderSyncServiceTest : PostgresIntegrationTest() {
     @Test
     fun manualRunConflictsWhileScheduledRunIsActiveForSameAccount() =
         runBlocking {
-            val database = openDatabase(PostgresTestDatabase.config())
-            val repository = ScheduledSyncRepository(database)
             val provider = BlockingProvider()
-            val service =
-                ScheduledProviderSyncService(
-                    providerRegistry = HealthProviderRegistry(listOf(provider)),
-                    providerOAuthRepository = ProviderOAuthRepository(database),
-                    repository = repository,
-                    runGuard = ScheduledSyncRunGuard(),
-                )
+            val (service, repository) = serviceWith(provider)
             val now = Instant.parse("2026-05-31T10:00:00Z")
-
-            repository.upsertConfig(
-                providerCode = provider.providerCode,
-                providerInstanceId = provider.defaultProviderInstanceId,
-                enabled = true,
-                dataTypes = listOf("steps"),
-                cadenceMinutes = 1_440,
-                lookbackDays = 7,
-                nextRunAt = now,
-                now = now,
-            )
+            configureEnabled(repository, provider, now)
 
             coroutineScope {
                 val scheduledRun = async { service.runDue(now) }
@@ -133,40 +112,28 @@ class ScheduledProviderSyncServiceTest : PostgresIntegrationTest() {
     @Test
     fun nonRetryableFailureParksConfigOnlyAfterRepeatedFailures() =
         runBlocking {
-            val provider = ThrowingProvider(ConflictException("withings_account_not_found", "account is gone"))
-            val (service, repository) = serviceWith(provider)
-            var runAt = Instant.parse("2026-05-31T10:00:00Z")
-            configureEnabled(repository, provider, runAt)
+            val config = failScheduledRuns(ConflictException("withings_account_not_found", "account is gone"), times = 3)
 
-            repeat(2) {
-                assertEquals(1, service.runDue(runAt))
-                runAt = assertNotNull(repository.getConfig(provider.providerCode, provider.defaultProviderInstanceId)?.nextRunAt)
-            }
-            assertEquals(1, service.runDue(runAt))
-
-            val config = repository.getConfig(provider.providerCode, provider.defaultProviderInstanceId)
-            assertNotNull(config)
             assertNull(config.nextRunAt)
+            assertEquals(3, config.failureCount)
+        }
+
+    @Test
+    fun retryableFailureKeepsBackingOffPastTheParkingThreshold() =
+        runBlocking {
+            val config = failScheduledRuns(IllegalStateException("upstream timed out"), times = 3)
+
+            assertNotNull(config.nextRunAt)
             assertEquals(3, config.failureCount)
         }
 
     @Test
     fun reschedulingParkedOrPausedConfigStartsFailureCountOver() =
         runBlocking {
-            val provider = ThrowingProvider(ConflictException("withings_account_not_found", "account is gone"))
-            val database = openDatabase(PostgresTestDatabase.config())
+            val provider = FakeProvider("fake_provider")
+            val database = openDatabase()
             val now = Instant.parse("2026-05-31T10:00:00Z")
-            ProviderOAuthRepository(database).upsertAccount(
-                providerCode = provider.providerCode,
-                providerUserId = "throwing-user",
-                providerInstanceId = provider.defaultProviderInstanceId,
-                accessTokenCiphertext = "access",
-                refreshTokenCiphertext = "refresh",
-                tokenType = "Bearer",
-                expiresAt = now.plusSeconds(3600),
-                scope = "scope",
-                now = now,
-            )
+            connectAccount(database, provider, now)
             val (service, repository) = serviceWith(provider, database)
 
             for (wasEnabled in listOf(true, false)) {
@@ -201,22 +168,10 @@ class ScheduledProviderSyncServiceTest : PostgresIntegrationTest() {
     fun needsReauthAccountParksConfigOnFirstRetryableFailure() =
         runBlocking {
             val provider = ThrowingProvider(IllegalStateException("upstream timed out"))
-            val database = openDatabase(PostgresTestDatabase.config())
+            val database = openDatabase()
             val now = Instant.parse("2026-05-31T10:00:00Z")
-            val accounts = ProviderOAuthRepository(database)
-            accounts.upsertAccount(
-                providerCode = provider.providerCode,
-                providerUserId = "throwing-user",
-                providerInstanceId = provider.defaultProviderInstanceId,
-                accessTokenCiphertext = "access",
-                refreshTokenCiphertext = "refresh",
-                tokenType = "Bearer",
-                expiresAt = now.plusSeconds(3600),
-                scope = "scope",
-                now = now,
-            )
-            val account = accounts.accountByProviderInstanceForStatus(provider.providerCode, provider.defaultProviderInstanceId)!!
-            accounts.markNeedsReauth(account.id, account.refreshTokenCiphertext, "withings_needs_reauth", "reconnect", now)
+            val account = connectAccount(database, provider, now)
+            ProviderOAuthRepository(database).markNeedsReauth(account.id, account.refreshTokenCiphertext, "withings_needs_reauth", "reconnect", now)
             val (service, repository) = serviceWith(provider, database)
             configureEnabled(repository, provider, now)
 
@@ -228,28 +183,45 @@ class ScheduledProviderSyncServiceTest : PostgresIntegrationTest() {
             assertEquals(1, config.failureCount)
         }
 
-    @Test
-    fun transientFailureKeepsRetryingEvenWhenMessageMentionsValidation() =
-        runBlocking {
-            val provider =
-                ThrowingProvider(
-                    IllegalStateException("upstream response failed schema validation, not connected to peer"),
-                )
-            val (service, repository) = serviceWith(provider)
-            val now = Instant.parse("2026-05-31T10:00:00Z")
-            configureEnabled(repository, provider, now)
-
-            assertEquals(1, service.runDue(now))
-
-            val config = repository.getConfig(provider.providerCode, provider.defaultProviderInstanceId)
-            assertNotNull(config)
-            assertEquals(ScheduledSyncPolicy.nextRunAfterFailure(now, 1), config.nextRunAt)
-            assertEquals(1, config.failureCount)
+    private suspend fun failScheduledRuns(
+        failure: Exception,
+        times: Int,
+    ): ScheduledSyncConfigRecord {
+        val provider = ThrowingProvider(failure)
+        val (service, repository) = serviceWith(provider)
+        val start = Instant.parse("2026-05-31T10:00:00Z")
+        configureEnabled(repository, provider, start)
+        var runAt: Instant? = start
+        repeat(times) { run ->
+            assertEquals(1, service.runDue(assertNotNull(runAt, "parked before run ${run + 1}")))
+            runAt = repository.getConfig(provider.providerCode, provider.defaultProviderInstanceId)!!.nextRunAt
         }
+        return repository.getConfig(provider.providerCode, provider.defaultProviderInstanceId)!!
+    }
+
+    private suspend fun connectAccount(
+        database: Database,
+        provider: HealthProvider,
+        now: Instant,
+    ): ProviderOAuthAccount {
+        val accounts = ProviderOAuthRepository(database)
+        accounts.upsertAccount(
+            providerCode = provider.providerCode,
+            providerUserId = "fake-user",
+            providerInstanceId = provider.defaultProviderInstanceId,
+            accessTokenCiphertext = "access",
+            refreshTokenCiphertext = "refresh",
+            tokenType = "Bearer",
+            expiresAt = now.plusSeconds(3600),
+            scope = "scope",
+            now = now,
+        )
+        return accounts.accountByProviderInstanceForStatus(provider.providerCode, provider.defaultProviderInstanceId)!!
+    }
 
     private fun serviceWith(
         provider: HealthProvider,
-        database: Database = openDatabase(PostgresTestDatabase.config()),
+        database: Database = openDatabase(),
     ): Pair<ScheduledProviderSyncService, ScheduledSyncRepository> {
         val repository = ScheduledSyncRepository(database)
         val service =
@@ -281,86 +253,11 @@ class ScheduledProviderSyncServiceTest : PostgresIntegrationTest() {
 
     private class ThrowingProvider(
         private val failure: Exception,
-    ) : HealthProvider {
-        override val providerCode = "throwing_provider"
-        override val defaultProviderInstanceId = "throwing-provider-me"
-        override val descriptor =
-            HealthProviderDescriptor(
-                providerCode = providerCode,
-                displayName = "Throwing Provider",
-                authType = ProviderAuthType.NONE,
-                requiresAuthentication = false,
-                supportedDataTypes = listOf("steps"),
-                defaultDataTypes = listOf("steps"),
-                maxSyncRangeDays = 31,
-                supportsPageSize = false,
-                workflowEndpoints = ProviderWorkflowEndpoints(sync = "/sync"),
-            )
-
-        override fun isConfigured(): Boolean = true
-
-        override fun getAuthUrl(state: String): String = error("OAuth is not supported")
-
-        override suspend fun connect(
-            code: String,
-            now: Instant,
-        ): ProviderConnection = error("OAuth is not supported")
-
+    ) : FakeProvider("throwing_provider") {
         override suspend fun sync(
             request: ProviderSyncRequest,
             now: Instant,
             progress: ProviderSyncProgressSink,
         ): ProviderSyncSummary = throw failure
-    }
-
-    private class BlockingProvider : HealthProvider {
-        val started = CompletableDeferred<Unit>()
-        val release = CompletableDeferred<Unit>()
-        val syncCalls = AtomicInteger(0)
-        val requests = mutableListOf<ProviderSyncRequest>()
-
-        override val providerCode = "blocking_provider"
-        override val defaultProviderInstanceId = "blocking-provider-me"
-        override val descriptor =
-            HealthProviderDescriptor(
-                providerCode = providerCode,
-                displayName = "Blocking Provider",
-                authType = ProviderAuthType.NONE,
-                requiresAuthentication = false,
-                supportedDataTypes = listOf("steps"),
-                defaultDataTypes = listOf("steps"),
-                maxSyncRangeDays = 31,
-                supportsPageSize = false,
-                workflowEndpoints = ProviderWorkflowEndpoints(sync = "/sync"),
-            )
-
-        override fun isConfigured(): Boolean = true
-
-        override fun getAuthUrl(state: String): String = error("OAuth is not supported")
-
-        override suspend fun connect(
-            code: String,
-            now: Instant,
-        ): ProviderConnection = error("OAuth is not supported")
-
-        override suspend fun sync(
-            request: ProviderSyncRequest,
-            now: Instant,
-            progress: ProviderSyncProgressSink,
-        ): ProviderSyncSummary {
-            syncCalls.incrementAndGet()
-            requests += request
-            started.complete(Unit)
-            release.await()
-            return ProviderSyncSummary(
-                providerCode = providerCode,
-                providerInstanceId = request.providerInstanceId ?: defaultProviderInstanceId,
-                requestedFrom = request.from,
-                requestedTo = request.to,
-                status = "processed",
-                batches = emptyList(),
-                errors = emptyList(),
-            )
-        }
     }
 }

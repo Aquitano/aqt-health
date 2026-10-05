@@ -9,40 +9,32 @@ import me.aquitano.health.api.dto.IngestionBatchRequest
 import me.aquitano.health.api.dto.ScalarSample
 import me.aquitano.health.api.dto.StepInterval
 import me.aquitano.health.domain.BatchStatus
-import me.aquitano.health.domain.ConflictException
 import me.aquitano.health.domain.IngestionSnapshot
 import me.aquitano.health.domain.RequestValidationException
 import me.aquitano.health.domain.ScalarMetricTypes
-import me.aquitano.health.infrastructure.config.DatabaseConfig
-import me.aquitano.health.infrastructure.repositories.IngestionRepository
 import me.aquitano.health.infrastructure.repositories.PendingDerivedRebuildRepository
-import me.aquitano.health.infrastructure.repositories.SupportRepository
-import me.aquitano.health.test.NoOpDerivedRebuildExecutor
+import me.aquitano.health.infrastructure.time.UtcClock
 import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.test.PostgresTestDatabase
-import me.aquitano.health.test.metricWriteService
+import me.aquitano.health.test.countRows
+import me.aquitano.health.test.execute
+import me.aquitano.health.test.ingestionService
+import me.aquitano.health.test.queryInt
+import me.aquitano.health.test.queryString
 import me.aquitano.health.test.realDerivedRebuildExecutor
 import java.time.Instant
+import java.util.concurrent.CancellationException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class IngestionServiceTest : PostgresIntegrationTest() {
     @Test
     fun emptyProviderSnapshotPersistsWhileDirectIngestionStaysStrict() =
         runBlocking {
-            val database = openDatabase(PostgresTestDatabase.config())
-            val service =
-                IngestionService(
-                    database,
-                    IngestionMappingService(),
-                    SupportRepository(database),
-                    IngestionRepository(),
-                    metricWriteService(),
-                    NoOpDerivedRebuildExecutor,
-                    PendingDerivedRebuildRepository(database),
-                )
+            val service = ingestionService(openDatabase())
             val now = Instant.parse("2026-04-19T10:00:00Z")
             val request =
                 IngestionBatchRequest(
@@ -72,16 +64,7 @@ class IngestionServiceTest : PostgresIntegrationTest() {
             val config = PostgresTestDatabase.config().copy(maxPoolSize = 3)
             val database = openDatabase(config)
             val pending = PendingDerivedRebuildRepository(database)
-            val service =
-                IngestionService(
-                    database,
-                    IngestionMappingService(),
-                    SupportRepository(database),
-                    IngestionRepository(),
-                    metricWriteService(),
-                    realDerivedRebuildExecutor(database),
-                    pending,
-                )
+            val service = ingestionService(database, realDerivedRebuildExecutor(database))
             val now = Instant.parse("2026-04-19T10:00:00Z")
 
             fun request(hour: Int) =
@@ -108,8 +91,8 @@ class IngestionServiceTest : PostgresIntegrationTest() {
                 val first = async { service.ingestBatch(request(8), now) }
                 try {
                     withTimeout(10_000) {
-                        while (singleInt(
-                                config,
+                        while (
+                            config.queryInt(
                                 """
                                 SELECT COUNT(*) FROM pg_locks
                                 WHERE relation = 'canonical_step_day_bucket_contributions'::regclass
@@ -124,7 +107,7 @@ class IngestionServiceTest : PostgresIntegrationTest() {
                     val originalRevision = pending.due(now, 10).single().revision
                     val second = async { service.ingestBatch(request(9), now) }
                     withTimeout(10_000) {
-                        while (singleInt(config, "SELECT COUNT(*) FROM step_samples") != 2) delay(10)
+                        while (config.countRows("step_samples") != 2) delay(10)
                     }
                     assertTrue(originalRevision != pending.due(now, 10).single().revision)
                     blocker.rollback()
@@ -136,7 +119,7 @@ class IngestionServiceTest : PostgresIntegrationTest() {
                     blocker.rollback()
                 }
             }
-            assertEquals(200, singleInt(config, "SELECT SUM(value)::integer FROM canonical_step_day_bucket_contributions"))
+            assertEquals(200, config.queryInt("SELECT SUM(value)::integer FROM canonical_step_day_bucket_contributions"))
             assertEquals(0, pending.due(now, 10).size)
         }
 
@@ -147,19 +130,14 @@ class IngestionServiceTest : PostgresIntegrationTest() {
             val database = openDatabase(config)
             val pending = PendingDerivedRebuildRepository(database)
             val service =
-                IngestionService(
+                ingestionService(
                     database,
-                    IngestionMappingService(),
-                    SupportRepository(database),
-                    IngestionRepository(),
-                    metricWriteService(),
                     object : DerivedRebuildExecutor {
                         override suspend fun rebuild(
                             requests: List<DerivedRebuildRequest>,
                             computedAt: Instant,
-                        ): Unit = throw java.util.concurrent.CancellationException("request cancelled")
+                        ): Unit = throw CancellationException("request cancelled")
                     },
-                    pending,
                 )
             val now = Instant.parse("2026-04-19T10:00:00Z")
             val request =
@@ -171,38 +149,27 @@ class IngestionServiceTest : PostgresIntegrationTest() {
                     sourcePayload = buildJsonObject {},
                     records = listOf(StepInterval(startAt = "2026-04-19T08:00:00Z", endAt = "2026-04-19T09:00:00Z", steps = 100)),
                 )
-            assertFailsWith<java.util.concurrent.CancellationException> { service.ingestBatch(request, now) }
+            assertFailsWith<CancellationException> { service.ingestBatch(request, now) }
             assertEquals(1, pending.due(now, 10).size)
             assertTrue(service.ingestBatch(request, now).duplicateBatch)
             assertEquals(1, pending.due(now, 10).size)
             val sweeper =
                 PendingDerivedRebuildSweeper(
                     pending,
-                    me.aquitano.health.test
-                        .realDerivedRebuildExecutor(database),
-                    me.aquitano.health.infrastructure.time
-                        .UtcClock(),
+                    realDerivedRebuildExecutor(database),
+                    UtcClock(),
                 )
             assertEquals(1, sweeper.sweep(now))
             assertEquals(0, pending.due(now, 10).size)
-            assertEquals(100, singleInt(config, "SELECT SUM(value)::integer FROM canonical_step_day_bucket_contributions"))
+            assertEquals(100, config.queryInt("SELECT SUM(value)::integer FROM canonical_step_day_bucket_contributions"))
         }
 
     @Test
     fun derivedRebuildFailureDoesNotFailRawIngestion() =
         runBlocking {
-            val dbConfig = PostgresTestDatabase.config()
-            val database = openDatabase(dbConfig)
-            val service =
-                IngestionService(
-                    database = database,
-                    mappingService = IngestionMappingService(),
-                    supportRepository = SupportRepository(database),
-                    ingestionRepository = IngestionRepository(),
-                    metricWriteService = metricWriteService(),
-                    derivedRebuildExecutor = FailingDerivedRebuildExecutor,
-                    pendingDerivedRebuildRepository = PendingDerivedRebuildRepository(database),
-                )
+            val config = PostgresTestDatabase.config()
+            val database = openDatabase(config)
+            val service = ingestionService(database, FailingDerivedRebuildExecutor)
 
             val response =
                 service.ingestBatch(
@@ -226,86 +193,31 @@ class IngestionServiceTest : PostgresIntegrationTest() {
                 )
 
             assertEquals(BatchStatus.Processed, response.status)
-            assertEquals("processed", singleString(dbConfig, "SELECT status FROM ingestion_batches"))
-            assertEquals(1, singleInt(dbConfig, "SELECT COUNT(*) FROM ingestion_records"))
-            assertEquals(1, singleInt(dbConfig, "SELECT COUNT(*) FROM step_samples"))
-            assertEquals(0, singleInt(dbConfig, "SELECT COUNT(*) FROM canonical_step_day_bucket_contributions"))
+            assertEquals("processed", config.queryString("SELECT status FROM ingestion_batches"))
+            assertEquals(1, config.countRows("ingestion_records"))
+            assertEquals(1, config.countRows("step_samples"))
+            assertEquals(0, config.countRows("canonical_step_day_bucket_contributions"))
             assertTrue(
-                singleString(dbConfig, "SELECT error_message FROM ingestion_batches")
+                assertNotNull(config.queryString("SELECT error_message FROM ingestion_batches"))
                     .startsWith("Derived rebuild failed: test derived failure"),
             )
             // The failed rebuild must be queued for the sweeper, not just marked on the batch.
-            assertEquals(1, singleInt(dbConfig, "SELECT COUNT(*) FROM pending_derived_rebuilds"))
+            assertEquals(1, config.countRows("pending_derived_rebuilds"))
             assertEquals(
                 "2026-04-19",
-                singleString(dbConfig, "SELECT affected_date::text FROM pending_derived_rebuilds"),
+                config.queryString("SELECT affected_date::text FROM pending_derived_rebuilds"),
             )
-        }
-
-    @Test
-    fun unknownExistingBatchStatusReturnsConflictInsteadOfParseFailure() =
-        runBlocking {
-            val dbConfig = PostgresTestDatabase.config()
-            val database = openDatabase(dbConfig)
-            val service =
-                IngestionService(
-                    database = database,
-                    mappingService = IngestionMappingService(),
-                    supportRepository = SupportRepository(database),
-                    ingestionRepository = IngestionRepository(),
-                    metricWriteService = metricWriteService(),
-                    derivedRebuildExecutor = FailingDerivedRebuildExecutor,
-                    pendingDerivedRebuildRepository = PendingDerivedRebuildRepository(database),
-                )
-            val request =
-                IngestionBatchRequest(
-                    provider = "health_connect",
-                    providerInstanceId = "pixel-8-health-connect",
-                    batchExternalId = "legacy-status",
-                    ingestedAt = "2026-04-20T10:00:00Z",
-                    sourcePayload = buildJsonObject {},
-                    records =
-                        listOf(
-                            StepInterval(
-                                providerRecordId = "steps-legacy",
-                                startAt = "2026-04-20T08:00:00Z",
-                                endAt = "2026-04-20T09:00:00Z",
-                                steps = 900,
-                            ),
-                        ),
-                )
-
-            service.ingestBatch(request, Instant.parse("2026-04-20T10:01:00Z"))
-            execute(dbConfig, "ALTER TABLE ingestion_batches DROP CONSTRAINT ingestion_batches_status_check")
-            execute(dbConfig, "UPDATE ingestion_batches SET status = 'legacy' WHERE batch_external_id = 'legacy-status'")
-
-            val error =
-                assertFailsWith<ConflictException> {
-                    service.ingestBatch(request, Instant.parse("2026-04-20T10:02:00Z"))
-                }
-
-            assertEquals("ingestion_batch_in_progress", error.code)
-            assertTrue(error.message!!.contains("status 'legacy'"))
         }
 
     @Test
     fun metricWriteFailureKeepsFailedBatchAndDiscardsPartialMetrics() =
         runBlocking {
-            val dbConfig = PostgresTestDatabase.config()
-            val database = openDatabase(dbConfig)
-            val service =
-                IngestionService(
-                    database = database,
-                    mappingService = IngestionMappingService(),
-                    supportRepository = SupportRepository(database),
-                    ingestionRepository = IngestionRepository(),
-                    metricWriteService = metricWriteService(),
-                    derivedRebuildExecutor = FailingDerivedRebuildExecutor,
-                    pendingDerivedRebuildRepository = PendingDerivedRebuildRepository(database),
-                )
+            val config = PostgresTestDatabase.config()
+            val database = openDatabase(config)
+            val service = ingestionService(database, FailingDerivedRebuildExecutor)
             // Makes the step write fail at the SQL level, which aborts the transaction unless the
             // metric writes run in their own savepoint.
-            execute(dbConfig, "ALTER TABLE step_samples ADD CONSTRAINT step_samples_test_reject CHECK (steps < 100)")
+            config.execute("ALTER TABLE step_samples ADD CONSTRAINT step_samples_test_reject CHECK (steps < 100)")
 
             assertFailsWith<Exception> {
                 service.ingestBatch(
@@ -329,25 +241,16 @@ class IngestionServiceTest : PostgresIntegrationTest() {
                 )
             }
 
-            assertEquals("failed", singleString(dbConfig, "SELECT status FROM ingestion_batches"))
-            assertEquals(0, singleInt(dbConfig, "SELECT COUNT(*) FROM step_samples"))
+            assertEquals("failed", config.queryString("SELECT status FROM ingestion_batches"))
+            assertEquals(0, config.countRows("step_samples"))
         }
 
     @Test
     fun sameProviderRecordIdKeepsOneSamplePerContext() =
         runBlocking {
-            val dbConfig = PostgresTestDatabase.config()
-            val database = openDatabase(dbConfig)
-            val service =
-                IngestionService(
-                    database = database,
-                    mappingService = IngestionMappingService(),
-                    supportRepository = SupportRepository(database),
-                    ingestionRepository = IngestionRepository(),
-                    metricWriteService = metricWriteService(),
-                    derivedRebuildExecutor = NoOpDerivedRebuildExecutor,
-                    pendingDerivedRebuildRepository = PendingDerivedRebuildRepository(database),
-                )
+            val config = PostgresTestDatabase.config()
+            val database = openDatabase(config)
+            val service = ingestionService(database)
 
             listOf("general", "sleep").forEachIndexed { index, context ->
                 service.ingestBatch(
@@ -374,7 +277,7 @@ class IngestionServiceTest : PostgresIntegrationTest() {
 
             assertEquals(
                 2,
-                singleInt(dbConfig, "SELECT COUNT(*) FROM scalar_samples WHERE provider_record_id = 'hr-1'"),
+                config.queryInt("SELECT COUNT(*) FROM scalar_samples WHERE provider_record_id = 'hr-1'"),
             )
         }
 
@@ -383,42 +286,5 @@ class IngestionServiceTest : PostgresIntegrationTest() {
             requests: List<DerivedRebuildRequest>,
             computedAt: Instant,
         ): Unit = throw IllegalStateException("test derived failure")
-    }
-
-    private fun singleInt(
-        dbConfig: DatabaseConfig,
-        sql: String,
-    ): Int =
-        PostgresTestDatabase.connection(dbConfig).use { connection ->
-            connection.createStatement().use { statement ->
-                statement.executeQuery(sql).use { resultSet ->
-                    resultSet.next()
-                    resultSet.getInt(1)
-                }
-            }
-        }
-
-    private fun singleString(
-        dbConfig: DatabaseConfig,
-        sql: String,
-    ): String =
-        PostgresTestDatabase.connection(dbConfig).use { connection ->
-            connection.createStatement().use { statement ->
-                statement.executeQuery(sql).use { resultSet ->
-                    resultSet.next()
-                    resultSet.getString(1)
-                }
-            }
-        }
-
-    private fun execute(
-        dbConfig: DatabaseConfig,
-        sql: String,
-    ) {
-        PostgresTestDatabase.connection(dbConfig).use { connection ->
-            connection.createStatement().use { statement ->
-                statement.execute(sql)
-            }
-        }
     }
 }

@@ -33,52 +33,48 @@ class ProviderCorrectionMigrationTest : PostgresIntegrationTest() {
                 .target("30")
                 .load()
                 .migrate()
-            PostgresTestDatabase.connection(config).use { connection ->
-                connection.createStatement().use { statement ->
-                    statement.execute("INSERT INTO sources (id, code, created_at) VALUES (1, 'google_health', now())")
-                    statement.execute(
-                        """
-                        INSERT INTO source_instances (id, source_id, provider_instance_id, created_at, updated_at)
-                        VALUES (1, 1, 'migration', now(), now())
-                        """.trimIndent(),
-                    )
-                    statement.execute(
-                        """
-                        INSERT INTO ingestion_batches (id, source_instance_id, source_payload_json, status,
-                            ingested_at, received_at, processed_at, created_at, updated_at)
-                        SELECT id, 1, '{}', CASE WHEN id = 6 THEN 'failed' ELSE 'processed' END, now(), now(), now(), now(), now()
-                        FROM generate_series(1, 8) id
-                        """.trimIndent(),
-                    )
-                    statement.execute(
-                        """
-                        INSERT INTO ingestion_records (id, batch_id, record_type, provider_record_id,
-                            normalized_record_json, record_start_at, record_end_at, created_at)
-                        SELECT id, id, 'step_interval', provider_id,
-                            jsonb_build_object('type', 'step_interval', 'providerRecordId', provider_id,
-                                'startAt', start_at, 'endAt', end_at, 'steps', steps),
-                            start_at::timestamptz, end_at::timestamptz, now()
-                        FROM (VALUES
-                            (1, 'accepted', '2026-04-19T08:00:00Z', '2026-04-19T09:00:00Z', 100),
-                            (2, 'skipped', '2026-04-19T08:30:00Z', '2026-04-19T08:45:00Z', 50),
-                            (3, 'neighbor', '2026-04-19T09:00:00Z', '2026-04-19T10:00:00Z', 600),
-                            (4, 'accepted', '2026-04-19T08:00:00Z', '2026-04-19T09:30:00Z', 300),
-                            (5, 'accepted', '2026-04-19T08:00:00Z', '2026-04-19T09:30:00Z', 300),
-                            (6, 'accepted', '2026-04-19T08:00:00Z', '2026-04-19T09:30:00Z', 900),
-                            (7, 'neighbor', '2026-04-19T09:00:00Z', '2026-04-19T10:00:00Z', 600),
-                            (8, 'accepted', '2026-04-19T08:00:00Z', '2026-04-19T09:30:00Z', 300)
-                        ) raw(id, provider_id, start_at, end_at, steps)
-                        """.trimIndent(),
-                    )
-                    statement.execute(
-                        """
-                        INSERT INTO step_samples (source_instance_id, ingestion_record_id, provider_record_id, start_at, end_at, steps, created_at)
-                        VALUES (1, 1, 'accepted', '2026-04-19T08:00:00Z', '2026-04-19T09:00:00Z', 100, now()),
-                               (1, 3, 'neighbor', '2026-04-19T09:00:00Z', '2026-04-19T10:00:00Z', 600, now())
-                        """.trimIndent(),
-                    )
-                }
-            }
+            config.execute("INSERT INTO sources (id, code, created_at) VALUES (1, 'google_health', now())")
+            config.execute(
+                """
+                INSERT INTO source_instances (id, source_id, provider_instance_id, created_at, updated_at)
+                VALUES (1, 1, 'migration', now(), now())
+                """.trimIndent(),
+            )
+            config.execute(
+                """
+                INSERT INTO ingestion_batches (id, source_instance_id, source_payload_json, status,
+                    ingested_at, received_at, processed_at, created_at, updated_at)
+                SELECT id, 1, '{}', CASE WHEN id = 6 THEN 'failed' ELSE 'processed' END, now(), now(), now(), now(), now()
+                FROM generate_series(1, 8) id
+                """.trimIndent(),
+            )
+            config.execute(
+                """
+                INSERT INTO ingestion_records (id, batch_id, record_type, provider_record_id,
+                    normalized_record_json, record_start_at, record_end_at, created_at)
+                SELECT id, id, 'step_interval', provider_id,
+                    jsonb_build_object('type', 'step_interval', 'providerRecordId', provider_id,
+                        'startAt', start_at, 'endAt', end_at, 'steps', steps),
+                    start_at::timestamptz, end_at::timestamptz, now()
+                FROM (VALUES
+                    (1, 'accepted', '2026-04-19T08:00:00Z', '2026-04-19T09:00:00Z', 100),
+                    (2, 'skipped', '2026-04-19T08:30:00Z', '2026-04-19T08:45:00Z', 50),
+                    (3, 'neighbor', '2026-04-19T09:00:00Z', '2026-04-19T10:00:00Z', 600),
+                    (4, 'accepted', '2026-04-19T08:00:00Z', '2026-04-19T09:30:00Z', 300),
+                    (5, 'accepted', '2026-04-19T08:00:00Z', '2026-04-19T09:30:00Z', 300),
+                    (6, 'accepted', '2026-04-19T08:00:00Z', '2026-04-19T09:30:00Z', 900),
+                    (7, 'neighbor', '2026-04-19T09:00:00Z', '2026-04-19T10:00:00Z', 600),
+                    (8, 'accepted', '2026-04-19T08:00:00Z', '2026-04-19T09:30:00Z', 300)
+                ) raw(id, provider_id, start_at, end_at, steps)
+                """.trimIndent(),
+            )
+            config.execute(
+                """
+                INSERT INTO step_samples (source_instance_id, ingestion_record_id, provider_record_id, start_at, end_at, steps, created_at)
+                VALUES (1, 1, 'accepted', '2026-04-19T08:00:00Z', '2026-04-19T09:00:00Z', 100, now()),
+                       (1, 3, 'neighbor', '2026-04-19T09:00:00Z', '2026-04-19T10:00:00Z', 600, now())
+                """.trimIndent(),
+            )
 
             fun payloads() =
                 PostgresTestDatabase.connection(config).use { connection ->

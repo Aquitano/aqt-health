@@ -1,10 +1,9 @@
 package me.aquitano.health.infrastructure.repositories
 
 import kotlinx.coroutines.runBlocking
-import me.aquitano.health.infrastructure.config.DatabaseConfig
 import me.aquitano.health.infrastructure.security.ApiKeyHasher
 import me.aquitano.health.test.PostgresIntegrationTest
-import me.aquitano.health.test.PostgresTestDatabase
+import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.time.Instant
 import java.time.OffsetDateTime
@@ -17,7 +16,7 @@ class SupportRepositoryTest : PostgresIntegrationTest() {
     @Test
     fun apiClientLastUsedAtIsThrottled() =
         runBlocking {
-            val database = openDatabase(tempDatabaseConfig())
+            val database = openDatabase()
             val repository = SupportRepository(database)
             val hasher = ApiKeyHasher()
             val apiKeyHash = hasher.hash("test-key")
@@ -51,7 +50,7 @@ class SupportRepositoryTest : PostgresIntegrationTest() {
     @Test
     fun bootstrapClientHashIsRewrittenWhenTheConfiguredKeyRotates() =
         runBlocking {
-            val database = openDatabase(tempDatabaseConfig())
+            val database = openDatabase()
             val repository = SupportRepository(database)
             val hasher = ApiKeyHasher()
             val now = Instant.parse("2026-05-15T09:00:00Z")
@@ -76,9 +75,7 @@ class SupportRepositoryTest : PostgresIntegrationTest() {
             )
         }
 
-    private fun tempDatabaseConfig(): DatabaseConfig = PostgresTestDatabase.config()
-
-    private fun lastUsedAt(database: org.jetbrains.exposed.v1.jdbc.Database): String? =
+    private fun lastUsedAt(database: Database): String? =
         transaction(database) {
             var value: String? = null
             exec("SELECT last_used_at FROM api_clients WHERE name = 'test-client'") { resultSet ->

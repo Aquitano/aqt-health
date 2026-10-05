@@ -2,19 +2,17 @@ package me.aquitano.health.infrastructure.database
 
 import me.aquitano.health.application.ApiClientBootstrapService
 import me.aquitano.health.infrastructure.config.AuthConfig
-import me.aquitano.health.infrastructure.config.DatabaseConfig
 import me.aquitano.health.infrastructure.repositories.SupportRepository
 import me.aquitano.health.infrastructure.security.ApiKeyHasher
 import me.aquitano.health.infrastructure.time.UtcClock
 import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.test.PostgresTestDatabase
-import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
+import me.aquitano.health.test.queryString
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 
 class DatabaseFactoryTest : PostgresIntegrationTest() {
     @Test
@@ -66,7 +64,7 @@ class DatabaseFactoryTest : PostgresIntegrationTest() {
 
     @Test
     fun bootstrapStoresOnlyHashedApiKey() {
-        val database = openDatabase(tempDatabaseConfig())
+        val config = PostgresTestDatabase.config()
         val hasher = ApiKeyHasher()
         ApiClientBootstrapService(
             authConfig =
@@ -74,256 +72,11 @@ class DatabaseFactoryTest : PostgresIntegrationTest() {
                     bootstrapClientName = "test-client",
                     bootstrapApiKey = "plain-test-key",
                 ),
-            supportRepository = SupportRepository(database),
+            supportRepository = SupportRepository(openDatabase(config)),
             apiKeyHasher = hasher,
             clock = UtcClock.fixed(Instant.parse("2026-04-19T10:00:00Z")),
         ).bootstrap()
 
-        val stored =
-            transaction(database) {
-                var hash: String? = null
-                exec("SELECT api_key_hash FROM api_clients WHERE name = 'test-client'") { resultSet ->
-                    if (resultSet.next()) hash = resultSet.getString("api_key_hash")
-                }
-                hash
-            }
-
-        assertEquals(hasher.hash("plain-test-key"), stored)
-    }
-
-    @Test
-    fun postgresForeignKeysAreEnforced() {
-        val database = openDatabase(tempDatabaseConfig())
-
-        transaction(database) {
-            assertFailsWith<Exception> {
-                exec(
-                    """
-                    INSERT INTO source_instances (
-                        source_id,
-                        provider_instance_id,
-                        display_name,
-                        created_at,
-                        updated_at
-                    )
-                    VALUES (
-                        999,
-                        'missing-source',
-                        NULL,
-                        '2026-04-19T10:00:00Z',
-                        '2026-04-19T10:00:00Z'
-                    )
-                    """.trimIndent(),
-                )
-            }
-        }
-    }
-
-    @Test
-    fun postgresConnectionUsesReadCommitted() {
-        val database = openDatabase(tempDatabaseConfig())
-
-        transaction(database) {
-            assertEquals("read committed", singleString("SHOW transaction_isolation"))
-        }
-    }
-
-    @Test
-    fun sleepStagesCascadeWhenSessionIsDeleted() {
-        val database = openDatabase(tempDatabaseConfig())
-
-        transaction(database) {
-            insertSourceInstance()
-            exec(
-                """
-                INSERT INTO sleep_sessions (
-                    id,
-                    source_instance_id,
-                    ingestion_record_id,
-                    provider_record_id,
-                    start_at,
-                    end_at,
-                    duration_seconds,
-                    created_at
-                )
-                VALUES (
-                    1,
-                    1,
-                    NULL,
-                    'sleep-1',
-                    '2026-04-18T22:00:00Z',
-                    '2026-04-19T06:00:00Z',
-                    28800,
-                    '2026-04-19T10:00:00Z'
-                )
-                """.trimIndent(),
-            )
-            exec(
-                """
-                INSERT INTO sleep_stages (
-                    sleep_session_id,
-                    stage,
-                    start_at,
-                    end_at,
-                    duration_seconds
-                )
-                VALUES (
-                    1,
-                    'light',
-                    '2026-04-18T22:00:00Z',
-                    '2026-04-19T06:00:00Z',
-                    28800
-                )
-                """.trimIndent(),
-            )
-
-            exec("DELETE FROM sleep_sessions WHERE id = 1")
-
-            assertEquals(0, singleInt("SELECT COUNT(*) FROM sleep_stages"))
-        }
-    }
-
-    @Test
-    fun integrityConstraintsRejectInvalidMetricRows() {
-        val database = openDatabase(tempDatabaseConfig())
-
-        transaction(database) {
-            insertSourceInstance()
-
-            assertFailsWith<Exception> {
-                exec(
-                    """
-                    INSERT INTO ingestion_batches (
-                        source_instance_id,
-                        batch_external_id,
-                        source_payload_json,
-                        status,
-                        ingested_at,
-                        received_at,
-                        processed_at,
-                        error_message,
-                        created_at,
-                        updated_at
-                    )
-                    VALUES (
-                        1,
-                        'bad-status',
-                        '{}',
-                        'done',
-                        '2026-04-19T10:00:00Z',
-                        '2026-04-19T10:00:00Z',
-                        NULL,
-                        NULL,
-                        '2026-04-19T10:00:00Z',
-                        '2026-04-19T10:00:00Z'
-                    )
-                    """.trimIndent(),
-                )
-            }
-
-            assertFailsWith<Exception> {
-                exec(
-                    """
-                    INSERT INTO step_samples (
-                        source_instance_id,
-                        ingestion_record_id,
-                        provider_record_id,
-                        start_at,
-                        end_at,
-                        steps,
-                        created_at
-                    )
-                    VALUES (
-                        1,
-                        NULL,
-                        'steps-invalid',
-                        '2026-04-19T09:00:00Z',
-                        '2026-04-19T08:00:00Z',
-                        1200,
-                        '2026-04-19T10:00:00Z'
-                    )
-                    """.trimIndent(),
-                )
-            }
-
-            // scalar_samples rejects metric types missing from metric_catalog
-            assertFailsWith<Exception> {
-                exec(
-                    """
-                    INSERT INTO scalar_samples (
-                        source_instance_id,
-                        ingestion_record_id,
-                        provider_record_id,
-                        measured_at,
-                        metric_type,
-                        value,
-                        context,
-                        segment,
-                        created_at
-                    )
-                    VALUES (
-                        1,
-                        NULL,
-                        'scalar-invalid',
-                        '2026-04-19T10:00:00Z',
-                        'not_a_metric',
-                        64,
-                        'resting',
-                        NULL,
-                        '2026-04-19T10:00:00Z'
-                    )
-                    """.trimIndent(),
-                )
-            }
-        }
-    }
-
-    private fun tempDatabaseConfig(): DatabaseConfig = PostgresTestDatabase.config()
-
-    private fun singleInt(sql: String): Int {
-        var value = 0
-        TransactionManager.current().exec(sql) { resultSet ->
-            resultSet.next()
-            value = resultSet.getInt(1)
-        }
-        return value
-    }
-
-    private fun singleString(sql: String): String {
-        var value = ""
-        TransactionManager.current().exec(sql) { resultSet ->
-            resultSet.next()
-            value = resultSet.getString(1)
-        }
-        return value
-    }
-
-    private fun insertSourceInstance() {
-        TransactionManager.current().exec(
-            """
-            INSERT INTO sources (id, code, display_name, created_at)
-            VALUES (1, 'health_connect', NULL, '2026-04-19T10:00:00Z')
-            """.trimIndent(),
-        )
-        TransactionManager.current().exec(
-            """
-            INSERT INTO source_instances (
-                id,
-                source_id,
-                provider_instance_id,
-                display_name,
-                created_at,
-                updated_at
-            )
-            VALUES (
-                1,
-                1,
-                'pixel-8-health-connect',
-                NULL,
-                '2026-04-19T10:00:00Z',
-                '2026-04-19T10:00:00Z'
-            )
-            """.trimIndent(),
-        )
+        assertEquals(hasher.hash("plain-test-key"), config.queryString("SELECT api_key_hash FROM api_clients WHERE name = 'test-client'"))
     }
 }

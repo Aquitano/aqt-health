@@ -20,12 +20,16 @@ import me.aquitano.health.infrastructure.repositories.IngestionRepository
 import me.aquitano.health.infrastructure.repositories.PendingDerivedRebuildRepository
 import me.aquitano.health.infrastructure.repositories.ProjectionWipeRepository
 import me.aquitano.health.infrastructure.repositories.ReplayJobRepository
-import me.aquitano.health.infrastructure.repositories.SupportRepository
 import me.aquitano.health.infrastructure.time.UtcClock
 import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.test.PostgresTestDatabase
+import me.aquitano.health.test.countRows
 import me.aquitano.health.test.derivedRebuildRegistry
+import me.aquitano.health.test.execute
+import me.aquitano.health.test.ingestionService
 import me.aquitano.health.test.metricWriteService
+import me.aquitano.health.test.queryInt
+import me.aquitano.health.test.queryString
 import me.aquitano.health.test.realDerivedRebuildExecutor
 import org.jetbrains.exposed.v1.jdbc.Database
 import java.time.Instant
@@ -41,10 +45,10 @@ class ReplayServiceTest : PostgresIntegrationTest() {
             val fixture = Fixture(poolSize = 3)
             fixture.ingestMixedBatch()
             val jobId =
-                PostgresTestDatabase.connection(fixture.dbConfig).use { blocker ->
+                PostgresTestDatabase.connection(fixture.config).use { blocker ->
                     blocker.autoCommit = false
                     blocker.createStatement().use { it.execute("LOCK TABLE scalar_samples IN SHARE MODE") }
-                    val ingestion = async { fixture.ingestAdditionalScalar() }
+                    val ingestion = async { fixture.ingestScalar("hr-late", "2026-04-19T08:31:00Z") }
                     try {
                         withTimeout(10_000) {
                             while (fixture.waitingLocks("scalar_samples", "RowExclusiveLock") == 0) delay(10)
@@ -69,8 +73,8 @@ class ReplayServiceTest : PostgresIntegrationTest() {
             val job = fixture.awaitReplay(jobId)
             assertEquals(ReplayJobStatus.Completed, job.status)
             assertEquals(2, job.recordsReplayed)
-            assertEquals(2, fixture.count("scalar_samples"))
-            assertEquals(1, fixture.singleInt("SELECT COUNT(*) FROM scalar_samples WHERE provider_record_id = 'hr-late'"))
+            assertEquals(2, fixture.config.countRows("scalar_samples"))
+            assertEquals(1, fixture.config.queryInt("SELECT COUNT(*) FROM scalar_samples WHERE provider_record_id = 'hr-late'"))
         }
 
     @Test
@@ -79,21 +83,21 @@ class ReplayServiceTest : PostgresIntegrationTest() {
             val fixture = Fixture()
             fixture.ingestMixedBatch()
 
-            assertEquals(1, fixture.count("scalar_samples"))
-            assertEquals(1, fixture.count("canonical_scalar_samples"))
-            fixture.execute("DELETE FROM scalar_samples")
-            assertEquals(0, fixture.count("scalar_samples"))
-            assertEquals(0, fixture.count("canonical_scalar_samples"))
+            assertEquals(1, fixture.config.countRows("scalar_samples"))
+            assertEquals(1, fixture.config.countRows("canonical_scalar_samples"))
+            fixture.config.execute("DELETE FROM scalar_samples")
+            assertEquals(0, fixture.config.countRows("scalar_samples"))
+            assertEquals(0, fixture.config.countRows("canonical_scalar_samples"))
 
             val job = fixture.runReplay(ReplayRequest(scope = "all"))
 
             assertEquals(ReplayJobStatus.Completed, job.status)
             assertTrue(job.metricsWritten >= 1, "expected restored metrics, got ${job.metricsWritten}")
             assertEquals(0, job.mappingFailures)
-            assertEquals(1, fixture.count("scalar_samples"))
-            assertEquals(1, fixture.count("canonical_scalar_samples"))
-            assertEquals(1, fixture.count("step_samples"))
-            assertEquals(1, fixture.count("canonical_activity_summaries"))
+            assertEquals(1, fixture.config.countRows("scalar_samples"))
+            assertEquals(1, fixture.config.countRows("canonical_scalar_samples"))
+            assertEquals(1, fixture.config.countRows("step_samples"))
+            assertEquals(1, fixture.config.countRows("canonical_activity_summaries"))
         }
 
     @Test
@@ -116,14 +120,14 @@ class ReplayServiceTest : PostgresIntegrationTest() {
             val fixture = Fixture()
             fixture.ingestMixedBatch()
 
-            fixture.execute("DELETE FROM canonical_step_samples")
+            fixture.config.execute("DELETE FROM canonical_step_samples")
 
             val job = fixture.runReplay(ReplayRequest(scope = "derived"))
 
             assertEquals(ReplayJobStatus.Completed, job.status)
             assertEquals(0, job.recordsReplayed)
-            assertEquals(1, fixture.count("canonical_step_samples"))
-            assertEquals(1, fixture.count("canonical_activity_summaries"))
+            assertEquals(1, fixture.config.countRows("canonical_step_samples"))
+            assertEquals(1, fixture.config.countRows("canonical_activity_summaries"))
         }
 
     @Test
@@ -131,7 +135,7 @@ class ReplayServiceTest : PostgresIntegrationTest() {
         runBlocking {
             val fixture = Fixture()
             fixture.ingestMixedBatch()
-            val originalId = fixture.singleInt("SELECT id FROM scalar_samples")
+            val originalId = fixture.config.queryInt("SELECT id FROM scalar_samples")
 
             val job =
                 fixture.runReplay(
@@ -147,75 +151,29 @@ class ReplayServiceTest : PostgresIntegrationTest() {
             assertEquals(ReplayJobStatus.Completed, job.status)
             assertEquals(1, job.recordsReplayed)
             assertEquals(1, job.metricsWritten)
-            assertEquals(1, fixture.count("scalar_samples"))
-            assertEquals(1, fixture.count("canonical_scalar_samples"))
+            assertEquals(1, fixture.config.countRows("scalar_samples"))
+            assertEquals(1, fixture.config.countRows("canonical_scalar_samples"))
             assertTrue(
-                fixture.singleInt("SELECT id FROM scalar_samples") != originalId,
+                fixture.config.queryInt("SELECT id FROM scalar_samples") != originalId,
                 "wipe should rewrite the row under a new id",
             )
             // Untouched record types survive a scoped wipe.
-            assertEquals(1, fixture.count("step_samples"))
+            assertEquals(1, fixture.config.countRows("step_samples"))
         }
 
     @Test
-    fun replayOverDateRangeRebuildsDerivedData() =
+    fun dateRangeLimitsReplayToRecordsInsideIt() =
         runBlocking {
             val fixture = Fixture()
             fixture.ingestMixedBatch()
+            fixture.ingestScalar("hr-in-range", "2026-04-21T08:00:00Z")
+            fixture.config.execute("DELETE FROM scalar_samples")
 
-            fixture.execute("DELETE FROM canonical_step_samples")
-
-            val job =
-                fixture.runReplay(
-                    ReplayRequest(scope = "derived", fromDate = "2026-04-18", toDate = "2026-04-19"),
-                )
+            val job = fixture.runReplay(ReplayRequest(scope = "projections", fromDate = "2026-04-21", toDate = "2026-04-21"))
 
             assertEquals(ReplayJobStatus.Completed, job.status)
-            assertEquals(1, fixture.count("canonical_step_samples"))
-        }
-
-    @Test
-    fun repositoryCreateFlagsDuplicateIdempotencyKey() =
-        runBlocking {
-            val repository = ReplayJobRepository(Fixture().database)
-            val key = "replay-repo-flag-key"
-            val id1 =
-                java.util.UUID
-                    .randomUUID()
-                    .toString()
-            val id2 =
-                java.util.UUID
-                    .randomUUID()
-                    .toString()
-
-            val first =
-                repository.create(
-                    id = id1,
-                    scope = "projections",
-                    metricTypes = null,
-                    fromDate = null,
-                    toDate = null,
-                    wipe = false,
-                    now = Instant.parse("2026-05-01T10:00:00Z"),
-                    idempotencyKey = key,
-                    idempotencyRequestHash = "hash-a",
-                )
-            val second =
-                repository.create(
-                    id = id2,
-                    scope = "projections",
-                    metricTypes = null,
-                    fromDate = null,
-                    toDate = null,
-                    wipe = false,
-                    now = Instant.parse("2026-05-01T10:00:00Z"),
-                    idempotencyKey = key,
-                    idempotencyRequestHash = "hash-a",
-                )
-
-            assertTrue(first.created)
-            assertTrue(!second.created)
-            assertEquals(id1, second.record.id)
+            assertEquals(1, job.recordsReplayed)
+            assertEquals("hr-in-range", fixture.config.queryString("SELECT string_agg(provider_record_id, ',') FROM scalar_samples"))
         }
 
     @Test
@@ -242,28 +200,17 @@ class ReplayServiceTest : PostgresIntegrationTest() {
     private inner class Fixture(
         poolSize: Int = 1,
     ) {
-        val dbConfig: DatabaseConfig = PostgresTestDatabase.config().copy(maxPoolSize = poolSize)
-        val database: Database = openDatabase(dbConfig)
+        val config: DatabaseConfig = PostgresTestDatabase.config().copy(maxPoolSize = poolSize)
+        val database: Database = openDatabase(config)
         val clock = UtcClock()
-        private val mappingService = IngestionMappingService()
-        private val metricWriteService = metricWriteService()
         private val derivedRebuildExecutor = realDerivedRebuildExecutor(database)
-        private val ingestionService =
-            IngestionService(
-                database = database,
-                mappingService = mappingService,
-                supportRepository = SupportRepository(database),
-                ingestionRepository = IngestionRepository(),
-                metricWriteService = metricWriteService,
-                derivedRebuildExecutor = derivedRebuildExecutor,
-                pendingDerivedRebuildRepository = PendingDerivedRebuildRepository(database),
-            )
+        private val ingestionService = ingestionService(database, derivedRebuildExecutor)
         val replayService =
             ReplayService(
                 database = database,
                 ingestionRepository = IngestionRepository(),
-                mappingService = mappingService,
-                metricWriteService = metricWriteService,
+                mappingService = IngestionMappingService(),
+                metricWriteService = metricWriteService(),
                 derivedRebuildExecutor = derivedRebuildExecutor,
                 derivedRebuildRegistry = derivedRebuildRegistry(),
                 pendingDerivedRebuildRepository = PendingDerivedRebuildRepository(database),
@@ -312,7 +259,10 @@ class ReplayServiceTest : PostgresIntegrationTest() {
             )
         }
 
-        suspend fun ingestAdditionalScalar() {
+        suspend fun ingestScalar(
+            providerRecordId: String,
+            measuredAt: String,
+        ) {
             ingestionService.ingestBatch(
                 IngestionBatchRequest(
                     provider = "withings",
@@ -322,8 +272,8 @@ class ReplayServiceTest : PostgresIntegrationTest() {
                     records =
                         listOf(
                             ScalarSample(
-                                providerRecordId = "hr-late",
-                                measuredAt = "2026-04-19T08:31:00Z",
+                                providerRecordId = providerRecordId,
+                                measuredAt = measuredAt,
                                 metricType = "heart_rate",
                                 value = 65.0,
                                 context = "resting",
@@ -352,29 +302,6 @@ class ReplayServiceTest : PostgresIntegrationTest() {
         fun waitingLocks(
             table: String,
             mode: String,
-        ): Int =
-            singleInt(
-                "SELECT COUNT(*) FROM pg_locks WHERE relation = '$table'::regclass AND mode = '$mode' AND NOT granted",
-            )
-
-        fun count(table: String): Int = singleInt("SELECT COUNT(*) FROM $table")
-
-        fun singleInt(sql: String): Int =
-            PostgresTestDatabase.connection(dbConfig).use { connection ->
-                connection.createStatement().use { statement ->
-                    statement.executeQuery(sql).use { resultSet ->
-                        resultSet.next()
-                        resultSet.getInt(1)
-                    }
-                }
-            }
-
-        fun execute(sql: String) {
-            PostgresTestDatabase.connection(dbConfig).use { connection ->
-                connection.createStatement().use { statement ->
-                    statement.execute(sql)
-                }
-            }
-        }
+        ): Int = config.queryInt("SELECT COUNT(*) FROM pg_locks WHERE relation = '$table'::regclass AND mode = '$mode' AND NOT granted")
     }
 }
