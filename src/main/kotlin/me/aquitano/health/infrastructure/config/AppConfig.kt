@@ -22,10 +22,11 @@ enum class RuntimeEnvironment {
         get() = this == PRODUCTION
 
     companion object {
-        fun from(value: String): RuntimeEnvironment =
+        fun from(value: String): RuntimeEnvironment? =
             when (value.trim().lowercase()) {
+                "local" -> LOCAL
                 "production", "prod" -> PRODUCTION
-                else -> LOCAL
+                else -> null
             }
     }
 }
@@ -78,7 +79,12 @@ class AppConfigValidationException(
 
 fun ApplicationConfig.toAppConfig(): AppConfig =
     AppConfig(
-        environment = RuntimeEnvironment.from(optional("aqtHealth.environment", "local")),
+        environment =
+            optional("aqtHealth.environment", "local").let { value ->
+                RuntimeEnvironment.from(value) ?: throw AppConfigValidationException(
+                    listOf(ConfigValidationIssue("aqtHealth.environment", "must be local or production, got '$value'")),
+                )
+            },
         database =
             DatabaseConfig(
                 jdbcUrl = property("aqtHealth.database.jdbcUrl").getString(),
