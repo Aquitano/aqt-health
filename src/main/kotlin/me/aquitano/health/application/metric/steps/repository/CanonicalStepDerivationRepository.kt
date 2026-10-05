@@ -1,13 +1,12 @@
 package me.aquitano.health.application.metric.steps.repository
 
+import me.aquitano.health.api.dto.SourceMetadataResponse
 import me.aquitano.health.api.dto.StepDailySummaryResponse
 import me.aquitano.health.application.metric.common.keysetFetchLimit
 import me.aquitano.health.application.metric.common.repository.BaseMetricReadRepository
 import me.aquitano.health.application.metric.common.repository.LocalDayOf
 import me.aquitano.health.application.metric.common.repository.ReadFilters
-import me.aquitano.health.application.metric.common.repository.SourceMetadata
 import me.aquitano.health.application.metric.common.repository.TimeFilterMode
-import me.aquitano.health.application.metric.common.toResponse
 import me.aquitano.health.application.metric.steps.derived.CANONICAL_STEP_ALGORITHM_VERSION
 import me.aquitano.health.infrastructure.database.tables.CanonicalStepDayBucketContributionsTable
 import me.aquitano.health.infrastructure.database.tables.CanonicalStepSamplesTable
@@ -20,28 +19,18 @@ import java.time.Instant
 import java.time.LocalDate
 import kotlin.math.roundToInt
 
-data class CanonicalStepSampleOutput(
-    val sampleId: Int,
-    val sourceInstanceId: Int,
-    val startAt: Instant,
-    val endAt: Instant,
-    val steps: Int,
-)
-
 data class CanonicalStepBucketContributionOutput(
-    val date: LocalDate,
     val sourceInstanceId: Int,
     val sampleId: Int,
     val bucketStartAt: Instant,
     val bucketEndAt: Instant,
     val value: Double,
-    val computedAt: Instant,
 )
 
 data class CanonicalStepOutput(
     val date: LocalDate,
     val computedAt: Instant,
-    val samples: List<CanonicalStepSampleOutput>,
+    val samples: List<StepSampleRow>,
     val bucketContributions: List<CanonicalStepBucketContributionOutput>,
 )
 
@@ -99,7 +88,7 @@ class CanonicalStepDerivationRepository : BaseMetricReadRepository() {
         ) { sample ->
             this[CanonicalStepSamplesTable.date] = output.date
             this[CanonicalStepSamplesTable.sourceInstanceId] = sample.sourceInstanceId
-            this[CanonicalStepSamplesTable.stepSampleId] = sample.sampleId
+            this[CanonicalStepSamplesTable.stepSampleId] = sample.id
             this[CanonicalStepSamplesTable.startAt] = sample.startAt.toDbTimestamp()
             this[CanonicalStepSamplesTable.endAt] = sample.endAt.toDbTimestamp()
             this[CanonicalStepSamplesTable.steps] = sample.steps
@@ -112,20 +101,20 @@ class CanonicalStepDerivationRepository : BaseMetricReadRepository() {
             ignore = true,
             shouldReturnGeneratedValues = false,
         ) { contribution ->
-            this[CanonicalStepDayBucketContributionsTable.date] = contribution.date
+            this[CanonicalStepDayBucketContributionsTable.date] = output.date
             this[CanonicalStepDayBucketContributionsTable.sourceInstanceId] = contribution.sourceInstanceId
             this[CanonicalStepDayBucketContributionsTable.stepSampleId] = contribution.sampleId
             this[CanonicalStepDayBucketContributionsTable.bucketStartAt] = contribution.bucketStartAt.toDbTimestamp()
             this[CanonicalStepDayBucketContributionsTable.bucketEndAt] = contribution.bucketEndAt.toDbTimestamp()
             this[CanonicalStepDayBucketContributionsTable.value] = contribution.value
             this[CanonicalStepDayBucketContributionsTable.algorithmVersion] = CANONICAL_STEP_ALGORITHM_VERSION
-            this[CanonicalStepDayBucketContributionsTable.computedAt] = contribution.computedAt.toDbTimestamp()
+            this[CanonicalStepDayBucketContributionsTable.computedAt] = output.computedAt.toDbTimestamp()
         }
     }
 
     fun listCanonicalStepSamples(
         filters: ReadFilters,
-    ): Pair<List<StepSampleRow>, Map<Int, SourceMetadata>> {
+    ): Pair<List<StepSampleRow>, Map<Int, SourceMetadataResponse>> {
         val where =
             timestampConditions(
                 filters = filters,
@@ -158,7 +147,7 @@ class CanonicalStepDerivationRepository : BaseMetricReadRepository() {
     /** Canonical samples overlapping the filter window, counted per source instance. */
     fun countCanonicalStepSamplesBySource(
         filters: ReadFilters,
-    ): Pair<Map<Int, Int>, Map<Int, SourceMetadata>> {
+    ): Pair<Map<Int, Int>, Map<Int, SourceMetadataResponse>> {
         val where =
             timestampConditions(
                 filters = filters,
@@ -256,7 +245,7 @@ class CanonicalStepDerivationRepository : BaseMetricReadRepository() {
                 date = it[day].toString(),
                 steps = (it[total] ?: 0.0).roundToInt(),
                 sampleCount = it[samples].toInt(),
-                source = singleSourceId(it)?.let(metadata::get).toResponse(),
+                source = singleSourceId(it)?.let(metadata::get),
             )
         }
     }
@@ -286,7 +275,7 @@ class CanonicalStepDerivationRepository : BaseMetricReadRepository() {
 
     fun summarizeCanonicalStepsForDashboard(
         filters: ReadFilters,
-    ): Pair<CanonicalDashboardStepsSummary, Map<Int, SourceMetadata>> {
+    ): Pair<CanonicalDashboardStepsSummary, Map<Int, SourceMetadataResponse>> {
         val table = CanonicalStepDayBucketContributionsTable
         val where = localDayContributionConditions(filters) ?: return emptyDashboardStepSummary(filters.includeSource)
         val stepsExpression = table.value.sum()
@@ -309,7 +298,7 @@ class CanonicalStepDerivationRepository : BaseMetricReadRepository() {
 
     private fun emptyDashboardStepSummary(
         includeSource: Boolean,
-    ): Pair<CanonicalDashboardStepsSummary, Map<Int, SourceMetadata>> =
+    ): Pair<CanonicalDashboardStepsSummary, Map<Int, SourceMetadataResponse>> =
         CanonicalDashboardStepsSummary(
             steps = 0,
             sampleCount = 0,

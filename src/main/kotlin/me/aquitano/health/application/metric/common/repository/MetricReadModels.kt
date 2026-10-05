@@ -6,11 +6,6 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZoneOffset
 
-data class SourceMetadata(
-    val provider: String,
-    val providerInstanceId: String,
-)
-
 /**
  * Timestamp reads use [from]/[to]; date-keyed reads use [fromDate]/[toDate], and sleep nights
  * also label dates in [timezone].

@@ -1,7 +1,6 @@
 package me.aquitano.health.application.metric.common.repository
 
 import me.aquitano.health.api.dto.SourceMetadataResponse
-import me.aquitano.health.application.metric.common.toResponse
 import me.aquitano.health.domain.RequestValidationException
 import me.aquitano.health.domain.ValidationIssue
 import me.aquitano.health.domain.ValidationIssueCodes
@@ -27,7 +26,7 @@ import java.time.ZoneOffset
  * query logic.
  */
 abstract class BaseMetricReadRepository {
-    fun sourceMetadataFor(sourceIds: Set<Int>): Map<Int, SourceMetadata> {
+    fun sourceMetadataFor(sourceIds: Set<Int>): Map<Int, SourceMetadataResponse> {
         if (sourceIds.isEmpty()) return emptyMap()
         return SourceInstancesTable
             .innerJoin(SourcesTable)
@@ -38,7 +37,7 @@ abstract class BaseMetricReadRepository {
             ).where { SourceInstancesTable.id inList sourceIds }
             .associate {
                 it[SourceInstancesTable.id].value to
-                    SourceMetadata(
+                    SourceMetadataResponse(
                         provider = it[SourcesTable.code],
                         providerInstanceId = it[SourceInstancesTable.providerInstanceId],
                     )
@@ -74,11 +73,11 @@ abstract class BaseMetricReadRepository {
 
     protected fun List<Int>?.hasNoMatchingSources(): Boolean = this != null && isEmpty()
 
-    protected fun <T> emptyReadResult(): Pair<List<T>, Map<Int, SourceMetadata>> = emptyList<T>() to emptyMap()
+    protected fun <T> emptyReadResult(): Pair<List<T>, Map<Int, SourceMetadataResponse>> = emptyList<T>() to emptyMap()
 
-    protected fun <T> emptyLatestResult(): Pair<T?, Map<Int, SourceMetadata>> = null to emptyMap()
+    protected fun <T> emptyLatestResult(): Pair<T?, Map<Int, SourceMetadataResponse>> = null to emptyMap()
 
-    protected fun <T, S> emptyTripleReadResult(): Triple<List<T>, Map<Int, List<S>>, Map<Int, SourceMetadata>> = Triple(emptyList(), emptyMap(), emptyMap())
+    protected fun <T, S> emptyTripleReadResult(): Triple<List<T>, Map<Int, List<S>>, Map<Int, SourceMetadataResponse>> = Triple(emptyList(), emptyMap(), emptyMap())
 
     /** The read's where clause, or null when the source filters match no source instance. */
     protected fun timestampConditions(
@@ -131,7 +130,7 @@ abstract class BaseMetricReadRepository {
     protected fun sourceMetadata(
         sourceInstanceIds: Set<Int>,
         includeSource: Boolean,
-    ): Map<Int, SourceMetadata> = if (includeSource) sourceMetadataFor(sourceInstanceIds) else emptyMap()
+    ): Map<Int, SourceMetadataResponse> = if (includeSource) sourceMetadataFor(sourceInstanceIds) else emptyMap()
 
     protected fun <T> List<ResultRow>.mapWithSource(
         sourceInstanceId: Column<Int>,
@@ -139,7 +138,7 @@ abstract class BaseMetricReadRepository {
         toItem: (row: ResultRow, source: SourceMetadataResponse?) -> T,
     ): List<T> {
         val metadata = sourceMetadata(mapTo(HashSet()) { it[sourceInstanceId] }, includeSource)
-        return map { toItem(it, metadata[it[sourceInstanceId]].toResponse()) }
+        return map { toItem(it, metadata[it[sourceInstanceId]]) }
     }
 
     /**

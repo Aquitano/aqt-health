@@ -1,9 +1,9 @@
 package me.aquitano.health.application.metric.sleep.repository
 
+import me.aquitano.health.api.dto.SourceMetadataResponse
 import me.aquitano.health.application.metric.common.keysetFetchLimit
 import me.aquitano.health.application.metric.common.repository.BaseMetricReadRepository
 import me.aquitano.health.application.metric.common.repository.ReadFilters
-import me.aquitano.health.application.metric.common.repository.SourceMetadata
 import me.aquitano.health.application.metric.common.repository.TimeFilterMode
 import me.aquitano.health.infrastructure.database.tables.CanonicalSleepSessionsTable
 import me.aquitano.health.infrastructure.database.tables.SleepSessionsTable
@@ -15,7 +15,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 class CanonicalSleepSessionDerivationRepository : BaseMetricReadRepository() {
     fun listCanonicalSleepSessions(
         filters: ReadFilters,
-    ): Pair<List<SleepSessionRow>, Map<Int, SourceMetadata>> {
+    ): Pair<List<SleepSessionRow>, Map<Int, SourceMetadataResponse>> {
         val where =
             timestampConditions(
                 filters = filters,

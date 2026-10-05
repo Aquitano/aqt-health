@@ -8,7 +8,6 @@ import me.aquitano.health.application.metric.common.SortFields
 import me.aquitano.health.application.metric.common.dailyReadFilters
 import me.aquitano.health.application.metric.common.pagedRead
 import me.aquitano.health.application.metric.common.readFilters
-import me.aquitano.health.application.metric.common.toResponse
 import me.aquitano.health.application.metric.steps.repository.CanonicalStepDerivationRepository
 import org.jetbrains.exposed.v1.jdbc.Database
 import java.time.Instant
@@ -28,7 +27,7 @@ class StepQueryService(
                     startAt = it.startAt.toString(),
                     endAt = it.endAt.toString(),
                     steps = it.steps,
-                    source = sourceMetadata[it.sourceInstanceId].toResponse(),
+                    source = sourceMetadata[it.sourceInstanceId],
                 )
             }
         }

@@ -1,10 +1,10 @@
 package me.aquitano.health.application.metric.scalar
 
+import me.aquitano.health.api.dto.SourceMetadataResponse
 import me.aquitano.health.application.metric.common.keysetFetchLimit
 import me.aquitano.health.application.metric.common.repository.BaseMetricReadRepository
 import me.aquitano.health.application.metric.common.repository.LocalDayOf
 import me.aquitano.health.application.metric.common.repository.ReadFilters
-import me.aquitano.health.application.metric.common.repository.SourceMetadata
 import me.aquitano.health.application.metric.common.repository.TimeFilterMode
 import me.aquitano.health.infrastructure.database.tables.CanonicalScalarSamplesView
 import me.aquitano.health.infrastructure.database.tables.MetricCatalogTable
@@ -33,7 +33,7 @@ class ScalarSampleReadRepository : BaseMetricReadRepository() {
         filters: ReadFilters,
         metricTypes: Set<String>,
         canonical: Boolean,
-    ): Pair<List<ScalarSampleRow>, Map<Int, SourceMetadata>> {
+    ): Pair<List<ScalarSampleRow>, Map<Int, SourceMetadataResponse>> {
         val table = source(canonical)
         val where =
             timestampConditions(
@@ -64,7 +64,7 @@ class ScalarSampleReadRepository : BaseMetricReadRepository() {
         metricTypes: Set<String>,
         canonical: Boolean,
         mode: TimeFilterMode = TimeFilterMode.StartAtInRange,
-    ): Pair<ScalarSampleRow?, Map<Int, SourceMetadata>> {
+    ): Pair<ScalarSampleRow?, Map<Int, SourceMetadataResponse>> {
         val table = source(canonical)
         val where =
             timestampConditions(
@@ -95,7 +95,7 @@ class ScalarSampleReadRepository : BaseMetricReadRepository() {
         filters: ReadFilters,
         metricTypes: Set<String>,
         canonical: Boolean,
-    ): Pair<ScalarSampleRow?, Map<Int, SourceMetadata>> = latest(filters, metricTypes, canonical, mode = TimeFilterMode.BeforeFrom)
+    ): Pair<ScalarSampleRow?, Map<Int, SourceMetadataResponse>> = latest(filters, metricTypes, canonical, mode = TimeFilterMode.BeforeFrom)
 
     fun summarize(
         filters: ReadFilters,
