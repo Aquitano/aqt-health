@@ -3,8 +3,6 @@ package me.aquitano.external.google
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.*
 import me.aquitano.health.application.HealthProviderRegistry
-import me.aquitano.health.application.IngestionMappingService
-import me.aquitano.health.application.IngestionService
 import me.aquitano.health.application.ProviderStatusService
 import me.aquitano.health.application.ProviderWorkflowService
 import me.aquitano.health.application.providersync.RefreshedTokenSet
@@ -15,16 +13,17 @@ import me.aquitano.health.domain.StructuralMetricKinds
 import me.aquitano.health.domain.UpstreamProviderException
 import me.aquitano.health.infrastructure.config.DatabaseConfig
 import me.aquitano.health.infrastructure.config.ProviderOAuthConfig
-import me.aquitano.health.infrastructure.repositories.IngestionRepository
-import me.aquitano.health.infrastructure.repositories.PendingDerivedRebuildRepository
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
 import me.aquitano.health.infrastructure.repositories.ScheduledSyncRepository
-import me.aquitano.health.infrastructure.repositories.SupportRepository
 import me.aquitano.health.infrastructure.security.TokenCipher
 import me.aquitano.health.infrastructure.time.UtcClock
 import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.test.PostgresTestDatabase
-import me.aquitano.health.test.metricWriteService
+import me.aquitano.health.test.TEST_TOKEN_ENCRYPTION_KEY
+import me.aquitano.health.test.countRows
+import me.aquitano.health.test.ingestionService
+import me.aquitano.health.test.queryInt
+import me.aquitano.health.test.queryString
 import me.aquitano.health.test.realDerivedRebuildExecutor
 import org.jetbrains.exposed.v1.jdbc.Database
 import java.time.Instant
@@ -49,16 +48,8 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
                 )
 
             assertEquals("google-health-me", response.providerInstanceId)
-            val accessCiphertext =
-                singleString(
-                    fixture.dbPath,
-                    "SELECT access_token_ciphertext FROM provider_oauth_accounts",
-                )
-            val refreshCiphertext =
-                singleString(
-                    fixture.dbPath,
-                    "SELECT refresh_token_ciphertext FROM provider_oauth_accounts",
-                )
+            val accessCiphertext = fixture.databaseConfig.queryString("SELECT access_token_ciphertext FROM provider_oauth_accounts")!!
+            val refreshCiphertext = fixture.databaseConfig.queryString("SELECT refresh_token_ciphertext FROM provider_oauth_accounts")!!
             assertFalse(accessCiphertext.contains("access-from-code"))
             assertFalse(refreshCiphertext.contains("refresh-from-code"))
             val cipher = TokenCipher(fixture.config.tokenEncryptionKey, GOOGLE_HEALTH_PROVIDER_CODE)
@@ -97,13 +88,8 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
 
             assertEquals(
                 1,
-                singleInt(
-                    fixture.dbPath,
-                    """
-                    SELECT COUNT(*)
-                    FROM provider_oauth_accounts
-                    WHERE connected_at = TIMESTAMPTZ '2026-04-20T10:00:00Z'
-                    """.trimIndent(),
+                fixture.databaseConfig.queryInt(
+                    "SELECT COUNT(*) FROM provider_oauth_accounts WHERE connected_at = TIMESTAMPTZ '2026-04-20T10:00:00Z'",
                 ),
             )
         }
@@ -147,7 +133,7 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
                 }
 
             assertEquals("google_health_not_configured", error.code)
-            assertEquals(0, countRows(fixture.dbPath, "provider_oauth_states"))
+            assertEquals(0, fixture.databaseConfig.countRows("provider_oauth_states"))
         }
 
     @Test
@@ -176,11 +162,11 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
             assertEquals("google_health_needs_reauth", error.code)
             assertEquals(
                 "needs_reauth",
-                singleString(fixture.dbPath, "SELECT account_status FROM provider_oauth_accounts"),
+                fixture.databaseConfig.queryString("SELECT account_status FROM provider_oauth_accounts"),
             )
             assertEquals(
                 "google_health_needs_reauth",
-                singleString(fixture.dbPath, "SELECT last_auth_error_code FROM provider_oauth_accounts"),
+                fixture.databaseConfig.queryString("SELECT last_auth_error_code FROM provider_oauth_accounts"),
             )
         }
 
@@ -190,8 +176,8 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
             val fixture = Fixture()
             fixture.storeAccount(accessToken = "access-token", refreshToken = "refresh-token")
             fixture.providerRepository.markNeedsReauth(
-                accountId = singleInt(fixture.dbPath, "SELECT id FROM provider_oauth_accounts"),
-                expectedRefreshTokenCiphertext = singleString(fixture.dbPath, "SELECT refresh_token_ciphertext FROM provider_oauth_accounts"),
+                accountId = fixture.databaseConfig.queryInt("SELECT id FROM provider_oauth_accounts"),
+                expectedRefreshTokenCiphertext = fixture.databaseConfig.queryString("SELECT refresh_token_ciphertext FROM provider_oauth_accounts")!!,
                 errorCode = "google_health_needs_reauth",
                 errorMessage = "invalid refresh token",
                 now = fixture.now,
@@ -233,26 +219,25 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
             assertEquals(7, second.batches.size)
             assertTrue(second.batches.all { it.duplicateBatch })
             assertEquals(7, fixture.client.fetchRequests.size)
-            assertEquals(1, countRows(fixture.dbPath, "step_samples"))
-            assertEquals(1, countRows(fixture.dbPath, "sleep_sessions"))
-            assertEquals(2, countRows(fixture.dbPath, "sleep_stages"))
-            assertEquals(1, countRows(fixture.dbPath, "sleep_summaries"))
+            assertEquals(1, fixture.databaseConfig.countRows("step_samples"))
+            assertEquals(1, fixture.databaseConfig.countRows("sleep_sessions"))
+            assertEquals(2, fixture.databaseConfig.countRows("sleep_stages"))
+            assertEquals(1, fixture.databaseConfig.countRows("sleep_summaries"))
             assertEquals(
                 1,
-                singleInt(fixture.dbPath, "SELECT COUNT(*) FROM scalar_samples WHERE metric_type = 'hrv_rmssd'"),
+                fixture.databaseConfig.queryInt("SELECT COUNT(*) FROM scalar_samples WHERE metric_type = 'hrv_rmssd'"),
             )
             assertEquals(
                 1,
-                singleInt(fixture.dbPath, "SELECT COUNT(*) FROM scalar_samples WHERE metric_type = 'respiratory_rate'"),
+                fixture.databaseConfig.queryInt("SELECT COUNT(*) FROM scalar_samples WHERE metric_type = 'respiratory_rate'"),
             )
             assertEquals(
                 1,
-                singleInt(fixture.dbPath, "SELECT COUNT(*) FROM scalar_samples WHERE metric_type = 'heart_rate'"),
+                fixture.databaseConfig.queryInt("SELECT COUNT(*) FROM scalar_samples WHERE metric_type = 'heart_rate'"),
             )
             assertEquals(
                 2,
-                singleInt(
-                    fixture.dbPath,
+                fixture.databaseConfig.queryInt(
                     "SELECT COUNT(*) FROM scalar_samples WHERE metric_type IN " +
                         "('weight', 'body_fat', 'muscle', 'water', 'visceral_fat')",
                 ),
@@ -284,49 +269,7 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
 
             assertEquals("google_health_account_not_found", error.code)
             assertEquals(0, fixture.client.fetchRequests.size)
-            assertEquals(0, countRows(fixture.dbPath, "provider_sync_runs"))
-        }
-
-    @Test
-    fun syncRetriesFailedCachedWindow() =
-        runBlocking {
-            val fixture = Fixture()
-            fixture.storeAccount(accessToken = "access-token", refreshToken = "refresh-token")
-            insertFailedGoogleBatch(
-                fixture.dbPath,
-                providerInstanceId = "google-user-1",
-                batchExternalId = "google_health:google-user-1:steps:2026-04-01T00:00:00Z:2026-04-02T00:00:00Z",
-            )
-            fixture.client.fetchResults += listOf(stepsFetchResult())
-
-            val response =
-                fixture.provider.sync(
-                    ProviderSyncRequest(
-                        from = Instant.parse("2026-04-01T00:00:00Z"),
-                        to = Instant.parse("2026-04-02T00:00:00Z"),
-                        dataTypes = listOf("steps"),
-                    ),
-                    fixture.now,
-                )
-
-            assertEquals(1, fixture.client.fetchRequests.size)
-            assertEquals(false, response.batches.single().duplicateBatch)
-            assertEquals(1, response.batches.single().metricsCreated[StructuralMetricKinds.STEP_SAMPLES])
-            assertEquals(2, countRows(fixture.dbPath, "ingestion_batches"))
-            assertEquals(
-                1,
-                singleInt(
-                    fixture.dbPath,
-                    "SELECT COUNT(*) FROM ingestion_batches WHERE status = 'processed' AND batch_external_id = 'google_health:google-user-1:steps:2026-04-01T00:00:00Z:2026-04-02T00:00:00Z'",
-                ),
-            )
-            assertEquals(
-                1,
-                singleInt(
-                    fixture.dbPath,
-                    "SELECT COUNT(*) FROM ingestion_batches WHERE status = 'failed' AND batch_external_id LIKE 'google_health:google-user-1:steps:2026-04-01T00:00:00Z:2026-04-02T00:00:00Z#failed:%'",
-                ),
-            )
+            assertEquals(0, fixture.databaseConfig.countRows("provider_sync_runs"))
         }
 
     @Test
@@ -360,8 +303,8 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
             assertEquals(0, second.batches.single().metricsCreated[StructuralMetricKinds.STEP_SAMPLES])
             assertEquals(1, second.batches.single().duplicateMetricsSkipped)
             assertEquals(2, fixture.client.fetchRequests.size)
-            assertEquals(1, countRows(fixture.dbPath, "step_samples"))
-            assertEquals(1200, singleInt(fixture.dbPath, "SELECT SUM(value)::int FROM canonical_step_day_bucket_contributions"))
+            assertEquals(1, fixture.databaseConfig.countRows("step_samples"))
+            assertEquals(1200, fixture.databaseConfig.queryInt("SELECT SUM(value)::int FROM canonical_step_day_bucket_contributions"))
         }
 
     @Test
@@ -416,8 +359,8 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
             assertEquals(1, first.batches.single().metricsCreated[StructuralMetricKinds.STEP_SAMPLES])
             assertEquals(0, second.batches.single().metricsCreated[StructuralMetricKinds.STEP_SAMPLES])
             assertEquals(1, second.batches.single().duplicateMetricsSkipped)
-            assertEquals(1, countRows(fixture.dbPath, "step_samples"))
-            assertEquals(20, singleInt(fixture.dbPath, "SELECT SUM(value)::int FROM canonical_step_day_bucket_contributions"))
+            assertEquals(1, fixture.databaseConfig.countRows("step_samples"))
+            assertEquals(20, fixture.databaseConfig.queryInt("SELECT SUM(value)::int FROM canonical_step_day_bucket_contributions"))
         }
 
     @Test
@@ -472,70 +415,8 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
             assertEquals(1, first.batches.single().metricsCreated[StructuralMetricKinds.STEP_SAMPLES])
             assertEquals(1, second.batches.single().metricsCreated[StructuralMetricKinds.STEP_SAMPLES])
             assertEquals(0, second.batches.single().duplicateMetricsSkipped)
-            assertEquals(2, countRows(fixture.dbPath, "step_samples"))
-            assertEquals(2000, singleInt(fixture.dbPath, "SELECT SUM(value)::int FROM canonical_step_day_bucket_contributions"))
-        }
-
-    @Test
-    fun syncChunksHeartRateByDayAndSkipsCachedChunks() =
-        runBlocking {
-            val fixture = Fixture()
-            fixture.storeAccount(accessToken = "access-token", refreshToken = "refresh-token")
-            fixture.client.fetchResults += listOf(fetchResult("heart-rate", heartRatePoint()))
-            fixture.client.fetchResults += listOf(fetchResult("heart-rate", heartRatePoint()))
-
-            val request =
-                ProviderSyncRequest(
-                    from = Instant.parse("2026-04-01T00:00:00Z"),
-                    to = Instant.parse("2026-04-03T00:00:00Z"),
-                    dataTypes = listOf("heart-rate"),
-                )
-            val first = fixture.provider.sync(request, fixture.now)
-            val second = fixture.provider.sync(request, fixture.now.plusSeconds(60))
-
-            assertEquals(2, first.batches.size)
-            assertEquals(2, second.batches.size)
-            assertTrue(second.batches.all { it.duplicateBatch })
-            assertEquals(
-                listOf(
-                    FetchRequest("heart-rate", Instant.parse("2026-04-01T00:00:00Z"), Instant.parse("2026-04-02T00:00:00Z")),
-                    FetchRequest("heart-rate", Instant.parse("2026-04-02T00:00:00Z"), Instant.parse("2026-04-03T00:00:00Z")),
-                ),
-                fixture.client.fetchRequests,
-            )
-        }
-
-    @Test
-    fun syncChunksLongGoogleRangesByDayAndSkipsCachedChunks() =
-        runBlocking {
-            val fixture = Fixture()
-            fixture.storeAccount(accessToken = "access-token", refreshToken = "refresh-token")
-            fixture.client.fetchResults += listOf(stepsFetchResult())
-            fixture.client.fetchResults += listOf(stepsFetchResult())
-            fixture.client.fetchResults += listOf(stepsFetchResult())
-
-            val request =
-                ProviderSyncRequest(
-                    from = Instant.parse("2026-04-01T06:00:00Z"),
-                    to = Instant.parse("2026-04-04T00:00:00Z"),
-                    dataTypes = listOf("steps"),
-                )
-            val first = fixture.provider.sync(request, fixture.now)
-            val second = fixture.provider.sync(request, fixture.now.plusSeconds(60))
-
-            assertEquals("2026-04-01T06:00:00Z", first.requestedFrom.toString())
-            assertEquals("2026-04-04T00:00:00Z", first.requestedTo.toString())
-            assertEquals(3, first.batches.size)
-            assertEquals(3, second.batches.size)
-            assertTrue(second.batches.all { it.duplicateBatch })
-            assertEquals(
-                listOf(
-                    FetchRequest("steps", Instant.parse("2026-04-01T00:00:00Z"), Instant.parse("2026-04-02T00:00:00Z")),
-                    FetchRequest("steps", Instant.parse("2026-04-02T00:00:00Z"), Instant.parse("2026-04-03T00:00:00Z")),
-                    FetchRequest("steps", Instant.parse("2026-04-03T00:00:00Z"), Instant.parse("2026-04-04T00:00:00Z")),
-                ),
-                fixture.client.fetchRequests,
-            )
+            assertEquals(2, fixture.databaseConfig.countRows("step_samples"))
+            assertEquals(2000, fixture.databaseConfig.queryInt("SELECT SUM(value)::int FROM canonical_step_day_bucket_contributions"))
         }
 
     @Test
@@ -564,11 +445,7 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
             assertEquals(1, response.batches.size)
             assertEquals(2, fixture.client.refreshCalls)
             assertEquals(listOf("fresh-access", "fresh-access"), fixture.client.fetchAccessTokens)
-            val accessCiphertext =
-                singleString(
-                    fixture.dbPath,
-                    "SELECT access_token_ciphertext FROM provider_oauth_accounts",
-                )
+            val accessCiphertext = fixture.databaseConfig.queryString("SELECT access_token_ciphertext FROM provider_oauth_accounts")!!
             assertEquals("fresh-access", TokenCipher(fixture.config.tokenEncryptionKey, GOOGLE_HEALTH_PROVIDER_CODE).decrypt(accessCiphertext))
         }
 
@@ -593,40 +470,27 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
                     fixture.now,
                 )
             }
-            assertEquals("failed", singleString(fixture.dbPath, "SELECT status FROM provider_sync_runs"))
+            assertEquals("failed", fixture.databaseConfig.queryString("SELECT status FROM provider_sync_runs"))
         }
 
     private inner class Fixture(
         clientSecret: String = "client-secret",
     ) {
-        val dbPath: DatabaseConfig = PostgresTestDatabase.config()
-        val database: Database =
-            openDatabase(
-                dbPath,
-            )
+        val databaseConfig: DatabaseConfig = PostgresTestDatabase.config()
+        val database: Database = openDatabase(databaseConfig)
         val now: Instant = Instant.parse("2026-04-20T10:00:00Z")
         val config =
             ProviderOAuthConfig(
                 clientId = "client-id",
                 clientSecret = clientSecret,
                 redirectUri = "http://localhost:8080/api/v2/providers/google-health/oauth/callback",
-                tokenEncryptionKey = "test-token-encryption-key-with-32-bytes",
+                tokenEncryptionKey = TEST_TOKEN_ENCRYPTION_KEY,
                 apiBaseUrl = "https://health.googleapis.com",
                 oauthTokenUrl = "https://oauth2.googleapis.com/token",
                 oauthAuthUrl = "https://accounts.google.com/o/oauth2/v2/auth",
             )
         val providerRepository = ProviderOAuthRepository(database)
         val client = FakeGoogleHealthClient()
-        val ingestionService =
-            IngestionService(
-                database = database,
-                mappingService = IngestionMappingService(),
-                supportRepository = SupportRepository(database),
-                ingestionRepository = IngestionRepository(),
-                metricWriteService = metricWriteService(),
-                derivedRebuildExecutor = realDerivedRebuildExecutor(database),
-                pendingDerivedRebuildRepository = PendingDerivedRebuildRepository(database),
-            )
         val provider =
             GoogleHealthProvider(
                 config = config,
@@ -638,7 +502,7 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
                         store =
                             me.aquitano.health.application.providersync.OAuthProviderSyncStore(
                                 repository = providerRepository,
-                                ingestionService = ingestionService,
+                                ingestionService = ingestionService(database, realDerivedRebuildExecutor(database)),
                                 tokenEncryptionKeys = mapOf(GOOGLE_HEALTH_PROVIDER_CODE to config.tokenEncryptionKey),
                             ),
                         clock = UtcClock.fixed(now),
@@ -891,86 +755,4 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
                 }
             }
         }
-
-    private fun countRows(
-        dbPath: DatabaseConfig,
-        tableName: String,
-    ): Int = singleInt(dbPath, "SELECT COUNT(*) FROM $tableName")
-
-    private fun singleInt(
-        dbPath: DatabaseConfig,
-        sql: String,
-    ): Int =
-        PostgresTestDatabase.connection(dbPath).use { connection ->
-            connection.createStatement().use { statement ->
-                statement.executeQuery(sql).use { resultSet ->
-                    resultSet.next()
-                    resultSet.getInt(1)
-                }
-            }
-        }
-
-    private fun singleString(
-        dbPath: DatabaseConfig,
-        sql: String,
-    ): String =
-        PostgresTestDatabase.connection(dbPath).use { connection ->
-            connection.createStatement().use { statement ->
-                statement.executeQuery(sql).use { resultSet ->
-                    resultSet.next()
-                    resultSet.getString(1)
-                }
-            }
-        }
-
-    private fun insertFailedGoogleBatch(
-        dbPath: DatabaseConfig,
-        providerInstanceId: String,
-        batchExternalId: String,
-    ) {
-        PostgresTestDatabase.connection(dbPath).use { connection ->
-            connection.createStatement().use { statement ->
-                statement.executeUpdate(
-                    """
-                    INSERT INTO sources (code, display_name, created_at)
-                    VALUES ('$GOOGLE_HEALTH_PROVIDER_CODE', NULL, '2026-04-19T09:00:00Z')
-                    """.trimIndent(),
-                )
-                statement.executeUpdate(
-                    """
-                    INSERT INTO source_instances (source_id, provider_instance_id, display_name, created_at, updated_at)
-                    VALUES (1, '$providerInstanceId', NULL, '2026-04-19T09:00:00Z', '2026-04-19T09:00:00Z')
-                    """.trimIndent(),
-                )
-                statement.executeUpdate(
-                    """
-                    INSERT INTO ingestion_batches (
-                        source_instance_id,
-                        batch_external_id,
-                        source_payload_json,
-                        status,
-                        ingested_at,
-                        received_at,
-                        processed_at,
-                        error_message,
-                        created_at,
-                        updated_at
-                    )
-                    VALUES (
-                        1,
-                        '$batchExternalId',
-                        '{}',
-                        'failed',
-                        '2026-04-19T09:00:00Z',
-                        '2026-04-19T09:00:00Z',
-                        NULL,
-                        'previous failure',
-                        '2026-04-19T09:00:00Z',
-                        '2026-04-19T09:00:00Z'
-                    )
-                    """.trimIndent(),
-                )
-            }
-        }
-    }
 }

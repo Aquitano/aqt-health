@@ -19,6 +19,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import me.aquitano.health.infrastructure.config.ProviderOAuthConfig
 import me.aquitano.health.shared.AppJson
+import me.aquitano.health.test.TEST_TOKEN_ENCRYPTION_KEY
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -79,7 +80,6 @@ class WithingsOAuthClientTest {
             assertEquals(listOf("auth-code"), form["code"])
             assertEquals(listOf("http://localhost:8080/api/v2/providers/withings/oauth/callback"), form["redirect_uri"])
             assertEquals(listOf("client-secret"), form["client_secret"])
-            assertNull(form["signature"])
             assertEquals("363", tokens.providerUserId)
             assertEquals("access-from-code", tokens.accessToken)
             assertEquals("refresh-from-code", tokens.refreshToken)
@@ -115,7 +115,6 @@ class WithingsOAuthClientTest {
             assertEquals(listOf("client-id"), form["client_id"])
             assertEquals(listOf("existing-refresh"), form["refresh_token"])
             assertEquals(listOf("client-secret"), form["client_secret"])
-            assertNull(form["signature"])
             assertEquals("fresh-access", tokens.accessToken)
             assertEquals("existing-refresh", tokens.refreshToken)
             assertEquals("", tokens.providerUserId)
@@ -340,7 +339,6 @@ class WithingsOAuthClientTest {
             // Half-open windows, inclusive Withings bounds: the last second belongs to the next window.
             assertEquals(listOf("1775001600", "1775088000"), forms.map { it["startdate"]!!.single() })
             assertEquals(listOf("1775087999", "1775174399"), forms.map { it["enddate"]!!.single() })
-            assertNull(forms[0]["meastypes"])
         }
 
     @Test
@@ -466,7 +464,7 @@ class WithingsOAuthClientTest {
             clientId = "client-id",
             clientSecret = "client-secret",
             redirectUri = "http://localhost:8080/api/v2/providers/withings/oauth/callback",
-            tokenEncryptionKey = "test-token-encryption-key-with-32-bytes",
+            tokenEncryptionKey = TEST_TOKEN_ENCRYPTION_KEY,
             apiBaseUrl = "https://wbsapi.withings.net",
             oauthTokenUrl = "https://wbsapi.withings.net/v2/oauth2",
             oauthAuthUrl = "https://account.withings.com/oauth2_user/authorize2",

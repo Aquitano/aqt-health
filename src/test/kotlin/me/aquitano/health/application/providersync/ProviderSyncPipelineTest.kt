@@ -47,6 +47,31 @@ class ProviderSyncPipelineTest {
         }
 
     @Test
+    fun failedBatchIsFetchedAgainInsteadOfReused() =
+        runBlocking {
+            val store = FakeStore(existingBatch = ExistingProviderBatch(id = 42, status = BatchStatus.Failed))
+            val adapter = FakeAdapter()
+            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+
+            val summary = pipeline.sync(adapter, request, now)
+
+            assertEquals(1, adapter.fetchCalls)
+            assertEquals(1, store.ingested.size)
+            assertFalse(summary.batches.single().duplicateBatch)
+        }
+
+    @Test
+    fun dailySyncWindowsStartAtUtcMidnightAndClampTheLastDay() {
+        assertEquals(
+            listOf(
+                SyncWindow(Instant.parse("2026-04-01T00:00:00Z"), Instant.parse("2026-04-02T00:00:00Z")),
+                SyncWindow(Instant.parse("2026-04-02T00:00:00Z"), Instant.parse("2026-04-02T10:00:00Z")),
+            ),
+            dailySyncWindows(Instant.parse("2026-04-01T06:00:00Z"), Instant.parse("2026-04-02T10:00:00Z")),
+        )
+    }
+
+    @Test
     fun invalidRefreshTokenMarksAccountNeedsReauthBeforeStartingRun() =
         runBlocking {
             val store =
