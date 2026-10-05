@@ -11,7 +11,6 @@ import me.aquitano.health.application.metric.common.validateDateRange
 import me.aquitano.health.application.metric.scalar.ScalarSampleReadRepository
 import me.aquitano.health.application.metric.scalar.toScalarResponse
 import me.aquitano.health.application.metric.sleep.repository.SleepRepository
-import me.aquitano.health.application.metric.steps.derived.CANONICAL_STEP_ALGORITHM_VERSION
 import me.aquitano.health.application.metric.steps.repository.CanonicalStepDerivationRepository
 import me.aquitano.health.domain.BodyMetricTypes
 import me.aquitano.health.domain.ScalarMetricTypes
@@ -78,10 +77,7 @@ class DashboardQueryService(
         filters: ReadFilters,
     ): DashboardStepsSummaryResponse {
         val (summary, sourceMetadata) =
-            canonicalStepRepository.summarizeCanonicalStepsForDashboard(
-                filters,
-                CANONICAL_STEP_ALGORITHM_VERSION,
-            )
+            canonicalStepRepository.summarizeCanonicalStepsForDashboard(filters)
         return DashboardStepsSummaryResponse(
             steps = summary.steps,
             sampleCount = summary.sampleCount,

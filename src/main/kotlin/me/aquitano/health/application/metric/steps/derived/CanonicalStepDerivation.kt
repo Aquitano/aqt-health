@@ -95,7 +95,6 @@ class CanonicalStepDerivationService(
         val output =
             CanonicalStepOutput(
                 date = date,
-                algorithmVersion = CANONICAL_STEP_ALGORITHM_VERSION,
                 computedAt = computedAt,
                 samples =
                     spans.map { it.sample }.distinctBy { it.id }.map {

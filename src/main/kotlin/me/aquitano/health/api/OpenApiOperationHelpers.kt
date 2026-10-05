@@ -137,18 +137,17 @@ internal fun Route.describeReadOperation(
     operationId: String,
     summary: String,
     descriptionText: String,
-    includeLatest: Boolean = false,
 ): Route =
     describe {
         this.operationId = operationId
         tag("Read")
         this.summary = summary
         description = descriptionText
-        readQueryParameters(includeLatest = includeLatest)
+        readQueryParameters()
         errorResponses()
     }
 
-private fun Route.describeDailyReadOperation(
+internal fun Route.describeDailyReadOperation(
     id: String,
     operationSummary: String,
     operationDescription: String,
@@ -169,35 +168,5 @@ private fun Route.describeDailyReadOperation(
                 }
             }
         }
-        errorResponses()
-    }
-
-internal fun Route.describeDailyStepReadOperation(): Route =
-    describeDailyReadOperation(
-        id = "listDailyStepSummaries",
-        operationSummary = "List daily step summaries",
-        operationDescription =
-            "Returns daily step totals for the local days of `timezone` (UTC by default). Use `date` for one day, or `fromDate` and `toDate` for an inclusive date range.",
-        localDays = true,
-    )
-
-internal fun Route.describeActivitySummaryReadOperation(): Route =
-    describeDailyReadOperation(
-        id = "listActivitySummaries",
-        operationSummary = "List activity summaries",
-        operationDescription =
-            "Returns daily activity summary metrics such as distance, calories, elevation, activity minutes, and daily heart-rate summary values.",
-        latestDescription =
-            "Return the latest matching activity summary when true. Defaults to false. Cannot be combined with limit, order, or cursor.",
-    )
-
-internal fun Route.describeSleepNightReadOperation(): Route =
-    describe {
-        operationId = "listSleepNights"
-        tag("Read")
-        summary = "List sleep nights"
-        description =
-            "Returns sleep sessions classified by the localized date of `endAt`. Use `timezone` to control night boundaries."
-        sleepNightQueryParameters()
         errorResponses()
     }

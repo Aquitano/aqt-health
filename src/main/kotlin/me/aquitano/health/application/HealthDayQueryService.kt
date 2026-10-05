@@ -8,7 +8,6 @@ import me.aquitano.health.application.metric.common.toResponse
 import me.aquitano.health.application.metric.scalar.ScalarSampleReadRepository
 import me.aquitano.health.application.metric.scalar.toScalarResponse
 import me.aquitano.health.application.metric.sleep.repository.SleepRepository
-import me.aquitano.health.application.metric.steps.derived.CANONICAL_STEP_ALGORITHM_VERSION
 import me.aquitano.health.application.metric.steps.repository.CanonicalStepDerivationRepository
 import me.aquitano.health.domain.BodyMetricTypes
 import me.aquitano.health.domain.RequestValidationException
@@ -112,14 +111,14 @@ class HealthDayQueryService(
     private fun steps(context: HealthDayQueryContext): HealthDayStepsResponse {
         val filters = context.filters()
         val (samplesBySource, sourceMetadata) =
-            canonicalStepRepository.countCanonicalStepSamplesBySource(filters, CANONICAL_STEP_ALGORITHM_VERSION)
+            canonicalStepRepository.countCanonicalStepSamplesBySource(filters)
         val buckets = context.buckets()
         val values = DoubleArray(buckets.size)
         val counts = IntArray(buckets.size)
 
         val byStart = buckets.withIndex().associate { (index, bucket) -> bucket.first to index }
         canonicalStepRepository
-            .listBucketContributions(filters, CANONICAL_STEP_ALGORITHM_VERSION)
+            .listBucketContributions(filters)
             .forEach { contribution ->
                 val index = byStart[contribution.bucketStartAt]
                 if (index != null) {

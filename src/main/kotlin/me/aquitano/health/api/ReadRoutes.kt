@@ -140,7 +140,6 @@ internal fun Route.readRoutes() {
         operationId = "listStepSamples",
         summary = "List step samples",
         descriptionText = "Returns canonical step samples filtered by timestamp range, source provider, provider instance, source metadata inclusion, item limit, and sort order. Use `latest=true` to return the latest matching sample only.",
-        includeLatest = true,
     )
     get("/api/v2/steps/daily") {
         call.respond<StepDailySummariesResponse>(
@@ -150,7 +149,13 @@ internal fun Route.readRoutes() {
                 clock.instant(),
             ),
         )
-    }.describeDailyStepReadOperation()
+    }.describeDailyReadOperation(
+        id = "listDailyStepSummaries",
+        operationSummary = "List daily step summaries",
+        operationDescription =
+            "Returns daily step totals for the local days of `timezone` (UTC by default). Use `date` for one day, or `fromDate` and `toDate` for an inclusive date range.",
+        localDays = true,
+    )
     get("/api/v2/activity/summaries") {
         call.respond<ActivitySummariesResponse>(
             HttpStatusCode.OK,
@@ -159,7 +164,14 @@ internal fun Route.readRoutes() {
                 clock.instant(),
             ),
         )
-    }.describeActivitySummaryReadOperation()
+    }.describeDailyReadOperation(
+        id = "listActivitySummaries",
+        operationSummary = "List activity summaries",
+        operationDescription =
+            "Returns daily activity summary metrics such as distance, calories, elevation, activity minutes, and daily heart-rate summary values.",
+        latestDescription =
+            "Return the latest matching activity summary when true. Defaults to false. Cannot be combined with limit, order, or cursor.",
+    )
     get("/api/v2/sleep/sessions") {
         call.respond<SleepSessionsResponse>(
             sleepQueryService.listSleepSessions(
@@ -170,7 +182,6 @@ internal fun Route.readRoutes() {
         operationId = "listSleepSessions",
         summary = "List sleep sessions",
         descriptionText = "Returns sleep sessions with nested stages. Use `latest=true` to return the latest matching session only.",
-        includeLatest = true,
     )
     get("/api/v2/sleep/nights") {
         call.respond<SleepNightsResponse>(
@@ -180,7 +191,15 @@ internal fun Route.readRoutes() {
                 clock.instant(),
             ),
         )
-    }.describeSleepNightReadOperation()
+    }.describe {
+        operationId = "listSleepNights"
+        tag("Read")
+        summary = "List sleep nights"
+        description =
+            "Returns sleep sessions classified by the localized date of `endAt`. Use `timezone` to control night boundaries."
+        sleepNightQueryParameters()
+        errorResponses()
+    }
     get("/api/v2/sleep/summaries") {
         call.respond<SleepSummariesResponse>(
             sleepSummaryReadService.list(
@@ -191,7 +210,6 @@ internal fun Route.readRoutes() {
         operationId = "listSleepSummaries",
         summary = "List sleep summaries",
         descriptionText = "Returns aggregate sleep summary records such as sleep score, efficiency, latency, wakeups, WASO, and stage-duration totals. Use `latest=true` to return the latest matching summary only.",
-        includeLatest = true,
     )
     get("/api/v2/blood-pressure") {
         call.respond<BloodPressureMeasurementsResponse>(
@@ -201,7 +219,6 @@ internal fun Route.readRoutes() {
         operationId = "listBloodPressureMeasurements",
         summary = "List blood pressure measurements",
         descriptionText = "Returns paired systolic/diastolic blood-pressure measurements filtered by timestamp and source. Use `latest=true` to return the latest matching measurement only.",
-        includeLatest = true,
     )
 
     get("/api/v2/dashboard/summary") {

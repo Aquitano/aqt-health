@@ -49,7 +49,7 @@ internal fun Operation.Builder.idempotencyKeyHeader() {
     }
 }
 
-internal fun Operation.Builder.readQueryParameters(includeLatest: Boolean = false) {
+internal fun Operation.Builder.readQueryParameters() {
     instantRangeParameters(
         fromDescription =
             "Inclusive start timestamp or date. Date-only values are interpreted by the endpoint's query service.",
@@ -57,11 +57,9 @@ internal fun Operation.Builder.readQueryParameters(includeLatest: Boolean = fals
             "Exclusive end timestamp or date. Date-only values are interpreted by the endpoint's query service.",
     )
     providerFilterParameters()
-    if (includeLatest) {
-        latestParameter(
-            "Return the latest matching item when true. Defaults to false. Cannot be combined with limit, order, or cursor.",
-        )
-    }
+    latestParameter(
+        "Return the latest matching item when true. Defaults to false. Cannot be combined with limit, order, or cursor.",
+    )
     orderParameter("Sort direction. Defaults to ${QueryParamSpecs.order.default}. Use desc for newest-first reads.")
     limitParameter(
         spec = QueryParamSpecs.readLimit,
@@ -88,7 +86,7 @@ internal fun Operation.Builder.multiScalarMetricQueryParameters() {
 }
 
 private fun Operation.Builder.scalarListQueryParameters() {
-    readQueryParameters(includeLatest = true)
+    readQueryParameters()
     parameters {
         query(QueryParamSpecs.raw.name) {
             description =

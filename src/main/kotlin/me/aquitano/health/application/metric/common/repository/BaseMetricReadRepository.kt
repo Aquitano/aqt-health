@@ -61,12 +61,12 @@ abstract class BaseMetricReadRepository {
             .innerJoin(SourcesTable)
             .select(SourceInstancesTable.id)
             .where {
-                val conditions = mutableListOf<Op<Boolean>>()
-                provider?.let { conditions.add(SourcesTable.code eq it) }
-                providerInstanceId?.let {
-                    conditions.add(SourceInstancesTable.providerInstanceId eq it)
-                }
-                combineConditions(conditions)
+                combineConditions(
+                    listOfNotNull(
+                        provider?.let { SourcesTable.code eq it },
+                        providerInstanceId?.let { SourceInstancesTable.providerInstanceId eq it },
+                    ),
+                )
             }.map { it[SourceInstancesTable.id].value }
     }
 
@@ -80,95 +80,53 @@ abstract class BaseMetricReadRepository {
 
     protected fun <T, S> emptyTripleReadResult(): Triple<List<T>, Map<Int, List<S>>, Map<Int, SourceMetadata>> = Triple(emptyList(), emptyMap(), emptyMap())
 
+    /** The read's where clause, or null when the source filters match no source instance. */
     protected fun timestampConditions(
         filters: ReadFilters,
         sourceInstanceIdColumn: Column<Int>,
         fromColumn: Column<OffsetDateTime>,
-        toColumn: Column<OffsetDateTime>? = null,
-        mode: TimeFilterMode = TimeFilterMode.START_AT_IN_RANGE,
-    ): MetricConditionResult {
+        mode: TimeFilterMode = TimeFilterMode.StartAtInRange,
+    ): Op<Boolean>? {
         val sourceIds = filters.sourceInstanceIds()
-
-        if (sourceIds.hasNoMatchingSources()) {
-            return MetricConditionResult.Empty
-        }
-
-        val conditions = mutableListOf<Op<Boolean>>()
-
-        when (mode) {
-            TimeFilterMode.START_AT_IN_RANGE -> {
-                filters.from?.let {
-                    conditions.add(fromColumn greaterEq it.toDbTimestamp())
-                }
-                filters.to?.let {
-                    conditions.add(fromColumn less it.toDbTimestamp())
-                }
-            }
-
-            TimeFilterMode.OVERLAPS_WINDOW -> {
-                requireNotNull(toColumn) {
-                    "toColumn is required for OVERLAPS_WINDOW filtering"
+        if (sourceIds.hasNoMatchingSources()) return null
+        val from = filters.from?.toDbTimestamp()
+        val to = filters.to?.toDbTimestamp()
+        val timeConditions =
+            when (mode) {
+                TimeFilterMode.StartAtInRange -> {
+                    listOf(from?.let { fromColumn greaterEq it }, to?.let { fromColumn less it })
                 }
 
-                filters.from?.let {
-                    conditions.add(toColumn greater it.toDbTimestamp())
+                TimeFilterMode.BeforeFrom -> {
+                    listOf(from?.let { fromColumn less it })
                 }
-                filters.to?.let {
-                    conditions.add(fromColumn less it.toDbTimestamp())
+
+                is TimeFilterMode.OverlapsWindow -> {
+                    listOf(
+                        from?.let { if (mode.inclusiveFrom) mode.toColumn greaterEq it else mode.toColumn greater it },
+                        to?.let { fromColumn less it },
+                    )
                 }
             }
-
-            TimeFilterMode.BEFORE_FROM -> {
-                filters.from?.let {
-                    conditions.add(fromColumn less it.toDbTimestamp())
-                }
-            }
-
-            TimeFilterMode.OVERLAPS_WINDOW_INCLUSIVE_FROM -> {
-                requireNotNull(toColumn) {
-                    "toColumn is required for OVERLAPS_WINDOW_INCLUSIVE_FROM filtering"
-                }
-
-                filters.from?.let {
-                    conditions.add(toColumn greaterEq it.toDbTimestamp())
-                }
-                filters.to?.let {
-                    conditions.add(fromColumn less it.toDbTimestamp())
-                }
-            }
-        }
-
-        sourceIds?.let {
-            conditions.add(sourceInstanceIdColumn inList it)
-        }
-
-        return MetricConditionResult.Conditions(combineConditions(conditions))
+        return combineConditions(timeConditions.filterNotNull() + listOfNotNull(sourceIds?.let { sourceInstanceIdColumn inList it }))
     }
 
+    /** The read's where clause, or null when the source filters match no source instance. */
     protected fun dateConditions(
         filters: ReadFilters,
         sourceInstanceIdColumn: Column<Int>,
         dateColumn: Column<LocalDate>,
-    ): MetricConditionResult {
+    ): Op<Boolean>? {
         val sourceIds = filters.sourceInstanceIds()
-
-        if (sourceIds.hasNoMatchingSources()) {
-            return MetricConditionResult.Empty
-        }
-
-        val conditions = mutableListOf<Op<Boolean>>()
-        filters.fromDate?.let { conditions.add(dateColumn greaterEq it) }
-        filters.toDate?.let { conditions.add(dateColumn lessEq it) }
-        sourceIds?.let { conditions.add(sourceInstanceIdColumn inList it) }
-
-        return MetricConditionResult.Conditions(combineConditions(conditions))
+        if (sourceIds.hasNoMatchingSources()) return null
+        return combineConditions(
+            listOfNotNull(
+                filters.fromDate?.let { dateColumn greaterEq it },
+                filters.toDate?.let { dateColumn lessEq it },
+                sourceIds?.let { sourceInstanceIdColumn inList it },
+            ),
+        )
     }
-
-    protected fun MetricConditionResult.whereOrNull(): Op<Boolean>? =
-        when (this) {
-            MetricConditionResult.Empty -> null
-            is MetricConditionResult.Conditions -> where
-        }
 
     protected fun sourceMetadata(
         sourceInstanceIds: Set<Int>,
@@ -259,17 +217,14 @@ abstract class BaseMetricReadRepository {
     protected fun ReadFilters.sortOrder(): SortOrder = sortOrder(order)
 }
 
-enum class TimeFilterMode {
-    START_AT_IN_RANGE,
-    OVERLAPS_WINDOW,
-    BEFORE_FROM,
-    OVERLAPS_WINDOW_INCLUSIVE_FROM,
-}
+sealed interface TimeFilterMode {
+    data object StartAtInRange : TimeFilterMode
 
-sealed interface MetricConditionResult {
-    data object Empty : MetricConditionResult
+    data object BeforeFrom : TimeFilterMode
 
-    data class Conditions(
-        val where: Op<Boolean>,
-    ) : MetricConditionResult
+    /** The row's span up to [toColumn] overlaps the window; [inclusiveFrom] also keeps spans ending exactly at `from`. */
+    data class OverlapsWindow(
+        val toColumn: Column<OffsetDateTime>,
+        val inclusiveFrom: Boolean = false,
+    ) : TimeFilterMode
 }

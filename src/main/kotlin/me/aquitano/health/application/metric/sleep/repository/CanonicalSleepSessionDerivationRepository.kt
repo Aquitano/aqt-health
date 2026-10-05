@@ -21,7 +21,7 @@ class CanonicalSleepSessionDerivationRepository : BaseMetricReadRepository() {
                 filters = filters,
                 sourceInstanceIdColumn = CanonicalSleepSessionsTable.sourceInstanceId,
                 fromColumn = CanonicalSleepSessionsTable.startAt,
-            ).whereOrNull() ?: return emptyReadResult()
+            ) ?: return emptyReadResult()
 
         val keyset =
             timestampKeyset(
@@ -49,9 +49,8 @@ class CanonicalSleepSessionDerivationRepository : BaseMetricReadRepository() {
                 filters = filters,
                 sourceInstanceIdColumn = CanonicalSleepSessionsTable.sourceInstanceId,
                 fromColumn = CanonicalSleepSessionsTable.startAt,
-                toColumn = CanonicalSleepSessionsTable.endAt,
-                mode = TimeFilterMode.OVERLAPS_WINDOW_INCLUSIVE_FROM,
-            ).whereOrNull() ?: return null
+                mode = TimeFilterMode.OverlapsWindow(toColumn = CanonicalSleepSessionsTable.endAt, inclusiveFrom = true),
+            ) ?: return null
 
         val avgExpression = SleepSessionsTable.durationSeconds.avg()
         return CanonicalSleepSessionsTable
