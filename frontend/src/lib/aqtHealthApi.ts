@@ -1,45 +1,35 @@
 import type {
   ApiResult,
   ApiSchema,
-  HealthDataPageSources,
   HealthDayModuleName,
-  HealthDayResponse,
+  IngestionBatch,
   IngestionBatchDetailResponse,
-  IngestionsPageData,
-  ProviderSyncPageData,
-  TrendsPageData,
-  HealthStatusData,
 } from "./types";
-import { aqtHealthClient, toProviderCode } from "./aqtHealthClient";
+import { aqtHealthClient as client, toProviderCode } from "./aqtHealthClient";
 import { toPositiveInteger } from "./format";
-import { addUtcDays, first, rangeDays, startOfDayInstant } from "./dates";
-
-export async function getHealthStatus(): Promise<HealthStatusData> {
-  return {
-    apiBaseUrl: aqtHealthClient.apiBaseUrl,
-    health: await aqtHealthClient.getHealth(),
-  };
-}
+import { addUtcDays, rangeDays, startOfDayInstant } from "./dates";
 
 /** Start independent section requests before rendering their Suspense boundaries. */
-export function getHealthDataPageSources(
-  fromDate: string,
-  toDate: string,
-  timezone: string,
-): HealthDataPageSources {
-  const client = aqtHealthClient;
+export function getHealthDataPageSources(fromDate: string, toDate: string, timezone: string) {
   const measurementsFrom = startOfDayInstant(fromDate, timezone);
   const measurementsTo = startOfDayInstant(addUtcDays(toDate, 1), timezone);
+  const samplesQuery = {
+    from: measurementsFrom,
+    to: measurementsTo,
+    includeSource: true,
+    order: "desc" as const,
+    limit: 5000,
+  };
+  const healthDayModules: HealthDayModuleName[] = ["steps", "heartRate", "weight", "sleep"];
 
   return {
-    apiBaseUrl: client.apiBaseUrl,
     health: client.getHealth(),
     summary: client.getDashboardSummary({ fromDate, toDate, timezone }),
     trends: client.getDashboardTrends({ periodDays: Math.min(rangeDays(fromDate, toDate), 90), toDate, timezone }),
-    healthDay: getHealthDay({
+    healthDay: client.getHealthDay({
       date: toDate,
       timezone,
-      modules: ["steps", "heartRate", "weight", "sleep"],
+      modules: healthDayModules.join(","),
       includeSource: true,
     }),
     dailySteps: client.listDailyStepSummaries({ fromDate, toDate, timezone, includeSource: true }),
@@ -50,50 +40,23 @@ export function getHealthDataPageSources(
       order: "desc",
       limit: 5000,
     }),
-    bodyMeasurements: client.listBodyMeasurements({
-      from: measurementsFrom,
-      to: measurementsTo,
-      includeSource: true,
-      order: "desc",
-      limit: 5000,
-    }),
+    bodyMeasurements: client.listBodyMeasurements(samplesQuery),
     heartRateDaily: client.getScalarDailySummaries("heart_rate", { from: measurementsFrom, to: measurementsTo, timezone }),
     sleepNights: client.listSleepNights({ fromDate, toDate, timezone, includeSource: true }),
-    sleepSummaries: client.listSleepSummaries({
-      from: measurementsFrom,
-      to: measurementsTo,
-      includeSource: true,
-      order: "desc",
-      limit: 5000,
-    }),
-    respiratoryRates: client.listRespiratoryRateSamples({
-      from: measurementsFrom,
-      to: measurementsTo,
-      includeSource: true,
-      order: "desc",
-      limit: 5000,
-    }),
-    hrvSamples: client.listHrvSamples({
-      from: measurementsFrom,
-      to: measurementsTo,
-      includeSource: true,
-      order: "desc",
-      limit: 5000,
-    }),
-    latestActivity: client.getLatestActivitySummary({ date: toDate, includeSource: true }),
-    latestSleepSummary: client.getLatestSleepSummary({ includeSource: true }),
-    latestRespiratoryRate: client.listRespiratoryRateSamples({ latest: true, includeSource: true }),
-    latestHrv: client.listHrvSamples({ latest: true, includeSource: true }),
-    latestBloodPressure: client.getLatestBloodPressure({ includeSource: true }),
+    sleepSummaries: client.listSleepSummaries(samplesQuery),
+    respiratoryRates: client.listScalarSamples("respiratory_rate", samplesQuery),
+    hrvSamples: client.listScalarSamples("hrv_rmssd", samplesQuery),
+    latestActivity: client.listActivitySummaries({ date: toDate, includeSource: true, latest: true }),
+    latestSleepSummary: client.listSleepSummaries({ includeSource: true, latest: true }),
+    latestRespiratoryRate: client.listScalarSamples("respiratory_rate", { includeSource: true, latest: true }),
+    latestHrv: client.listScalarSamples("hrv_rmssd", { includeSource: true, latest: true }),
+    latestBloodPressure: client.listBloodPressure({ includeSource: true, latest: true }),
   };
 }
 
-export async function getTrendsPageData(
-  toDate: string,
-  days: number,
-  timezone: string,
-): Promise<TrendsPageData> {
-  const client = aqtHealthClient;
+export type HealthDataPageSources = ReturnType<typeof getHealthDataPageSources>;
+
+export async function getTrendsPageData(toDate: string, days: number, timezone: string) {
   const fromDate = addUtcDays(toDate, -(days - 1));
   const from = startOfDayInstant(fromDate, timezone);
   const to = startOfDayInstant(addUtcDays(toDate, 1), timezone);
@@ -109,14 +72,7 @@ export async function getTrendsPageData(
     client.getHealth(),
     readAllPages((cursor) => client.listScalarSamples("weight", { ...sampleQuery, cursor })),
     readAllPages((cursor) => client.listDailyStepSummaries({ fromDate, toDate, timezone, limit: 5000, cursor })),
-    readAllPages((cursor) => client.listSleepSummaries({
-      cursor,
-      from,
-      to,
-      includeSource: true,
-      order: "asc",
-      limit: 5000,
-    })),
+    readAllPages((cursor) => client.listSleepSummaries({ ...sampleQuery, cursor })),
     client.getScalarDailySummaries("hrv_rmssd", { from, to, timezone }),
     readAllPages((cursor) => client.listActivitySummaries({
       cursor,
@@ -129,19 +85,10 @@ export async function getTrendsPageData(
     client.getScalarDailySummaries("respiratory_rate", { from, to, timezone }),
   ]);
 
-  return {
-    health,
-    weight,
-    steps,
-    sleep,
-    hrv,
-    activity,
-    respiratory,
-  };
+  return { health, weight, steps, sleep, hrv, activity, respiratory };
 }
 
-export async function getProviderSyncPageData(): Promise<ProviderSyncPageData> {
-  const client = aqtHealthClient;
+export async function getProviderSyncPageData() {
   const [health, providerCatalog, providerStatuses] = await Promise.all([
     client.getHealth(),
     client.listProviders(),
@@ -175,23 +122,14 @@ export async function getProviderSyncPageData(): Promise<ProviderSyncPageData> {
       .flatMap((job) => (job.ok && !job.data.terminal ? [job.data] : []))
       .at(0) ?? null;
 
-  return {
-    apiBaseUrl: client.apiBaseUrl,
-    health,
-    providerCatalog,
-    providerStatuses,
-    scheduledSyncConfigs,
-    runningSyncJob,
-  };
+  return { health, providerCatalog, providerStatuses, scheduledSyncConfigs, runningSyncJob };
 }
 
-export async function getIngestionsPageData(options: {
-  limit?: string | string[];
-  status?: string | string[];
-}): Promise<IngestionsPageData> {
-  const client = aqtHealthClient;
-  const limit = toPositiveInteger(first(options.limit) ?? "") ?? 25;
-  const status = ingestionStatus(first(options.status));
+const ingestionStatuses: IngestionBatch["status"][] = ["received", "processed", "failed"];
+
+export async function getIngestionsPageData(options: { limit?: string; status?: string }) {
+  const limit = toPositiveInteger(options.limit) ?? 25;
+  const status = ingestionStatuses.find((candidate) => candidate === options.status);
 
   const [health, batches, failures] = await Promise.all([
     client.getHealth(),
@@ -199,42 +137,18 @@ export async function getIngestionsPageData(options: {
     client.listIngestionFailures({ limit }),
   ]);
 
-  return {
-    apiBaseUrl: client.apiBaseUrl,
-    health,
-    batches,
-    failures,
-  };
+  return { health, batches, failures };
 }
 
 export async function getIngestionBatchDetail(
   id: string,
 ): Promise<ApiResult<IngestionBatchDetailResponse>> {
-  const parsed = Number(id);
-  if (!Number.isInteger(parsed) || parsed <= 0) {
+  const parsed = toPositiveInteger(id);
+  if (parsed === undefined) {
     return { ok: false, message: "Ingestion batch id must be a positive integer." };
   }
 
-  return aqtHealthClient.getIngestionBatch(parsed);
-}
-
-async function getHealthDay(paramsValue: {
-  date: string;
-  timezone: string;
-  modules: HealthDayModuleName[];
-  includeSource?: boolean;
-}): Promise<ApiResult<HealthDayResponse>> {
-  return aqtHealthClient.getHealthDay({
-    date: paramsValue.date,
-    timezone: paramsValue.timezone,
-    modules: paramsValue.modules.join(","),
-    includeSource: paramsValue.includeSource ?? false,
-  });
-}
-
-function ingestionStatus(value?: string): "received" | "processed" | "failed" | undefined {
-  if (value === "received" || value === "processed" || value === "failed") return value;
-  return undefined;
+  return client.getIngestionBatch(parsed);
 }
 
 type ReadPage<T> = { items: T[]; meta: ApiSchema<"ReadResponseMeta"> };

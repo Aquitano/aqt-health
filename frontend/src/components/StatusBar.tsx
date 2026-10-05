@@ -4,13 +4,12 @@ import type { ApiResult, HealthResponse } from "@/lib/types";
 import styles from "./StatusBar.module.css";
 
 type StatusBarProps = {
-  apiBaseUrl: string;
   health: ApiResult<HealthResponse>;
   fromDate?: string;
   toDate?: string;
 };
 
-export function StatusBar({ apiBaseUrl, health, fromDate, toDate }: StatusBarProps) {
+export function StatusBar({ health, fromDate, toDate }: StatusBarProps) {
   const status = health.ok ? health.data.status : "offline";
   const serviceTime = health.ok ? formatDateTime(health.data.time, serverConfig.timeZone) : "n/a";
 
@@ -28,7 +27,7 @@ export function StatusBar({ apiBaseUrl, health, fromDate, toDate }: StatusBarPro
       </div>
       <div className={styles.item}>
         <span className={styles.label}>API</span>
-        <span className={styles.value}>{apiBaseUrl}</span>
+        <span className={styles.value}>{serverConfig.apiBaseUrl}</span>
       </div>
       {fromDate && toDate ? (
         <div className={styles.item}>

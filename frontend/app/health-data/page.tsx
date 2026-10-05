@@ -8,11 +8,11 @@ import { LoadingPulse } from "@/components/motion/LoadingPulse";
 import { MetricHighlights } from "@/components/MetricHighlights";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBar } from "@/components/StatusBar";
-import { getHealthDataPageSources } from "@/lib/aqtHealthApi";
+import { getHealthDataPageSources, type HealthDataPageSources } from "@/lib/aqtHealthApi";
 import { addUtcDays, parseDateRange, rangeDays, startOfDayInstant } from "@/lib/dates";
 import { buildHealthCharts } from "@/lib/healthCharts";
 import { serverConfig } from "@/lib/serverConfig";
-import type { HealthDataPageSources, ScalarSample } from "@/lib/types";
+import type { ScalarSample } from "@/lib/types";
 import { Suspense } from "react";
 
 type PageProps = {
@@ -106,12 +106,7 @@ async function OverviewSection({
 
   return (
     <>
-      <StatusBar
-        apiBaseUrl={sources.apiBaseUrl}
-        health={health}
-        fromDate={fromDate}
-        toDate={toDate}
-      />
+      <StatusBar health={health} fromDate={fromDate} toDate={toDate} />
       <ErrorNotice result={health} />
       <ErrorNotice result={summary} />
       <ErrorNotice result={trends} />

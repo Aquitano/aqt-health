@@ -1,23 +1,15 @@
 import { type } from "arktype";
 import type { ArkErrors } from "arktype";
 import createClient from "openapi-fetch";
-import type {
-  ApiResult,
-  ApiSchema,
-  ScheduledSyncConfig,
-  ScheduledSyncConfigUpdateRequest,
-  ScheduledSyncRunResponse,
-} from "./types";
+import type { ApiResult, ProviderSyncRequest, ScheduledSyncConfigUpdateRequest } from "./types";
 import type { paths } from "./generated/aqtHealthApiTypes";
 import { serverConfig } from "./serverConfig";
 
 type ClientResponse<T> = {
   data?: T;
   error?: unknown;
-  response?: Response;
+  response: Response;
 };
-
-type NextFetchInit = RequestInit & { next: { revalidate: number } };
 
 const backendErrorBody = type({
   error: { "code?": "string", "message?": "string" },
@@ -47,81 +39,34 @@ export function toProviderCode(value: string): ProviderCode | null {
 }
 
 const bodyMetricTypes = ["weight", "body_fat", "muscle", "water", "visceral_fat"];
-const defaultBaseUrl = "http://localhost:8080";
 const longRunningBackendRequestTimeoutMs = 300_000;
 
-function apiBaseUrlFromEnv(): string {
-  const configured = process.env.AQT_HEALTH_API_BASE_URL;
-  if (configured) {
-    return configured;
-  }
-  // Mirror the backend's fail-fast production validation: a production server
-  // must not silently fall back to localhost. `next build` prerenders no
-  // backend-dependent pages, so the default is only allowed there and in dev.
-  if (
-    process.env.NODE_ENV === "production" &&
-    process.env.NEXT_PHASE !== "phase-production-build"
-  ) {
-    throw new Error(
-      "AQT_HEALTH_API_BASE_URL must be set when running the production server.",
-    );
-  }
-  return defaultBaseUrl;
-}
+const uncachedFetchWithin = (timeoutMs: number) => (request: Request) =>
+  fetch(request, { signal: AbortSignal.timeout(timeoutMs), next: { revalidate: 0 } });
 
-const apiBaseUrl = apiBaseUrlFromEnv();
 const rawClient = createClient<paths>({
-  baseUrl: apiBaseUrl,
-  fetch: (input: Request) => fetchWithTimeout(input),
+  baseUrl: serverConfig.apiBaseUrl,
+  fetch: uncachedFetchWithin(serverConfig.backendRequestTimeoutMs),
 });
 
 export const aqtHealthClient = {
-  apiBaseUrl,
-
-  getHealth: () =>
-    call<ApiSchema<"HealthResponse">>(() => rawClient.GET("/api/v2/admin/health"), {
-      protected: false,
-    }),
+  getHealth: () => call(() => rawClient.GET("/api/v2/admin/health"), { protected: false }),
 
   listIngestionBatches: (query: GetQuery<"/api/v2/admin/ingestion/batches">) =>
-    call<ApiSchema<"IngestionBatchesResponse">>(
-      (headers) =>
-        rawClient.GET("/api/v2/admin/ingestion/batches", {
-          headers,
-          params: { query },
-        }),
-    ),
+    call((headers) => rawClient.GET("/api/v2/admin/ingestion/batches", { headers, params: { query } })),
 
   getIngestionBatch: (id: number) =>
-    call<ApiSchema<"IngestionBatchDetailResponse">>(
-      (headers) =>
-        rawClient.GET("/api/v2/admin/ingestion/batches/{id}", {
-          headers,
-          params: { path: { id } },
-        }),
-    ),
+    call((headers) => rawClient.GET("/api/v2/admin/ingestion/batches/{id}", { headers, params: { path: { id } } })),
 
   listIngestionFailures: (query: GetQuery<"/api/v2/admin/ingestion/failures">) =>
-    call<ApiSchema<"IngestionBatchesResponse">>(
-      (headers) =>
-        rawClient.GET("/api/v2/admin/ingestion/failures", {
-          headers,
-          params: { query },
-        }),
-    ),
+    call((headers) => rawClient.GET("/api/v2/admin/ingestion/failures", { headers, params: { query } })),
 
-  listProviders: () =>
-    call<ApiSchema<"ProviderCatalogResponse">>((headers) =>
-      rawClient.GET("/api/v2/providers", { headers }),
-    ),
+  listProviders: () => call((headers) => rawClient.GET("/api/v2/providers", { headers })),
 
-  listProviderStatuses: () =>
-    call<ApiSchema<"ProviderStatusCatalogResponse">>((headers) =>
-      rawClient.GET("/api/v2/providers/status", { headers }),
-    ),
+  listProviderStatuses: () => call((headers) => rawClient.GET("/api/v2/providers/status", { headers })),
 
   startProviderOAuth: (providerCode: ProviderCode) =>
-    call<ApiSchema<"ProviderOAuthStartResponse">>((headers) =>
+    call((headers) =>
       rawClient.GET("/api/v2/providers/{providerCode}/oauth/start", {
         headers,
         params: { path: { providerCode } },
@@ -129,7 +74,7 @@ export const aqtHealthClient = {
     ),
 
   disconnectProviderAccount: (providerCode: ProviderCode, providerInstanceId: string) =>
-    call<ApiSchema<"ProviderDisconnectResponse">>((headers) =>
+    call((headers) =>
       rawClient.POST("/api/v2/providers/{providerCode}/accounts/{providerInstanceId}/disconnect", {
         headers,
         params: { path: { providerCode, providerInstanceId } },
@@ -137,7 +82,7 @@ export const aqtHealthClient = {
     ),
 
   reconnectProviderAccount: (providerCode: ProviderCode, providerInstanceId: string) =>
-    call<ApiSchema<"ProviderOAuthStartResponse">>((headers) =>
+    call((headers) =>
       rawClient.POST("/api/v2/providers/{providerCode}/accounts/{providerInstanceId}/reconnect", {
         headers,
         params: { path: { providerCode, providerInstanceId } },
@@ -145,7 +90,7 @@ export const aqtHealthClient = {
     ),
 
   getScheduledSyncConfig: (providerCode: ProviderCode, providerInstanceId: string) =>
-    call<ScheduledSyncConfig>((headers) =>
+    call((headers) =>
       rawClient.GET("/api/v2/providers/{providerCode}/accounts/{providerInstanceId}/scheduled-sync", {
         headers,
         params: { path: { providerCode, providerInstanceId } },
@@ -157,7 +102,7 @@ export const aqtHealthClient = {
     providerInstanceId: string,
     body: ScheduledSyncConfigUpdateRequest,
   ) =>
-    call<ScheduledSyncConfig>((headers) =>
+    call((headers) =>
       rawClient.PUT("/api/v2/providers/{providerCode}/accounts/{providerInstanceId}/scheduled-sync", {
         body,
         headers,
@@ -166,20 +111,16 @@ export const aqtHealthClient = {
     ),
 
   runScheduledSyncNow: (providerCode: ProviderCode, providerInstanceId: string) =>
-    call<ScheduledSyncRunResponse>((headers) =>
-      rawClient.POST(
-        "/api/v2/providers/{providerCode}/accounts/{providerInstanceId}/scheduled-sync/run",
-        {
-          headers,
-          params: { path: { providerCode, providerInstanceId } },
-          fetch: (input: Request) =>
-            fetchWithTimeout(input, undefined, longRunningBackendRequestTimeoutMs),
-        },
-      ),
+    call((headers) =>
+      rawClient.POST("/api/v2/providers/{providerCode}/accounts/{providerInstanceId}/scheduled-sync/run", {
+        headers,
+        params: { path: { providerCode, providerInstanceId } },
+        fetch: uncachedFetchWithin(longRunningBackendRequestTimeoutMs),
+      }),
     ),
 
-  startProviderSyncJob: (providerCode: ProviderCode, body: ApiSchema<"ProviderSyncRequest">) =>
-    call<ApiSchema<"ProviderSyncJobStartResponse">>((headers) =>
+  startProviderSyncJob: (providerCode: ProviderCode, body: ProviderSyncRequest) =>
+    call((headers) =>
       rawClient.POST("/api/v2/providers/{providerCode}/sync-jobs", {
         body,
         headers,
@@ -188,7 +129,7 @@ export const aqtHealthClient = {
     ),
 
   getLatestProviderSyncJob: (providerCode: ProviderCode) =>
-    call<ApiSchema<"ProviderSyncJobStatusResponse">>((headers) =>
+    call((headers) =>
       rawClient.GET("/api/v2/providers/{providerCode}/sync-jobs/latest", {
         headers,
         params: { path: { providerCode } },
@@ -196,7 +137,7 @@ export const aqtHealthClient = {
     ),
 
   getProviderSyncJob: (providerCode: ProviderCode, jobId: string) =>
-    call<ApiSchema<"ProviderSyncJobStatusResponse">>((headers) =>
+    call((headers) =>
       rawClient.GET("/api/v2/providers/{providerCode}/sync-jobs/{jobId}", {
         headers,
         params: { path: { providerCode, jobId } },
@@ -204,80 +145,38 @@ export const aqtHealthClient = {
     ),
 
   getHealthDay: (query: GetQuery<"/api/v2/health/day">) =>
-    call<ApiSchema<"HealthDayResponse">>((headers) =>
-      rawClient.GET("/api/v2/health/day", {
-        headers,
-        params: { query },
-      }),
-    ),
+    call((headers) => rawClient.GET("/api/v2/health/day", { headers, params: { query } })),
 
   listDailyStepSummaries: (query: GetQuery<"/api/v2/steps/daily">) =>
-    call<ApiSchema<"StepDailySummariesResponse">>((headers) =>
-      rawClient.GET("/api/v2/steps/daily", {
-        headers,
-        params: { query },
-      }),
-    ),
+    call((headers) => rawClient.GET("/api/v2/steps/daily", { headers, params: { query } })),
 
   listActivitySummaries: (query: GetQuery<"/api/v2/activity/summaries">) =>
-    call<ApiSchema<"ActivitySummariesResponse">>((headers) =>
-      rawClient.GET("/api/v2/activity/summaries", {
-        headers,
-        params: { query },
-      }),
-    ),
+    call((headers) => rawClient.GET("/api/v2/activity/summaries", { headers, params: { query } })),
 
-  getLatestActivitySummary: (query: GetQuery<"/api/v2/activity/summaries">) =>
-    call<ApiSchema<"ActivitySummariesResponse">>((headers) =>
-      rawClient.GET("/api/v2/activity/summaries", {
-        headers,
-        params: { query: { ...query, latest: true } },
-      }),
-    ),
-
-  getScalarDailySummaries: (
-    metricType: string,
-    query: GetQuery<"/api/v2/metrics/{metricType}/daily">,
-  ) =>
-    call<ApiSchema<"ScalarDailySummariesResponse">>((headers) =>
+  getScalarDailySummaries: (metricType: string, query: GetQuery<"/api/v2/metrics/{metricType}/daily">) =>
+    call((headers) =>
       rawClient.GET("/api/v2/metrics/{metricType}/daily", {
         headers,
         params: { path: { metricType }, query },
       }),
     ),
 
-  listRespiratoryRateSamples: (query: ScalarSamplesQuery) =>
-    listScalarMetric("respiratory_rate", query),
-
-  listHrvSamples: (query: ScalarSamplesQuery) =>
-    listScalarMetric("hrv_rmssd", query),
+  listScalarSamples: (metricType: string, query: GetQuery<"/api/v2/metrics/{metricType}">) =>
+    call((headers) =>
+      rawClient.GET("/api/v2/metrics/{metricType}", {
+        headers,
+        params: { path: { metricType }, query },
+      }),
+    ),
 
   listSleepNights: (query: GetQuery<"/api/v2/sleep/nights">) =>
-    call<ApiSchema<"SleepNightsResponse">>((headers) =>
-      rawClient.GET("/api/v2/sleep/nights", {
-        headers,
-        params: { query },
-      }),
-    ),
+    call((headers) => rawClient.GET("/api/v2/sleep/nights", { headers, params: { query } })),
 
   listSleepSummaries: (query: GetQuery<"/api/v2/sleep/summaries">) =>
-    call<ApiSchema<"SleepSummariesResponse">>((headers) =>
-      rawClient.GET("/api/v2/sleep/summaries", {
-        headers,
-        params: { query },
-      }),
-    ),
-
-  getLatestSleepSummary: (query: GetQuery<"/api/v2/sleep/summaries">) =>
-    call<ApiSchema<"SleepSummariesResponse">>((headers) =>
-      rawClient.GET("/api/v2/sleep/summaries", {
-        headers,
-        params: { query: { ...query, latest: true } },
-      }),
-    ),
+    call((headers) => rawClient.GET("/api/v2/sleep/summaries", { headers, params: { query } })),
 
   listBodyMeasurements: (query: Omit<GetQuery<"/api/v2/metrics/samples">, "metricTypes">) =>
-    call<ApiSchema<"ScalarSamplesResponse">>((headers) =>
+    call((headers) =>
       rawClient.GET("/api/v2/metrics/samples", {
         headers,
         params: { query: { ...query, metricTypes: bodyMetricTypes.join(",") } },
@@ -285,77 +184,17 @@ export const aqtHealthClient = {
     ),
 
   getDashboardSummary: (query: GetQuery<"/api/v2/dashboard/summary">) =>
-    call<ApiSchema<"DashboardSummaryResponse">>((headers) =>
-      rawClient.GET("/api/v2/dashboard/summary", {
-        headers,
-        params: { query },
-      }),
-    ),
+    call((headers) => rawClient.GET("/api/v2/dashboard/summary", { headers, params: { query } })),
 
   getDashboardTrends: (query: GetQuery<"/api/v2/dashboard/trends">) =>
-    call<ApiSchema<"DashboardTrendsResponse">>((headers) =>
-      rawClient.GET("/api/v2/dashboard/trends", {
-        headers,
-        params: { query },
-      }),
-    ),
+    call((headers) => rawClient.GET("/api/v2/dashboard/trends", { headers, params: { query } })),
 
   listBloodPressure: (query: GetQuery<"/api/v2/blood-pressure">) =>
-    call<ApiSchema<"BloodPressureMeasurementsResponse">>((headers) =>
-      rawClient.GET("/api/v2/blood-pressure", {
-        headers,
-        params: { query },
-      }),
-    ),
-
-  getLatestBloodPressure: (query: GetQuery<"/api/v2/blood-pressure">) =>
-    call<ApiSchema<"BloodPressureMeasurementsResponse">>((headers) =>
-      rawClient.GET("/api/v2/blood-pressure", {
-        headers,
-        params: { query: { ...query, latest: true } },
-      }),
-    ),
-
-  listScalarSamples: listScalarMetric,
+    call((headers) => rawClient.GET("/api/v2/blood-pressure", { headers, params: { query } })),
 
   listSleepSessions: (query: GetQuery<"/api/v2/sleep/sessions">) =>
-    call<ApiSchema<"SleepSessionsResponse">>((headers) =>
-      rawClient.GET("/api/v2/sleep/sessions", { headers, params: { query } }),
-    ),
+    call((headers) => rawClient.GET("/api/v2/sleep/sessions", { headers, params: { query } })),
 };
-
-type ScalarSamplesQuery = GetQuery<"/api/v2/metrics/{metricType}">;
-
-function listScalarMetric(
-  metricType: string,
-  query: ScalarSamplesQuery,
-): Promise<ApiResult<ApiSchema<"ScalarSamplesResponse">>> {
-  return call<ApiSchema<"ScalarSamplesResponse">>((headers) =>
-    rawClient.GET("/api/v2/metrics/{metricType}", {
-      headers,
-      params: { path: { metricType }, query },
-    }),
-  );
-}
-
-async function fetchWithTimeout(
-  input: RequestInfo | URL,
-  init?: RequestInit,
-  timeoutMs = serverConfig.backendRequestTimeoutMs,
-): Promise<Response> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  const uncachedInit: NextFetchInit = {
-    ...init,
-    signal: controller.signal,
-    next: { revalidate: 0 },
-  };
-  try {
-    return await fetch(input, uncachedInit);
-  } finally {
-    clearTimeout(timeout);
-  }
-}
 
 async function call<T>(
   execute: (headers: HeadersInit) => Promise<ClientResponse<T>>,
@@ -364,24 +203,23 @@ async function call<T>(
   const headers: HeadersInit = {};
 
   if (options.protected) {
-    const apiKey = process.env.AQT_HEALTH_API_KEY;
-    if (!apiKey) {
+    if (!serverConfig.apiKey) {
       return {
         ok: false,
         message: "AQT_HEALTH_API_KEY is not configured for protected backend requests.",
       };
     }
-    headers.Authorization = `Bearer ${apiKey}`;
+    headers.Authorization = `Bearer ${serverConfig.apiKey}`;
   }
 
   try {
     const { data, error, response } = await execute(headers);
 
-    if (!response?.ok || error) {
+    if (!response.ok || error) {
       return {
         ok: false,
-        status: response?.status,
-        message: errorMessage(backendErrorBody(error), response?.statusText || "Backend returned an error."),
+        status: response.status,
+        message: errorMessage(backendErrorBody(error), response.statusText || "Backend returned an error."),
       };
     }
 
