@@ -600,7 +600,7 @@ class WithingsNormalizer {
     ): List<ScalarSample> =
         flatMap { record -> (record[field] as? JsonObject).orEmpty().entries }
             .mapNotNull { (epochSecond, value) ->
-                val instant = epochSecond.toLongOrNull()?.let(Instant::ofEpochSecond) ?: return@mapNotNull null
+                val instant = epochSecond.toLongOrNull()?.let { runCatching { Instant.ofEpochSecond(it) }.getOrNull() } ?: return@mapNotNull null
                 val number = value.primitiveOrNull()?.doubleOrNull ?: return@mapNotNull null
                 (instant to number).takeIf { window.contains(instant) && isValid(number) }
             }.distinctBy { (instant) -> instant }
