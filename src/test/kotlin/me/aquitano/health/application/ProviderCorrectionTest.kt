@@ -278,11 +278,11 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
             val day = LocalDate.parse("2030-03-01")
             val sample = StepInterval("steps", "2030-03-01T08:00:00Z", "2030-03-01T09:00:00Z", 100)
             fixture.ingest(listOf(sample))
-            val derivation = CanonicalStepDerivationService(CanonicalStepDerivationRepository())
+            val derivation = CanonicalStepDerivationService(fixture.database, CanonicalStepDerivationRepository())
             PostgresTestDatabase.connection(fixture.config).use { lock ->
                 lock.autoCommit = false
                 lock.createStatement().use { it.execute("SELECT pg_advisory_xact_lock(384729, ${day.toEpochDay()})") }
-                val stale = async(Dispatchers.IO) { derivation.recompute(fixture.database, setOf(day), fixture.now) }
+                val stale = async(Dispatchers.IO) { derivation.recompute(setOf(day), fixture.now) }
                 try {
                     withTimeout(10_000) {
                         while (fixture.config.queryInt("SELECT COUNT(*) FROM pg_locks WHERE locktype = 'advisory' AND classid = 384729 AND objid = ${day.toEpochDay()} AND NOT granted") == 0) delay(20)
@@ -337,7 +337,6 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
                 mapping,
                 writer,
                 derived,
-                derivedRebuildRegistry(),
                 PendingDerivedRebuildRepository(database),
                 ReplayJobRepository(database),
                 ProjectionWipeRepository(),

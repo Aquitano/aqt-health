@@ -63,7 +63,6 @@ class ReplayService(
     private val mappingService: IngestionMappingService,
     private val metricWriteService: MetricWriteService,
     private val derivedRebuildExecutor: DerivedRebuildExecutor,
-    private val derivedRebuildRegistry: DerivedRebuildModuleRegistry,
     private val pendingDerivedRebuildRepository: PendingDerivedRebuildRepository,
     private val replayJobRepository: ReplayJobRepository,
     private val projectionWipeRepository: ProjectionWipeRepository,
@@ -245,7 +244,7 @@ class ReplayService(
         val writesBySource = prepared.groupBy { it.first.sourceInstanceId }.toSortedMap()
         if (plan.scope.includesDerived) {
             rows.forEach { row ->
-                val dates = derivedRebuildRegistry.affectedDatesFor(row.recordType, row.recordStartAt, row.recordEndAt)
+                val dates = stepRebuildDates(row.recordType, row.recordStartAt, row.recordEndAt)
                 if (dates.isNotEmpty()) {
                     affectedBySource.getOrPut(row.sourceInstanceId) { linkedSetOf() }.addAll(dates)
                 }

@@ -1,6 +1,5 @@
 package me.aquitano.health.application.metric.common
 
-import me.aquitano.health.application.DerivedRebuildModuleRegistry
 import me.aquitano.health.application.metric.activity.repository.ActivitySummaryWriteRepository
 import me.aquitano.health.application.metric.cardiovascular.repository.CardiovascularWriteRepository
 import me.aquitano.health.application.metric.common.repository.ProviderRecordCorrections
@@ -8,6 +7,7 @@ import me.aquitano.health.application.metric.scalar.ScalarSampleWrite
 import me.aquitano.health.application.metric.scalar.ScalarSampleWriteRepository
 import me.aquitano.health.application.metric.sleep.repository.SleepWriteRepository
 import me.aquitano.health.application.metric.steps.repository.StepWriteRepository
+import me.aquitano.health.application.stepRebuildDates
 import me.aquitano.health.domain.ActivitySummaryRecord
 import me.aquitano.health.domain.BloodPressureRecord
 import me.aquitano.health.domain.HealthRecord
@@ -31,7 +31,6 @@ class MetricWriteService(
     private val activitySummaryWriteRepository: ActivitySummaryWriteRepository,
     private val cardiovascularWriteRepository: CardiovascularWriteRepository,
     private val scalarSampleWriteRepository: ScalarSampleWriteRepository,
-    private val derivedRebuildRegistry: DerivedRebuildModuleRegistry,
 ) {
     private val corrections = ProviderRecordCorrections()
 
@@ -51,8 +50,7 @@ class MetricWriteService(
         var duplicateSkipped = writes.size - prepared.writes.size
         val affectedStepDates = linkedSetOf<LocalDate>()
         prepared.replacedSpans.forEach { previous ->
-            affectedStepDates +=
-                derivedRebuildRegistry.affectedDatesFor(previous.recordType, previous.startAt, previous.endAt)
+            affectedStepDates += stepRebuildDates(previous.recordType, previous.startAt, previous.endAt)
         }
         val scalarWrites = mutableListOf<ScalarSampleWrite>()
         val googleStepDecisions = prepared.googleStepDecisions.toMutableMap()
@@ -191,12 +189,7 @@ class MetricWriteService(
         return if (inserted) {
             MetricWriteResult(
                 created = MetricCreatedCounts.of(StructuralMetricKinds.STEP_SAMPLES to 1),
-                affectedStepDates =
-                    derivedRebuildRegistry.affectedDatesFor(
-                        record.recordType,
-                        record.startAt,
-                        record.endAt,
-                    ),
+                affectedStepDates = stepRebuildDates(record.recordType, record.startAt, record.endAt),
             )
         } else {
             MetricWriteResult(duplicateSkipped = 1)
@@ -223,12 +216,7 @@ class MetricWriteService(
                         StructuralMetricKinds.SLEEP_SESSIONS to 1,
                         StructuralMetricKinds.SLEEP_STAGES to record.stages.size,
                     ),
-                affectedStepDates =
-                    derivedRebuildRegistry.affectedDatesFor(
-                        record.recordType,
-                        record.startAt,
-                        record.endAt,
-                    ),
+                affectedStepDates = stepRebuildDates(record.recordType, record.startAt, record.endAt),
             )
         } else {
             MetricWriteResult(duplicateSkipped = 1)

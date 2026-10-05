@@ -116,11 +116,7 @@ fun ingestionModule() =
         // Derived-projection rebuild
         singleOf(::PendingDerivedRebuildRepository)
         singleOf(::ProjectionWipeRepository)
-        single { CanonicalStepDerivationService(get<CanonicalStepDerivationRepository>()) }
-        single {
-            DerivedRebuildModuleRegistry(derivedRebuildModules(canonicalStepService = get()))
-        }
-        singleOf(::PerDateDerivedRebuildExecutor) { bind<DerivedRebuildExecutor>() }
+        singleOf(::CanonicalStepDerivationService) { bind<DerivedRebuildExecutor>() }
         single {
             PendingDerivedRebuildSweeper(
                 repository = get(),
@@ -276,7 +272,6 @@ fun adminReplayModule() =
                 mappingService = get(),
                 metricWriteService = get(),
                 derivedRebuildExecutor = get(),
-                derivedRebuildRegistry = get(),
                 pendingDerivedRebuildRepository = get(),
                 replayJobRepository = get(),
                 projectionWipeRepository = get(),

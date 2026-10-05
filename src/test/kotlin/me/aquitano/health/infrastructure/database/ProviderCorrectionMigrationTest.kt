@@ -104,7 +104,6 @@ class ProviderCorrectionMigrationTest : PostgresIntegrationTest() {
                     IngestionMappingService(),
                     metricWriteService(),
                     realDerivedRebuildExecutor(database),
-                    derivedRebuildRegistry(),
                     PendingDerivedRebuildRepository(database),
                     ReplayJobRepository(database),
                     ProjectionWipeRepository(),

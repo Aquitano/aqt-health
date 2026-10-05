@@ -1,5 +1,7 @@
 package me.aquitano.health.application.metric.steps.derived
 
+import me.aquitano.health.application.DerivedRebuildExecutor
+import me.aquitano.health.application.DerivedRebuildRequest
 import me.aquitano.health.application.MetricCatalogBootstrap
 import me.aquitano.health.application.metric.common.CanonicalIntervalCandidate
 import me.aquitano.health.application.metric.common.canonicalIntervalRows
@@ -23,22 +25,26 @@ private const val UNKNOWN_PROVIDER_RANK = 10_000
 private const val MAX_SNAPSHOT_ATTEMPTS = 3
 
 class CanonicalStepDerivationService(
+    private val database: Database,
     private val repository: CanonicalStepDerivationRepository,
-) {
+) : DerivedRebuildExecutor {
+    override suspend fun rebuild(
+        requests: List<DerivedRebuildRequest>,
+        computedAt: Instant,
+    ) = recompute(requests.flatMapTo(sortedSetOf()) { it.affectedStepDates }, computedAt)
+
     suspend fun recompute(
-        database: Database,
         dates: Set<LocalDate>,
         computedAt: Instant,
     ) {
         dates.forEach { date ->
-            val persisted = (1..MAX_SNAPSHOT_ATTEMPTS).any { recomputeFromCurrentSamples(database, date, computedAt) }
+            val persisted = (1..MAX_SNAPSHOT_ATTEMPTS).any { recomputeFromCurrentSamples(date, computedAt) }
             check(persisted) { "Step samples kept changing while deriving $date; retry required" }
         }
     }
 
     /** Returns false when raw samples changed between the read and the locked persist. */
     private suspend fun recomputeFromCurrentSamples(
-        database: Database,
         date: LocalDate,
         computedAt: Instant,
     ): Boolean {

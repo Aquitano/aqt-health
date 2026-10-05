@@ -24,7 +24,6 @@ import me.aquitano.health.infrastructure.repositories.ReplayJobRepository
 import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.test.PostgresTestDatabase
 import me.aquitano.health.test.countRows
-import me.aquitano.health.test.derivedRebuildRegistry
 import me.aquitano.health.test.execute
 import me.aquitano.health.test.ingestionService
 import me.aquitano.health.test.metricWriteService
@@ -209,7 +208,6 @@ class ReplayServiceTest : PostgresIntegrationTest() {
                 mappingService = IngestionMappingService(),
                 metricWriteService = metricWriteService(),
                 derivedRebuildExecutor = derivedRebuildExecutor,
-                derivedRebuildRegistry = derivedRebuildRegistry(),
                 pendingDerivedRebuildRepository = PendingDerivedRebuildRepository(database),
                 replayJobRepository = ReplayJobRepository(database),
                 projectionWipeRepository = ProjectionWipeRepository(),
