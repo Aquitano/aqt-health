@@ -72,11 +72,7 @@ fun Application.configureRoutes(appConfig: AppConfig) {
                         example("health", healthResponseExample())
                     }
                 }
-                commonErrors(
-                    unauthorized = false,
-                    validation = false,
-                    internal = true,
-                )
+                commonErrors(unauthorized = false, validation = false)
                 defaultError()
             }
         }
@@ -143,8 +139,7 @@ fun Application.configureRoutes(appConfig: AppConfig) {
                     jsonRequest<IngestionBatchRequest>(
                         descriptionText =
                             "Normalized ingestion batch. Fields are nullable at the transport layer where provider adapters may omit them, but validation enforces provider, providerInstanceId, batch identity, and record-specific required fields.",
-                        exampleName = "batch",
-                        example = ingestionBatchExample(),
+                        namedExample = "batch" to ingestionBatchExample(),
                     )
                     responses {
                         HttpStatusCode.Created {

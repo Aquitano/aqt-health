@@ -255,8 +255,7 @@ internal fun Route.providerRoutes() {
         idempotencyKeyHeader()
         jsonRequest<ProviderSyncRequest>(
             "Provider sync request. Historical ranges up to 1095 days (3 years) are accepted for backfill and processed by the backend job worker; longer histories need several jobs.",
-            "syncJobRequest",
-            providerSyncRequestExample(),
+            "syncJobRequest" to providerSyncRequestExample(),
         )
         responses {
             HttpStatusCode.Accepted {
