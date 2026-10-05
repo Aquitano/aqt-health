@@ -67,20 +67,23 @@ interface ProviderSyncStore {
         errorMessage: String?,
     )
 
-    suspend fun findExistingBatch(
+    /** Resolves, creating it on first use, the source instance an account's batches are stored under. */
+    suspend fun sourceInstanceId(
         providerCode: String,
         providerInstanceId: String,
-        batchExternalId: String,
         now: Instant,
+    ): Int
+
+    suspend fun findExistingBatch(
+        sourceInstanceId: Int,
+        batchExternalId: String,
     ): ExistingProviderBatch?
 
     /** The processed batch whose snapshot still matches [contentHash] for this window, if any. */
     suspend fun reusableBatchId(
-        providerCode: String,
-        providerInstanceId: String,
+        sourceInstanceId: Int,
         windowKey: String,
         contentHash: String,
-        now: Instant,
     ): Int?
 
     suspend fun ingest(
@@ -193,27 +196,25 @@ class OAuthProviderSyncStore(
         repository.finishSyncRun(runId, status, finishedAt, errorMessage)
     }
 
-    override suspend fun findExistingBatch(
+    override suspend fun sourceInstanceId(
         providerCode: String,
         providerInstanceId: String,
-        batchExternalId: String,
         now: Instant,
+    ): Int = ingestionService.sourceInstanceId(providerCode, providerInstanceId, now)
+
+    override suspend fun findExistingBatch(
+        sourceInstanceId: Int,
+        batchExternalId: String,
     ): ExistingProviderBatch? =
         ingestionService
-            .findExistingBatch(
-                provider = providerCode,
-                providerInstanceId = providerInstanceId,
-                batchExternalId = batchExternalId,
-                now = now,
-            )?.let { batch -> ExistingProviderBatch(batch.id, batch.status) }
+            .findExistingBatch(sourceInstanceId, batchExternalId)
+            ?.let { batch -> ExistingProviderBatch(batch.id, batch.status) }
 
     override suspend fun reusableBatchId(
-        providerCode: String,
-        providerInstanceId: String,
+        sourceInstanceId: Int,
         windowKey: String,
         contentHash: String,
-        now: Instant,
-    ): Int? = ingestionService.reusableSyncBatchId(providerCode, providerInstanceId, windowKey, contentHash, now)
+    ): Int? = ingestionService.reusableSyncBatchId(sourceInstanceId, windowKey, contentHash)
 
     override suspend fun ingest(
         command: ProviderIngestionCommand,

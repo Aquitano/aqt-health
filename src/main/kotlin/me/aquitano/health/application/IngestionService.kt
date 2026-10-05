@@ -31,39 +31,29 @@ class IngestionService(
     private val derivedRebuildExecutor: DerivedRebuildExecutor,
     private val pendingDerivedRebuildRepository: PendingDerivedRebuildRepository,
 ) {
-    suspend fun findExistingBatch(
+    suspend fun sourceInstanceId(
         provider: String,
         providerInstanceId: String,
-        batchExternalId: String,
         now: Instant,
+    ): Int =
+        suspendDbTransaction(db = database) {
+            supportRepository.resolveOrCreateSourceInstanceInTransaction(provider, providerInstanceId, now).id
+        }
+
+    suspend fun findExistingBatch(
+        sourceInstanceId: Int,
+        batchExternalId: String,
     ) = suspendDbTransaction(db = database) {
-        val sourceInstance =
-            supportRepository.resolveOrCreateSourceInstanceInTransaction(
-                provider = provider,
-                providerInstanceId = providerInstanceId,
-                now = now,
-            )
-        ingestionRepository.findBatchByExternalId(
-            sourceInstance.id,
-            batchExternalId,
-        )
+        ingestionRepository.findBatchByExternalId(sourceInstanceId, batchExternalId)
     }
 
     suspend fun reusableSyncBatchId(
-        provider: String,
-        providerInstanceId: String,
+        sourceInstanceId: Int,
         windowKey: String,
         contentHash: String,
-        now: Instant,
     ): Int? =
         suspendDbTransaction(db = database) {
-            val sourceInstance =
-                supportRepository.resolveOrCreateSourceInstanceInTransaction(
-                    provider,
-                    providerInstanceId,
-                    now,
-                )
-            ingestionRepository.reusableSyncBatchId(sourceInstance.id, windowKey, contentHash)
+            ingestionRepository.reusableSyncBatchId(sourceInstanceId, windowKey, contentHash)
         }
 
     /**

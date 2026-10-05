@@ -49,7 +49,8 @@ class IngestionServiceTest : PostgresIntegrationTest() {
             val stored = service.ingestBatch(request, now, IngestionSnapshot("window", "empty"), allowEmptyRecords = true)
             assertEquals(BatchStatus.Processed, stored.status)
             assertEquals(0, stored.ingestionRecordsStored)
-            assertEquals(stored.batchId, service.reusableSyncBatchId("withings", "empty-account", "window", "empty", now))
+            val sourceInstanceId = service.sourceInstanceId("withings", "empty-account", now)
+            assertEquals(stored.batchId, service.reusableSyncBatchId(sourceInstanceId, "window", "empty"))
 
             val record = StepInterval("duplicate", "2026-04-19T08:00:00Z", "2026-04-19T09:00:00Z", 100)
             assertFailsWith<RequestValidationException> {

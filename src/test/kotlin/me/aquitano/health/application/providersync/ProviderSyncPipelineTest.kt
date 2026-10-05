@@ -599,27 +599,26 @@ class ProviderSyncPipelineTest {
             errorMessage: String?,
         ) = Unit
 
-        override suspend fun findExistingBatch(
+        override suspend fun sourceInstanceId(
             providerCode: String,
             providerInstanceId: String,
-            batchExternalId: String,
             now: Instant,
+        ): Int = 1
+
+        override suspend fun findExistingBatch(
+            sourceInstanceId: Int,
+            batchExternalId: String,
         ): ExistingProviderBatch? = existingBatch
 
         override suspend fun reusableBatchId(
-            providerCode: String,
-            providerInstanceId: String,
+            sourceInstanceId: Int,
             windowKey: String,
             contentHash: String,
-            now: Instant,
         ): Int? =
             ingested
                 .withIndex()
-                .lastOrNull {
-                    it.value.providerCode == providerCode &&
-                        it.value.providerInstanceId == providerInstanceId &&
-                        it.value.snapshot.windowKey == windowKey
-                }?.takeIf { it.value.snapshot.contentHash == contentHash }
+                .lastOrNull { it.value.snapshot.windowKey == windowKey }
+                ?.takeIf { it.value.snapshot.contentHash == contentHash }
                 ?.let { it.index + 1 }
 
         override suspend fun ingest(

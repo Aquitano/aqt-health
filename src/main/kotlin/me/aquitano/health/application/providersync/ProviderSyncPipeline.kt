@@ -54,6 +54,7 @@ class ProviderSyncPipeline(
             )
 
         var token = freshAccessToken(adapter, account, clock.instant())
+        val sourceInstanceId = store.sourceInstanceId(adapter.providerCode, account.providerInstanceId, now)
         val runId =
             store.startRun(
                 providerCode = adapter.providerCode,
@@ -94,12 +95,7 @@ class ProviderSyncPipeline(
                 if (request.refresh) {
                     null
                 } else {
-                    store.findExistingBatch(
-                        providerCode = adapter.providerCode,
-                        providerInstanceId = account.providerInstanceId,
-                        batchExternalId = batchExternalId,
-                        now = now,
-                    )
+                    store.findExistingBatch(sourceInstanceId, batchExternalId)
                 }
             if (existingBatch?.status == BatchStatus.Processed) {
                 batches += cachedBatchResponse(item.dataType, existingBatch.id)
@@ -180,13 +176,8 @@ class ProviderSyncPipeline(
                 val snapshot = IngestionSnapshot(windowKey, fetched.copy(records = records).contentHash())
                 if (request.refresh) {
                     store
-                        .reusableBatchId(
-                            adapter.providerCode,
-                            account.providerInstanceId,
-                            windowKey,
-                            snapshot.contentHash,
-                            now,
-                        )?.let { batchId ->
+                        .reusableBatchId(sourceInstanceId, windowKey, snapshot.contentHash)
+                        ?.let { batchId ->
                             batches += cachedBatchResponse(item.dataType, batchId)
                             progress.itemCompleted(item)
                             return@forEach
