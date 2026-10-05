@@ -262,47 +262,45 @@ class ReplayService(
                         return@suspendDbTransaction null
                     }
                 }
-                var recordsReplayed = 0
-                var metricsWritten = 0
-                var duplicatesSkipped = 0
-                val mappingFailures = if (plan.scope.includesProjections) rows.size - prepared.size else 0
-
-                if (plan.scope.includesProjections) {
-                    if (plan.wipe) {
-                        projectionWipeRepository.wipeDay(
-                            day = day,
-                            dayStart = dayStart,
-                            dayEnd = dayEnd,
-                            recordTypes = plan.recordTypes ?: replayableRecordTypes,
-                        )
-                    }
-                    writesBySource.forEach { (sourceId, entries) ->
-                        val writeResult =
-                            metricWriteService.writeAll(
+                if (plan.scope.includesProjections && plan.wipe) {
+                    projectionWipeRepository.wipeDay(
+                        day = day,
+                        dayStart = dayStart,
+                        dayEnd = dayEnd,
+                        recordTypes = plan.recordTypes ?: replayableRecordTypes,
+                    )
+                }
+                val writeResults =
+                    writesBySource.map { (sourceId, entries) ->
+                        metricWriteService
+                            .writeAll(
                                 provider = entries.first().first.provider,
                                 sourceInstanceId = sourceId,
                                 writes = entries.map { it.second },
                                 now = now,
-                            )
-                        if (plan.scope.includesDerived) {
-                            if (writeResult.affectedStepDates.isNotEmpty()) {
-                                affectedBySource.getOrPut(sourceId) { linkedSetOf() }.addAll(writeResult.affectedStepDates)
+                            ).also { writeResult ->
+                                if (plan.scope.includesDerived && writeResult.affectedStepDates.isNotEmpty()) {
+                                    affectedBySource.getOrPut(sourceId) { linkedSetOf() }.addAll(writeResult.affectedStepDates)
+                                }
                             }
-                        }
-                        recordsReplayed += entries.size
-                        metricsWritten +=
-                            writeResult.created.counts.values
-                                .sum()
-                        duplicatesSkipped += writeResult.duplicateSkipped
                     }
-                }
 
                 val rebuildRequests =
                     affectedBySource.map { (sourceInstanceId, dates) ->
                         DerivedRebuildRequest(sourceInstanceId, dates.toSet())
                     }
                 ReplayedDay(
-                    result = DayReplayResult(recordsReplayed, metricsWritten, duplicatesSkipped, mappingFailures),
+                    result =
+                        DayReplayResult(
+                            recordsReplayed = prepared.size,
+                            metricsWritten =
+                                writeResults.sumOf {
+                                    it.created.counts.values
+                                        .sum()
+                                },
+                            duplicatesSkipped = writeResults.sumOf { it.duplicateSkipped },
+                            mappingFailures = if (plan.scope.includesProjections) rows.size - prepared.size else 0,
+                        ),
                     rebuildRequests = rebuildRequests,
                     queuedRebuilds = rebuildRequests.flatMap { pendingDerivedRebuildRepository.enqueueInTransaction(it, now) },
                 )
