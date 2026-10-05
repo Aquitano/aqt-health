@@ -51,7 +51,7 @@ export function MetricHighlights({
     {
       kind: "sleep",
       label: "Sleep score",
-      value: sleep?.sleepScore !== undefined && sleep.sleepScore !== null ? `${sleep.sleepScore}/100` : "n/a",
+      value: sleep?.sleepScore != null ? `${sleep.sleepScore}/100` : "n/a",
       detail: sleep
         ? `${formatDuration(sleep.totalSleepSeconds)} asleep - ${formatMeasurement(sleep.sleepEfficiencyPercent, "%")} efficiency`
         : "No sleep summary",

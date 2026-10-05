@@ -1,7 +1,7 @@
 const dateTimeFormatters = new Map<string, Intl.DateTimeFormat>();
 
 export function formatDateTime(value: string | number | null | undefined, timeZone: string): string {
-  if (value === undefined || value === null || value === "") return "n/a";
+  if (value == null || value === "") return "n/a";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return typeof value === "number" ? "n/a" : String(value);
 
@@ -17,12 +17,12 @@ function dateTimeFormatter(timeZone: string): Intl.DateTimeFormat {
 }
 
 export function formatNumber(value?: number | null): string {
-  if (value === undefined || value === null) return "n/a";
+  if (value == null) return "n/a";
   return new Intl.NumberFormat("en").format(value);
 }
 
 export function formatDuration(seconds?: number | null): string {
-  if (seconds === undefined || seconds === null) return "n/a";
+  if (seconds == null) return "n/a";
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
   if (hours === 0) return `${minutes}m`;
@@ -30,7 +30,7 @@ export function formatDuration(seconds?: number | null): string {
 }
 
 export function formatMeasurement(value?: number | null, unit?: string | null): string {
-  if (value === undefined || value === null) return "n/a";
+  if (value == null) return "n/a";
   return `${new Intl.NumberFormat("en", { maximumFractionDigits: 1 }).format(value)} ${unit ?? ""}`.trim();
 }
 

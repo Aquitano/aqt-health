@@ -42,7 +42,7 @@ const SleepIcon = () => (
 );
 
 function TrendBadge({ percentChange, periodLabel }: { percentChange?: number | null; periodLabel?: string }) {
-  if (percentChange === undefined || percentChange === null) return null;
+  if (percentChange == null) return null;
   const isPositive = percentChange > 0;
   const isNeutral = percentChange === 0;
   const sign = isNeutral ? "" : isPositive ? "+" : "";
