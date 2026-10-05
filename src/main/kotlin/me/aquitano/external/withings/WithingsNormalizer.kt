@@ -381,47 +381,9 @@ class WithingsNormalizer {
                     SleepSegment(start = start, end = end, stage = stage)
                 }.sortedBy { it.start }
 
-        val heartRates =
-            records.mapNotNull { record ->
-                val bpm = record.sleepHeartRate() ?: return@mapNotNull null
-                if (bpm !in 25..250) return@mapNotNull null
-                val instant = record.sleepSampleInstant(window) ?: return@mapNotNull null
-                ScalarSample(
-                    providerRecordId = "withings:sleep:hr:${instant.epochSecond}",
-                    measuredAt = instant.toString(),
-                    metricType = ScalarMetricTypes.HEART_RATE,
-                    value = bpm.toDouble(),
-                    context = "sleep",
-                )
-            }
-
-        val respiratoryRates =
-            records.mapNotNull { record ->
-                val breathsPerMinute = record.sleepRespiratoryRate() ?: return@mapNotNull null
-                if (breathsPerMinute !in 5..80) return@mapNotNull null
-                val instant = record.sleepSampleInstant(window) ?: return@mapNotNull null
-                ScalarSample(
-                    providerRecordId = "withings:sleep:rr:${instant.epochSecond}",
-                    measuredAt = instant.toString(),
-                    metricType = ScalarMetricTypes.RESPIRATORY_RATE,
-                    value = breathsPerMinute.toDouble(),
-                    context = "sleep",
-                )
-            }
-
-        val hrv =
-            records.mapNotNull { record ->
-                val rmssd = record.sleepRmssd() ?: return@mapNotNull null
-                if (rmssd <= 0.0 || rmssd > 500.0) return@mapNotNull null
-                val instant = record.sleepSampleInstant(window) ?: return@mapNotNull null
-                ScalarSample(
-                    providerRecordId = "withings:sleep:rmssd:${instant.epochSecond}",
-                    measuredAt = instant.toString(),
-                    metricType = ScalarMetricTypes.HRV_RMSSD,
-                    value = rmssd,
-                    context = "sleep",
-                )
-            }
+        val heartRates = records.sleepSeriesSamples("hr", ScalarMetricTypes.HEART_RATE, window) { it in 25.0..250.0 }
+        val respiratoryRates = records.sleepSeriesSamples("rr", ScalarMetricTypes.RESPIRATORY_RATE, window) { it in 5.0..80.0 }
+        val hrv = records.sleepSeriesSamples("rmssd", ScalarMetricTypes.HRV_RMSSD, window) { it > 0.0 && it <= 500.0 }
 
         if (segments.isNotEmpty()) {
             val sessions =
@@ -624,18 +586,33 @@ class WithingsNormalizer {
             ?: (this["value"] as? JsonObject)?.int("state")
             ?: (this["value"] as? JsonObject)?.int("value")
 
-    private fun JsonObject.sleepHeartRate(): Int? = int("hr") ?: (this["data"] as? JsonObject)?.int("hr")
-
-    private fun JsonObject.sleepRespiratoryRate(): Int? = int("rr") ?: (this["data"] as? JsonObject)?.int("rr")
-
-    private fun JsonObject.sleepRmssd(): Double? = doubleOrNull("rmssd") ?: (this["data"] as? JsonObject)?.doubleOrNull("rmssd")
-
     private fun JsonObject.sleepInstant(key: String): Instant? = instant(key) ?: (this["data"] as? JsonObject)?.instant(key)
 
-    /** Sleep samples stay with the window they were measured in; the lookbehind ones are dropped. */
-    private fun JsonObject.sleepSampleInstant(window: SyncWindow): Instant? =
-        (sleepInstant("timestamp") ?: sleepInstant("startdate"))
-            ?.takeIf { window.contains(it) }
+    /**
+     * Sleep v2 returns each requested data field as `{"<epoch second>": value}` per series item.
+     * Samples stay with the window they were measured in, so the lookbehind ones are dropped.
+     */
+    private fun List<JsonObject>.sleepSeriesSamples(
+        field: String,
+        metricType: String,
+        window: SyncWindow,
+        isValid: (Double) -> Boolean,
+    ): List<ScalarSample> =
+        flatMap { record -> (record[field] as? JsonObject).orEmpty().entries }
+            .mapNotNull { (epochSecond, value) ->
+                val instant = epochSecond.toLongOrNull()?.let(Instant::ofEpochSecond) ?: return@mapNotNull null
+                val number = value.primitiveOrNull()?.doubleOrNull ?: return@mapNotNull null
+                (instant to number).takeIf { window.contains(instant) && isValid(number) }
+            }.distinctBy { (instant) -> instant }
+            .map { (instant, number) ->
+                ScalarSample(
+                    providerRecordId = "withings:sleep:$field:${instant.epochSecond}",
+                    measuredAt = instant.toString(),
+                    metricType = metricType,
+                    value = number,
+                    context = "sleep",
+                )
+            }
 
     private fun SyncWindow.contains(instant: Instant): Boolean = !instant.isBefore(from) && instant.isBefore(to)
 
