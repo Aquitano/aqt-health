@@ -496,49 +496,6 @@ class WithingsNormalizer {
             maxHeartRateBpm = validHeartRate("hr_max"),
         )
 
-    private fun ActivitySummary.hasAnyMetric(): Boolean =
-        distanceMeters != null ||
-            activeEnergyKcal != null ||
-            totalEnergyKcal != null ||
-            elevationMeters != null ||
-            softMinutes != null ||
-            moderateMinutes != null ||
-            intenseMinutes != null ||
-            activeMinutes != null ||
-            averageHeartRateBpm != null ||
-            minHeartRateBpm != null ||
-            maxHeartRateBpm != null
-
-    private fun SleepSummary.hasAnyMetric(): Boolean =
-        timeInBedSeconds != null ||
-            totalSleepSeconds != null ||
-            lightSleepSeconds != null ||
-            deepSleepSeconds != null ||
-            remSleepSeconds != null ||
-            sleepEfficiencyPercent != null ||
-            sleepLatencySeconds != null ||
-            wakeupLatencySeconds != null ||
-            wakeupDurationSeconds != null ||
-            wakeupCount != null ||
-            wasoSeconds != null ||
-            sleepScore != null ||
-            remEpisodesCount != null ||
-            outOfBedCount != null ||
-            awakeDurationSeconds != null ||
-            overnightHrvRmssd != null ||
-            respiratoryRhythm != null ||
-            breathingQuality != null ||
-            snoringDurationSeconds != null ||
-            apneaHypopneaIndex != null ||
-            movementScore != null ||
-            snoringEpisodeCount != null ||
-            hrAverageBpm != null ||
-            hrMinBpm != null ||
-            hrMaxBpm != null ||
-            rrAverage != null ||
-            rrMin != null ||
-            rrMax != null
-
     private fun JsonObject.int(key: String): Int? {
         val primitive = this[key]?.primitiveOrNull() ?: return null
         primitive.intOrNull?.let { return it }

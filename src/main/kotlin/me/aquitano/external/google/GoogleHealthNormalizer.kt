@@ -140,8 +140,7 @@ class GoogleHealthNormalizer {
                 wakeupCount = stageSummaries["AWAKE"]?.nonNegativeLong("count")?.toInt(),
                 remEpisodesCount = stageSummaries["REM"]?.nonNegativeLong("count")?.toInt(),
             )
-        val withoutMetrics = SleepSummary(record.providerRecordId, record.startAt, record.endAt)
-        return record.takeIf { it != withoutMetrics }
+        return record.takeIf { it.hasAnyMetric() }
     }
 
     private fun normalizeHeartRateVariability(

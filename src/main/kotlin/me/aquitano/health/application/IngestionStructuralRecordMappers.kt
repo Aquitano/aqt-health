@@ -232,20 +232,7 @@ internal fun mapActivitySummary(
         )
     }
 
-    val hasAnyMetric =
-        listOfNotNull(
-            dto.distanceMeters,
-            dto.activeEnergyKcal,
-            dto.totalEnergyKcal,
-            dto.elevationMeters,
-            dto.softMinutes,
-            dto.moderateMinutes,
-            dto.intenseMinutes,
-            dto.activeMinutes,
-            dto.averageHeartRateBpm,
-            dto.minHeartRateBpm,
-            dto.maxHeartRateBpm,
-        ).isNotEmpty()
+    val hasAnyMetric = dto.hasAnyMetric()
     if (!hasAnyMetric) {
         issues.add(
             ValidationIssue(
@@ -380,37 +367,7 @@ internal fun mapSleepSummary(
         issues.add(ValidationIssue("$field.rrMax", code = ValidationIssueCodes.OutOfRange, message = "must be between 5 and 40"))
     }
 
-    val hasAnyMetric =
-        listOfNotNull(
-            dto.timeInBedSeconds,
-            dto.totalSleepSeconds,
-            dto.lightSleepSeconds,
-            dto.deepSleepSeconds,
-            dto.remSleepSeconds,
-            dto.sleepEfficiencyPercent,
-            dto.sleepLatencySeconds,
-            dto.wakeupLatencySeconds,
-            dto.wakeupDurationSeconds,
-            dto.wakeupCount,
-            dto.wasoSeconds,
-            dto.sleepScore,
-            dto.remEpisodesCount,
-            dto.outOfBedCount,
-            dto.awakeDurationSeconds,
-            dto.overnightHrvRmssd,
-            dto.respiratoryRhythm,
-            dto.breathingQuality,
-            dto.snoringDurationSeconds,
-            dto.apneaHypopneaIndex,
-            dto.movementScore,
-            dto.snoringEpisodeCount,
-            dto.hrAverageBpm,
-            dto.hrMinBpm,
-            dto.hrMaxBpm,
-            dto.rrAverage,
-            dto.rrMin,
-            dto.rrMax,
-        ).isNotEmpty()
+    val hasAnyMetric = dto.hasAnyMetric()
     if (!hasAnyMetric) {
         issues.add(
             ValidationIssue(
