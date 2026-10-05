@@ -48,44 +48,73 @@ class MetricWriteService(
         val prepared = corrections.prepare(provider, sourceInstanceId, writes)
         var created = MetricCreatedCounts()
         var duplicateSkipped = writes.size - prepared.writes.size
-        val affectedStepDates = linkedSetOf<LocalDate>()
-        prepared.replacedSpans.forEach { previous ->
-            affectedStepDates += stepRebuildDates(previous.recordType, previous.startAt, previous.endAt)
-        }
+        val affectedStepDates =
+            prepared.replacedSpans.flatMapTo(linkedSetOf()) { stepRebuildDates(it.recordType, it.startAt, it.endAt) }
         val scalarWrites = mutableListOf<ScalarSampleWrite>()
         val googleStepDecisions = prepared.googleStepDecisions.toMutableMap()
 
-        prepared.writes.forEach { entry ->
-            if (entry.record is ScalarSampleRecord) {
-                scalarWrites += ScalarSampleWrite(entry.ingestionRecordId, entry.record)
+        prepared.writes.forEach { (ingestionRecordId, record) ->
+            val inserted =
+                when (record) {
+                    is ScalarSampleRecord -> {
+                        scalarWrites += ScalarSampleWrite(ingestionRecordId, record)
+                        return@forEach
+                    }
+
+                    is StepIntervalRecord -> {
+                        MetricCreatedCounts.of(StructuralMetricKinds.STEP_SAMPLES to 1).takeIf {
+                            stepWriteRepository.insertStepSample(
+                                provider,
+                                sourceInstanceId,
+                                ingestionRecordId,
+                                record,
+                                now,
+                                preserveAcceptance = ingestionRecordId in prepared.acceptedGoogleStepIds,
+                            )
+                        }
+                    }
+
+                    is SleepSessionRecord -> {
+                        sleepWriteRepository.insertSleepSession(sourceInstanceId, ingestionRecordId, record, now)?.let {
+                            MetricCreatedCounts.of(
+                                StructuralMetricKinds.SLEEP_SESSIONS to 1,
+                                StructuralMetricKinds.SLEEP_STAGES to record.stages.size,
+                            )
+                        }
+                    }
+
+                    is ActivitySummaryRecord -> {
+                        MetricCreatedCounts.of(StructuralMetricKinds.ACTIVITY_SUMMARIES to 1).takeIf {
+                            activitySummaryWriteRepository.insertActivitySummary(sourceInstanceId, ingestionRecordId, record, now)
+                        }
+                    }
+
+                    is SleepSummaryRecord -> {
+                        MetricCreatedCounts.of(StructuralMetricKinds.SLEEP_SUMMARIES to 1).takeIf {
+                            sleepWriteRepository.insertSleepSummary(sourceInstanceId, ingestionRecordId, record, now)
+                        }
+                    }
+
+                    is BloodPressureRecord -> {
+                        MetricCreatedCounts.of(StructuralMetricKinds.BLOOD_PRESSURE_MEASUREMENTS to 1).takeIf {
+                            cardiovascularWriteRepository.insertBloodPressure(sourceInstanceId, ingestionRecordId, record, now)
+                        }
+                    }
+                }
+            if (ingestionRecordId in prepared.googleStepRecordIds) {
+                googleStepDecisions[ingestionRecordId] =
+                    ingestionRecordId in prepared.acceptedGoogleStepIds || inserted != null
+            }
+            if (inserted == null) {
+                duplicateSkipped++
                 return@forEach
             }
-            val result =
-                writePrepared(
-                    provider,
-                    sourceInstanceId,
-                    entry.ingestionRecordId,
-                    entry.record,
-                    now,
-                    preserveAcceptance = entry.ingestionRecordId in prepared.acceptedGoogleStepIds,
-                )
-            if (entry.ingestionRecordId in prepared.googleStepRecordIds) {
-                googleStepDecisions[entry.ingestionRecordId] =
-                    entry.ingestionRecordId in prepared.acceptedGoogleStepIds ||
-                    result.created.counts[StructuralMetricKinds.STEP_SAMPLES] == 1
-            }
-            created += result.created
-            duplicateSkipped += result.duplicateSkipped
-            affectedStepDates += result.affectedStepDates
+            created += inserted
+            record.recordStartAt?.let { affectedStepDates += stepRebuildDates(record.recordType, it, record.recordEndAt) }
         }
 
         if (scalarWrites.isNotEmpty()) {
-            val insertedTypes =
-                scalarSampleWriteRepository.insertScalarSamples(
-                    sourceInstanceId,
-                    scalarWrites,
-                    now,
-                )
+            val insertedTypes = scalarSampleWriteRepository.insertScalarSamples(sourceInstanceId, scalarWrites, now)
             // insertedTypes is the repository's in-memory dedup decision and is authoritative for
             // these counts: created = rows that passed dedup, duplicateSkipped = the rest. The
             // insert's ignore=true can additionally drop a concurrent writer's row after the
@@ -100,209 +129,6 @@ class MetricWriteService(
             created = created,
             duplicateSkipped = duplicateSkipped,
             affectedStepDates = affectedStepDates,
-        )
-    }
-
-    private fun writePrepared(
-        provider: String,
-        sourceInstanceId: Int,
-        ingestionRecordId: Int,
-        record: HealthRecord,
-        now: Instant,
-        preserveAcceptance: Boolean,
-    ): MetricWriteResult =
-        when (record) {
-            is StepIntervalRecord -> {
-                writeStepInterval(
-                    provider,
-                    sourceInstanceId,
-                    ingestionRecordId,
-                    record,
-                    now,
-                    preserveAcceptance,
-                )
-            }
-
-            is SleepSessionRecord -> {
-                writeSleepSession(
-                    sourceInstanceId,
-                    ingestionRecordId,
-                    record,
-                    now,
-                )
-            }
-
-            is ActivitySummaryRecord -> {
-                writeActivitySummary(
-                    sourceInstanceId,
-                    ingestionRecordId,
-                    record,
-                    now,
-                )
-            }
-
-            is SleepSummaryRecord -> {
-                writeSleepSummary(
-                    sourceInstanceId,
-                    ingestionRecordId,
-                    record,
-                    now,
-                )
-            }
-
-            is BloodPressureRecord -> {
-                writeBloodPressure(
-                    sourceInstanceId,
-                    ingestionRecordId,
-                    record,
-                    now,
-                )
-            }
-
-            is ScalarSampleRecord -> {
-                writeScalarSamples(
-                    sourceInstanceId,
-                    ingestionRecordId,
-                    record,
-                    now,
-                )
-            }
-        }
-
-    private fun writeStepInterval(
-        provider: String,
-        sourceInstanceId: Int,
-        ingestionRecordId: Int,
-        record: StepIntervalRecord,
-        now: Instant,
-        preserveAcceptance: Boolean,
-    ): MetricWriteResult {
-        val inserted =
-            stepWriteRepository.insertStepSample(
-                provider,
-                sourceInstanceId,
-                ingestionRecordId,
-                record,
-                now,
-                preserveAcceptance,
-            )
-        return if (inserted) {
-            MetricWriteResult(
-                created = MetricCreatedCounts.of(StructuralMetricKinds.STEP_SAMPLES to 1),
-                affectedStepDates = stepRebuildDates(record.recordType, record.startAt, record.endAt),
-            )
-        } else {
-            MetricWriteResult(duplicateSkipped = 1)
-        }
-    }
-
-    private fun writeSleepSession(
-        sourceInstanceId: Int,
-        ingestionRecordId: Int,
-        record: SleepSessionRecord,
-        now: Instant,
-    ): MetricWriteResult {
-        val sessionId =
-            sleepWriteRepository.insertSleepSession(
-                sourceInstanceId,
-                ingestionRecordId,
-                record,
-                now,
-            )
-        return if (sessionId != null) {
-            MetricWriteResult(
-                created =
-                    MetricCreatedCounts.of(
-                        StructuralMetricKinds.SLEEP_SESSIONS to 1,
-                        StructuralMetricKinds.SLEEP_STAGES to record.stages.size,
-                    ),
-                affectedStepDates = stepRebuildDates(record.recordType, record.startAt, record.endAt),
-            )
-        } else {
-            MetricWriteResult(duplicateSkipped = 1)
-        }
-    }
-
-    private fun writeActivitySummary(
-        sourceInstanceId: Int,
-        ingestionRecordId: Int,
-        record: ActivitySummaryRecord,
-        now: Instant,
-    ): MetricWriteResult {
-        val inserted =
-            activitySummaryWriteRepository.insertActivitySummary(
-                sourceInstanceId,
-                ingestionRecordId,
-                record,
-                now,
-            )
-        return if (inserted) {
-            MetricWriteResult(created = MetricCreatedCounts.of(StructuralMetricKinds.ACTIVITY_SUMMARIES to 1))
-        } else {
-            MetricWriteResult(duplicateSkipped = 1)
-        }
-    }
-
-    private fun writeSleepSummary(
-        sourceInstanceId: Int,
-        ingestionRecordId: Int,
-        record: SleepSummaryRecord,
-        now: Instant,
-    ): MetricWriteResult {
-        val inserted =
-            sleepWriteRepository.insertSleepSummary(
-                sourceInstanceId,
-                ingestionRecordId,
-                record,
-                now,
-            )
-        return if (inserted) {
-            MetricWriteResult(created = MetricCreatedCounts.of(StructuralMetricKinds.SLEEP_SUMMARIES to 1))
-        } else {
-            MetricWriteResult(duplicateSkipped = 1)
-        }
-    }
-
-    private fun writeBloodPressure(
-        sourceInstanceId: Int,
-        ingestionRecordId: Int,
-        record: BloodPressureRecord,
-        now: Instant,
-    ): MetricWriteResult {
-        val inserted =
-            cardiovascularWriteRepository.insertBloodPressure(
-                sourceInstanceId,
-                ingestionRecordId,
-                record,
-                now,
-            )
-        return if (inserted) {
-            MetricWriteResult(created = MetricCreatedCounts.of(StructuralMetricKinds.BLOOD_PRESSURE_MEASUREMENTS to 1))
-        } else {
-            MetricWriteResult(duplicateSkipped = 1)
-        }
-    }
-
-    private fun writeScalarSamples(
-        sourceInstanceId: Int,
-        ingestionRecordId: Int,
-        record: ScalarSampleRecord,
-        now: Instant,
-    ): MetricWriteResult {
-        val insertedTypes =
-            scalarSampleWriteRepository.insertScalarSamples(
-                sourceInstanceId,
-                ingestionRecordId,
-                record,
-                now,
-            )
-        val counts =
-            insertedTypes
-                .groupingBy { it }
-                .eachCount()
-        return MetricWriteResult(
-            created = MetricCreatedCounts(counts),
-            duplicateSkipped = if (insertedTypes.isEmpty()) 1 else 0,
         )
     }
 }
