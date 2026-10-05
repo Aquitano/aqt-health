@@ -11,7 +11,6 @@ it("keeps daily points on their calendar day and labels instants in the app zone
         items: [{ id: 1, measuredAt: "2026-01-05T20:00:00Z", metricType: "weight", value: 80, unit: "kg" }],
         meta,
       },
-      heartRateDaily: [],
     },
     "Pacific/Kiritimati",
   );
