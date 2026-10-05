@@ -1,5 +1,7 @@
 package me.aquitano.health.infrastructure.repositories
 
+import me.aquitano.health.domain.ReplayJobStatus
+import me.aquitano.health.domain.ReplayScope
 import me.aquitano.health.infrastructure.database.suspendDbTransaction
 import me.aquitano.health.infrastructure.database.tables.ReplayJobsTable
 import me.aquitano.health.infrastructure.database.toDbTimestamp
@@ -18,12 +20,12 @@ import java.time.LocalDate
 data class ReplayJobRecord(
     val id: String,
     val idempotencyRequestHash: String?,
-    val scope: String,
+    val scope: ReplayScope,
     val metricTypes: List<String>?,
     val fromDate: LocalDate?,
     val toDate: LocalDate?,
     val wipe: Boolean,
-    val status: String,
+    val status: ReplayJobStatus,
     val totalItems: Int,
     val completedItems: Int,
     val currentItem: String?,
@@ -48,7 +50,7 @@ class ReplayJobRepository(
 ) {
     suspend fun create(
         id: String,
-        scope: String,
+        scope: ReplayScope,
         metricTypes: List<String>?,
         fromDate: LocalDate?,
         toDate: LocalDate?,
@@ -71,7 +73,7 @@ class ReplayJobRepository(
                         it[this.fromDate] = fromDate
                         it[this.toDate] = toDate
                         it[this.wipe] = wipe
-                        it[status] = "queued"
+                        it[status] = ReplayJobStatus.Queued
                         it[totalItems] = 0
                         it[completedItems] = 0
                         it[recordsReplayed] = 0
@@ -111,7 +113,7 @@ class ReplayJobRepository(
     ) {
         suspendDbTransaction(db = database) {
             ReplayJobsTable.update({ ReplayJobsTable.id eq id }) {
-                it[status] = "running"
+                it[status] = ReplayJobStatus.Running
                 it[this.totalItems] = totalItems
                 it[startedAt] = now.toDbTimestamp()
                 it[updatedAt] = now.toDbTimestamp()
@@ -157,7 +159,7 @@ class ReplayJobRepository(
 
     suspend fun finish(
         id: String,
-        status: String,
+        status: ReplayJobStatus,
         errorMessage: String?,
         now: Instant,
     ) {
@@ -174,8 +176,8 @@ class ReplayJobRepository(
 
     suspend fun markInterruptedUnfinishedJobs(now: Instant) {
         suspendDbTransaction(db = database) {
-            ReplayJobsTable.update({ ReplayJobsTable.status inList listOf("queued", "running") }) {
-                it[status] = "failed"
+            ReplayJobsTable.update({ ReplayJobsTable.status inList listOf(ReplayJobStatus.Queued, ReplayJobStatus.Running) }) {
+                it[status] = ReplayJobStatus.Failed
                 it[errorMessage] =
                     "Backend stopped before the replay job finished. Replay is idempotent; start a new job to continue."
                 it[updatedAt] = now.toDbTimestamp()

@@ -1,5 +1,7 @@
 package me.aquitano.health.infrastructure.database.tables
 
+import me.aquitano.health.domain.ReplayJobStatus
+import me.aquitano.health.domain.ReplayScope
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.javatime.date
 import org.jetbrains.exposed.v1.javatime.timestampWithTimeZone
@@ -8,12 +10,12 @@ object ReplayJobsTable : Table("replay_jobs") {
     val id = text("id")
     val idempotencyKey = text("idempotency_key").nullable()
     val idempotencyRequestHash = text("idempotency_request_hash").nullable()
-    val scope = text("scope")
+    val scope = customEnumeration("scope", "TEXT", { ReplayScope.fromStored(it as String) }, ReplayScope::stored)
     val metricTypes = text("metric_types").nullable()
     val fromDate = date("from_date").nullable()
     val toDate = date("to_date").nullable()
     val wipe = bool("wipe")
-    val status = text("status")
+    val status = customEnumeration("status", "TEXT", { ReplayJobStatus.fromStored(it as String) }, ReplayJobStatus::stored)
     val totalItems = integer("total_items")
     val completedItems = integer("completed_items")
     val currentItem = text("current_item").nullable()

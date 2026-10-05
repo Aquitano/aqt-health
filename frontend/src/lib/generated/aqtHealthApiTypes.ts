@@ -1621,7 +1621,8 @@ export interface components {
         };
         /** ReplayRequest */
         ReplayRequest: {
-            scope?: string;
+            /** @enum {string} */
+            scope?: "projections" | "derived" | "all";
             metricTypes?: string[] | null;
             /** Format: date */
             fromDate?: string | null;
@@ -1640,7 +1641,8 @@ export interface components {
         /** ReplayJobStatusResponse */
         ReplayJobStatusResponse: {
             jobId: string;
-            scope: string;
+            /** @enum {string} */
+            scope: "projections" | "derived" | "all";
             metricTypes?: string[] | null;
             /** Format: date */
             fromDate?: string | null;

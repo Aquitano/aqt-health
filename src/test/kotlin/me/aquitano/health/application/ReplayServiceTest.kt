@@ -14,6 +14,7 @@ import me.aquitano.health.api.dto.SleepSession
 import me.aquitano.health.api.dto.StepInterval
 import me.aquitano.health.domain.RecordTypes
 import me.aquitano.health.domain.ReplayJobStatus
+import me.aquitano.health.domain.ReplayScope
 import me.aquitano.health.domain.RequestValidationException
 import me.aquitano.health.infrastructure.config.DatabaseConfig
 import me.aquitano.health.infrastructure.repositories.IngestionRepository
@@ -55,7 +56,7 @@ class ReplayServiceTest : PostgresIntegrationTest() {
                         }
                         val start =
                             fixture.replayService.create(
-                                ReplayRequest(scope = "projections", metricTypes = listOf(RecordTypes.SCALAR), wipe = true),
+                                ReplayRequest(scope = ReplayScope.Projections, metricTypes = listOf(RecordTypes.SCALAR), wipe = true),
                                 fixture.clock.now(),
                             )
                         withTimeout(10_000) {
@@ -89,7 +90,7 @@ class ReplayServiceTest : PostgresIntegrationTest() {
             assertEquals(0, fixture.config.countRows("scalar_samples"))
             assertEquals(0, fixture.config.countRows("canonical_scalar_samples"))
 
-            val job = fixture.runReplay(ReplayRequest(scope = "all"))
+            val job = fixture.runReplay(ReplayRequest())
 
             assertEquals(ReplayJobStatus.Completed, job.status)
             assertTrue(job.metricsWritten >= 1, "expected restored metrics, got ${job.metricsWritten}")
@@ -106,7 +107,7 @@ class ReplayServiceTest : PostgresIntegrationTest() {
             val fixture = Fixture()
             fixture.ingestMixedBatch()
 
-            val job = fixture.runReplay(ReplayRequest(scope = "projections"))
+            val job = fixture.runReplay(ReplayRequest(scope = ReplayScope.Projections))
 
             assertEquals(ReplayJobStatus.Completed, job.status)
             assertEquals(0, job.metricsWritten)
@@ -122,7 +123,7 @@ class ReplayServiceTest : PostgresIntegrationTest() {
 
             fixture.config.execute("DELETE FROM canonical_step_samples")
 
-            val job = fixture.runReplay(ReplayRequest(scope = "derived"))
+            val job = fixture.runReplay(ReplayRequest(scope = ReplayScope.Derived))
 
             assertEquals(ReplayJobStatus.Completed, job.status)
             assertEquals(0, job.recordsReplayed)
@@ -140,7 +141,6 @@ class ReplayServiceTest : PostgresIntegrationTest() {
             val job =
                 fixture.runReplay(
                     ReplayRequest(
-                        scope = "all",
                         metricTypes = listOf(RecordTypes.SCALAR),
                         fromDate = "2026-04-19",
                         toDate = "2026-04-19",
@@ -169,7 +169,7 @@ class ReplayServiceTest : PostgresIntegrationTest() {
             fixture.ingestScalar("hr-in-range", "2026-04-21T08:00:00Z")
             fixture.config.execute("DELETE FROM scalar_samples")
 
-            val job = fixture.runReplay(ReplayRequest(scope = "projections", fromDate = "2026-04-21", toDate = "2026-04-21"))
+            val job = fixture.runReplay(ReplayRequest(scope = ReplayScope.Projections, fromDate = "2026-04-21", toDate = "2026-04-21"))
 
             assertEquals(ReplayJobStatus.Completed, job.status)
             assertEquals(1, job.recordsReplayed)
@@ -177,12 +177,9 @@ class ReplayServiceTest : PostgresIntegrationTest() {
         }
 
     @Test
-    fun replayRejectsUnknownScopeAndRecordTypes(): Unit =
+    fun replayRejectsUnknownRecordTypesAndDerivedWipe(): Unit =
         runBlocking {
             val fixture = Fixture()
-            assertFailsWith<RequestValidationException> {
-                fixture.replayService.create(ReplayRequest(scope = "bogus"), fixture.clock.now())
-            }
             assertFailsWith<RequestValidationException> {
                 fixture.replayService.create(
                     ReplayRequest(metricTypes = listOf("not_a_record_type")),
@@ -191,7 +188,7 @@ class ReplayServiceTest : PostgresIntegrationTest() {
             }
             assertFailsWith<RequestValidationException> {
                 fixture.replayService.create(
-                    ReplayRequest(scope = "derived", wipe = true),
+                    ReplayRequest(scope = ReplayScope.Derived, wipe = true),
                     fixture.clock.now(),
                 )
             }

@@ -110,7 +110,7 @@ class ProviderCorrectionMigrationTest : PostgresIntegrationTest() {
                     UtcClock.fixed(now),
                 )
             try {
-                val job = replay.create(ReplayRequest(scope = "all", wipe = true), now)
+                val job = replay.create(ReplayRequest(wipe = true), now)
                 val result =
                     withTimeout(30_000) {
                         var status = replay.get(job.jobId)
