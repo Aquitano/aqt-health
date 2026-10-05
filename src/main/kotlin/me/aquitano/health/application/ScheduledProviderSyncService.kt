@@ -7,7 +7,6 @@ import me.aquitano.health.api.dto.*
 import me.aquitano.health.domain.*
 import me.aquitano.health.domain.ProviderSyncRequest
 import me.aquitano.health.infrastructure.logging.*
-import me.aquitano.health.infrastructure.repositories.ACCOUNT_STATUS_NEEDS_REAUTH
 import me.aquitano.health.infrastructure.repositories.ScheduledSyncCheckpointRecord
 import me.aquitano.health.infrastructure.repositories.ScheduledSyncConfigRecord
 import me.aquitano.health.infrastructure.repositories.ScheduledSyncRepository
@@ -145,7 +144,7 @@ class ScheduledProviderSyncService(
         return ScheduledSyncRunResponse(
             providerCode = provider.providerCode,
             providerInstanceId = providerInstanceId,
-            status = SyncStatus.fromStored(result.status),
+            status = result.status,
             requestedFrom = result.requestedFrom?.toString(),
             requestedTo = result.requestedTo?.toString(),
             errors = result.errors,
@@ -232,7 +231,7 @@ class ScheduledProviderSyncService(
                 nextRunAt = ScheduledSyncPolicy.nextRunAfterSuccess(now, config.cadenceMinutes),
                 now = now,
             )
-            ScheduledSyncExecutionResult("processed", earliestFrom, latestTo, emptyList(), summaries)
+            ScheduledSyncExecutionResult(SyncStatus.Processed, earliestFrom, latestTo, emptyList(), summaries)
         } else {
             val failureCount = config.failureCount + 1
             val park = (hasNonRetryableError && failureCount >= FAILURES_BEFORE_PARKING) || needsReauth(config)
@@ -251,7 +250,7 @@ class ScheduledProviderSyncService(
                 "failureCount" to failureCount,
                 "parked" to park,
             )
-            ScheduledSyncExecutionResult("failed", earliestFrom, latestTo, errors, summaries)
+            ScheduledSyncExecutionResult(SyncStatus.Failed, earliestFrom, latestTo, errors, summaries)
         }
     }
 
@@ -274,7 +273,7 @@ class ScheduledProviderSyncService(
     private suspend fun needsReauth(config: ScheduledSyncConfigRecord): Boolean =
         providerOAuthRepository
             .accountByProviderInstanceForStatus(config.providerCode, config.providerInstanceId)
-            ?.accountStatus == ACCOUNT_STATUS_NEEDS_REAUTH
+            ?.accountStatus == ProviderAccountStatus.NeedsReauth
 
     private fun runKey(config: ScheduledSyncConfigRecord): String = "${config.providerCode}:${config.providerInstanceId}"
 
@@ -348,7 +347,7 @@ object ScheduledSyncPolicy {
 }
 
 private data class ScheduledSyncExecutionResult(
-    val status: String,
+    val status: SyncStatus,
     val requestedFrom: Instant?,
     val requestedTo: Instant?,
     val errors: List<String>,

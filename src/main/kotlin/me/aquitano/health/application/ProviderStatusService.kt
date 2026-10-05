@@ -9,9 +9,7 @@ import me.aquitano.health.api.dto.ProviderStatusResponse
 import me.aquitano.health.api.dto.ProviderTokenStatus
 import me.aquitano.health.domain.HealthProvider
 import me.aquitano.health.domain.NotFoundException
-import me.aquitano.health.infrastructure.repositories.ACCOUNT_STATUS_CONNECTED
-import me.aquitano.health.infrastructure.repositories.ACCOUNT_STATUS_DISCONNECTED
-import me.aquitano.health.infrastructure.repositories.ACCOUNT_STATUS_NEEDS_REAUTH
+import me.aquitano.health.domain.ProviderAccountStatus
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthAccount
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
 import me.aquitano.health.shared.normalizeProviderCode
@@ -133,9 +131,9 @@ class ProviderStatusService(
     private fun ProviderOAuthAccount.lifecycleStatus(configured: Boolean): ProviderAccountLifecycleStatus =
         when {
             !configured -> ProviderAccountLifecycleStatus.ConfigurationError
-            accountStatus == ACCOUNT_STATUS_NEEDS_REAUTH -> ProviderAccountLifecycleStatus.NeedsReauth
-            accountStatus == ACCOUNT_STATUS_DISCONNECTED -> ProviderAccountLifecycleStatus.Disconnected
-            accountStatus == ACCOUNT_STATUS_CONNECTED && hasStoredTokens() -> ProviderAccountLifecycleStatus.Connected
+            accountStatus == ProviderAccountStatus.NeedsReauth -> ProviderAccountLifecycleStatus.NeedsReauth
+            accountStatus == ProviderAccountStatus.Disconnected -> ProviderAccountLifecycleStatus.Disconnected
+            hasStoredTokens() -> ProviderAccountLifecycleStatus.Connected
             else -> ProviderAccountLifecycleStatus.NotConnected
         }
 

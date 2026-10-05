@@ -306,7 +306,7 @@ class ProviderSyncPipeline(
             providerInstanceId = account.providerInstanceId,
             requestedFrom = request.from,
             requestedTo = request.to,
-            status = status.stored,
+            status = status,
             batches = batches,
             errors = errors,
             emptyDataTypes = emptyDataTypes,

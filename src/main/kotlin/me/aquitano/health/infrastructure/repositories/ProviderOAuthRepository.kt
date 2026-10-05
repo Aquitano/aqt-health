@@ -1,5 +1,7 @@
 package me.aquitano.health.infrastructure.repositories
 
+import me.aquitano.health.domain.ProviderAccountStatus
+import me.aquitano.health.domain.SyncStatus
 import me.aquitano.health.infrastructure.database.suspendDbTransaction
 import me.aquitano.health.infrastructure.database.tables.ProviderOAuthAccountsTable
 import me.aquitano.health.infrastructure.database.tables.ProviderOAuthStatesTable
@@ -19,7 +21,7 @@ data class ProviderOAuthAccount(
     val tokenType: String,
     val expiresAt: Instant,
     val scope: String,
-    val accountStatus: String,
+    val accountStatus: ProviderAccountStatus,
     val connectedAt: Instant?,
     val disconnectedAt: Instant?,
     val lastTokenRefreshAt: Instant?,
@@ -30,14 +32,10 @@ data class ProviderOAuthAccount(
     val updatedAt: Instant,
 ) {
     fun isConnectedForSync(): Boolean =
-        accountStatus == ACCOUNT_STATUS_CONNECTED &&
+        accountStatus == ProviderAccountStatus.Connected &&
             accessTokenCiphertext.isNotBlank() &&
             refreshTokenCiphertext.isNotBlank()
 }
-
-const val ACCOUNT_STATUS_CONNECTED = "connected"
-const val ACCOUNT_STATUS_NEEDS_REAUTH = "needs_reauth"
-const val ACCOUNT_STATUS_DISCONNECTED = "disconnected"
 
 const val TOKEN_REFRESH_STATUS_SUCCESS = "success"
 const val TOKEN_REFRESH_STATUS_FAILED = "failed"
@@ -133,11 +131,9 @@ class ProviderOAuthRepository(
                     }.limit(1)
                     .singleOrNull()
 
-            val previousStatus = existing?.get(ProviderOAuthAccountsTable.accountStatus)
             val connectedAtValue =
                 if (existing == null ||
-                    previousStatus == ACCOUNT_STATUS_DISCONNECTED ||
-                    previousStatus == ACCOUNT_STATUS_NEEDS_REAUTH
+                    existing[ProviderOAuthAccountsTable.accountStatus] != ProviderAccountStatus.Connected
                 ) {
                     nowTimestamp
                 } else {
@@ -157,7 +153,7 @@ class ProviderOAuthRepository(
                 it[this.tokenType] = tokenType
                 it[this.expiresAt] = expiresAt.toDbTimestamp()
                 it[this.scope] = scope
-                it[accountStatus] = ACCOUNT_STATUS_CONNECTED
+                it[accountStatus] = ProviderAccountStatus.Connected
                 it[connectedAt] = connectedAtValue
                 it[disconnectedAt] = null
                 it[lastTokenRefreshAt] = null
@@ -185,7 +181,7 @@ class ProviderOAuthRepository(
         suspendDbTransaction(db = database) {
             ProviderOAuthAccountsTable.update({
                 (ProviderOAuthAccountsTable.id eq accountId) and
-                    (ProviderOAuthAccountsTable.accountStatus eq ACCOUNT_STATUS_CONNECTED) and
+                    (ProviderOAuthAccountsTable.accountStatus eq ProviderAccountStatus.Connected) and
                     (ProviderOAuthAccountsTable.refreshTokenCiphertext eq expectedRefreshTokenCiphertext)
             }) {
                 it[this.accessTokenCiphertext] = accessTokenCiphertext
@@ -213,10 +209,10 @@ class ProviderOAuthRepository(
         suspendDbTransaction(db = database) {
             ProviderOAuthAccountsTable.update({
                 (ProviderOAuthAccountsTable.id eq accountId) and
-                    (ProviderOAuthAccountsTable.accountStatus eq ACCOUNT_STATUS_CONNECTED) and
+                    (ProviderOAuthAccountsTable.accountStatus eq ProviderAccountStatus.Connected) and
                     (ProviderOAuthAccountsTable.refreshTokenCiphertext eq expectedRefreshTokenCiphertext)
             }) {
-                it[accountStatus] = ACCOUNT_STATUS_NEEDS_REAUTH
+                it[accountStatus] = ProviderAccountStatus.NeedsReauth
                 it[lastTokenRefreshAt] = now.toDbTimestamp()
                 it[lastTokenRefreshStatus] = TOKEN_REFRESH_STATUS_FAILED
                 it[lastAuthErrorCode] = errorCode.take(200)
@@ -235,7 +231,7 @@ class ProviderOAuthRepository(
         suspendDbTransaction(db = database) {
             ProviderOAuthAccountsTable.update({
                 (ProviderOAuthAccountsTable.id eq accountId) and
-                    (ProviderOAuthAccountsTable.accountStatus eq ACCOUNT_STATUS_CONNECTED) and
+                    (ProviderOAuthAccountsTable.accountStatus eq ProviderAccountStatus.Connected) and
                     (ProviderOAuthAccountsTable.refreshTokenCiphertext eq expectedRefreshTokenCiphertext)
             }) {
                 it[lastTokenRefreshAt] = now.toDbTimestamp()
@@ -259,7 +255,7 @@ class ProviderOAuthRepository(
                 }) {
                     it[accessTokenCiphertext] = ""
                     it[refreshTokenCiphertext] = ""
-                    it[accountStatus] = ACCOUNT_STATUS_DISCONNECTED
+                    it[accountStatus] = ProviderAccountStatus.Disconnected
                     it[disconnectedAt] = now.toDbTimestamp()
                     it[lastTokenRefreshAt] = null
                     it[lastTokenRefreshStatus] = null
@@ -276,7 +272,7 @@ class ProviderOAuthRepository(
                 .selectAll()
                 .where {
                     (ProviderOAuthAccountsTable.providerCode eq providerCode) and
-                        (ProviderOAuthAccountsTable.accountStatus eq ACCOUNT_STATUS_CONNECTED) and
+                        (ProviderOAuthAccountsTable.accountStatus eq ProviderAccountStatus.Connected) and
                         (ProviderOAuthAccountsTable.accessTokenCiphertext neq "") and
                         (ProviderOAuthAccountsTable.refreshTokenCiphertext neq "")
                 }.orderBy(ProviderOAuthAccountsTable.updatedAt to SortOrder.DESC)
@@ -307,7 +303,7 @@ class ProviderOAuthRepository(
                 .where {
                     (ProviderOAuthAccountsTable.providerCode eq providerCode) and
                         (ProviderOAuthAccountsTable.providerInstanceId eq providerInstanceId) and
-                        (ProviderOAuthAccountsTable.accountStatus eq ACCOUNT_STATUS_CONNECTED) and
+                        (ProviderOAuthAccountsTable.accountStatus eq ProviderAccountStatus.Connected) and
                         (ProviderOAuthAccountsTable.accessTokenCiphertext neq "") and
                         (ProviderOAuthAccountsTable.refreshTokenCiphertext neq "")
                 }.limit(1)
@@ -371,13 +367,13 @@ class ProviderOAuthRepository(
 
     suspend fun finishSyncRun(
         runId: Int,
-        status: String,
+        status: SyncStatus,
         finishedAt: Instant,
         errorMessage: String?,
     ) {
         suspendDbTransaction(db = database) {
             ProviderSyncRunsTable.update({ ProviderSyncRunsTable.id eq runId }) {
-                it[this.status] = status
+                it[this.status] = status.stored
                 it[this.finishedAt] = finishedAt.toDbTimestamp()
                 it[this.errorMessage] = errorMessage?.take(2000)
             }

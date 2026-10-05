@@ -113,7 +113,7 @@ class ProviderSyncPipelineTest {
             assertEquals(1, adapter.refreshCalls)
             assertEquals("fresh-access", store.savedAccessToken)
             assertEquals(1, store.ingested.size)
-            assertEquals("processed", summary.status)
+            assertEquals(SyncStatus.Processed, summary.status)
         }
 
     @Test
@@ -159,7 +159,7 @@ class ProviderSyncPipelineTest {
 
             assertEquals(0, adapter.refreshCalls)
             assertEquals(0, store.saveCount)
-            assertEquals("processed", summary.status)
+            assertEquals(SyncStatus.Processed, summary.status)
         }
 
     @Test
@@ -400,7 +400,7 @@ class ProviderSyncPipelineTest {
             val adapter = FakeAdapter()
             val pipeline = ProviderSyncPipeline(store, clock = Clock.fixed(now, ZoneOffset.UTC))
             val summary = pipeline.sync(adapter, request, now)
-            assertEquals("processed", summary.status)
+            assertEquals(SyncStatus.Processed, summary.status)
             assertEquals(1, adapter.refreshCalls)
             assertEquals("fresh-access", store.savedAccessToken)
         }
@@ -685,5 +685,5 @@ private fun syncAccount(
         encryptedAccessToken = "encrypted-access",
         encryptedRefreshToken = "encrypted-refresh",
         expiresAt = expiresAt,
-        accountStatus = "connected",
+        accountStatus = ProviderAccountStatus.Connected,
     )

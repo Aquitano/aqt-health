@@ -3,9 +3,9 @@ package me.aquitano.health.application.providersync
 import me.aquitano.health.api.dto.IngestionBatchRequest
 import me.aquitano.health.application.IngestionService
 import me.aquitano.health.domain.MetricCreatedCounts
+import me.aquitano.health.domain.ProviderAccountStatus
 import me.aquitano.health.domain.ProviderSyncBatch
 import me.aquitano.health.domain.SyncStatus
-import me.aquitano.health.infrastructure.repositories.ACCOUNT_STATUS_NEEDS_REAUTH
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthAccount
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
 import me.aquitano.health.infrastructure.security.TokenCipher
@@ -129,7 +129,7 @@ class OAuthProviderSyncStore(
                 ?.let { repository.accountByProviderInstanceForStatus(providerCode, it) }
                 ?: repository
                     .accountsByProvider(providerCode)
-                    .firstOrNull { it.accountStatus == ACCOUNT_STATUS_NEEDS_REAUTH }
+                    .firstOrNull { it.accountStatus == ProviderAccountStatus.NeedsReauth }
         return account?.toSyncAccount()
     }
 
@@ -190,7 +190,7 @@ class OAuthProviderSyncStore(
         finishedAt: Instant,
         errorMessage: String?,
     ) {
-        repository.finishSyncRun(runId, status.stored, finishedAt, errorMessage)
+        repository.finishSyncRun(runId, status, finishedAt, errorMessage)
     }
 
     override suspend fun findExistingBatch(

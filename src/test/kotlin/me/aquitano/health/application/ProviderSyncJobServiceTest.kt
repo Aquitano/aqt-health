@@ -94,7 +94,7 @@ class ProviderSyncJobServiceTest : PostgresIntegrationTest() {
             repository.markRunning(finishedId, now)
             repository.finish(
                 id = finishedId,
-                status = "processed",
+                status = SyncJobStatus.Processed,
                 batchesCount = 0,
                 emptyCount = 0,
                 errorCount = 0,
@@ -111,7 +111,7 @@ class ProviderSyncJobServiceTest : PostgresIntegrationTest() {
                 assertTrue(result.abandoned.isEmpty())
                 assertEquals(attempt + 1, result.resumed.single().restartCount)
                 val requeued = repository.get(interruptedId)!!
-                assertEquals("queued", requeued.status)
+                assertEquals(SyncJobStatus.Queued, requeued.status)
                 assertEquals(0, requeued.completedItems)
             }
 
@@ -121,9 +121,9 @@ class ProviderSyncJobServiceTest : PostgresIntegrationTest() {
             assertEquals(listOf(interruptedId), capped.abandoned.map { it.id })
 
             val abandoned = repository.get(interruptedId)!!
-            assertEquals("failed", abandoned.status)
+            assertEquals(SyncJobStatus.Failed, abandoned.status)
             assertEquals(3, abandoned.restartCount)
-            assertEquals("processed", repository.get(finishedId)!!.status)
+            assertEquals(SyncJobStatus.Processed, repository.get(finishedId)!!.status)
         }
 
     @Test
@@ -147,7 +147,7 @@ class ProviderSyncJobServiceTest : PostgresIntegrationTest() {
             repository.markRunning(runningId, now)
             repository.finish(
                 id = finishedId,
-                status = "processed",
+                status = SyncJobStatus.Processed,
                 batchesCount = 0,
                 emptyCount = 0,
                 errorCount = 0,
@@ -160,7 +160,7 @@ class ProviderSyncJobServiceTest : PostgresIntegrationTest() {
 
             repository.finish(
                 id = runningId,
-                status = "failed",
+                status = SyncJobStatus.Failed,
                 batchesCount = 0,
                 emptyCount = 0,
                 errorCount = 1,

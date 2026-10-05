@@ -20,6 +20,7 @@ import me.aquitano.health.domain.NotFoundException
 import me.aquitano.health.domain.ProviderSyncItem
 import me.aquitano.health.domain.ProviderSyncProgressSink
 import me.aquitano.health.domain.SyncJobStatus
+import me.aquitano.health.domain.SyncStatus
 import me.aquitano.health.infrastructure.logging.*
 import me.aquitano.health.infrastructure.repositories.ProviderSyncJobRecord
 import me.aquitano.health.infrastructure.repositories.ProviderSyncJobRepository
@@ -170,7 +171,7 @@ class ProviderSyncJobService(
                 )
             repository.finish(
                 id = jobId,
-                status = summary.status.stored,
+                status = summary.status.toJobStatus(),
                 batchesCount = summary.batches.size,
                 emptyCount = summary.emptyDataTypes.size,
                 errorCount = summary.errors.size,
@@ -191,7 +192,7 @@ class ProviderSyncJobService(
             currentCoroutineContext().ensureActive()
             repository.finish(
                 id = jobId,
-                status = "failed",
+                status = SyncJobStatus.Failed,
                 batchesCount = 0,
                 emptyCount = 0,
                 errorCount = 1,
@@ -232,7 +233,7 @@ class ProviderSyncJobService(
     private fun ProviderSyncJobRecord.toStartDto(): ProviderSyncJobStartResponse =
         ProviderSyncJobStartResponse(
             jobId = id,
-            status = SyncJobStatus.fromStored(status),
+            status = status,
             createdAt = createdAt.toString(),
         )
 
@@ -250,17 +251,16 @@ class ProviderSyncJobService(
      */
     private fun wireProviderCode(providerCode: String): String = providerRegistry.getProvider(providerCode)?.descriptor?.providerCode ?: providerCode
 
-    private fun ProviderSyncJobRecord.toDto(): ProviderSyncJobStatusResponse {
-        val jobStatus = SyncJobStatus.fromStored(status)
-        return ProviderSyncJobStatusResponse(
+    private fun ProviderSyncJobRecord.toDto(): ProviderSyncJobStatusResponse =
+        ProviderSyncJobStatusResponse(
             jobId = id,
             providerCode = wireProviderCode(providerCode),
             providerInstanceId = providerInstanceId,
             requestedFrom = requestedFrom.toString(),
             requestedTo = requestedTo.toString(),
             dataTypes = dataTypes,
-            status = jobStatus,
-            terminal = jobStatus.terminal,
+            status = status,
+            terminal = status.terminal,
             totalItems = totalItems,
             completedItems = completedItems,
             currentItem = itemDto(currentDataType, currentFrom, currentTo),
@@ -279,7 +279,6 @@ class ProviderSyncJobService(
                     runCatching { AppJson.decodeFromString<ProviderSyncResponse>(it) }.getOrNull()
                 },
         )
-    }
 
     private fun itemDto(
         dataType: String?,
@@ -294,6 +293,13 @@ class ProviderSyncJobService(
 }
 
 private const val MAX_JOB_RESTARTS = 3
+
+private fun SyncStatus.toJobStatus(): SyncJobStatus =
+    when (this) {
+        SyncStatus.Processed -> SyncJobStatus.Processed
+        SyncStatus.PartialFailed -> SyncJobStatus.PartialFailed
+        SyncStatus.Failed -> SyncJobStatus.Failed
+    }
 
 private fun ProviderSyncJobRecord.toDomainRequest(): DomainProviderSyncRequest =
     DomainProviderSyncRequest(

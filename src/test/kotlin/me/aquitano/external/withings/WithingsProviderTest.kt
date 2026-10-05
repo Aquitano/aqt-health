@@ -10,6 +10,7 @@ import me.aquitano.health.application.ProviderWorkflowService
 import me.aquitano.health.domain.ConflictException
 import me.aquitano.health.domain.ProviderSyncRequest
 import me.aquitano.health.domain.RequestValidationException
+import me.aquitano.health.domain.SyncStatus
 import me.aquitano.health.domain.UpstreamProviderException
 import me.aquitano.health.infrastructure.config.DatabaseConfig
 import me.aquitano.health.infrastructure.config.ProviderOAuthConfig
@@ -119,7 +120,7 @@ class WithingsProviderTest : PostgresIntegrationTest() {
                     fixture.now,
                 )
 
-            assertEquals("processed", summary.status)
+            assertEquals(SyncStatus.Processed, summary.status)
             assertEquals(4, summary.batches.size)
             assertEquals(1, fixture.databaseConfig.countRows("step_samples"))
             assertEquals(1, fixture.databaseConfig.countRows("sleep_sessions"))
@@ -367,7 +368,7 @@ class WithingsProviderTest : PostgresIntegrationTest() {
                     fixture.now,
                 )
 
-            assertEquals("processed", summary.status)
+            assertEquals(SyncStatus.Processed, summary.status)
             assertTrue(summary.errors.isEmpty())
             // Empty windows are still stored as batches, so the next run dedupes them instead of
             // re-fetching the same empty day.

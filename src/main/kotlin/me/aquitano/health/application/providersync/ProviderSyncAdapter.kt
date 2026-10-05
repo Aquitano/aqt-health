@@ -1,13 +1,13 @@
 package me.aquitano.health.application.providersync
 
 import me.aquitano.health.domain.ConflictException
+import me.aquitano.health.domain.ProviderAccountStatus
 import me.aquitano.health.domain.ProviderSyncItem
 import me.aquitano.health.domain.ProviderSyncRequest
 import me.aquitano.health.domain.RequestValidationException
 import me.aquitano.health.domain.UpstreamProviderException
 import me.aquitano.health.domain.ValidationIssue
 import me.aquitano.health.domain.ValidationIssueCodes
-import me.aquitano.health.infrastructure.repositories.ACCOUNT_STATUS_NEEDS_REAUTH
 import java.time.Duration
 import java.time.Instant
 
@@ -63,7 +63,7 @@ internal fun ProviderSyncAdapter.accountUnavailable(
     statusHint: SyncAccount?,
 ): ConflictException =
     when {
-        statusHint?.accountStatus == ACCOUNT_STATUS_NEEDS_REAUTH -> {
+        statusHint?.accountStatus == ProviderAccountStatus.NeedsReauth -> {
             needsReauth()
         }
 

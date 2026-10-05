@@ -7,6 +7,7 @@ import me.aquitano.health.domain.ProviderConnection
 import me.aquitano.health.domain.ProviderSyncProgressSink
 import me.aquitano.health.domain.ProviderSyncRequest
 import me.aquitano.health.domain.ProviderSyncSummary
+import me.aquitano.health.domain.SyncStatus
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -50,7 +51,7 @@ open class FakeProvider(
             providerInstanceId = request.providerInstanceId ?: defaultProviderInstanceId,
             requestedFrom = request.from,
             requestedTo = request.to,
-            status = "processed",
+            status = SyncStatus.Processed,
             batches = emptyList(),
             errors = emptyList(),
         )

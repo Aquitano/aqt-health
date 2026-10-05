@@ -5,6 +5,7 @@ import kotlinx.serialization.json.JsonObject
 import me.aquitano.health.api.dto.IngestionRecord
 import me.aquitano.health.domain.BatchStatus
 import me.aquitano.health.domain.IngestionSnapshot
+import me.aquitano.health.domain.ProviderAccountStatus
 import java.time.Instant
 
 data class SyncAccount(
@@ -15,7 +16,7 @@ data class SyncAccount(
     val encryptedAccessToken: String,
     val encryptedRefreshToken: String,
     val expiresAt: Instant,
-    val accountStatus: String,
+    val accountStatus: ProviderAccountStatus,
 )
 
 data class ProviderAccessToken(

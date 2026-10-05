@@ -57,7 +57,7 @@ data class ProviderSyncSummary(
     val providerInstanceId: String,
     val requestedFrom: Instant,
     val requestedTo: Instant,
-    val status: String, // "processed", "failed", "partial_failed"
+    val status: SyncStatus,
     val batches: List<ProviderSyncBatch>,
     val errors: List<ProviderSyncError>,
     val emptyDataTypes: List<ProviderSyncEmptyDataType> = emptyList(),
