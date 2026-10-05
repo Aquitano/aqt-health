@@ -47,7 +47,7 @@ services:
       # Metrics and logs go out over OTLP only when the endpoint is set.
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
-      OTEL_RESOURCE_ATTRIBUTES: deployment.environment.name=${AQT_HEALTH_ENV:-production}
+      OTEL_RESOURCE_ATTRIBUTES: ${OTEL_RESOURCE_ATTRIBUTES:-deployment.environment.name=${AQT_HEALTH_ENV:-production}}
     depends_on:
       postgres:
         condition: service_healthy
