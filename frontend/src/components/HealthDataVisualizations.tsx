@@ -4,13 +4,13 @@ import { useState } from "react";
 import { ExpandedChartModal, type ChartSummary } from "./ExpandedChartModal";
 import { HealthMetricChart } from "./charts/HealthMetricChart";
 import { buildSummaries, type HealthCharts, type NormalizedChart } from "@/lib/healthCharts";
+import { useTimeZone } from "./TimeZoneProvider";
 import styles from "./HealthDataVisualizations.module.css";
 
 type HealthDataVisualizationsProps = {
   charts: HealthCharts;
   fromDate: string;
   toDate: string;
-  timezone: string;
 };
 
 type ModalChart = NormalizedChart & {
@@ -27,9 +27,10 @@ type ChartCard = {
   height: number;
 };
 
-export function HealthDataVisualizations({ charts, fromDate, toDate, timezone }: HealthDataVisualizationsProps) {
+export function HealthDataVisualizations({ charts, fromDate, toDate }: HealthDataVisualizationsProps) {
   const [modalChart, setModalChart] = useState<ModalChart | null>(null);
-  const dateLabel = `${fromDate} to ${toDate} (${timezone})`;
+  const timeZone = useTimeZone();
+  const dateLabel = `${fromDate} to ${toDate} (${timeZone})`;
 
   const primaryCharts: ChartCard[] = [
     {

@@ -21,10 +21,9 @@ type PageProps = {
 
 export default async function HealthDataPage({ searchParams }: PageProps) {
   const params = (await searchParams) ?? {};
-  const timezone = serverConfig.timeZone;
-  const range = parseDateRange(params, timezone);
+  const range = parseDateRange(params, serverConfig.timeZone);
 
-  const sources = getHealthDataPageSources(range.fromDate, range.toDate, timezone);
+  const sources = getHealthDataPageSources(range.fromDate, range.toDate, serverConfig.timeZone);
 
   return (
     <>
@@ -42,21 +41,11 @@ export default async function HealthDataPage({ searchParams }: PageProps) {
       {range.warning ? <div className="notice warning">{range.warning}</div> : null}
 
       <Suspense fallback={<LoadingPulse />}>
-        <OverviewSection
-          sources={sources}
-          fromDate={range.fromDate}
-          toDate={range.toDate}
-          timezone={timezone}
-        />
+        <OverviewSection sources={sources} fromDate={range.fromDate} toDate={range.toDate} />
       </Suspense>
 
       <Suspense fallback={<LoadingPulse label="Loading visual analytics…" />}>
-        <VisualizationsSection
-          sources={sources}
-          fromDate={range.fromDate}
-          toDate={range.toDate}
-          timezone={timezone}
-        />
+        <VisualizationsSection sources={sources} fromDate={range.fromDate} toDate={range.toDate} />
       </Suspense>
 
       <p><Link href={`/health-data/raw?${new URLSearchParams({ fromDate: range.fromDate, toDate: range.toDate })}`} prefetch={false}>Browse raw data</Link></p>
@@ -64,17 +53,13 @@ export default async function HealthDataPage({ searchParams }: PageProps) {
   );
 }
 
-async function OverviewSection({
-  sources,
-  fromDate,
-  toDate,
-  timezone,
-}: {
+type SectionProps = {
   sources: HealthDataPageSources;
   fromDate: string;
   toDate: string;
-  timezone: string;
-}) {
+};
+
+async function OverviewSection({ sources, fromDate, toDate }: SectionProps) {
   const [
     health,
     summary,
@@ -100,7 +85,7 @@ async function OverviewSection({
   ]);
 
   const bodyMeasurementItems = bodyMeasurements.ok ? bodyMeasurements.data.items : [];
-  const weightFrom = Date.parse(startOfDayInstant(addUtcDays(toDate, -6), timezone));
+  const weightFrom = Date.parse(startOfDayInstant(addUtcDays(toDate, -6), serverConfig.timeZone));
   const weightTrendItems = bodyMeasurementItems.filter((item) => isWeightTrendItem(item, weightFrom));
   const weightDelta = weightChange(weightTrendItems);
 
@@ -135,17 +120,7 @@ async function OverviewSection({
   );
 }
 
-async function VisualizationsSection({
-  sources,
-  fromDate,
-  toDate,
-  timezone,
-}: {
-  sources: HealthDataPageSources;
-  fromDate: string;
-  toDate: string;
-  timezone: string;
-}) {
+async function VisualizationsSection({ sources, fromDate, toDate }: SectionProps) {
   const [
     activitySummaries,
     bodyMeasurements,
@@ -195,11 +170,10 @@ async function VisualizationsSection({
             respiratoryRates: respiratoryRates.ok ? respiratoryRates.data : undefined,
             sleepSummaries: sleepSummaries.ok ? sleepSummaries.data : undefined,
           },
-          timezone,
+          serverConfig.timeZone,
         )}
         fromDate={fromDate}
         toDate={toDate}
-        timezone={timezone}
       />
     </>
   );
