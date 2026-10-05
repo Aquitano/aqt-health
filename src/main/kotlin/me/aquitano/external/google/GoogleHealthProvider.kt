@@ -29,8 +29,8 @@ class GoogleHealthProvider(
             displayName = GOOGLE_HEALTH_DISPLAY_NAME,
             authType = ProviderAuthType.OAUTH,
             requiresAuthentication = true,
-            supportedDataTypes = GOOGLE_HEALTH_DEFAULT_DATA_TYPES,
-            defaultDataTypes = GOOGLE_HEALTH_DEFAULT_DATA_TYPES,
+            supportedDataTypes = GoogleHealthDataType.codes,
+            defaultDataTypes = GoogleHealthDataType.codes,
             maxSyncRangeDays = 31,
             supportsPageSize = true,
             workflowEndpoints =

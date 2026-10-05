@@ -685,7 +685,7 @@ class WithingsProviderTest : PostgresIntegrationTest() {
             failDataRequestIfConfigured(accessToken)
             if ("measures" in emptyDataTypes) return emptyFetchResult("measures")
             return WithingsFetchResult(
-                dataType = "measures",
+                dataType = WithingsDataType.Measures,
                 pages = page("measures"),
                 records =
                     listOf(
@@ -715,7 +715,7 @@ class WithingsProviderTest : PostgresIntegrationTest() {
             failDataRequestIfConfigured(accessToken)
             if ("activity" in emptyDataTypes) return emptyFetchResult("activity")
             return WithingsFetchResult(
-                dataType = "activity",
+                dataType = WithingsDataType.Activity,
                 pages = page("activity"),
                 records =
                     listOf(
@@ -738,7 +738,7 @@ class WithingsProviderTest : PostgresIntegrationTest() {
             failDataRequestIfConfigured(accessToken)
             if ("sleep" in emptyDataTypes) return emptyFetchResult("sleep")
             return WithingsFetchResult(
-                dataType = "sleep",
+                dataType = WithingsDataType.Sleep,
                 pages = page("sleep"),
                 records =
                     listOf(
@@ -767,7 +767,7 @@ class WithingsProviderTest : PostgresIntegrationTest() {
             failDataRequestIfConfigured(accessToken)
             if ("sleep-summary" in emptyDataTypes) return emptyFetchResult("sleep-summary")
             return WithingsFetchResult(
-                dataType = "sleep-summary",
+                dataType = WithingsDataType.SleepSummary,
                 pages = page("sleep-summary"),
                 records =
                     listOf(
@@ -795,7 +795,7 @@ class WithingsProviderTest : PostgresIntegrationTest() {
             }
         }
 
-        private fun emptyFetchResult(dataType: String): WithingsFetchResult = WithingsFetchResult(dataType, page(dataType), emptyList())
+        private fun emptyFetchResult(dataType: String): WithingsFetchResult = WithingsFetchResult(WithingsDataType.fromCode(dataType), page(dataType), emptyList())
 
         private fun page(dataType: String): List<WithingsPage> =
             listOf(

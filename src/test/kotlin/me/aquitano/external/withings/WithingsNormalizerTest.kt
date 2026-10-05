@@ -562,7 +562,7 @@ class WithingsNormalizerTest {
         vararg records: kotlinx.serialization.json.JsonObject,
     ): WithingsFetchResult =
         WithingsFetchResult(
-            dataType = dataType,
+            dataType = WithingsDataType.fromCode(dataType),
             pages =
                 listOf(
                     WithingsPage(

@@ -17,19 +17,19 @@ class GoogleHealthNormalizer {
     fun normalize(fetchResult: GoogleHealthFetchResult): List<IngestionRecord> = fetchResult.dataPoints.flatMap { normalizeDataPoint(fetchResult.dataType, it) }
 
     private fun normalizeDataPoint(
-        dataType: String,
+        dataType: GoogleHealthDataType,
         dataPoint: JsonObject,
     ): List<IngestionRecord> {
         val point = (dataPoint["dataPoint"] as? JsonObject) ?: dataPoint
+        val code = dataType.code
         return when (dataType) {
-            "steps" -> listOfNotNull(normalizeSteps(dataType, point))
-            "sleep" -> normalizeSleep(dataType, point)
-            "heart-rate" -> listOfNotNull(normalizeHeartRate(dataType, point))
-            "weight" -> listOfNotNull(normalizeWeight(dataType, point))
-            "body-fat" -> listOfNotNull(normalizeBodyFat(dataType, point))
-            "heart-rate-variability" -> listOfNotNull(normalizeHeartRateVariability(dataType, point))
-            "respiratory-rate-sleep-summary" -> listOfNotNull(normalizeRespiratoryRate(dataType, point))
-            else -> emptyList()
+            GoogleHealthDataType.Steps -> listOfNotNull(normalizeSteps(code, point))
+            GoogleHealthDataType.Sleep -> normalizeSleep(code, point)
+            GoogleHealthDataType.HeartRate -> listOfNotNull(normalizeHeartRate(code, point))
+            GoogleHealthDataType.Weight -> listOfNotNull(normalizeWeight(code, point))
+            GoogleHealthDataType.BodyFat -> listOfNotNull(normalizeBodyFat(code, point))
+            GoogleHealthDataType.HeartRateVariability -> listOfNotNull(normalizeHeartRateVariability(code, point))
+            GoogleHealthDataType.RespiratoryRateSleepSummary -> listOfNotNull(normalizeRespiratoryRate(code, point))
         }
     }
 

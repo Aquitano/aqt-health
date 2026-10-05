@@ -18,7 +18,7 @@ class WithingsSyncAdapter(
 ) : ProviderSyncAdapter {
     override val providerCode: String = WITHINGS_PROVIDER_CODE
     override val displayName: String = WITHINGS_DISPLAY_NAME
-    override val dataTypes: List<String> = WITHINGS_DEFAULT_DATA_TYPES
+    override val dataTypes: List<String> = WithingsDataType.codes
     override val recordEmptyDataTypes: Boolean = true
     override val providerRequestInterval: Duration = PROVIDER_REQUEST_INTERVAL
 
@@ -31,7 +31,7 @@ class WithingsSyncAdapter(
         accessToken: String,
         item: ProviderSyncItem,
     ): ProviderFetchedBatch {
-        val result = fetchDataType(accessToken, item.dataType, item.from, item.to)
+        val result = fetchDataType(accessToken, WithingsDataType.fromCode(item.dataType), item.from, item.to)
         return ProviderFetchedBatch(
             pages = AppJson.encodeToJsonElement(result.pages).jsonArray,
             sourceRecords = result.records,
@@ -69,55 +69,27 @@ class WithingsSyncAdapter(
 
     private suspend fun fetchDataType(
         accessToken: String,
-        dataType: String,
+        dataType: WithingsDataType,
         from: Instant,
         to: Instant,
     ): WithingsFetchResult =
         when (dataType) {
-            "activity" -> {
-                client.fetchActivity(
-                    accessToken,
-                    from,
-                    to,
-                    WITHINGS_ACTIVITY_FIELDS,
-                )
+            WithingsDataType.Activity -> {
+                client.fetchActivity(accessToken, from, to, WITHINGS_ACTIVITY_FIELDS)
             }
 
-            "measures" -> {
-                client.fetchMeasures(
-                    accessToken,
-                    from,
-                    to,
-                    WITHINGS_MEASURE_TYPES,
-                    1,
-                )
+            WithingsDataType.Measures -> {
+                client.fetchMeasures(accessToken, from, to, WITHINGS_MEASURE_TYPES, 1)
             }
 
-            "sleep-summary" -> {
-                client.fetchSleepSummary(
-                    accessToken,
-                    from,
-                    to,
-                    WITHINGS_SLEEP_SUMMARY_FIELDS,
-                )
+            WithingsDataType.SleepSummary -> {
+                client.fetchSleepSummary(accessToken, from, to, WITHINGS_SLEEP_SUMMARY_FIELDS)
             }
 
             // Reaches back past the window start so a night that began on the previous UTC day is
             // fetched whole; the normalizer keeps the sessions that end inside the window.
-            "sleep" -> {
-                client.fetchSleep(
-                    accessToken,
-                    from.minus(WITHINGS_SLEEP_LOOKBEHIND),
-                    to,
-                    WITHINGS_SLEEP_FIELDS,
-                )
-            }
-
-            else -> {
-                throw WithingsHttpException(
-                    "withings_unsupported_data_type",
-                    "Unsupported Withings data type: $dataType",
-                )
+            WithingsDataType.Sleep -> {
+                client.fetchSleep(accessToken, from.minus(WITHINGS_SLEEP_LOOKBEHIND), to, WITHINGS_SLEEP_FIELDS)
             }
         }
 }

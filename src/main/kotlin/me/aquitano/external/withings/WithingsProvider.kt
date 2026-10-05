@@ -30,8 +30,8 @@ class WithingsProvider(
             displayName = WITHINGS_DISPLAY_NAME,
             authType = ProviderAuthType.OAUTH,
             requiresAuthentication = true,
-            supportedDataTypes = WITHINGS_DEFAULT_DATA_TYPES,
-            defaultDataTypes = WITHINGS_DEFAULT_DATA_TYPES,
+            supportedDataTypes = WithingsDataType.codes,
+            defaultDataTypes = WithingsDataType.codes,
             maxSyncRangeDays = 31,
             supportsPageSize = false,
             workflowEndpoints =

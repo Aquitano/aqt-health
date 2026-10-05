@@ -17,7 +17,7 @@ class GoogleHealthSyncAdapter(
 ) : ProviderSyncAdapter {
     override val providerCode: String = GOOGLE_HEALTH_PROVIDER_CODE
     override val displayName: String = GOOGLE_HEALTH_DISPLAY_NAME
-    override val dataTypes: List<String> = GOOGLE_HEALTH_DEFAULT_DATA_TYPES
+    override val dataTypes: List<String> = GoogleHealthDataType.codes
     override val tokenRefreshFailureMessage: String = "Google OAuth token refresh failed"
     override val providerRequestInterval: Duration = PROVIDER_REQUEST_INTERVAL
 
@@ -30,14 +30,14 @@ class GoogleHealthSyncAdapter(
         accessToken: String,
         item: ProviderSyncItem,
     ): ProviderFetchedBatch {
-        val maxPageSize = if (item.dataType == "sleep") 25 else MAX_PAGE_SIZE
+        val dataType = GoogleHealthDataType.fromCode(item.dataType)
         val result =
             client.fetchDataPoints(
                 accessToken,
-                item.dataType,
+                dataType,
                 item.from,
                 item.to,
-                minOf(item.pageSize ?: MAX_PAGE_SIZE, maxPageSize),
+                item.pageSize?.coerceAtMost(dataType.maxPageSize) ?: dataType.maxPageSize,
             )
         return ProviderFetchedBatch(
             pages = AppJson.encodeToJsonElement(result.pages).jsonArray,
@@ -53,8 +53,4 @@ class GoogleHealthSyncAdapter(
             (error is GoogleHealthHttpException && error.oauthError == "invalid_grant")
 
     override fun providerErrorCode(error: Throwable): String? = (error as? GoogleHealthHttpException)?.code
-
-    private companion object {
-        const val MAX_PAGE_SIZE = 10000
-    }
 }

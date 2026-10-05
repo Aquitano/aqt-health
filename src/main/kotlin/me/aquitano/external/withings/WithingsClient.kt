@@ -125,7 +125,7 @@ class KtorWithingsClient(
     ): WithingsFetchResult =
         fetchPaged(
             accessToken = accessToken,
-            dataType = "measures",
+            dataType = WithingsDataType.Measures,
             endpoint = measureEndpoint(),
             action = "getmeas",
             recordsKey = "measuregrps",
@@ -147,7 +147,7 @@ class KtorWithingsClient(
         val (startYmd, endYmd) = ymdRange(from, to)
         return fetchPaged(
             accessToken = accessToken,
-            dataType = "activity",
+            dataType = WithingsDataType.Activity,
             endpoint = measureEndpoint(),
             action = "getactivity",
             recordsKey = "activities",
@@ -176,7 +176,7 @@ class KtorWithingsClient(
                     val end = minOf(start.plus(WITHINGS_SLEEP_GET_MAX_RANGE), to)
                     fetchPaged(
                         accessToken = accessToken,
-                        dataType = "sleep",
+                        dataType = WithingsDataType.Sleep,
                         endpoint = sleepEndpoint(),
                         action = "get",
                         recordsKey = "series",
@@ -189,7 +189,7 @@ class KtorWithingsClient(
                     )
                 }
         return WithingsFetchResult(
-            dataType = "sleep",
+            dataType = WithingsDataType.Sleep,
             pages = chunks.flatMap { it.pages },
             records = chunks.flatMap { it.records }.distinct(),
         )
@@ -204,7 +204,7 @@ class KtorWithingsClient(
         val (startYmd, endYmd) = ymdRange(from, to)
         return fetchPaged(
             accessToken = accessToken,
-            dataType = "sleep-summary",
+            dataType = WithingsDataType.SleepSummary,
             endpoint = sleepEndpoint(),
             action = "getsummary",
             recordsKey = "series",
@@ -297,7 +297,7 @@ class KtorWithingsClient(
 
     private suspend fun fetchPaged(
         accessToken: String,
-        dataType: String,
+        dataType: WithingsDataType,
         endpoint: String,
         action: String,
         recordsKey: String,

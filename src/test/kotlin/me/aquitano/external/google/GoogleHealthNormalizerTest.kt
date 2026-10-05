@@ -22,7 +22,7 @@ class GoogleHealthNormalizerTest {
     fun heartRateVariabilityBecomesAnRmssdSample() {
         val records =
             normalize(
-                "heart-rate-variability",
+                GoogleHealthDataType.HeartRateVariability,
                 """
                 {
                   "name": "users/me/dataTypes/heart-rate-variability/dataPoints/8812734",
@@ -46,7 +46,7 @@ class GoogleHealthNormalizerTest {
     fun respiratoryRateSleepSummaryBecomesASleepRespiratoryRateSample() {
         val records =
             normalize(
-                "respiratory-rate-sleep-summary",
+                GoogleHealthDataType.RespiratoryRateSleepSummary,
                 """
                 {
                   "name": "users/me/dataTypes/respiratory-rate-sleep-summary/dataPoints/5521",
@@ -70,7 +70,7 @@ class GoogleHealthNormalizerTest {
 
     @Test
     fun sleepPointAlsoEmitsASummaryUnderItsOwnRecordId() {
-        val records = normalize("sleep", sleepPoint(nap = false))
+        val records = normalize(GoogleHealthDataType.Sleep, sleepPoint(nap = false))
 
         assertEquals(2, records.size)
         assertEquals("users/me/dataTypes/sleep/dataPoints/77310", assertIs<SleepSession>(records[0]).providerRecordId)
@@ -98,13 +98,13 @@ class GoogleHealthNormalizerTest {
 
     @Test
     fun napEmitsNoSummary() {
-        val records = normalize("sleep", sleepPoint(nap = true))
+        val records = normalize(GoogleHealthDataType.Sleep, sleepPoint(nap = true))
 
         assertIs<SleepSession>(records.single())
     }
 
     private fun normalize(
-        dataType: String,
+        dataType: GoogleHealthDataType,
         protoJson: String,
     ) = normalizer
         .normalize(GoogleHealthFetchResult(dataType, emptyList(), listOf(dataPointJson(protoJson))))

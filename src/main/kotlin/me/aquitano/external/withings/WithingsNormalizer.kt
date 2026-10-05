@@ -30,11 +30,10 @@ class WithingsNormalizer {
         window: SyncWindow,
     ): List<IngestionRecord> =
         when (fetchResult.dataType) {
-            "activity" -> normalizeActivity(fetchResult.records)
-            "measures" -> normalizeMeasures(fetchResult.records)
-            "sleep-summary" -> normalizeSleepSummary(fetchResult.records)
-            "sleep" -> normalizeSleep(fetchResult.records, window)
-            else -> emptyList()
+            WithingsDataType.Activity -> normalizeActivity(fetchResult.records)
+            WithingsDataType.Measures -> normalizeMeasures(fetchResult.records)
+            WithingsDataType.SleepSummary -> normalizeSleepSummary(fetchResult.records)
+            WithingsDataType.Sleep -> normalizeSleep(fetchResult.records, window)
         }
 
     private fun normalizeActivity(records: List<JsonObject>): List<IngestionRecord> =

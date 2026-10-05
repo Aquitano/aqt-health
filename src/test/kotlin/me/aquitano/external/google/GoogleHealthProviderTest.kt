@@ -316,7 +316,7 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
             fixture.client.fetchResults +=
                 listOf(
                     fetchResult(
-                        "steps",
+                        GoogleHealthDataType.Steps,
                         stepsPoint(
                             name = "google-steps-minute",
                             startAt = "2026-04-01T08:00:00Z",
@@ -328,7 +328,7 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
             fixture.client.fetchResults +=
                 listOf(
                     fetchResult(
-                        "steps",
+                        GoogleHealthDataType.Steps,
                         stepsPoint(
                             name = "google-steps-short",
                             startAt = "2026-04-01T08:00:30Z",
@@ -372,7 +372,7 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
             fixture.client.fetchResults +=
                 listOf(
                     fetchResult(
-                        "steps",
+                        GoogleHealthDataType.Steps,
                         stepsPoint(
                             name = "google-steps-1",
                             startAt = "2026-04-01T08:00:00Z",
@@ -384,7 +384,7 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
             fixture.client.fetchResults +=
                 listOf(
                     fetchResult(
-                        "steps",
+                        GoogleHealthDataType.Steps,
                         stepsPoint(
                             name = "google-steps-2",
                             startAt = "2026-04-01T10:00:00Z",
@@ -592,7 +592,7 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
 
         override suspend fun fetchDataPoints(
             accessToken: String,
-            dataType: String,
+            dataType: GoogleHealthDataType,
             from: Instant,
             to: Instant,
             pageSize: Int,
@@ -615,7 +615,7 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
     }
 
     private data class FetchRequest(
-        val dataType: String,
+        val dataType: GoogleHealthDataType,
         val from: Instant,
         val to: Instant,
     )
@@ -623,18 +623,18 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
     private fun allMetricFetchResults(): List<GoogleHealthFetchResult> =
         listOf(
             stepsFetchResult(),
-            fetchResult("sleep", sleepPoint()),
-            fetchResult("heart-rate", heartRatePoint()),
-            fetchResult("weight", weightPoint()),
-            fetchResult("body-fat", bodyFatPoint()),
-            fetchResult("heart-rate-variability", heartRateVariabilityPoint()),
-            fetchResult("respiratory-rate-sleep-summary", respiratoryRatePoint()),
+            fetchResult(GoogleHealthDataType.Sleep, sleepPoint()),
+            fetchResult(GoogleHealthDataType.HeartRate, heartRatePoint()),
+            fetchResult(GoogleHealthDataType.Weight, weightPoint()),
+            fetchResult(GoogleHealthDataType.BodyFat, bodyFatPoint()),
+            fetchResult(GoogleHealthDataType.HeartRateVariability, heartRateVariabilityPoint()),
+            fetchResult(GoogleHealthDataType.RespiratoryRateSleepSummary, respiratoryRatePoint()),
         )
 
-    private fun stepsFetchResult(): GoogleHealthFetchResult = fetchResult("steps", stepsPoint())
+    private fun stepsFetchResult(): GoogleHealthFetchResult = fetchResult(GoogleHealthDataType.Steps, stepsPoint())
 
     private fun fetchResult(
-        dataType: String,
+        dataType: GoogleHealthDataType,
         point: JsonObject,
     ): GoogleHealthFetchResult {
         val payload =
