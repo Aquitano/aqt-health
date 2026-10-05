@@ -41,49 +41,36 @@ export function useProviderSyncJob(runningSyncJob: ProviderSyncJobStatusResponse
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     async function poll() {
-      try {
-        const body = await proxyFetch(
-          `/providers/${encodeURIComponent(
-            pollingJob.providerCode
-          )}/sync-jobs/${encodeURIComponent(pollingJob.jobId)}`,
-          readSyncJobStatus,
-          { signal: controller.signal }
-        );
-        if (controller.signal.aborted) return;
-        if (!body.ok) {
-          setResult(body);
-          setSyncJob(null);
-          setActiveSyncJob(null);
-          return;
-        }
-        setSyncJob(body.data);
-        if (body.data.terminal) {
-          setResult(
-            body.data.summary
-              ? { ok: true, data: body.data.summary }
-              : {
-                  ok: false,
-                  message:
-                    body.data.errorMessage ?? "Provider sync job failed.",
-                }
-          );
-          setActiveSyncJob(null);
-          router.refresh();
-          return;
-        }
-        timer = setTimeout(() => void poll(), 1500);
-      } catch (error) {
-        if (controller.signal.aborted) return;
-        setResult({
-          ok: false,
-          message:
-            error instanceof Error
-              ? error.message
-              : "Provider sync status check failed.",
-        });
+      const body = await proxyFetch(
+        `/providers/${encodeURIComponent(
+          pollingJob.providerCode
+        )}/sync-jobs/${encodeURIComponent(pollingJob.jobId)}`,
+        readSyncJobStatus,
+        { signal: controller.signal }
+      );
+      if (controller.signal.aborted) return;
+      if (!body.ok) {
+        setResult(body);
         setSyncJob(null);
         setActiveSyncJob(null);
+        return;
       }
+      setSyncJob(body.data);
+      if (body.data.terminal) {
+        setResult(
+          body.data.summary
+            ? { ok: true, data: body.data.summary }
+            : {
+                ok: false,
+                message:
+                  body.data.errorMessage ?? "Provider sync job failed.",
+              }
+        );
+        setActiveSyncJob(null);
+        router.refresh();
+        return;
+      }
+      timer = setTimeout(() => void poll(), 1500);
     }
     void poll();
     return () => {
@@ -96,27 +83,17 @@ export function useProviderSyncJob(runningSyncJob: ProviderSyncJobStatusResponse
     setResult(null);
     setSyncJob(null);
     startTransition(async () => {
-      try {
-        const body = await proxyFetch(
-          `/providers/${encodeURIComponent(providerCode)}/sync-jobs`,
-          readSyncJobStart,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          }
-        );
-        if (body.ok) setActiveSyncJob({ providerCode, jobId: body.data.jobId });
-        else setResult(body);
-      } catch (error) {
-        setResult({
-          ok: false,
-          message:
-            error instanceof Error
-              ? error.message
-              : "Provider sync failed. Try again.",
-        });
-      }
+      const body = await proxyFetch(
+        `/providers/${encodeURIComponent(providerCode)}/sync-jobs`,
+        readSyncJobStart,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
+      if (body.ok) setActiveSyncJob({ providerCode, jobId: body.data.jobId });
+      else setResult(body);
     });
   }
 
