@@ -14,6 +14,7 @@ import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.test.authorized
 import me.aquitano.health.test.configureTestApplication
 import me.aquitano.health.test.countRows
+import me.aquitano.health.test.errorCode
 import me.aquitano.health.test.execute
 import me.aquitano.health.test.jsonBody
 import me.aquitano.health.test.queryInt
@@ -407,8 +408,6 @@ class IngestionRouteTest : PostgresIntegrationTest() {
                 database.queryInt("SELECT COUNT(*) FROM scalar_samples WHERE metric_type = 'heart_rate'"),
             )
         }
-
-    private suspend fun HttpResponse.errorCode(): String = jsonBody()["error"]!!.jsonObject["code"]!!.jsonPrimitive.content
 
     private fun DatabaseConfig.insertFailedBatch(
         provider: String,

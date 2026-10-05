@@ -8,6 +8,7 @@ import io.ktor.server.config.MapApplicationConfig
 import io.ktor.server.testing.ApplicationTestBuilder
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import me.aquitano.health.infrastructure.config.DatabaseConfig
 import me.aquitano.health.shared.AppJson
 
@@ -52,3 +53,5 @@ private fun providerTestConfig(
 fun HttpRequestBuilder.authorized() = bearerAuth(TEST_API_KEY)
 
 suspend fun HttpResponse.jsonBody(): JsonObject = AppJson.parseToJsonElement(bodyAsText()).jsonObject
+
+suspend fun HttpResponse.errorCode(): String = jsonBody()["error"]!!.jsonObject["code"]!!.jsonPrimitive.content

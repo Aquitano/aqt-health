@@ -382,7 +382,7 @@ class WithingsNormalizerTest {
     }
 
     @Test
-    fun sleepSeriesIgnoresNestedValueObjects() {
+    fun sleepSeriesReadsStateFromANestedValueObject() {
         val result =
             normalize(
                 fetchResult(

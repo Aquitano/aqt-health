@@ -9,6 +9,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.test.authorized
 import me.aquitano.health.test.configureTestApplication
+import me.aquitano.health.test.errorCode
 import me.aquitano.health.test.googleHealthTestConfig
 import me.aquitano.health.test.jsonBody
 import kotlin.test.Test
@@ -133,6 +134,4 @@ class IdempotencyKeyRouteTest : PostgresIntegrationTest() {
         }
 
     private suspend fun HttpResponse.jobId(): String = jsonBody()["jobId"]!!.jsonPrimitive.content
-
-    private suspend fun HttpResponse.errorCode(): String = jsonBody()["error"]!!.jsonObject["code"]!!.jsonPrimitive.content
 }

@@ -10,6 +10,7 @@ import me.aquitano.health.shared.AppJson
 import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.test.authorized
 import me.aquitano.health.test.configureTestApplication
+import me.aquitano.health.test.errorCode
 import me.aquitano.health.test.googleHealthTestConfig
 import me.aquitano.health.test.jsonBody
 import me.aquitano.health.test.queryString
@@ -134,6 +135,4 @@ class GoogleHealthProviderRouteTest : PostgresIntegrationTest() {
             assertEquals("google-config-test", error["requestId"]!!.jsonPrimitive.content)
             assertFalse(bodyText.contains("googleHealth.clientSecret"))
         }
-
-    private suspend fun HttpResponse.errorCode(): String = jsonBody()["error"]!!.jsonObject["code"]!!.jsonPrimitive.content
 }
