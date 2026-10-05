@@ -84,16 +84,16 @@ class CanonicalScalarSamplesViewTest : PostgresIntegrationTest() {
             openDatabase(config)
             config.execute(
                 """
-                INSERT INTO sources (id, code, display_name, created_at)
-                VALUES (1, 'withings', NULL, '2026-04-19T00:00:00Z'),
-                       (2, 'google_health', NULL, '2026-04-19T00:00:00Z')
+                INSERT INTO sources (id, code, created_at)
+                VALUES (1, 'withings', '2026-04-19T00:00:00Z'),
+                       (2, 'google_health', '2026-04-19T00:00:00Z')
                 """.trimIndent(),
             )
             config.execute(
                 """
-                INSERT INTO source_instances (id, source_id, provider_instance_id, display_name, created_at, updated_at)
-                VALUES (1, 1, 'withings-1', NULL, '2026-04-19T00:00:00Z', '2026-04-19T00:00:00Z'),
-                       (2, 2, 'google-1', NULL, '2026-04-19T00:00:00Z', '2026-04-19T00:00:00Z')
+                INSERT INTO source_instances (id, source_id, provider_instance_id, created_at, updated_at)
+                VALUES (1, 1, 'withings-1', '2026-04-19T00:00:00Z', '2026-04-19T00:00:00Z'),
+                       (2, 2, 'google-1', '2026-04-19T00:00:00Z', '2026-04-19T00:00:00Z')
                 """.trimIndent(),
             )
         }

@@ -161,7 +161,5 @@ object ScalarMetricRegistry {
 
     fun find(metricType: String): ScalarMetricDescriptor? = byType[metricType]
 
-    fun get(metricType: String): ScalarMetricDescriptor = requireNotNull(byType[metricType]) { "Unknown scalar metric type '$metricType'" }
-
     val metricTypes: Set<String> = byType.keys
 }

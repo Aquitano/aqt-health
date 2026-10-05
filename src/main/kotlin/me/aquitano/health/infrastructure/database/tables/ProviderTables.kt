@@ -109,7 +109,6 @@ object ProviderScheduledSyncCheckpointsTable : IntIdTable("provider_scheduled_sy
     val dataType = text("data_type")
     val checkpointAt = timestampWithTimeZone("checkpoint_at").nullable()
     val lastSuccessfulFrom = timestampWithTimeZone("last_successful_from").nullable()
-    val lastSuccessfulTo = timestampWithTimeZone("last_successful_to").nullable()
     val createdAt = timestampWithTimeZone("created_at")
     val updatedAt = timestampWithTimeZone("updated_at")
 

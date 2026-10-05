@@ -1,7 +1,6 @@
 package me.aquitano.health.application
 
 import me.aquitano.health.api.dto.ScalarSample
-import me.aquitano.health.domain.ScalarMetricRegistry
 import me.aquitano.health.domain.ScalarSampleRecord
 import me.aquitano.health.domain.ValidationIssue
 import kotlin.test.Test
@@ -80,7 +79,7 @@ class IngestionScalarRecordMappersTest {
     @Test
     fun unitIsOptionalAndMustMatchTheRegistryWhenPresent() {
         assertNotNull(map("weight", 80.0))
-        assertNotNull(map("weight", 80.0, unit = ScalarMetricRegistry.get("weight").unit))
+        assertNotNull(map("weight", 80.0, unit = "kg"))
 
         val issues = mutableListOf<ValidationIssue>()
         assertNull(map("weight", 80.0, unit = "lbs", issues = issues))

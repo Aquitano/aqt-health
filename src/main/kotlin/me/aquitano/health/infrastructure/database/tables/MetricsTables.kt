@@ -37,7 +37,6 @@ object SleepSessionsTable : IntIdTable("sleep_sessions") {
 /** Read-only mapping of the canonical_sleep_sessions view (see V15). */
 object CanonicalSleepSessionsTable : Table("canonical_sleep_sessions") {
     val id = integer("id")
-    val date = date("date")
     val sourceInstanceId = integer("source_instance_id")
     val sleepSessionId = integer("sleep_session_id").references(SleepSessionsTable.id)
     val startAt = timestampWithTimeZone("start_at")
@@ -91,9 +90,6 @@ object MetricCatalogTable : Table("metric_catalog") {
     val metricType = text("metric_type")
     val family = text("family")
     val unit = text("unit")
-    val minValue = double("min_value").nullable()
-    val maxValue = double("max_value").nullable()
-    val supportsSegment = bool("supports_segment")
 
     override val primaryKey = PrimaryKey(metricType)
 }
@@ -126,15 +122,12 @@ object ScalarSamplesTable : LongIdTable("scalar_samples") {
 object CanonicalScalarSamplesView : Table("canonical_scalar_samples") {
     val id = long("id")
     val sourceInstanceId = integer("source_instance_id")
-    val ingestionRecordId = integer("ingestion_record_id").nullable()
-    val providerRecordId = text("provider_record_id").nullable()
     val measuredAt = timestampWithTimeZone("measured_at")
     val metricType = text("metric_type")
     val value = double("value")
     val unit = text("unit")
     val context = text("context").nullable()
     val segment = text("segment").nullable()
-    val createdAt = timestampWithTimeZone("created_at")
 }
 
 object ActivitySummariesTable : IntIdTable("activity_summaries") {
@@ -162,7 +155,6 @@ object ActivitySummariesTable : IntIdTable("activity_summaries") {
 
 /** Read-only mapping of the canonical_activity_summaries view (see V15). */
 object CanonicalActivitySummariesTable : Table("canonical_activity_summaries") {
-    val id = integer("id")
     val date = date("date")
     val sourceInstanceId = integer("source_instance_id")
     val activitySummaryId =
@@ -212,8 +204,6 @@ object SleepSummariesTable : IntIdTable("sleep_summaries") {
 
 /** Read-only mapping of the canonical_sleep_summaries view (see V15). */
 object CanonicalSleepSummariesTable : Table("canonical_sleep_summaries") {
-    val id = integer("id")
-    val date = date("date")
     val sourceInstanceId = integer("source_instance_id")
     val sleepSummaryId = integer("sleep_summary_id").references(SleepSummariesTable.id)
     val startAt = timestampWithTimeZone("start_at")

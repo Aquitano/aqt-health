@@ -384,5 +384,5 @@ private fun ScheduledSyncCheckpointRecord.toDto(): ScheduledSyncCheckpointRespon
         dataType = dataType,
         checkpointAt = checkpointAt?.toString(),
         lastSuccessfulFrom = lastSuccessfulFrom?.toString(),
-        lastSuccessfulTo = lastSuccessfulTo?.toString(),
+        lastSuccessfulTo = checkpointAt?.toString(),
     )

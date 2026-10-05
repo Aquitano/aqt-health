@@ -23,9 +23,6 @@ class MetricCatalogBootstrap(
                     it[metricType] = descriptor.metricType
                     it[family] = descriptor.family
                     it[unit] = descriptor.unit
-                    it[minValue] = descriptor.valueRange.min
-                    it[maxValue] = descriptor.valueRange.max
-                    it[supportsSegment] = descriptor.supportsSegment
                 }
             }
             providerRanks.forEach { (family, providers) ->

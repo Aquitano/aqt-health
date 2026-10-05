@@ -416,14 +416,14 @@ class IngestionRouteTest : PostgresIntegrationTest() {
     ) {
         execute(
             """
-            INSERT INTO sources (code, display_name, created_at)
-            VALUES ('$provider', NULL, '2026-04-19T09:00:00Z')
+            INSERT INTO sources (code, created_at)
+            VALUES ('$provider', '2026-04-19T09:00:00Z')
             """.trimIndent(),
         )
         execute(
             """
-            INSERT INTO source_instances (source_id, provider_instance_id, display_name, created_at, updated_at)
-            VALUES (1, '$providerInstanceId', NULL, '2026-04-19T09:00:00Z', '2026-04-19T09:00:00Z')
+            INSERT INTO source_instances (source_id, provider_instance_id, created_at, updated_at)
+            VALUES (1, '$providerInstanceId', '2026-04-19T09:00:00Z', '2026-04-19T09:00:00Z')
             """.trimIndent(),
         )
         execute(
