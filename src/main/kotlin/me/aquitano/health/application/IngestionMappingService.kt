@@ -63,23 +63,23 @@ class IngestionMappingService {
                 .eachCount()
                 .filterValues { it > 1 }
                 .keys
-        duplicateProviderIds.forEach {
-            issues.add(
-                ValidationIssue(
-                    field = "records",
-                    code = ValidationIssueCodes.InvalidState,
-                    message = "providerRecordId '$it' is duplicated in this batch",
-                ),
+        duplicateProviderIds.mapTo(issues) {
+            ValidationIssue(
+                field = "records",
+                code = ValidationIssueCodes.InvalidState,
+                message = "providerRecordId '$it' is duplicated in this batch",
             )
         }
 
-        if (issues.isNotEmpty()) throw RequestValidationException(issues)
+        if (issues.isNotEmpty() || provider == null || providerInstanceId == null || ingestedAt == null) {
+            throw RequestValidationException(issues)
+        }
 
         return ValidatedIngestionBatch(
-            provider = provider!!,
-            providerInstanceId = providerInstanceId!!,
+            provider = provider,
+            providerInstanceId = providerInstanceId,
             batchExternalId = batchExternalId,
-            ingestedAt = ingestedAt!!,
+            ingestedAt = ingestedAt,
             sourcePayload = sourcePayload,
             records = records,
         )

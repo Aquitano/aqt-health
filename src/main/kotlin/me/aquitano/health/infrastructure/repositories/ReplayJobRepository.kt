@@ -85,7 +85,8 @@ class ReplayJobRepository(
                     }.insertedCount > 0
             val record =
                 getByIdInTransaction(id)
-                    ?: findByIdempotencyKeyInTransaction(idempotencyKey!!)!!
+                    ?: idempotencyKey?.let(::findByIdempotencyKeyInTransaction)
+                    ?: error("Replay job '$id' was not inserted and no job holds its idempotency key")
             ReplayJobCreateResult(record, created = inserted)
         }
 

@@ -255,11 +255,13 @@ class IngestionRepository {
         limit: Int,
         cursor: Cursor? = null,
     ): List<AdminBatchRow> {
-        val conditions = mutableListOf<Op<Boolean>>()
-        status?.let { conditions.add(IngestionBatchesTable.status eq it) }
-        from?.let { conditions.add(IngestionBatchesTable.receivedAt greaterEq it.toDbTimestamp()) }
-        to?.let { conditions.add(IngestionBatchesTable.receivedAt less it.toDbTimestamp()) }
-        cursor?.let { conditions.add(receivedAtKeyset(it)) }
+        val conditions =
+            listOfNotNull(
+                status?.let { IngestionBatchesTable.status eq it },
+                from?.let { IngestionBatchesTable.receivedAt greaterEq it.toDbTimestamp() },
+                to?.let { IngestionBatchesTable.receivedAt less it.toDbTimestamp() },
+                cursor?.let(::receivedAtKeyset),
+            )
 
         val batches =
             IngestionBatchesTable
@@ -353,10 +355,10 @@ class IngestionRepository {
         val minStart = IngestionRecordsTable.recordStartAt.min()
         val maxStart = IngestionRecordsTable.recordStartAt.max()
         val conditions =
-            mutableListOf<Op<Boolean>>(
+            listOfNotNull(
                 IngestionBatchesTable.status eq BatchStatus.Processed,
+                recordTypes?.let { IngestionRecordsTable.recordType inList it },
             )
-        recordTypes?.let { conditions.add(IngestionRecordsTable.recordType inList it) }
         return IngestionRecordsTable
             .innerJoin(IngestionBatchesTable)
             .select(minStart, maxStart)
@@ -382,16 +384,18 @@ class IngestionRepository {
             .selectAll()
             .where(replayConditions(dayStart, dayEnd, recordTypes))
             .orderBy(IngestionRecordsTable.id to SortOrder.ASC)
-            .map {
-                ReplayRecordRow(
-                    id = it[IngestionRecordsTable.id].value,
-                    recordType = it[IngestionRecordsTable.recordType],
-                    provider = it[SourcesTable.code],
-                    sourceInstanceId = it[IngestionBatchesTable.sourceInstanceId],
-                    normalizedRecordJson = it[IngestionRecordsTable.normalizedRecordJson],
-                    recordStartAt = it[IngestionRecordsTable.recordStartAt]!!.toInstant(),
-                    recordEndAt = it[IngestionRecordsTable.recordEndAt]?.toInstant(),
-                )
+            .mapNotNull { row ->
+                row[IngestionRecordsTable.recordStartAt]?.let { recordStartAt ->
+                    ReplayRecordRow(
+                        id = row[IngestionRecordsTable.id].value,
+                        recordType = row[IngestionRecordsTable.recordType],
+                        provider = row[SourcesTable.code],
+                        sourceInstanceId = row[IngestionBatchesTable.sourceInstanceId],
+                        normalizedRecordJson = row[IngestionRecordsTable.normalizedRecordJson],
+                        recordStartAt = recordStartAt.toInstant(),
+                        recordEndAt = row[IngestionRecordsTable.recordEndAt]?.toInstant(),
+                    )
+                }
             }
 
     /** Compare the prepared immutable log snapshot while ingestion writes are locked. */
@@ -412,12 +416,12 @@ class IngestionRepository {
         recordTypes: Set<String>?,
     ): Op<Boolean> {
         val conditions =
-            mutableListOf<Op<Boolean>>(
+            listOfNotNull(
                 IngestionBatchesTable.status eq BatchStatus.Processed,
                 IngestionRecordsTable.recordStartAt greaterEq dayStart.toDbTimestamp(),
                 IngestionRecordsTable.recordStartAt less dayEnd.toDbTimestamp(),
+                recordTypes?.let { IngestionRecordsTable.recordType inList it },
             )
-        recordTypes?.let { conditions.add(IngestionRecordsTable.recordType inList it) }
         return combineConditions(conditions)
     }
 

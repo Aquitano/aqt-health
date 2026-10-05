@@ -341,13 +341,11 @@ class ReplayService(
         val issues = mutableListOf<ValidationIssue>()
 
         val recordTypes = request.metricTypes?.toSet()
-        recordTypes?.minus(replayableRecordTypes)?.forEach { unknown ->
-            issues.add(
-                ValidationIssue(
-                    field = "metricTypes",
-                    code = ValidationIssueCodes.UnsupportedValue,
-                    message = "unsupported record type '$unknown'",
-                ),
+        recordTypes?.minus(replayableRecordTypes)?.mapTo(issues) { unknown ->
+            ValidationIssue(
+                field = "metricTypes",
+                code = ValidationIssueCodes.UnsupportedValue,
+                message = "unsupported record type '$unknown'",
             )
         }
 

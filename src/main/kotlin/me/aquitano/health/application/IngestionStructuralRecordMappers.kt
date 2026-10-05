@@ -166,38 +166,38 @@ internal fun mapActivitySummary(
     issues: MutableList<ValidationIssue>,
 ): ActivitySummaryRecord? {
     val date = parseDate(dto.date, "$field.date", issues)
-    validateNonNegativeDouble(
+    validateNonNegative(
         dto.distanceMeters,
         "$field.distanceMeters",
         issues,
     )
-    validateNonNegativeDouble(
+    validateNonNegative(
         dto.activeEnergyKcal,
         "$field.activeEnergyKcal",
         issues,
     )
-    validateNonNegativeDouble(
+    validateNonNegative(
         dto.totalEnergyKcal,
         "$field.totalEnergyKcal",
         issues,
     )
-    validateNonNegativeDouble(
+    validateNonNegative(
         dto.elevationMeters,
         "$field.elevationMeters",
         issues,
     )
-    validateNonNegativeInt(dto.softMinutes, "$field.softMinutes", issues)
-    validateNonNegativeInt(
+    validateNonNegative(dto.softMinutes, "$field.softMinutes", issues)
+    validateNonNegative(
         dto.moderateMinutes,
         "$field.moderateMinutes",
         issues,
     )
-    validateNonNegativeInt(
+    validateNonNegative(
         dto.intenseMinutes,
         "$field.intenseMinutes",
         issues,
     )
-    validateNonNegativeInt(dto.activeMinutes, "$field.activeMinutes", issues)
+    validateNonNegative(dto.activeMinutes, "$field.activeMinutes", issues)
     validateOptionalHeartRate(
         dto.averageHeartRateBpm,
         "$field.averageHeartRateBpm",
@@ -293,48 +293,48 @@ internal fun mapSleepSummary(
             ),
         )
     }
-    validateNonNegativeLong(
+    validateNonNegative(
         dto.timeInBedSeconds,
         "$field.timeInBedSeconds",
         issues,
     )
-    validateNonNegativeLong(
+    validateNonNegative(
         dto.totalSleepSeconds,
         "$field.totalSleepSeconds",
         issues,
     )
-    validateNonNegativeLong(
+    validateNonNegative(
         dto.lightSleepSeconds,
         "$field.lightSleepSeconds",
         issues,
     )
-    validateNonNegativeLong(
+    validateNonNegative(
         dto.deepSleepSeconds,
         "$field.deepSleepSeconds",
         issues,
     )
-    validateNonNegativeLong(
+    validateNonNegative(
         dto.remSleepSeconds,
         "$field.remSleepSeconds",
         issues,
     )
-    validateNonNegativeLong(
+    validateNonNegative(
         dto.sleepLatencySeconds,
         "$field.sleepLatencySeconds",
         issues,
     )
-    validateNonNegativeLong(
+    validateNonNegative(
         dto.wakeupLatencySeconds,
         "$field.wakeupLatencySeconds",
         issues,
     )
-    validateNonNegativeLong(
+    validateNonNegative(
         dto.wakeupDurationSeconds,
         "$field.wakeupDurationSeconds",
         issues,
     )
-    validateNonNegativeInt(dto.wakeupCount, "$field.wakeupCount", issues)
-    validateNonNegativeLong(dto.wasoSeconds, "$field.wasoSeconds", issues)
+    validateNonNegative(dto.wakeupCount, "$field.wakeupCount", issues)
+    validateNonNegative(dto.wasoSeconds, "$field.wasoSeconds", issues)
     if (dto.sleepEfficiencyPercent != null && dto.sleepEfficiencyPercent !in 0.0..100.0) {
         issues.add(
             ValidationIssue(
@@ -353,20 +353,20 @@ internal fun mapSleepSummary(
             ),
         )
     }
-    validateNonNegativeInt(dto.remEpisodesCount, "$field.remEpisodesCount", issues)
-    validateNonNegativeInt(dto.outOfBedCount, "$field.outOfBedCount", issues)
-    validateNonNegativeLong(dto.awakeDurationSeconds, "$field.awakeDurationSeconds", issues)
+    validateNonNegative(dto.remEpisodesCount, "$field.remEpisodesCount", issues)
+    validateNonNegative(dto.outOfBedCount, "$field.outOfBedCount", issues)
+    validateNonNegative(dto.awakeDurationSeconds, "$field.awakeDurationSeconds", issues)
     if (dto.overnightHrvRmssd != null && dto.overnightHrvRmssd <= 0.0) {
         issues.add(ValidationIssue("$field.overnightHrvRmssd", code = ValidationIssueCodes.OutOfRange, message = "must be greater than 0"))
     }
-    validateNonNegativeDouble(dto.respiratoryRhythm, "$field.respiratoryRhythm", issues)
+    validateNonNegative(dto.respiratoryRhythm, "$field.respiratoryRhythm", issues)
     if (dto.breathingQuality != null && dto.breathingQuality !in 0..100) {
         issues.add(ValidationIssue("$field.breathingQuality", code = ValidationIssueCodes.OutOfRange, message = "must be between 0 and 100"))
     }
-    validateNonNegativeLong(dto.snoringDurationSeconds, "$field.snoringDurationSeconds", issues)
-    validateNonNegativeDouble(dto.apneaHypopneaIndex, "$field.apneaHypopneaIndex", issues)
-    validateNonNegativeDouble(dto.movementScore, "$field.movementScore", issues)
-    validateNonNegativeInt(dto.snoringEpisodeCount, "$field.snoringEpisodeCount", issues)
+    validateNonNegative(dto.snoringDurationSeconds, "$field.snoringDurationSeconds", issues)
+    validateNonNegative(dto.apneaHypopneaIndex, "$field.apneaHypopneaIndex", issues)
+    validateNonNegative(dto.movementScore, "$field.movementScore", issues)
+    validateNonNegative(dto.snoringEpisodeCount, "$field.snoringEpisodeCount", issues)
     validateOptionalHeartRate(dto.hrAverageBpm, "$field.hrAverageBpm", issues)
     validateOptionalHeartRate(dto.hrMinBpm, "$field.hrMinBpm", issues)
     validateOptionalHeartRate(dto.hrMaxBpm, "$field.hrMaxBpm", issues)

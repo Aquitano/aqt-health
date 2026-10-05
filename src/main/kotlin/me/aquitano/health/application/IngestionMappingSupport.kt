@@ -114,44 +114,12 @@ internal fun parseDate(
     }
 }
 
-internal fun validateNonNegativeInt(
-    value: Int?,
+internal fun validateNonNegative(
+    value: Number?,
     field: String,
     issues: MutableList<ValidationIssue>,
 ) {
-    if (value != null && value < 0) {
-        issues.add(
-            ValidationIssue(
-                field = field,
-                code = ValidationIssueCodes.OutOfRange,
-                message = "must be greater than or equal to 0",
-            ),
-        )
-    }
-}
-
-internal fun validateNonNegativeLong(
-    value: Long?,
-    field: String,
-    issues: MutableList<ValidationIssue>,
-) {
-    if (value != null && value < 0) {
-        issues.add(
-            ValidationIssue(
-                field = field,
-                code = ValidationIssueCodes.OutOfRange,
-                message = "must be greater than or equal to 0",
-            ),
-        )
-    }
-}
-
-internal fun validateNonNegativeDouble(
-    value: Double?,
-    field: String,
-    issues: MutableList<ValidationIssue>,
-) {
-    if (value != null && value < 0.0) {
+    if (value != null && value.toDouble() < 0.0) {
         issues.add(
             ValidationIssue(
                 field = field,
