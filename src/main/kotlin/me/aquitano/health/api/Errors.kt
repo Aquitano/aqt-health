@@ -3,6 +3,7 @@
 package me.aquitano.health.api
 
 import io.github.oshai.kotlinlogging.KotlinLogging
+import io.github.oshai.kotlinlogging.Level
 import io.ktor.http.*
 import io.ktor.openapi.JsonSchema
 import io.ktor.server.application.*
@@ -21,192 +22,97 @@ private val logger = KotlinLogging.logger("me.aquitano.health.api.Errors")
 fun Application.configureErrorHandling() {
     install(StatusPages) {
         status(HttpStatusCode.NotFound) { call, status ->
-            logger.infoWithContext(
-                "request_not_found",
-                "errorCode" to "not_found",
-                "requestId" to call.requestId(),
-            )
-            call.respond(
-                status,
-                ErrorResponse(
-                    ErrorBody(
-                        code = "not_found",
-                        message = "Resource not found",
-                        requestId = call.requestId(),
-                    ),
-                ),
-            )
+            call.respondError(status, "not_found", "Resource not found", logEvent = "request_not_found")
         }
         status(HttpStatusCode.Unauthorized) { call, status ->
-            logger.infoWithContext(
-                "request_unauthorized",
-                "errorCode" to "unauthorized",
-                "requestId" to call.requestId(),
-            )
-            call.respond(
-                status,
-                ErrorResponse(
-                    ErrorBody(
-                        code = "unauthorized",
-                        message = "Missing or invalid API key",
-                        requestId = call.requestId(),
-                    ),
-                ),
-            )
+            call.respondError(status, "unauthorized", "Missing or invalid API key", logEvent = "request_unauthorized")
         }
         exception<RequestValidationException> { call, cause ->
-            logger.infoWithContext(
-                "request_validation_failed",
-                "errorCode" to "validation_failed",
-                "fields" to cause.issues.map { it.field },
-                "requestId" to call.requestId(),
-            )
-            call.respond(
+            call.respondError(
                 HttpStatusCode.BadRequest,
-                ErrorResponse(
-                    ErrorBody(
-                        code = "validation_failed",
-                        message = "Request validation failed",
-                        requestId = call.requestId(),
-                        details =
-                            cause.issues.map {
-                                ErrorDetail(
-                                    field = it.field,
-                                    code = it.code,
-                                    message = it.message,
-                                )
-                            },
-                    ),
-                ),
+                "validation_failed",
+                "Request validation failed",
+                logEvent = "request_validation_failed",
+                logFields = mapOf("fields" to cause.issues.map { it.field }),
+                details = cause.issues.map { ErrorDetail(field = it.field, code = it.code, message = it.message) },
             )
         }
         exception<NotFoundException> { call, cause ->
-            logger.infoWithContext(
-                "request_not_found",
-                "errorCode" to "not_found",
-                "requestId" to call.requestId(),
-            )
-            call.respond(
-                HttpStatusCode.NotFound,
-                ErrorResponse(
-                    ErrorBody(
-                        code = "not_found",
-                        message = cause.message ?: "Resource not found",
-                        requestId = call.requestId(),
-                    ),
-                ),
-            )
+            call.respondError(HttpStatusCode.NotFound, "not_found", cause.message ?: "Resource not found", logEvent = "request_not_found")
         }
         exception<ConflictException> { call, cause ->
-            logger.warnWithContext(
-                "request_conflict",
-                "errorCode" to cause.code,
-                "requestId" to call.requestId(),
-            )
-            call.respond(
+            call.respondError(
                 HttpStatusCode.Conflict,
-                ErrorResponse(
-                    ErrorBody(
-                        code = cause.code,
-                        message =
-                            cause.message
-                                ?: "Request conflicts with current state",
-                        requestId = call.requestId(),
-                    ),
-                ),
+                cause.code,
+                cause.message ?: "Request conflicts with current state",
+                logEvent = "request_conflict",
+                logLevel = Level.WARN,
             )
         }
         exception<UpstreamProviderException> { call, cause ->
-            logger.warnWithContext(
-                "upstream_provider_failed",
-                "errorCode" to cause.code,
-                "status" to cause.statusCode,
-                "requestId" to call.requestId(),
-                throwable = cause.cause ?: cause,
-            )
-            call.respond(
+            call.respondError(
                 HttpStatusCode.fromValue(cause.statusCode),
-                ErrorResponse(
-                    ErrorBody(
-                        code = cause.code,
-                        message = cause.message ?: "Provider request failed",
-                        requestId = call.requestId(),
-                    ),
-                ),
+                cause.code,
+                cause.message ?: "Provider request failed",
+                logEvent = "upstream_provider_failed",
+                logLevel = Level.WARN,
+                logFields = mapOf("status" to cause.statusCode),
+                throwable = cause.cause ?: cause,
             )
         }
         exception<PayloadTooLargeException> { call, _ ->
-            logger.infoWithContext(
-                "request_payload_too_large",
-                "errorCode" to "payload_too_large",
-                "requestId" to call.requestId(),
-            )
-            call.respond(
+            call.respondError(
                 HttpStatusCode.PayloadTooLarge,
-                ErrorResponse(
-                    ErrorBody(
-                        code = "payload_too_large",
-                        message = "Request body exceeds the configured size limit",
-                        requestId = call.requestId(),
-                    ),
-                ),
+                "payload_too_large",
+                "Request body exceeds the configured size limit",
+                logEvent = "request_payload_too_large",
             )
         }
         exception<BadRequestException> { call, _ ->
-            logger.infoWithContext(
-                "request_bad_request",
-                "errorCode" to "validation_failed",
-                "requestId" to call.requestId(),
-            )
-            call.respond(
-                HttpStatusCode.BadRequest,
-                ErrorResponse(
-                    ErrorBody(
-                        code = "validation_failed",
-                        message = "Request validation failed",
-                        requestId = call.requestId(),
-                    ),
-                ),
-            )
+            call.respondError(HttpStatusCode.BadRequest, "validation_failed", "Request validation failed", logEvent = "request_bad_request")
         }
         exception<ServerConfigurationException> { call, cause ->
-            logger.errorWithContext(
-                "server_configuration_error",
-                "errorCode" to cause.code,
-                "fields" to cause.details.map { it.field },
-                "requestId" to call.requestId(),
-                throwable = cause,
-            )
-            call.respond(
+            call.respondError(
                 HttpStatusCode.InternalServerError,
-                ErrorResponse(
-                    ErrorBody(
-                        code = cause.code,
-                        message = cause.publicMessage,
-                        requestId = call.requestId(),
-                    ),
-                ),
+                cause.code,
+                cause.publicMessage,
+                logEvent = "server_configuration_error",
+                logLevel = Level.ERROR,
+                logFields = mapOf("fields" to cause.details.map { it.field }),
+                throwable = cause,
             )
         }
         exception<Throwable> { call, cause ->
-            logger.errorWithContext(
-                "request_unexpected_error",
-                "errorCode" to "internal_error",
-                "requestId" to call.requestId(),
-                throwable = cause,
-            )
-            call.respond(
+            call.respondError(
                 HttpStatusCode.InternalServerError,
-                ErrorResponse(
-                    ErrorBody(
-                        code = "internal_error",
-                        message = "Unexpected server error",
-                        requestId = call.requestId(),
-                    ),
-                ),
+                "internal_error",
+                "Unexpected server error",
+                logEvent = "request_unexpected_error",
+                logLevel = Level.ERROR,
+                throwable = cause,
             )
         }
     }
+}
+
+private suspend fun ApplicationCall.respondError(
+    status: HttpStatusCode,
+    code: String,
+    message: String,
+    logEvent: String,
+    logLevel: Level = Level.INFO,
+    logFields: Map<String, Any?> = emptyMap(),
+    throwable: Throwable? = null,
+    details: List<ErrorDetail>? = null,
+) {
+    val requestId = requestId()
+    val context = mapOf("errorCode" to code) + logFields + ("requestId" to requestId)
+    when (logLevel) {
+        Level.ERROR -> logger.errorWithContext(logEvent, context, throwable)
+        Level.WARN -> logger.warnWithContext(logEvent, context, throwable)
+        else -> logger.infoWithContext(logEvent, context)
+    }
+    respond(status, ErrorResponse(ErrorBody(code = code, message = message, requestId = requestId, details = details)))
 }
 
 @Serializable
