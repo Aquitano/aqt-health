@@ -17,7 +17,6 @@
   --fg: #e8ecf3;
   --fg-muted: #8a93a5;
   --fg-dim: #5a6275;
-  --fg-inverse: #07090e;
 
   /* Accent — bioluminescent mint */
   --accent: #45d6a4;
@@ -71,11 +70,9 @@
   --r-sm: 8px;
   --r-md: 12px;
   --r-lg: 18px;
-  --r-4: 16px;
   --r-full: 9999px;
 
   /* Elevation */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.35);
   --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.5);
   --shadow-soft: 0 2px 10px rgba(0, 0, 0, 0.25);
@@ -85,7 +82,6 @@
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
   --dur-fast: 140ms;
   --dur-base: 200ms;
-  --dur-slow: 280ms;
   --ease: var(--dur-fast) var(--ease-out);
 
   /* Typography */
@@ -187,52 +183,13 @@ a:hover {
   background: var(--fg-muted);
 }
 
-/* ── Page shell ───────────────────────────────────────────── */
-.page {
-  width: min(1180px, calc(100% - var(--s-8)));
-  margin: 0 auto;
-  padding: var(--s-8) 0 var(--s-12);
-}
-
-/* ── Shared utilities ─────────────────────────────────────── */
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
 /* numerals across data UI read as instrument output */
-.num,
 td,
 dd {
   font-variant-numeric: tabular-nums;
 }
 
-/* ── Page header ──────────────────────────────────────────── */
-.hero {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--s-6);
-  margin-bottom: var(--s-5);
-}
-
-.eyebrow {
-  margin: 0 0 var(--s-1);
-  color: var(--accent);
-  font-family: var(--font-mono);
-  font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
+/* ── Headings ───────────────────────────────────────────── */
 h1 {
   margin: 0;
   font-family: var(--font-display);
@@ -277,13 +234,6 @@ h2 {
 @media (max-width: 900px) {
   .grid {
     grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 700px) {
-  .hero {
-    flex-direction: column;
-    align-items: stretch;
   }
 }
 

@@ -130,10 +130,7 @@ export async function getTrendsPageData(
   ]);
 
   return {
-    apiBaseUrl: client.apiBaseUrl,
     health,
-    fromDate,
-    toDate,
     weight,
     steps,
     sleep,

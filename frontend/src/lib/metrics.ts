@@ -21,7 +21,7 @@ export const scalarMetricTypes = [
   "segmental_fat_free_mass",
 ] as const;
 
-export type ScalarMetricType = (typeof scalarMetricTypes)[number];
+type ScalarMetricType = (typeof scalarMetricTypes)[number];
 
 export const scalarMetricLabels: Record<ScalarMetricType, string> = {
   weight: "Weight",

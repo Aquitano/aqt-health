@@ -44,20 +44,10 @@ export default async function IngestionsPage({ searchParams }: PageProps) {
       </form>
       <div className="grid">
         <DataSection title="Recent ingestion batches" result={data.batches}>
-          {(response) => (
-            <IngestionBatchesTable
-              items={response.items}
-              getHref={(item) => `/ingestions/${encodeURIComponent(item.id)}`}
-            />
-          )}
+          {(response) => <IngestionBatchesTable items={response.items} />}
         </DataSection>
         <DataSection title="Recent ingestion failures" result={data.failures}>
-          {(response) => (
-            <IngestionBatchesTable
-              items={response.items}
-              getHref={(item) => `/ingestions/${encodeURIComponent(item.id)}`}
-            />
-          )}
+          {(response) => <IngestionBatchesTable items={response.items} />}
         </DataSection>
       </div>
     </>

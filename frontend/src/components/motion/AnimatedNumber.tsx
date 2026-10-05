@@ -5,8 +5,9 @@ import { useEffect, useRef, type RefObject } from "react";
 type AnimatedNumberProps = {
   value: string;
   className?: string;
-  duration?: number;
 };
+
+const durationMs = 900;
 
 const NUMERIC_TOKEN = /\d[\d,]*(?:\.\d+)?/g;
 
@@ -14,9 +15,9 @@ const NUMERIC_TOKEN = /\d[\d,]*(?:\.\d+)?/g;
  * Renders a formatted value (e.g. "7,532", "72.5 kg") server-side, then counts
  * the numeric tokens up from zero on mount. Non-numeric values render as-is.
  */
-export function AnimatedNumber({ value, className, duration = 0.9 }: AnimatedNumberProps) {
+export function AnimatedNumber({ value, className }: AnimatedNumberProps) {
   const ref = useRef<HTMLSpanElement>(null);
-  useCountUp(ref, value, duration);
+  useCountUp(ref, value);
 
   return (
     <span ref={ref} className={className}>
@@ -25,7 +26,7 @@ export function AnimatedNumber({ value, className, duration = 0.9 }: AnimatedNum
   );
 }
 
-function useCountUp(ref: RefObject<HTMLElement | null>, value: string, durationSeconds: number) {
+function useCountUp(ref: RefObject<HTMLElement | null>, value: string) {
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -34,7 +35,7 @@ function useCountUp(ref: RefObject<HTMLElement | null>, value: string, durationS
 
     const start = performance.now();
     let frame = requestAnimationFrame(function tick(now) {
-      const elapsed = Math.max(0, Math.min((now - start) / (durationSeconds * 1000), 1));
+      const elapsed = Math.max(0, Math.min((now - start) / durationMs, 1));
       el.textContent = scaleNumbers(value, 1 - (1 - elapsed) ** 3);
       if (elapsed < 1) frame = requestAnimationFrame(tick);
     });
@@ -43,7 +44,7 @@ function useCountUp(ref: RefObject<HTMLElement | null>, value: string, durationS
       cancelAnimationFrame(frame);
       el.textContent = value;
     };
-  }, [ref, value, durationSeconds]);
+  }, [ref, value]);
 }
 
 function scaleNumbers(value: string, progress: number): string {

@@ -51,7 +51,7 @@ export type HealthStatusData = {
   health: ApiResult<HealthResponse>;
 };
 
-export type HealthDataPageData = HealthStatusData & {
+type HealthDataPageData = HealthStatusData & {
   summary: ApiResult<DashboardSummaryResponse>;
   trends: ApiResult<DashboardTrendsResponse>;
   healthDay: ApiResult<HealthDayResponse>;
@@ -81,9 +81,8 @@ export type HealthDataPageSources = {
     : Promise<HealthDataPageData[K]>;
 };
 
-export type TrendsPageData = HealthStatusData & {
-  fromDate: string;
-  toDate: string;
+export type TrendsPageData = {
+  health: ApiResult<HealthResponse>;
   weight: ApiResult<ScalarSamplesResponse>;
   steps: ApiResult<StepDailySummariesResponse>;
   sleep: ApiResult<SleepSummariesResponse>;

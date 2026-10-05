@@ -3,13 +3,14 @@ import { useId } from "react";
 type ValueSparklineProps = {
   values: number[];
   color: string;
-  width?: number;
-  height?: number;
   className?: string;
 };
 
+const width = 120;
+const height = 36;
+
 /** Minimal inline trend glyph: an area-filled polyline normalized to its range. */
-export function ValueSparkline({ values, color, width = 120, height = 36, className }: ValueSparklineProps) {
+export function ValueSparkline({ values, color, className }: ValueSparklineProps) {
   const gradientId = useId();
   if (values.length === 0) {
     return <svg className={className} viewBox={`0 0 ${width} ${height}`} aria-hidden="true" />;

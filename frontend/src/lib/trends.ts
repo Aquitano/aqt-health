@@ -97,7 +97,7 @@ function summarize(
   };
 }
 
-export type TrendsInput = {
+type TrendsInput = {
   weight?: ScalarSamplesResponse;
   steps?: StepDailySummariesResponse;
   sleep?: SleepSummariesResponse;

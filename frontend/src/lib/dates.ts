@@ -1,4 +1,4 @@
-export type DateRange = {
+type DateRange = {
   fromDate: string;
   toDate: string;
   warning?: string;
