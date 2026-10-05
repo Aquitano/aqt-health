@@ -18,9 +18,8 @@ class GoogleHealthNormalizer {
 
     private fun normalizeDataPoint(
         dataType: GoogleHealthDataType,
-        dataPoint: JsonObject,
+        point: JsonObject,
     ): List<IngestionRecord> {
-        val point = (dataPoint["dataPoint"] as? JsonObject) ?: dataPoint
         val code = dataType.code
         return when (dataType) {
             GoogleHealthDataType.Steps -> listOfNotNull(normalizeSteps(code, point))
@@ -115,7 +114,7 @@ class GoogleHealthNormalizer {
             summary["stagesSummary"]
                 ?.jsonArray
                 ?.filterIsInstance<JsonObject>()
-                ?.associateBy { it.stringOrNull("type")?.uppercase() }
+                ?.associateBy { it.stringOrNull("type") }
                 .orEmpty()
         val minutesAsleep = summary.nonNegativeLong("minutesAsleep")
         val minutesInSleepPeriod = summary.nonNegativeLong("minutesInSleepPeriod")
@@ -184,13 +183,10 @@ class GoogleHealthNormalizer {
         dataType: String,
         point: JsonObject,
     ): ScalarSample? {
-        val heartRate =
-            point.objOrNull("heartRate") ?: point.objOrNull("heart_rate") ?: return null
+        val heartRate = point.objOrNull("heartRate") ?: return null
         val sampleTime = heartRate.objOrNull("sampleTime") ?: return null
         val measuredAt = sampleTime.stringOrNull("physicalTime") ?: return null
-        val bpm =
-            heartRate.longOrNull("beatsPerMinute") ?: heartRate.longOrNull("bpm")
-                ?: return null
+        val bpm = heartRate.longOrNull("beatsPerMinute") ?: return null
         if (bpm !in 25..250) return null
         return ScalarSample(
             providerRecordId =
@@ -237,8 +233,7 @@ class GoogleHealthNormalizer {
         dataType: String,
         point: JsonObject,
     ): ScalarSample? {
-        val bodyFat =
-            point.objOrNull("bodyFat") ?: point.objOrNull("body_fat") ?: return null
+        val bodyFat = point.objOrNull("bodyFat") ?: return null
         val sampleTime = bodyFat.objOrNull("sampleTime") ?: return null
         val measuredAt = sampleTime.stringOrNull("physicalTime") ?: return null
         val percentage = bodyFat.doubleOrNull("percentage") ?: return null
@@ -267,7 +262,7 @@ class GoogleHealthNormalizer {
             ?: "$dataType:$startOrMeasuredAt:${endAt ?: "none"}:${point.sha256()}"
 
     private fun mapSleepStage(value: String?): String? =
-        when (value?.uppercase()) {
+        when (value) {
             "AWAKE" -> "awake"
             "RESTLESS" -> "restless"
             "ASLEEP" -> "asleep"
@@ -278,7 +273,7 @@ class GoogleHealthNormalizer {
         }
 
     private fun mapHeartRateContext(value: String?): String =
-        when (value?.uppercase()) {
+        when (value) {
             "ACTIVE" -> "active"
             "SEDENTARY" -> "resting"
             else -> "unknown"
