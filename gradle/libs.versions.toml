@@ -18,7 +18,7 @@ testcontainers = "2.0.5"
 konsist = "0.17.3"
 ktlint = "1.8.0"
 # Compile-only: Konsist supplies its own Kotlin compiler at runtime.
-konsist-kotlin-compiler = "2.0.21"
+konsist-kotlin-compiler = "2.4.20"
 
 [libraries]
 koin-ktor = { module = "io.insert-koin:koin-ktor", version.ref = "koin" }
