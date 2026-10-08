@@ -123,7 +123,8 @@ class ScheduledProviderSyncServiceTest : PostgresIntegrationTest() {
         runBlocking {
             val config = failScheduledRuns(IllegalStateException("upstream timed out"), times = 3)
 
-            assertNotNull(config.nextRunAt)
+            // Backoffs of 1, 2 and 4 minutes from the 10:00 start.
+            assertEquals(Instant.parse("2026-05-31T10:07:00Z"), config.nextRunAt)
             assertEquals(3, config.failureCount)
         }
 
