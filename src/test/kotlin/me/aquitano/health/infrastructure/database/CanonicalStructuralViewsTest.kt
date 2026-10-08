@@ -3,6 +3,7 @@ package me.aquitano.health.infrastructure.database
 import me.aquitano.health.infrastructure.config.DatabaseConfig
 import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.test.PostgresTestDatabase
+import me.aquitano.health.test.execute
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -56,18 +57,18 @@ class CanonicalStructuralViewsTest : PostgresIntegrationTest() {
     }
 
     private inner class Fixture {
-        val dbConfig: DatabaseConfig = PostgresTestDatabase.config()
+        val config: DatabaseConfig = PostgresTestDatabase.config()
 
         init {
-            openDatabase(dbConfig)
-            execute(
+            openDatabase(config)
+            config.execute(
                 """
                 INSERT INTO sources (id, code, display_name, created_at)
                 VALUES (1, 'withings', NULL, '2026-04-19T00:00:00Z'),
                        (2, 'google_health', NULL, '2026-04-19T00:00:00Z')
                 """.trimIndent(),
             )
-            execute(
+            config.execute(
                 """
                 INSERT INTO source_instances (id, source_id, provider_instance_id, display_name, created_at, updated_at)
                 VALUES (1, 1, 'withings-1', NULL, '2026-04-19T00:00:00Z', '2026-04-19T00:00:00Z'),
@@ -81,7 +82,7 @@ class CanonicalStructuralViewsTest : PostgresIntegrationTest() {
             sourceInstanceId: Int,
             date: String,
         ) {
-            execute(
+            config.execute(
                 """
                 INSERT INTO activity_summaries (id, source_instance_id, date, distance_meters, created_at)
                 VALUES ($id, $sourceInstanceId, '$date', 1000.0, '2026-04-19T10:00:00Z')
@@ -95,7 +96,7 @@ class CanonicalStructuralViewsTest : PostgresIntegrationTest() {
             startAt: String,
             endAt: String,
         ) {
-            execute(
+            config.execute(
                 """
                 INSERT INTO sleep_summaries (id, source_instance_id, start_at, end_at, total_sleep_seconds, created_at)
                 VALUES ($id, $sourceInstanceId, '$startAt', '$endAt', 28800, '2026-04-19T10:00:00Z')
@@ -109,7 +110,7 @@ class CanonicalStructuralViewsTest : PostgresIntegrationTest() {
             startAt: String,
             endAt: String,
         ) {
-            execute(
+            config.execute(
                 """
                 INSERT INTO sleep_sessions (id, source_instance_id, start_at, end_at, duration_seconds, created_at)
                 VALUES ($id, $sourceInstanceId, '$startAt', '$endAt',
@@ -124,7 +125,7 @@ class CanonicalStructuralViewsTest : PostgresIntegrationTest() {
             orderBy: String,
         ): List<Int> {
             val ids = mutableListOf<Int>()
-            PostgresTestDatabase.connection(dbConfig).use { connection ->
+            PostgresTestDatabase.connection(config).use { connection ->
                 connection.createStatement().use { statement ->
                     statement.executeQuery("SELECT id FROM $view ORDER BY $orderBy, id").use { resultSet ->
                         while (resultSet.next()) ids.add(resultSet.getInt(1))
@@ -132,14 +133,6 @@ class CanonicalStructuralViewsTest : PostgresIntegrationTest() {
                 }
             }
             return ids
-        }
-
-        fun execute(sql: String) {
-            PostgresTestDatabase.connection(dbConfig).use { connection ->
-                connection.createStatement().use { statement ->
-                    statement.execute(sql)
-                }
-            }
         }
     }
 

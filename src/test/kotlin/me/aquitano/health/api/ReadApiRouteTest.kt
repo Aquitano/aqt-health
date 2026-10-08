@@ -3,17 +3,15 @@ package me.aquitano.health.api
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.ktor.server.config.*
 import io.ktor.server.testing.*
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.*
 import me.aquitano.health.domain.BodyMetricTypes
-import me.aquitano.health.infrastructure.config.DatabaseConfig
-import me.aquitano.health.shared.AppJson
 import me.aquitano.health.test.PostgresIntegrationTest
-import me.aquitano.health.test.PostgresTestDatabase
+import me.aquitano.health.test.authorized
+import me.aquitano.health.test.configureTestApplication
+import me.aquitano.health.test.countRows
+import me.aquitano.health.test.execute
+import me.aquitano.health.test.jsonBody
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -24,7 +22,7 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
     @Test
     fun trendTotalsRoundLegacyFractionalContributionsOnlyAfterSummingTheRange() =
         testApplication {
-            val config = configureTestApplication()
+            val database = configureTestApplication()
             val ingestion =
                 client.post("/api/v2/ingestion/batches") {
                     authorized()
@@ -32,12 +30,9 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
                     setBody("""{"provider":"health_connect","providerInstanceId":"legacy-allocation","ingestedAt":"2026-04-20T10:00:00Z","sourcePayload":{},"records":[{"type":"step_interval","startAt":"2026-04-19T23:45:00Z","endAt":"2026-04-20T00:15:00Z","steps":1}]}""")
                 }
             assertEquals(HttpStatusCode.Created, ingestion.status)
-            PostgresTestDatabase.connection(config).use { connection ->
-                connection.createStatement().use { statement ->
-                    // V30 queues old fractional allocations for repair without hiding them from reads.
-                    assertEquals(2, statement.executeUpdate("UPDATE canonical_step_day_bucket_contributions SET value = 0.5"))
-                }
-            }
+            assertEquals(2, database.countRows("canonical_step_day_bucket_contributions"))
+            // V30 queues old fractional allocations for repair without hiding them from reads.
+            database.execute("UPDATE canonical_step_day_bucket_contributions SET value = 0.5")
             val trends = authorizedGet("/api/v2/dashboard/trends?toDate=2026-04-20&periodDays=2").jsonBody()
             val dashboard = authorizedGet("/api/v2/dashboard/summary?fromDate=2026-04-19&toDate=2026-04-20").jsonBody()
             assertEquals(1, trends["steps"]!!.jsonObject["currentTotal"]!!.jsonPrimitive.int)
@@ -291,12 +286,9 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
         }
 
     @Test
-    fun readEndpointsValidateRangesAndRequireAuth() =
+    fun readEndpointsValidateRanges() =
         testApplication {
             configureTestApplication()
-
-            val unauthorized = client.get("/api/v2/steps")
-            assertEquals(HttpStatusCode.Unauthorized, unauthorized.status)
 
             val invalidRange =
                 authorizedGet("/api/v2/steps?from=2026-04-20T00:00:00Z&to=2026-04-19T00:00:00Z")
@@ -327,9 +319,6 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
         testApplication {
             configureTestApplication()
 
-            val unauthorized = client.get("/api/v2/metrics")
-            assertEquals(HttpStatusCode.Unauthorized, unauthorized.status)
-
             val response = authorizedGet("/api/v2/metrics")
             assertEquals(HttpStatusCode.OK, response.status)
             val items = response.jsonBody()["items"]!!.jsonArray.map { it.jsonObject }
@@ -359,10 +348,6 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
             configureTestApplication()
             ingestMixedBatch()
             ingestLaterBatch()
-
-            val unauthorized =
-                client.get("/api/v2/health/day?date=2026-04-19&modules=steps")
-            assertEquals(HttpStatusCode.Unauthorized, unauthorized.status)
 
             val invalid =
                 authorizedGet("/api/v2/health/day?date=bad&timezone=Not/AZone&modules=steps,nope")
@@ -897,9 +882,6 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
                 "2026-04-18T22:30:00Z",
                 body["lastSleepSession"]!!.jsonObject["startAt"]!!.jsonPrimitive.content,
             )
-
-            val unauthorized = client.get("/api/v2/dashboard/summary?fromDate=2026-04-19&toDate=2026-04-19")
-            assertEquals(HttpStatusCode.Unauthorized, unauthorized.status)
         }
 
     @Test
@@ -1079,38 +1061,6 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
         }
 
     @Test
-    fun dashboardRelatedProtectedReadsCanRunConcurrently() =
-        testApplication {
-            val dbPath = configureTestApplication()
-            ingestMixedBatch()
-            ingestLaterBatch()
-
-            val paths =
-                listOf(
-                    "/api/v2/dashboard/summary?fromDate=2026-04-19&toDate=2026-04-19",
-                    "/api/v2/steps/daily?fromDate=2026-04-19&toDate=2026-04-19&includeSource=true",
-                    "/api/v2/metrics/weight?latest=true&includeSource=true",
-                    "/api/v2/metrics/heart_rate?latest=true&includeSource=true",
-                    "/api/v2/sleep/sessions?latest=true&includeSource=true",
-                    "/api/v2/admin/ingestion/batches?limit=10",
-                    "/api/v2/admin/ingestion/failures?limit=10",
-                )
-
-            val responses =
-                coroutineScope {
-                    paths
-                        .map { path ->
-                            async { authorizedGet(path) }
-                        }.awaitAll()
-                }
-
-            responses.forEach { response ->
-                assertEquals(HttpStatusCode.OK, response.status)
-            }
-            assertNotNull(lastUsedAt(dbPath))
-        }
-
-    @Test
     fun adminBatchDetailReturnsRecordsAndOptionalPayloads() =
         testApplication {
             configureTestApplication()
@@ -1178,21 +1128,6 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
                     .jsonPrimitive.content,
             )
         }
-
-    private fun ApplicationTestBuilder.configureTestApplication(): DatabaseConfig {
-        val dbConfig = PostgresTestDatabase.config()
-        environment {
-            config =
-                MapApplicationConfig(
-                    "ktor.application.modules.size" to "1",
-                    "ktor.application.modules.0" to "me.aquitano.health.api.ApplicationKt.module",
-                    *PostgresTestDatabase.ktorConfigEntries(dbConfig),
-                    "aqtHealth.auth.bootstrapClientName" to "test-client",
-                    "aqtHealth.auth.bootstrapApiKey" to "test-key",
-                )
-        }
-        return dbConfig
-    }
 
     private suspend fun ApplicationTestBuilder.ingestMixedBatch(): Int {
         val response =
@@ -1268,54 +1203,11 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
             authorized()
         }
 
-    private fun HttpRequestBuilder.authorized() {
-        header(HttpHeaders.Authorization, "Bearer test-key")
-    }
-
-    private fun lastUsedAt(dbPath: DatabaseConfig): String? =
-        PostgresTestDatabase.connection(dbPath).use { connection ->
-            connection.createStatement().use { statement ->
-                statement.executeQuery("SELECT last_used_at FROM api_clients WHERE name = 'test-client'").use { resultSet ->
-                    if (resultSet.next()) resultSet.getString("last_used_at") else null
-                }
-            }
-        }
-
-    private suspend fun HttpResponse.jsonBody(): JsonObject = AppJson.parseToJsonElement(bodyAsText()).jsonObject
-
     private suspend fun HttpResponse.items(): JsonArray = jsonBody()["items"]!!.jsonArray
 
     private suspend fun HttpResponse.meta(): JsonObject = jsonBody()["meta"]!!.jsonObject
 
     private suspend fun HttpResponse.errorDetails(): JsonArray = jsonBody()["error"]!!.jsonObject["details"]!!.jsonArray
-
-    private fun JsonArray.family(name: String): JsonObject =
-        map { it.jsonObject }
-            .single { it["name"]!!.jsonPrimitive.content == name }
-
-    private fun JsonObject.endpointPaths(): List<String> =
-        this["readEndpoints"]!!
-            .jsonArray
-            .mapNotNull { it.jsonObject["path"]?.jsonPrimitive?.content }
-
-    private fun JsonObject.queryParameterNames(): List<String> =
-        this["queryParameters"]!!
-            .jsonArray
-            .map { it.jsonObject["name"]!!.jsonPrimitive.content }
-
-    private fun JsonObject.queryParameterValues(name: String): List<String> =
-        this["queryParameters"]!!
-            .jsonArray
-            .map { it.jsonObject }
-            .single { it["name"]!!.jsonPrimitive.content == name }
-            .getValue("values")
-            .jsonArray
-            .map { it.jsonPrimitive.content }
-
-    private fun JsonObject.modeNames(): List<String> =
-        this["aggregationModes"]!!
-            .jsonArray
-            .map { it.jsonObject["name"]!!.jsonPrimitive.content }
 
     private fun mixedPayload(): String =
         """

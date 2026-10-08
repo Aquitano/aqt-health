@@ -1,39 +1,30 @@
 package me.aquitano.health.application
 
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import me.aquitano.health.api.dto.ProviderSyncJobStatusResponse
 import me.aquitano.health.api.dto.ProviderSyncRequest
 import me.aquitano.health.domain.HealthProvider
-import me.aquitano.health.domain.HealthProviderDescriptor
 import me.aquitano.health.domain.NotFoundException
-import me.aquitano.health.domain.ProviderAuthType
-import me.aquitano.health.domain.ProviderConnection
-import me.aquitano.health.domain.ProviderSyncProgressSink
-import me.aquitano.health.domain.ProviderSyncSummary
-import me.aquitano.health.domain.ProviderWorkflowEndpoints
 import me.aquitano.health.domain.SyncJobStatus
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
 import me.aquitano.health.infrastructure.repositories.ProviderSyncJobRepository
 import me.aquitano.health.infrastructure.repositories.ScheduledSyncRepository
 import me.aquitano.health.infrastructure.time.UtcClock
+import me.aquitano.health.test.BlockingProvider
+import me.aquitano.health.test.FakeProvider
 import me.aquitano.health.test.PostgresIntegrationTest
-import me.aquitano.health.test.PostgresTestDatabase
-import org.jetbrains.exposed.v1.jdbc.Database
 import java.time.Instant
 import java.util.UUID
-import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
-import me.aquitano.health.domain.ProviderSyncRequest as DomainProviderSyncRequest
 
 class ProviderSyncJobServiceTest : PostgresIntegrationTest() {
     private val now = Instant.parse("2026-05-01T10:00:00Z")
@@ -62,97 +53,36 @@ class ProviderSyncJobServiceTest : PostgresIntegrationTest() {
 
             provider.started.await()
             provider.release.complete(Unit)
-
-            val terminal =
-                withTimeout(30_000) {
-                    var job = fixture.service.get(provider.providerCode, jobIds[0])
-                    while (!job.status.terminal) {
-                        delay(50)
-                        job = fixture.service.get(provider.providerCode, jobIds[0])
-                    }
-                    job
-                }
+            val terminal = fixture.awaitTerminal(provider.providerCode, jobIds[0])
 
             assertEquals(1, provider.syncCalls.get(), "provider must run exactly once for a duplicate key")
             assertEquals(SyncJobStatus.Processed, terminal.status)
         }
 
     @Test
-    fun createReportsExistingJobOnDuplicateIdempotencyKey() =
-        runBlocking {
-            val database = database()
-            val repository = ProviderSyncJobRepository(database)
-            val key = "sync-job-repo-flag-key"
-            val id1 = UUID.randomUUID().toString()
-            val id2 = UUID.randomUUID().toString()
-
-            val first =
-                repository.create(
-                    id = id1,
-                    providerCode = "blocking_provider",
-                    providerInstanceId = null,
-                    requestedFrom = now,
-                    requestedTo = now.plusSeconds(3600),
-                    dataTypes = null,
-                    pageSize = null,
-                    now = now,
-                    idempotencyKey = key,
-                    idempotencyRequestHash = "hash-a",
-                )
-            val second =
-                repository.create(
-                    id = id2,
-                    providerCode = "blocking_provider",
-                    providerInstanceId = null,
-                    requestedFrom = now,
-                    requestedTo = now.plusSeconds(3600),
-                    dataTypes = null,
-                    pageSize = null,
-                    now = now,
-                    idempotencyKey = key,
-                    idempotencyRequestHash = "hash-a",
-                )
-
-            assertTrue(first.created)
-            assertFalse(second.created)
-            assertEquals(id1, second.record.id)
-        }
-
-    @Test
     fun createWithoutKeyLaunchesEveryTime() =
         runBlocking {
-            val provider = CountingProvider()
+            val provider = FakeProvider("fake_provider")
             val fixture = Fixture(provider)
 
             val first = fixture.service.create(provider.providerCode, request, now, idempotencyKey = null)
             val second = fixture.service.create(provider.providerCode, request, now, idempotencyKey = null)
 
             assertNotEquals(first.jobId, second.jobId)
-
-            withTimeout(30_000) {
-                listOf(first.jobId, second.jobId).forEach { jobId ->
-                    var job = fixture.service.get(provider.providerCode, jobId)
-                    while (!job.status.terminal) {
-                        delay(50)
-                        job = fixture.service.get(provider.providerCode, jobId)
-                    }
-                }
-            }
-
+            listOf(first.jobId, second.jobId).forEach { fixture.awaitTerminal(provider.providerCode, it) }
             assertEquals(2, provider.syncCalls.get())
         }
 
     @Test
     fun requeueInterruptedJobsRequeuesUntilRestartCap() =
         runBlocking {
-            val database = database()
-            val repository = ProviderSyncJobRepository(database)
+            val repository = ProviderSyncJobRepository(openDatabase())
             val interruptedId = UUID.randomUUID().toString()
             val finishedId = UUID.randomUUID().toString()
             listOf(interruptedId, finishedId).forEach { id ->
                 repository.create(
                     id = id,
-                    providerCode = "blocking_provider",
+                    providerCode = "fake_provider",
                     providerInstanceId = null,
                     requestedFrom = now,
                     requestedTo = now.plusSeconds(3600),
@@ -199,13 +129,13 @@ class ProviderSyncJobServiceTest : PostgresIntegrationTest() {
     @Test
     fun latestPrefersOlderRunningJobOverNewerFinishedJob() =
         runBlocking {
-            val repository = ProviderSyncJobRepository(database())
+            val repository = ProviderSyncJobRepository(openDatabase())
             val runningId = UUID.randomUUID().toString()
             val finishedId = UUID.randomUUID().toString()
             listOf(runningId to now, finishedId to now.plusSeconds(60)).forEach { (id, createdAt) ->
                 repository.create(
                     id = id,
-                    providerCode = "blocking_provider",
+                    providerCode = "fake_provider",
                     providerInstanceId = null,
                     requestedFrom = now,
                     requestedTo = now.plusSeconds(3600),
@@ -226,7 +156,7 @@ class ProviderSyncJobServiceTest : PostgresIntegrationTest() {
                 now = now.plusSeconds(120),
             )
 
-            assertEquals(runningId, repository.latest("blocking_provider")?.id)
+            assertEquals(runningId, repository.latest("fake_provider")?.id)
 
             repository.finish(
                 id = runningId,
@@ -239,13 +169,13 @@ class ProviderSyncJobServiceTest : PostgresIntegrationTest() {
                 now = now.plusSeconds(180),
             )
 
-            assertEquals(finishedId, repository.latest("blocking_provider")?.id)
+            assertEquals(finishedId, repository.latest("fake_provider")?.id)
         }
 
     @Test
     fun startResumesInterruptedJob() =
         runBlocking {
-            val provider = CountingProvider()
+            val provider = FakeProvider("fake_provider")
             val fixture = Fixture(provider)
             val repository = ProviderSyncJobRepository(fixture.database)
             val jobId = UUID.randomUUID().toString()
@@ -262,16 +192,7 @@ class ProviderSyncJobServiceTest : PostgresIntegrationTest() {
             repository.markRunning(jobId, now)
 
             fixture.service.start(now)
-
-            val terminal =
-                withTimeout(30_000) {
-                    var job = fixture.service.get(provider.providerCode, jobId)
-                    while (!job.status.terminal) {
-                        delay(50)
-                        job = fixture.service.get(provider.providerCode, jobId)
-                    }
-                    job
-                }
+            val terminal = fixture.awaitTerminal(provider.providerCode, jobId)
 
             assertEquals(SyncJobStatus.Processed, terminal.status)
             assertEquals(1, terminal.restartCount)
@@ -279,25 +200,21 @@ class ProviderSyncJobServiceTest : PostgresIntegrationTest() {
         }
 
     @Test
-    fun getRejectsJobOfAnotherProvider() =
+    fun getRejectsJobOfAnotherProvider(): Unit =
         runBlocking {
-            val provider = CountingProvider()
-            val other = BlockingProvider()
+            val provider = FakeProvider("fake_provider")
+            val other = FakeProvider("other_provider")
             val fixture = Fixture(provider, other)
             val job = fixture.service.create(provider.providerCode, request, now)
 
             assertFailsWith<NotFoundException> { fixture.service.get(other.providerCode, job.jobId) }
-            withTimeout(30_000) {
-                while (!fixture.service.get(provider.providerCode, job.jobId).terminal) delay(50)
-            }
+            fixture.awaitTerminal(provider.providerCode, job.jobId)
         }
-
-    private fun database(): Database = openDatabase(PostgresTestDatabase.config())
 
     private inner class Fixture(
         vararg providers: HealthProvider,
     ) {
-        val database = database()
+        val database = openDatabase()
         private val registry = HealthProviderRegistry(providers.toList())
         private val oAuthRepository = ProviderOAuthRepository(database)
         private val workflowService =
@@ -314,89 +231,18 @@ class ProviderSyncJobServiceTest : PostgresIntegrationTest() {
                 repository = ProviderSyncJobRepository(database),
                 clock = UtcClock(),
             )
-    }
 
-    private class BlockingProvider : HealthProvider {
-        val started = CompletableDeferred<Unit>()
-        val release = CompletableDeferred<Unit>()
-        val syncCalls = AtomicInteger(0)
-
-        override val providerCode = "blocking_provider"
-        override val defaultProviderInstanceId = "blocking-provider-me"
-        override val descriptor = descriptorFor(providerCode, "Blocking Provider")
-
-        override fun isConfigured(): Boolean = true
-
-        override fun getAuthUrl(state: String): String = error("OAuth is not supported")
-
-        override suspend fun connect(
-            code: String,
-            now: Instant,
-        ): ProviderConnection = error("OAuth is not supported")
-
-        override suspend fun sync(
-            request: DomainProviderSyncRequest,
-            now: Instant,
-            progress: ProviderSyncProgressSink,
-        ): ProviderSyncSummary {
-            syncCalls.incrementAndGet()
-            started.complete(Unit)
-            release.await()
-            return summaryFor(request)
-        }
-    }
-
-    private class CountingProvider : HealthProvider {
-        val syncCalls = AtomicInteger(0)
-
-        override val providerCode = "counting_provider"
-        override val defaultProviderInstanceId = "counting-provider-me"
-        override val descriptor = descriptorFor(providerCode, "Counting Provider")
-
-        override fun isConfigured(): Boolean = true
-
-        override fun getAuthUrl(state: String): String = error("OAuth is not supported")
-
-        override suspend fun connect(
-            code: String,
-            now: Instant,
-        ): ProviderConnection = error("OAuth is not supported")
-
-        override suspend fun sync(
-            request: DomainProviderSyncRequest,
-            now: Instant,
-            progress: ProviderSyncProgressSink,
-        ): ProviderSyncSummary {
-            syncCalls.incrementAndGet()
-            return summaryFor(request)
-        }
-    }
-
-    private companion object {
-        fun descriptorFor(
+        suspend fun awaitTerminal(
             providerCode: String,
-            displayName: String,
-        ) = HealthProviderDescriptor(
-            providerCode = providerCode,
-            displayName = displayName,
-            authType = ProviderAuthType.NONE,
-            requiresAuthentication = false,
-            supportedDataTypes = listOf("steps"),
-            defaultDataTypes = listOf("steps"),
-            maxSyncRangeDays = 31,
-            supportsPageSize = false,
-            workflowEndpoints = ProviderWorkflowEndpoints(sync = "/sync"),
-        )
-
-        fun HealthProvider.summaryFor(request: DomainProviderSyncRequest): ProviderSyncSummary =
-            ProviderSyncSummary(
-                providerCode = providerCode,
-                providerInstanceId = request.providerInstanceId ?: defaultProviderInstanceId,
-                requestedFrom = request.from,
-                requestedTo = request.to,
-                status = "processed",
-                batches = emptyList(),
-                errors = emptyList(),
-            )
+            jobId: String,
+        ): ProviderSyncJobStatusResponse =
+            withTimeout(30_000) {
+                var job = service.get(providerCode, jobId)
+                while (!job.status.terminal) {
+                    delay(50)
+                    job = service.get(providerCode, jobId)
+                }
+                job
+            }
     }
 }

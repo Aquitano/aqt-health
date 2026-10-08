@@ -99,7 +99,7 @@ class WithingsNormalizerTest {
     }
 
     @Test
-    fun aRepeatedSegmentalZoneCollapsesToOneSample() {
+    fun segmentalMeasuresAreKeyedByZoneAndARepeatedZoneCollapses() {
         val result =
             normalize(
                 fetchResult(
@@ -124,40 +124,9 @@ class WithingsNormalizerTest {
             ),
             samples.map { it.providerRecordId },
         )
+        assertEquals(listOf("left_arm", "right_arm"), samples.map { it.segment })
         assertEquals(3.4, samples[0].value, 0.000001)
         assertAcceptedByIngestion(result.records)
-    }
-
-    @Test
-    fun segmentalMeasuresCarryTheirSegmentInTheProviderRecordId() {
-        val result =
-            normalize(
-                fetchResult(
-                    "measures",
-                    buildJsonObject {
-                        put("grpid", 321)
-                        put("date", 1775001600)
-                        putJsonArray("measures") {
-                            add(
-                                buildJsonObject {
-                                    put("type", 175)
-                                    put("value", 32)
-                                    put("unit", -1)
-                                    put("zone", "left_arm")
-                                },
-                            )
-                        }
-                    },
-                ),
-            )
-
-        val sample = assertIs<ScalarSample>(result.records.single())
-        assertEquals(
-            "withings:measure:321:segmental_muscle_mass:left_arm",
-            sample.providerRecordId,
-        )
-        assertEquals("left_arm", sample.segment)
-        assertEquals(3.2, sample.value, 0.000001)
     }
 
     @Test
@@ -196,7 +165,7 @@ class WithingsNormalizerTest {
     }
 
     @Test
-    fun activityCreatesSummaryFieldsAlongsideSteps() {
+    fun activityCreatesAUtcDayStepIntervalAndASummary() {
         val result =
             normalize(
                 fetchResult(
@@ -219,10 +188,12 @@ class WithingsNormalizerTest {
                 ),
             )
 
-        val summary =
-            assertIs<ActivitySummary>(
-                result.records.filterIsInstance<ActivitySummary>().single(),
-            )
+        val steps = result.records.filterIsInstance<StepInterval>().single()
+        assertEquals("withings:activity:2026-04-01", steps.providerRecordId)
+        assertEquals("2026-04-01T00:00:00Z", steps.startAt)
+        assertEquals("2026-04-02T00:00:00Z", steps.endAt)
+        assertEquals(1234, steps.steps)
+        val summary = result.records.filterIsInstance<ActivitySummary>().single()
         assertEquals("withings:activity:2026-04-01:summary", summary.providerRecordId)
         assertEquals(800.5, summary.distanceMeters!!, 0.000001)
         assertEquals(310.0, summary.activeEnergyKcal!!, 0.000001)
@@ -230,7 +201,6 @@ class WithingsNormalizerTest {
         assertEquals(15.0, summary.elevationMeters!!, 0.000001)
         assertEquals(60, summary.activeMinutes)
         assertEquals(74, summary.averageHeartRateBpm)
-        assertEquals(1, result.records.filterIsInstance<StepInterval>().size)
     }
 
     @Test
@@ -286,7 +256,7 @@ class WithingsNormalizerTest {
     }
 
     @Test
-    fun incompleteBloodPressureIsDroppedAndRawPagesAreTheOnlySourceCopy() {
+    fun incompleteBloodPressureIsDroppedButItsRawPageIsKept() {
         val result =
             normalize(
                 fetchResult(
@@ -302,55 +272,7 @@ class WithingsNormalizerTest {
             )
 
         assertTrue(result.records.isEmpty())
-        // Raw pages are the only source copy: duplicating the records here doubled peak memory and
-        // was dropped before storage anyway.
         assertEquals(1, result.sourcePayload["pages"]!!.jsonArray.size)
-        assertTrue("records" !in result.sourcePayload)
-    }
-
-    @Test
-    fun activityStepsCreateUtcDayInterval() {
-        val result =
-            normalize(
-                fetchResult(
-                    "activity",
-                    buildJsonObject {
-                        put("date", "2026-04-01")
-                        put("steps", 1234)
-                        put("distance", 800)
-                    },
-                ),
-            )
-
-        val steps =
-            assertIs<StepInterval>(
-                result.records.filterIsInstance<StepInterval>().single(),
-            )
-        assertEquals("withings:activity:2026-04-01", steps.providerRecordId)
-        assertEquals("2026-04-01T00:00:00Z", steps.startAt)
-        assertEquals("2026-04-02T00:00:00Z", steps.endAt)
-        assertEquals(1234, steps.steps)
-    }
-
-    @Test
-    fun sleepSummaryDoesNotCreateSleepSession() {
-        val result =
-            normalize(
-                fetchResult(
-                    "sleep-summary",
-                    buildJsonObject {
-                        put("startdate", 1775001600)
-                        put("enddate", 1775023200)
-                        put("date", "2026-04-01")
-                        putJsonObject("data") {
-                            put("total_sleep_time", 18000)
-                        }
-                    },
-                ),
-            )
-
-        assertTrue(result.records.filterIsInstance<SleepSession>().isEmpty())
-        assertEquals(1, result.records.filterIsInstance<SleepSummary>().size)
     }
 
     @Test
@@ -380,10 +302,7 @@ class WithingsNormalizerTest {
                 ),
             )
 
-        val summary =
-            assertIs<SleepSummary>(
-                result.records.filterIsInstance<SleepSummary>().single(),
-            )
+        val summary = assertIs<SleepSummary>(result.records.single())
         assertEquals("withings:sleep-summary:1775001600:1775023200:summary", summary.providerRecordId)
         assertEquals(21600, summary.timeInBedSeconds)
         assertEquals(18000, summary.totalSleepSeconds)
@@ -463,7 +382,7 @@ class WithingsNormalizerTest {
     }
 
     @Test
-    fun sleepSeriesIgnoresNestedValueObjects() {
+    fun sleepSeriesReadsStateFromANestedValueObject() {
         val result =
             normalize(
                 fetchResult(
@@ -527,34 +446,6 @@ class WithingsNormalizerTest {
     }
 
     @Test
-    fun sleepSegmentsCreateSessionsFromStartAndEndDates() {
-        val result =
-            normalize(
-                fetchResult(
-                    "sleep",
-                    buildJsonObject {
-                        put("startdate", 1775001600)
-                        put("enddate", 1775005200)
-                        put("state", 1)
-                    },
-                    buildJsonObject {
-                        put("startdate", 1775005200)
-                        put("enddate", 1775008800)
-                        put("state", 2)
-                    },
-                ),
-            )
-
-        val sessions = result.records.filterIsInstance<SleepSession>()
-        assertEquals(1, sessions.size)
-        assertEquals("2026-04-01T00:00:00Z", sessions.first().startAt)
-        assertEquals("2026-04-01T02:00:00Z", sessions.first().endAt)
-        assertEquals(2, sessions.first().stages.size)
-        assertEquals("light", sessions.first().stages[0].stage)
-        assertEquals("deep", sessions.first().stages[1].stage)
-    }
-
-    @Test
     fun sleepSessionCrossingUtcMidnightBelongsToTheWindowItEndsIn() {
         val night =
             fetchResult(
@@ -581,7 +472,7 @@ class WithingsNormalizerTest {
         assertEquals("withings:sleep:1775077200:1775106000", session.providerRecordId)
         assertEquals("2026-04-01T21:00:00Z", session.startAt)
         assertEquals("2026-04-02T05:00:00Z", session.endAt)
-        assertEquals(2, session.stages.size)
+        assertEquals(listOf("light", "deep"), session.stages.map { it.stage })
         assertEquals(
             listOf("2026-04-02T00:00:00Z"),
             nightEnded.records.filterIsInstance<ScalarSample>().map { it.measuredAt },

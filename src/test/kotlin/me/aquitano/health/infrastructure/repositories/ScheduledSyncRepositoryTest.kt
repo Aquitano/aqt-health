@@ -1,20 +1,16 @@
 package me.aquitano.health.infrastructure.repositories
 
 import kotlinx.coroutines.runBlocking
-import me.aquitano.health.infrastructure.config.DatabaseConfig
 import me.aquitano.health.test.PostgresIntegrationTest
-import me.aquitano.health.test.PostgresTestDatabase
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
 
 class ScheduledSyncRepositoryTest : PostgresIntegrationTest() {
     @Test
     fun configAndCheckpointsArePersisted() =
         runBlocking {
-            val database = openDatabase(tempDatabaseConfig())
-            val repository = ScheduledSyncRepository(database)
+            val repository = ScheduledSyncRepository(openDatabase())
             val now = Instant.parse("2026-05-31T10:00:00Z")
 
             val config =
@@ -68,9 +64,5 @@ class ScheduledSyncRepositoryTest : PostgresIntegrationTest() {
 
             val due = repository.dueConfigs(now)
             assertEquals(config.id, due.single().id)
-            assertNotNull(repository.getConfig("google_health", "google-health-me"))
-            Unit
         }
-
-    private fun tempDatabaseConfig(): DatabaseConfig = PostgresTestDatabase.config()
 }

@@ -2,24 +2,17 @@ package me.aquitano.health.application
 
 import kotlinx.coroutines.runBlocking
 import me.aquitano.health.api.dto.ProviderSyncRequest
-import me.aquitano.health.domain.HealthProvider
-import me.aquitano.health.domain.HealthProviderDescriptor
-import me.aquitano.health.domain.ProviderAuthType
 import me.aquitano.health.domain.ProviderConnection
-import me.aquitano.health.domain.ProviderSyncProgressSink
-import me.aquitano.health.domain.ProviderSyncSummary
-import me.aquitano.health.domain.ProviderWorkflowEndpoints
 import me.aquitano.health.domain.RequestValidationException
 import me.aquitano.health.domain.ValidationIssueCodes
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
 import me.aquitano.health.infrastructure.repositories.ScheduledSyncRepository
+import me.aquitano.health.test.FakeProvider
 import me.aquitano.health.test.PostgresIntegrationTest
-import me.aquitano.health.test.PostgresTestDatabase
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import me.aquitano.health.domain.ProviderSyncRequest as DomainProviderSyncRequest
 
 class ProviderWorkflowServiceTest : PostgresIntegrationTest() {
     private val now = Instant.parse("2026-05-01T10:00:00Z")
@@ -58,7 +51,7 @@ class ProviderWorkflowServiceTest : PostgresIntegrationTest() {
     fun completingOAuthResumesAParkedSchedule() =
         runBlocking {
             val provider = ConnectingProvider()
-            val database = openDatabase(PostgresTestDatabase.config())
+            val database = openDatabase()
             val oAuthRepository = ProviderOAuthRepository(database)
             val scheduledSyncRepository = ScheduledSyncRepository(database)
             val registry = HealthProviderRegistry(listOf(provider))
@@ -90,35 +83,10 @@ class ProviderWorkflowServiceTest : PostgresIntegrationTest() {
             assertEquals(0, resumed.failureCount)
         }
 
-    private class ConnectingProvider : HealthProvider {
-        override val providerCode = "connecting_provider"
-        override val defaultProviderInstanceId = "connecting-provider-me"
-        override val descriptor =
-            HealthProviderDescriptor(
-                providerCode = providerCode,
-                displayName = "Connecting Provider",
-                authType = ProviderAuthType.OAUTH,
-                requiresAuthentication = true,
-                supportedDataTypes = listOf("steps"),
-                defaultDataTypes = listOf("steps"),
-                maxSyncRangeDays = 31,
-                supportsPageSize = false,
-                workflowEndpoints = ProviderWorkflowEndpoints(sync = "/sync-jobs"),
-            )
-
-        override fun isConfigured(): Boolean = true
-
-        override fun getAuthUrl(state: String): String = "https://example.test/auth?state=$state"
-
+    private class ConnectingProvider : FakeProvider("connecting_provider") {
         override suspend fun connect(
             code: String,
             now: Instant,
         ): ProviderConnection = ProviderConnection(providerCode, defaultProviderInstanceId, connected = true)
-
-        override suspend fun sync(
-            request: DomainProviderSyncRequest,
-            now: Instant,
-            progress: ProviderSyncProgressSink,
-        ): ProviderSyncSummary = error("Sync is not supported")
     }
 }

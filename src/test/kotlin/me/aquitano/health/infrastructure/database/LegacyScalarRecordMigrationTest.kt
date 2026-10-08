@@ -7,6 +7,7 @@ import me.aquitano.health.infrastructure.config.DatabaseConfig
 import me.aquitano.health.shared.AppJson
 import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.test.PostgresTestDatabase
+import me.aquitano.health.test.execute
 import org.flywaydb.core.Flyway
 import org.flywaydb.core.api.MigrationVersion
 import kotlin.test.Test
@@ -120,8 +121,7 @@ class LegacyScalarRecordMigrationTest : PostgresIntegrationTest() {
     }
 
     private fun seedLegacyRecords(config: DatabaseConfig) {
-        execute(
-            config,
+        config.execute(
             """
             INSERT INTO sources (id, code, display_name, created_at)
             VALUES (1, 'withings', NULL, '2026-04-19T00:00:00Z');
@@ -208,15 +208,4 @@ class LegacyScalarRecordMigrationTest : PostgresIntegrationTest() {
                 }
             }
         }
-
-    private fun execute(
-        config: DatabaseConfig,
-        sql: String,
-    ) {
-        PostgresTestDatabase.connection(config).use { connection ->
-            connection.createStatement().use { statement ->
-                statement.execute(sql)
-            }
-        }
-    }
 }

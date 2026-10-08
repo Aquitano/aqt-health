@@ -3,6 +3,7 @@ package me.aquitano.health.infrastructure.database
 import me.aquitano.health.infrastructure.config.DatabaseConfig
 import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.test.PostgresTestDatabase
+import me.aquitano.health.test.execute
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -15,16 +16,6 @@ import kotlin.test.assertEquals
  */
 class CanonicalScalarSamplesViewTest : PostgresIntegrationTest() {
     @Test
-    fun crossProviderCollisionKeepsOnlyTopRankedProvider() {
-        val fixture = Fixture()
-        // heart_rate family: google_health(0) beats withings(2); same 30s bin
-        fixture.insertSample(GOOGLE, "2026-04-19T08:00:01Z", "heart_rate", 60.0, context = "resting")
-        fixture.insertSample(WITHINGS, "2026-04-19T08:00:11Z", "heart_rate", 70.0, context = "resting")
-
-        assertEquals(listOf(60.0), fixture.canonicalValues("heart_rate"))
-    }
-
-    @Test
     fun singleProviderBinPassesAllSamplesThrough() {
         val fixture = Fixture()
         fixture.insertSample(WITHINGS, "2026-04-19T08:00:01Z", "heart_rate", 70.0, context = "resting")
@@ -35,7 +26,7 @@ class CanonicalScalarSamplesViewTest : PostgresIntegrationTest() {
     }
 
     @Test
-    fun samplesOutsideTheCollidingBinSurvive() {
+    fun crossProviderCollisionKeepsOnlyTopRankedProviderWithinItsBin() {
         val fixture = Fixture()
         fixture.insertSample(GOOGLE, "2026-04-19T08:00:01Z", "heart_rate", 60.0, context = "resting")
         fixture.insertSample(WITHINGS, "2026-04-19T08:00:11Z", "heart_rate", 70.0, context = "resting")
@@ -87,18 +78,18 @@ class CanonicalScalarSamplesViewTest : PostgresIntegrationTest() {
     }
 
     private inner class Fixture {
-        val dbConfig: DatabaseConfig = PostgresTestDatabase.config()
+        val config: DatabaseConfig = PostgresTestDatabase.config()
 
         init {
-            openDatabase(dbConfig)
-            execute(
+            openDatabase(config)
+            config.execute(
                 """
                 INSERT INTO sources (id, code, display_name, created_at)
                 VALUES (1, 'withings', NULL, '2026-04-19T00:00:00Z'),
                        (2, 'google_health', NULL, '2026-04-19T00:00:00Z')
                 """.trimIndent(),
             )
-            execute(
+            config.execute(
                 """
                 INSERT INTO source_instances (id, source_id, provider_instance_id, display_name, created_at, updated_at)
                 VALUES (1, 1, 'withings-1', NULL, '2026-04-19T00:00:00Z', '2026-04-19T00:00:00Z'),
@@ -115,7 +106,7 @@ class CanonicalScalarSamplesViewTest : PostgresIntegrationTest() {
             context: String? = null,
             segment: String? = null,
         ) {
-            execute(
+            config.execute(
                 """
                 INSERT INTO scalar_samples (source_instance_id, measured_at, metric_type, value, context, segment, created_at)
                 VALUES ($sourceInstanceId, '$measuredAt', '$metricType', $value,
@@ -127,7 +118,7 @@ class CanonicalScalarSamplesViewTest : PostgresIntegrationTest() {
 
         fun canonicalValues(metricType: String): List<Double> {
             val values = mutableListOf<Double>()
-            PostgresTestDatabase.connection(dbConfig).use { connection ->
+            PostgresTestDatabase.connection(config).use { connection ->
                 connection.createStatement().use { statement ->
                     statement
                         .executeQuery(
@@ -138,14 +129,6 @@ class CanonicalScalarSamplesViewTest : PostgresIntegrationTest() {
                 }
             }
             return values
-        }
-
-        fun execute(sql: String) {
-            PostgresTestDatabase.connection(dbConfig).use { connection ->
-                connection.createStatement().use { statement ->
-                    statement.execute(sql)
-                }
-            }
         }
     }
 

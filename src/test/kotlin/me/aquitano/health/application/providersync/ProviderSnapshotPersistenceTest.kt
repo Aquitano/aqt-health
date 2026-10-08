@@ -4,17 +4,12 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.buildJsonObject
 import me.aquitano.health.api.dto.IngestionBatchRequest
 import me.aquitano.health.api.dto.ScalarSample
-import me.aquitano.health.application.IngestionMappingService
-import me.aquitano.health.application.IngestionService
 import me.aquitano.health.domain.IngestionSnapshot
 import me.aquitano.health.domain.ScalarMetricTypes
-import me.aquitano.health.infrastructure.repositories.IngestionRepository
-import me.aquitano.health.infrastructure.repositories.PendingDerivedRebuildRepository
-import me.aquitano.health.infrastructure.repositories.SupportRepository
-import me.aquitano.health.test.NoOpDerivedRebuildExecutor
 import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.test.PostgresTestDatabase
-import me.aquitano.health.test.metricWriteService
+import me.aquitano.health.test.execute
+import me.aquitano.health.test.ingestionService
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -25,17 +20,7 @@ class ProviderSnapshotPersistenceTest : PostgresIntegrationTest() {
     @Test
     fun movedRecordInvalidatesItsOldWindowEvenWhenItReturnsWithTheOriginalContent() =
         runBlocking {
-            val database = openDatabase(PostgresTestDatabase.config())
-            val service =
-                IngestionService(
-                    database,
-                    IngestionMappingService(),
-                    SupportRepository(database),
-                    IngestionRepository(),
-                    metricWriteService(),
-                    NoOpDerivedRebuildExecutor,
-                    PendingDerivedRebuildRepository(database),
-                )
+            val service = ingestionService(openDatabase())
             val original = sample("2026-04-01T08:00:00Z")
             val first = service.ingestBatch(request("first", original), now, IngestionSnapshot("day-a", "hash-a"))
             assertEquals(first.batchId, service.reusableSyncBatchId("withings", "account", "day-a", "hash-a", now))
@@ -60,18 +45,8 @@ class ProviderSnapshotPersistenceTest : PostgresIntegrationTest() {
     @Test
     fun snapshotValidityUsesScalarIdentityDefaultsAndIgnoresOtherSourcesAndFailedVersions() =
         runBlocking {
-            val config = PostgresTestDatabase.config()
-            val database = openDatabase(config)
-            val service =
-                IngestionService(
-                    database,
-                    IngestionMappingService(),
-                    SupportRepository(database),
-                    IngestionRepository(),
-                    metricWriteService(),
-                    NoOpDerivedRebuildExecutor,
-                    PendingDerivedRebuildRepository(database),
-                )
+            val databaseConfig = PostgresTestDatabase.config()
+            val service = ingestionService(openDatabase(databaseConfig))
             val original = sample("2026-04-01T08:00:00Z")
             service.ingestBatch(request("first", original), now, IngestionSnapshot("window", "hash"))
             service.ingestBatch(request("explicit-default", original.copy(context = "unknown", unit = "bpm")), now)
@@ -79,9 +54,7 @@ class ProviderSnapshotPersistenceTest : PostgresIntegrationTest() {
             service.ingestBatch(request("other-metric", original.copy(metricType = ScalarMetricTypes.RESPIRATORY_RATE, value = 20.0)), now)
             service.ingestBatch(request("other-source", original.copy(value = 66.0)).copy(providerInstanceId = "another-account"), now)
             val failed = service.ingestBatch(request("failed", original.copy(value = 67.0)), now)
-            PostgresTestDatabase.connection(config).use { connection ->
-                connection.createStatement().use { it.executeUpdate("UPDATE ingestion_batches SET status = 'failed' WHERE id = ${failed.batchId}") }
-            }
+            databaseConfig.execute("UPDATE ingestion_batches SET status = 'failed' WHERE id = ${failed.batchId}")
             assertNotNull(service.reusableSyncBatchId("withings", "account", "window", "hash", now))
 
             service.ingestBatch(request("changed", original.copy(context = "unknown", value = 68.0)), now)

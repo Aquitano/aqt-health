@@ -6,7 +6,6 @@ import me.aquitano.health.infrastructure.repositories.PendingDerivedRebuildRepos
 import me.aquitano.health.infrastructure.repositories.SupportRepository
 import me.aquitano.health.infrastructure.time.UtcClock
 import me.aquitano.health.test.PostgresIntegrationTest
-import me.aquitano.health.test.PostgresTestDatabase
 import java.time.Instant
 import java.time.LocalDate
 import java.util.concurrent.atomic.AtomicInteger
@@ -17,7 +16,7 @@ class PendingDerivedRebuildSweeperTest : PostgresIntegrationTest() {
     @Test
     fun failingDateDoesNotDelayOtherDatesOrSources() =
         runBlocking {
-            val database = openDatabase(PostgresTestDatabase.config())
+            val database = openDatabase()
             val repository = PendingDerivedRebuildRepository(database)
             val now = Instant.parse("2026-06-01T10:00:00Z")
             val failingDate = LocalDate.parse("2026-05-30")
@@ -65,7 +64,7 @@ class PendingDerivedRebuildSweeperTest : PostgresIntegrationTest() {
     @Test
     fun staleWorkerCannotAcknowledgeOrDelayNewerWork() =
         runBlocking {
-            val database = openDatabase(PostgresTestDatabase.config())
+            val database = openDatabase()
             val repository = PendingDerivedRebuildRepository(database)
             val now = Instant.parse("2026-06-01T10:00:00Z")
             val source =
@@ -85,7 +84,7 @@ class PendingDerivedRebuildSweeperTest : PostgresIntegrationTest() {
     @Test
     fun retriesQueuedRebuildWithBackoffUntilItSucceeds() =
         runBlocking {
-            val database = openDatabase(PostgresTestDatabase.config())
+            val database = openDatabase()
             val repository = PendingDerivedRebuildRepository(database)
             val supportRepository = SupportRepository(database)
             val executor = FlakyDerivedRebuildExecutor(failuresBeforeSuccess = 1)

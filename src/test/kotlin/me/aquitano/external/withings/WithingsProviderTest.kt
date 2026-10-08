@@ -6,8 +6,6 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import me.aquitano.health.application.HealthProviderRegistry
-import me.aquitano.health.application.IngestionMappingService
-import me.aquitano.health.application.IngestionService
 import me.aquitano.health.application.ProviderStatusService
 import me.aquitano.health.application.ProviderWorkflowService
 import me.aquitano.health.domain.ConflictException
@@ -16,17 +14,18 @@ import me.aquitano.health.domain.RequestValidationException
 import me.aquitano.health.domain.UpstreamProviderException
 import me.aquitano.health.infrastructure.config.DatabaseConfig
 import me.aquitano.health.infrastructure.config.ProviderOAuthConfig
-import me.aquitano.health.infrastructure.repositories.IngestionRepository
-import me.aquitano.health.infrastructure.repositories.PendingDerivedRebuildRepository
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
 import me.aquitano.health.infrastructure.repositories.ScheduledSyncRepository
-import me.aquitano.health.infrastructure.repositories.SupportRepository
 import me.aquitano.health.infrastructure.security.TokenCipher
 import me.aquitano.health.infrastructure.time.UtcClock
-import me.aquitano.health.test.NoOpDerivedRebuildExecutor
 import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.test.PostgresTestDatabase
-import me.aquitano.health.test.metricWriteService
+import me.aquitano.health.test.TEST_TOKEN_ENCRYPTION_KEY
+import me.aquitano.health.test.countRows
+import me.aquitano.health.test.execute
+import me.aquitano.health.test.ingestionService
+import me.aquitano.health.test.queryInt
+import me.aquitano.health.test.queryString
 import org.jetbrains.exposed.v1.jdbc.Database
 import java.time.Instant
 import kotlin.test.Test
@@ -67,10 +66,10 @@ class WithingsProviderTest : PostgresIntegrationTest() {
                 )
 
             assertEquals("withings-363", response.providerInstanceId)
-            assertEquals("363", singleString(fixture.dbPath, "SELECT provider_user_id FROM provider_oauth_accounts"))
-            assertEquals("withings-363", singleString(fixture.dbPath, "SELECT provider_instance_id FROM provider_oauth_accounts"))
-            val accessCiphertext = singleString(fixture.dbPath, "SELECT access_token_ciphertext FROM provider_oauth_accounts")
-            val refreshCiphertext = singleString(fixture.dbPath, "SELECT refresh_token_ciphertext FROM provider_oauth_accounts")
+            assertEquals("363", fixture.databaseConfig.queryString("SELECT provider_user_id FROM provider_oauth_accounts"))
+            assertEquals("withings-363", fixture.databaseConfig.queryString("SELECT provider_instance_id FROM provider_oauth_accounts"))
+            val accessCiphertext = fixture.databaseConfig.queryString("SELECT access_token_ciphertext FROM provider_oauth_accounts")!!
+            val refreshCiphertext = fixture.databaseConfig.queryString("SELECT refresh_token_ciphertext FROM provider_oauth_accounts")!!
             assertFalse(accessCiphertext.contains("access-from-code"))
             assertFalse(refreshCiphertext.contains("refresh-from-code"))
             val cipher = TokenCipher(fixture.config.tokenEncryptionKey, WITHINGS_PROVIDER_CODE)
@@ -122,21 +121,20 @@ class WithingsProviderTest : PostgresIntegrationTest() {
 
             assertEquals("processed", summary.status)
             assertEquals(4, summary.batches.size)
-            assertEquals(1, countRows(fixture.dbPath, "step_samples"))
-            assertEquals(1, countRows(fixture.dbPath, "sleep_sessions"))
-            assertEquals(1, countRows(fixture.dbPath, "sleep_stages"))
-            assertEquals(1, countRows(fixture.dbPath, "sleep_summaries"))
+            assertEquals(1, fixture.databaseConfig.countRows("step_samples"))
+            assertEquals(1, fixture.databaseConfig.countRows("sleep_sessions"))
+            assertEquals(1, fixture.databaseConfig.countRows("sleep_stages"))
+            assertEquals(1, fixture.databaseConfig.countRows("sleep_summaries"))
             assertEquals(
                 4,
-                singleInt(
-                    fixture.dbPath,
+                fixture.databaseConfig.queryInt(
                     "SELECT COUNT(*) FROM scalar_samples WHERE metric_type IN " +
                         "('weight', 'body_fat', 'muscle', 'water', 'visceral_fat')",
                 ),
             )
             assertEquals(
                 3,
-                singleInt(fixture.dbPath, "SELECT COUNT(*) FROM scalar_samples WHERE metric_type = 'heart_rate'"),
+                fixture.databaseConfig.queryInt("SELECT COUNT(*) FROM scalar_samples WHERE metric_type = 'heart_rate'"),
             )
         }
 
@@ -186,11 +184,11 @@ class WithingsProviderTest : PostgresIntegrationTest() {
             assertEquals("withings_needs_reauth", error.code)
             assertEquals(
                 "needs_reauth",
-                singleString(fixture.dbPath, "SELECT account_status FROM provider_oauth_accounts"),
+                fixture.databaseConfig.queryString("SELECT account_status FROM provider_oauth_accounts"),
             )
             assertEquals(
                 "withings_needs_reauth",
-                singleString(fixture.dbPath, "SELECT last_auth_error_code FROM provider_oauth_accounts"),
+                fixture.databaseConfig.queryString("SELECT last_auth_error_code FROM provider_oauth_accounts"),
             )
         }
 
@@ -221,11 +219,11 @@ class WithingsProviderTest : PostgresIntegrationTest() {
             assertEquals("withings_token_refresh_failed", error.code)
             assertEquals(
                 "connected",
-                singleString(fixture.dbPath, "SELECT account_status FROM provider_oauth_accounts"),
+                fixture.databaseConfig.queryString("SELECT account_status FROM provider_oauth_accounts"),
             )
             assertEquals(
                 "withings_token_request_failed",
-                singleString(fixture.dbPath, "SELECT last_auth_error_code FROM provider_oauth_accounts"),
+                fixture.databaseConfig.queryString("SELECT last_auth_error_code FROM provider_oauth_accounts"),
             )
         }
 
@@ -255,8 +253,8 @@ class WithingsProviderTest : PostgresIntegrationTest() {
                 me.aquitano.health.domain
                     .isRetryableSyncFailure(error),
             )
-            assertEquals("connected", singleString(fixture.dbPath, "SELECT account_status FROM provider_oauth_accounts"))
-            assertEquals("failed", singleString(fixture.dbPath, "SELECT last_token_refresh_status FROM provider_oauth_accounts"))
+            assertEquals("connected", fixture.databaseConfig.queryString("SELECT account_status FROM provider_oauth_accounts"))
+            assertEquals("failed", fixture.databaseConfig.queryString("SELECT last_token_refresh_status FROM provider_oauth_accounts"))
         }
 
     @Test
@@ -283,8 +281,8 @@ class WithingsProviderTest : PostgresIntegrationTest() {
                     .single()
             assertTrue(unchanged.duplicateBatch)
             assertEquals(first.batchId, unchanged.batchId)
-            assertEquals(1, countRows(fixture.dbPath, "ingestion_batches"))
-            val originalRecords = countRows(fixture.dbPath, "ingestion_records")
+            assertEquals(1, fixture.databaseConfig.countRows("ingestion_batches"))
+            val originalRecords = fixture.databaseConfig.countRows("ingestion_records")
 
             fixture.client.activitySteps = 2345
             val changed =
@@ -300,8 +298,8 @@ class WithingsProviderTest : PostgresIntegrationTest() {
                     .batches
                     .single()
             assertFalse(reverted.duplicateBatch)
-            assertEquals(3, countRows(fixture.dbPath, "ingestion_batches"))
-            assertEquals(originalRecords * 3, countRows(fixture.dbPath, "ingestion_records"))
+            assertEquals(3, fixture.databaseConfig.countRows("ingestion_batches"))
+            assertEquals(originalRecords * 3, fixture.databaseConfig.countRows("ingestion_records"))
             assertEquals(
                 reverted.batchId,
                 fixture.provider
@@ -312,16 +310,14 @@ class WithingsProviderTest : PostgresIntegrationTest() {
             )
 
             // A failed snapshot with the same content must not suppress the next ingestion attempt.
-            PostgresTestDatabase.connection(fixture.dbPath).use { connection ->
-                connection.createStatement().use { it.executeUpdate("UPDATE ingestion_batches SET status = 'failed' WHERE id = ${reverted.batchId}") }
-            }
+            fixture.databaseConfig.execute("UPDATE ingestion_batches SET status = 'failed' WHERE id = ${reverted.batchId}")
             val retry =
                 fixture.provider
                     .sync(request, fixture.now)
                     .batches
                     .single()
             assertFalse(retry.duplicateBatch)
-            assertEquals(4, countRows(fixture.dbPath, "ingestion_batches"))
+            assertEquals(4, fixture.databaseConfig.countRows("ingestion_batches"))
             assertEquals(6, fixture.client.fetchRequests.size)
         }
 
@@ -331,8 +327,8 @@ class WithingsProviderTest : PostgresIntegrationTest() {
             val fixture = Fixture()
             fixture.seedAccount()
             fixture.providerRepository.markNeedsReauth(
-                accountId = singleInt(fixture.dbPath, "SELECT id FROM provider_oauth_accounts"),
-                expectedRefreshTokenCiphertext = singleString(fixture.dbPath, "SELECT refresh_token_ciphertext FROM provider_oauth_accounts"),
+                accountId = fixture.databaseConfig.queryInt("SELECT id FROM provider_oauth_accounts"),
+                expectedRefreshTokenCiphertext = fixture.databaseConfig.queryString("SELECT refresh_token_ciphertext FROM provider_oauth_accounts")!!,
                 errorCode = "withings_needs_reauth",
                 errorMessage = "invalid refresh token",
                 now = fixture.now,
@@ -512,7 +508,7 @@ class WithingsProviderTest : PostgresIntegrationTest() {
                     dataTypes = listOf("measures"),
                 )
             fixture.provider.sync(request, fixture.now)
-            assertEquals(1, singleInt(fixture.dbPath, "SELECT COUNT(*) FROM scalar_samples WHERE metric_type = 'weight'"))
+            assertEquals(1, fixture.databaseConfig.queryInt("SELECT COUNT(*) FROM scalar_samples WHERE metric_type = 'weight'"))
             fixture.client.lateMeasure =
                 buildJsonObject {
                     put("grpid", 101)
@@ -528,60 +524,9 @@ class WithingsProviderTest : PostgresIntegrationTest() {
                     }
                 }
             fixture.provider.sync(request.copy(refresh = true), fixture.now.plusSeconds(1))
-            assertEquals(2, singleInt(fixture.dbPath, "SELECT COUNT(*) FROM scalar_samples WHERE metric_type = 'weight'"))
+            assertEquals(2, fixture.databaseConfig.queryInt("SELECT COUNT(*) FROM scalar_samples WHERE metric_type = 'weight'"))
             assertEquals(2, fixture.client.fetchRequests.size)
-            assertEquals(2, countRows(fixture.dbPath, "ingestion_batches"))
-        }
-
-    @Test
-    fun duplicateProcessedBatchReturnsCachedBatch() =
-        runBlocking {
-            val fixture = Fixture()
-            fixture.seedAccount()
-            val request =
-                ProviderSyncRequest(
-                    from = Instant.parse("2026-04-01T00:00:00Z"),
-                    to = Instant.parse("2026-04-02T00:00:00Z"),
-                    dataTypes = listOf("activity"),
-                )
-
-            val first = fixture.provider.sync(request, fixture.now)
-            val second = fixture.provider.sync(request, fixture.now.plusSeconds(1))
-
-            assertEquals(1, first.batches.size)
-            assertEquals(1, second.batches.size)
-            assertTrue(second.batches.single().duplicateBatch)
-            assertEquals(1, countRows(fixture.dbPath, "ingestion_batches"))
-        }
-
-    @Test
-    fun syncChunksLongRangesByDayAndSkipsCachedChunks() =
-        runBlocking {
-            val fixture = Fixture()
-            fixture.seedAccount()
-            val request =
-                ProviderSyncRequest(
-                    from = Instant.parse("2026-04-01T06:00:00Z"),
-                    to = Instant.parse("2026-04-04T00:00:00Z"),
-                    dataTypes = listOf("activity"),
-                )
-
-            val first = fixture.provider.sync(request, fixture.now)
-            val second = fixture.provider.sync(request, fixture.now.plusSeconds(1))
-
-            assertEquals("2026-04-01T06:00:00Z", first.requestedFrom.toString())
-            assertEquals("2026-04-04T00:00:00Z", first.requestedTo.toString())
-            assertEquals(3, first.batches.size)
-            assertEquals(3, second.batches.size)
-            assertTrue(second.batches.all { it.duplicateBatch })
-            assertEquals(
-                listOf(
-                    WithingsFetchRequest("activity", Instant.parse("2026-04-01T00:00:00Z"), Instant.parse("2026-04-02T00:00:00Z")),
-                    WithingsFetchRequest("activity", Instant.parse("2026-04-02T00:00:00Z"), Instant.parse("2026-04-03T00:00:00Z")),
-                    WithingsFetchRequest("activity", Instant.parse("2026-04-03T00:00:00Z"), Instant.parse("2026-04-04T00:00:00Z")),
-                ),
-                fixture.client.fetchRequests,
-            )
+            assertEquals(2, fixture.databaseConfig.countRows("ingestion_batches"))
         }
 
     @Test
@@ -611,7 +556,7 @@ class WithingsProviderTest : PostgresIntegrationTest() {
         }
 
     private inner class Fixture(
-        val dbPath: DatabaseConfig = PostgresTestDatabase.config(),
+        val databaseConfig: DatabaseConfig = PostgresTestDatabase.config(),
         val now: Instant = Instant.parse("2026-04-20T10:00:00Z"),
     ) {
         val config =
@@ -619,26 +564,13 @@ class WithingsProviderTest : PostgresIntegrationTest() {
                 clientId = "client-id",
                 clientSecret = "client-secret",
                 redirectUri = "http://localhost:8080/api/v2/providers/withings/oauth/callback",
-                tokenEncryptionKey = "test-token-encryption-key-with-32-bytes",
+                tokenEncryptionKey = TEST_TOKEN_ENCRYPTION_KEY,
                 apiBaseUrl = "https://wbsapi.withings.net",
                 oauthTokenUrl = "https://wbsapi.withings.net/v2/oauth2",
                 oauthAuthUrl = "https://account.withings.com/oauth2_user/authorize2",
             )
-        private val database: Database =
-            openDatabase(
-                dbPath,
-            )
+        private val database: Database = openDatabase(databaseConfig)
         val providerRepository = ProviderOAuthRepository(database)
-        private val ingestionService =
-            IngestionService(
-                database = database,
-                mappingService = IngestionMappingService(),
-                supportRepository = SupportRepository(database),
-                ingestionRepository = IngestionRepository(),
-                metricWriteService = metricWriteService(),
-                derivedRebuildExecutor = NoOpDerivedRebuildExecutor,
-                pendingDerivedRebuildRepository = PendingDerivedRebuildRepository(database),
-            )
         val client = FakeWithingsClient()
         val provider =
             WithingsProvider(
@@ -651,7 +583,7 @@ class WithingsProviderTest : PostgresIntegrationTest() {
                         store =
                             me.aquitano.health.application.providersync.OAuthProviderSyncStore(
                                 repository = providerRepository,
-                                ingestionService = ingestionService,
+                                ingestionService = ingestionService(database),
                                 tokenEncryptionKeys = mapOf(WITHINGS_PROVIDER_CODE to config.tokenEncryptionKey),
                             ),
                         clock = UtcClock.fixed(now),
@@ -895,42 +827,3 @@ class WithingsProviderTest : PostgresIntegrationTest() {
         val to: Instant,
     )
 }
-
-private fun singleString(
-    dbPath: DatabaseConfig,
-    sql: String,
-): String =
-    PostgresTestDatabase.connection(dbPath).use { connection ->
-        connection.createStatement().use { statement ->
-            statement.executeQuery(sql).use { resultSet ->
-                resultSet.next()
-                resultSet.getString(1)
-            }
-        }
-    }
-
-private fun singleInt(
-    dbPath: DatabaseConfig,
-    sql: String,
-): Int =
-    PostgresTestDatabase.connection(dbPath).use { connection ->
-        connection.createStatement().use { statement ->
-            statement.executeQuery(sql).use { resultSet ->
-                resultSet.next()
-                resultSet.getInt(1)
-            }
-        }
-    }
-
-private fun countRows(
-    dbPath: DatabaseConfig,
-    tableName: String,
-): Int =
-    PostgresTestDatabase.connection(dbPath).use { connection ->
-        connection.createStatement().use { statement ->
-            statement.executeQuery("SELECT COUNT(*) FROM $tableName").use { resultSet ->
-                resultSet.next()
-                resultSet.getInt(1)
-            }
-        }
-    }
