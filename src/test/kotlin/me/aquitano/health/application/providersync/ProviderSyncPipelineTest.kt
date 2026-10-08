@@ -4,15 +4,17 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import me.aquitano.health.api.dto.IngestionRecord
 import me.aquitano.health.api.dto.StepInterval
 import me.aquitano.health.domain.*
-import me.aquitano.health.infrastructure.time.UtcClock
+import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -36,7 +38,7 @@ class ProviderSyncPipelineTest {
                     existingBatch = ExistingProviderBatch(id = 42, status = BatchStatus.Processed),
                 )
             val adapter = FakeAdapter()
-            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+            val pipeline = ProviderSyncPipeline(store, clock = Clock.fixed(now, ZoneOffset.UTC))
 
             val summary = pipeline.sync(adapter, request, now)
 
@@ -51,7 +53,7 @@ class ProviderSyncPipelineTest {
         runBlocking {
             val store = FakeStore(existingBatch = ExistingProviderBatch(id = 42, status = BatchStatus.Failed))
             val adapter = FakeAdapter()
-            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+            val pipeline = ProviderSyncPipeline(store, clock = Clock.fixed(now, ZoneOffset.UTC))
 
             val summary = pipeline.sync(adapter, request, now)
 
@@ -82,7 +84,7 @@ class ProviderSyncPipelineTest {
                 FakeAdapter(
                     refreshFailure = InvalidRefreshToken(),
                 )
-            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+            val pipeline = ProviderSyncPipeline(store, clock = Clock.fixed(now, ZoneOffset.UTC))
 
             val error =
                 assertFailsWith<ConflictException> {
@@ -102,7 +104,7 @@ class ProviderSyncPipelineTest {
             val pipeline =
                 ProviderSyncPipeline(
                     store,
-                    clock = UtcClock.fixed(now),
+                    clock = Clock.fixed(now, ZoneOffset.UTC),
                 )
 
             val summary = pipeline.sync(adapter, request, now)
@@ -111,26 +113,22 @@ class ProviderSyncPipelineTest {
             assertEquals(1, adapter.refreshCalls)
             assertEquals("fresh-access", store.savedAccessToken)
             assertEquals(1, store.ingested.size)
-            assertEquals("processed", summary.status)
+            assertEquals(SyncStatus.Processed, summary.status)
         }
 
     @Test
     fun providerFetchesAreThrottledBetweenUncachedItems() =
         runBlocking {
             val delays = mutableListOf<Duration>()
-            val adapter =
-                FakeAdapter(
-                    itemCount = 2,
-                    providerRequestInterval = Duration.ofSeconds(5),
-                )
+            val adapter = FakeAdapter(providerRequestInterval = Duration.ofSeconds(5))
             val pipeline =
                 ProviderSyncPipeline(
                     FakeStore(),
                     throttleDelay = { delays += it },
-                    clock = UtcClock.fixed(now),
+                    clock = Clock.fixed(now, ZoneOffset.UTC),
                 )
 
-            val summary = pipeline.sync(adapter, request, now)
+            val summary = pipeline.sync(adapter, request.copy(dataTypes = listOf("steps", "heart-rate")), now)
 
             assertEquals(2, adapter.fetchCalls)
             assertEquals(2, summary.batches.size)
@@ -154,14 +152,14 @@ class ProviderSyncPipelineTest {
             val pipeline =
                 ProviderSyncPipeline(
                     store,
-                    clock = UtcClock.fixed(now),
+                    clock = Clock.fixed(now, ZoneOffset.UTC),
                 )
 
             val summary = pipeline.sync(adapter, request, now)
 
             assertEquals(0, adapter.refreshCalls)
             assertEquals(0, store.saveCount)
-            assertEquals("processed", summary.status)
+            assertEquals(SyncStatus.Processed, summary.status)
         }
 
     @Test
@@ -169,7 +167,7 @@ class ProviderSyncPipelineTest {
         runBlocking {
             val store = FakeStore()
             val adapter = FakeAdapter(emptyFetch = true)
-            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+            val pipeline = ProviderSyncPipeline(store, clock = Clock.fixed(now, ZoneOffset.UTC))
 
             val summary = pipeline.sync(adapter, request, now)
 
@@ -190,7 +188,7 @@ class ProviderSyncPipelineTest {
         runBlocking {
             val store = FakeStore(existingBatch = ExistingProviderBatch(42, BatchStatus.Processed))
             val adapter = FakeAdapter(emptyFetch = true)
-            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+            val pipeline = ProviderSyncPipeline(store, clock = Clock.fixed(now, ZoneOffset.UTC))
             val refresh = request.copy(refresh = true)
 
             repeat(2) { pipeline.sync(adapter, refresh, now) }
@@ -224,7 +222,7 @@ class ProviderSyncPipelineTest {
             // a normalizer fix could never bring the dropped records back.
             val store = FakeStore()
             val adapter = FakeAdapter(normalizedAwayFetch = true)
-            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+            val pipeline = ProviderSyncPipeline(store, clock = Clock.fixed(now, ZoneOffset.UTC))
 
             val summary = pipeline.sync(adapter, request, now)
 
@@ -248,7 +246,7 @@ class ProviderSyncPipelineTest {
                             stepInterval(steps = 1500),
                         ),
                 )
-            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+            val pipeline = ProviderSyncPipeline(store, clock = Clock.fixed(now, ZoneOffset.UTC))
 
             pipeline.sync(adapter, request, now)
 
@@ -264,7 +262,7 @@ class ProviderSyncPipelineTest {
             val first = stepInterval(steps = 1200)
             val last = stepInterval(steps = 1500)
             val adapter = FakeAdapter(records = listOf(first, last))
-            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+            val pipeline = ProviderSyncPipeline(store, clock = Clock.fixed(now, ZoneOffset.UTC))
             val refresh = request.copy(refresh = true)
 
             pipeline.sync(adapter, refresh, now)
@@ -290,7 +288,7 @@ class ProviderSyncPipelineTest {
             val pipeline =
                 ProviderSyncPipeline(
                     FakeStore(),
-                    clock = UtcClock.fixed(now),
+                    clock = Clock.fixed(now, ZoneOffset.UTC),
                 )
 
             val error =
@@ -307,7 +305,7 @@ class ProviderSyncPipelineTest {
         runBlocking {
             val store = FakeStore(existingBatch = ExistingProviderBatch(42, BatchStatus.Processed))
             val adapter = FakeAdapter()
-            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+            val pipeline = ProviderSyncPipeline(store, clock = Clock.fixed(now, ZoneOffset.UTC))
             repeat(2) { pipeline.sync(adapter, request.copy(refresh = true), now) }
             assertEquals(2, adapter.fetchCalls)
             assertEquals(1, store.ingested.size)
@@ -318,7 +316,7 @@ class ProviderSyncPipelineTest {
         runBlocking {
             val store = FakeStore()
             val adapter = FakeAdapter()
-            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+            val pipeline = ProviderSyncPipeline(store, clock = Clock.fixed(now, ZoneOffset.UTC))
             val morning = request.copy(to = Instant.parse("2026-04-01T10:00:00Z"), refresh = true)
             pipeline.sync(adapter, morning, now)
             val later = pipeline.sync(adapter, morning.copy(to = Instant.parse("2026-04-01T10:15:00Z")), now)
@@ -334,7 +332,7 @@ class ProviderSyncPipelineTest {
         runBlocking {
             val store = FakeStore()
             val adapter = FakeAdapter()
-            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+            val pipeline = ProviderSyncPipeline(store, clock = Clock.fixed(now, ZoneOffset.UTC))
             val refresh = request.copy(refresh = true)
             adapter.sourceRecords =
                 listOf(
@@ -371,7 +369,7 @@ class ProviderSyncPipelineTest {
             val releaseRefresh = CompletableDeferred<Unit>()
             val adapter = BlockingRefreshAdapter(refreshStarted, releaseRefresh)
             val store = FakeStore(account = syncAccount(now.minusSeconds(1)))
-            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+            val pipeline = ProviderSyncPipeline(store, clock = Clock.fixed(now, ZoneOffset.UTC))
             val first = async { pipeline.sync(adapter, request, now) }
             refreshStarted.await()
             val second = async(start = CoroutineStart.UNDISPATCHED) { pipeline.sync(adapter, request, now) }
@@ -388,7 +386,7 @@ class ProviderSyncPipelineTest {
         runBlocking {
             val store = RejectingSaveStore(syncAccount(now.minusSeconds(1)))
             val adapter = FakeAdapter()
-            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+            val pipeline = ProviderSyncPipeline(store, clock = Clock.fixed(now, ZoneOffset.UTC))
             val error = assertFailsWith<UpstreamProviderException> { pipeline.sync(adapter, request, now) }
             assertEquals("provider_account_changed", error.code)
             assertEquals(0, adapter.fetchCalls)
@@ -400,9 +398,9 @@ class ProviderSyncPipelineTest {
         runBlocking {
             val store = FlakySaveStore(syncAccount(now.minusSeconds(1)))
             val adapter = FakeAdapter()
-            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+            val pipeline = ProviderSyncPipeline(store, clock = Clock.fixed(now, ZoneOffset.UTC))
             val summary = pipeline.sync(adapter, request, now)
-            assertEquals("processed", summary.status)
+            assertEquals(SyncStatus.Processed, summary.status)
             assertEquals(1, adapter.refreshCalls)
             assertEquals("fresh-access", store.savedAccessToken)
         }
@@ -412,10 +410,10 @@ class ProviderSyncPipelineTest {
         runBlocking {
             val adapter = FakeAdapter(refreshFailure = IllegalStateException("secret upstream credentials"))
             val store = FakeStore(account = syncAccount(now.minusSeconds(1)))
-            val pipeline = ProviderSyncPipeline(store, clock = UtcClock.fixed(now))
+            val pipeline = ProviderSyncPipeline(store, clock = Clock.fixed(now, ZoneOffset.UTC))
             val error = assertFailsWith<UpstreamProviderException> { pipeline.sync(adapter, request, now) }
-            assertEquals("Fake refresh failed", error.message)
-            assertEquals("Fake refresh failed", store.refreshFailureMessage)
+            assertEquals("Fake OAuth token refresh failed", error.message)
+            assertEquals("Fake OAuth token refresh failed", store.refreshFailureMessage)
         }
 
     private class BlockingRefreshAdapter(
@@ -424,12 +422,11 @@ class ProviderSyncPipelineTest {
     ) : FakeAdapter() {
         override suspend fun refreshAccessToken(
             refreshToken: String,
-            account: SyncAccount,
             now: Instant,
         ): RefreshedTokenSet {
             started.complete(Unit)
             release.await()
-            return super.refreshAccessToken(refreshToken, account, now)
+            return super.refreshAccessToken(refreshToken, now)
         }
     }
 
@@ -461,7 +458,6 @@ class ProviderSyncPipelineTest {
     private open class FakeAdapter(
         private val refreshFailure: RuntimeException? = null,
         private var throwUnauthorizedOnce: Boolean = false,
-        private val itemCount: Int = 1,
         private val fetchFailure: RuntimeException? = null,
         var emptyFetch: Boolean = false,
         private val normalizedAwayFetch: Boolean = false,
@@ -473,38 +469,14 @@ class ProviderSyncPipelineTest {
         var fetchCalls = 0
         var refreshCalls = 0
         var steps = 1200
-        var sourceRecords = emptyList<JsonObject>()
+        var sourceRecords = listOf(buildJsonObject { put("steps", 1200) })
 
         override val providerCode = "fake"
-        override val defaultSyncFailureMessage = "Fake sync failed"
-        override val tokenRefreshFailureCode = "fake_refresh_failed"
-        override val tokenRefreshFailureMessage = "Fake refresh failed"
-        override val needsReauthCode = "fake_needs_reauth"
-        override val needsReauthMessage = "Fake needs reconnect"
-
-        override fun validate(request: ProviderSyncRequest): ProviderSyncPlan =
-            ProviderSyncPlan(
-                providerInstanceId = request.providerInstanceId,
-                requestedFrom = request.from,
-                requestedTo = request.to,
-                items =
-                    (1..itemCount).map { index ->
-                        ProviderSyncItem(
-                            dataType = "steps",
-                            from = request.from.plusSeconds((index - 1).toLong()),
-                            to = request.to.plusSeconds((index - 1).toLong()),
-                        )
-                    },
-            )
-
-        override fun accountUnavailable(
-            providerInstanceId: String?,
-            statusHint: SyncAccount?,
-        ): Throwable = ConflictException("fake_not_connected", "Fake is not connected")
+        override val displayName = "Fake"
+        override val dataTypes = listOf("steps", "heart-rate")
 
         override suspend fun refreshAccessToken(
             refreshToken: String,
-            account: SyncAccount,
             now: Instant,
         ): RefreshedTokenSet {
             refreshCalls += 1
@@ -520,9 +492,7 @@ class ProviderSyncPipelineTest {
 
         override suspend fun fetch(
             accessToken: String,
-            account: SyncAccount,
             item: ProviderSyncItem,
-            now: Instant,
         ): ProviderFetchedBatch {
             fetchCalls += 1
             if (throwUnauthorizedOnce) {
@@ -531,11 +501,8 @@ class ProviderSyncPipelineTest {
             }
             fetchFailure?.let { throw it }
             return ProviderFetchedBatch(
-                dataType = item.dataType,
-                pagesFetched = 1,
-                sourceRecordsReceived = if (emptyFetch) 0 else 1,
-                sourcePayload = buildJsonObject { put("requestId", fetchCalls) },
-                sourceRecords = sourceRecords,
+                pages = JsonArray(listOf(buildJsonObject { put("requestId", fetchCalls) })),
+                sourceRecords = if (emptyFetch) emptyList() else sourceRecords,
                 records =
                     if (emptyFetch || normalizedAwayFetch) {
                         emptyList()
@@ -549,12 +516,7 @@ class ProviderSyncPipelineTest {
 
         override fun isInvalidRefreshToken(error: Throwable): Boolean = error is InvalidRefreshToken
 
-        override fun batchExternalId(
-            providerInstanceId: String,
-            item: ProviderSyncItem,
-        ): String = "fake:$providerInstanceId:${item.dataType}:${item.from}:${item.to}"
-
-        override fun errorCode(error: Throwable): String = "fake_sync_failed"
+        override fun providerErrorCode(error: Throwable): String? = null
     }
 
     /** In-memory [ProviderSyncStore] with counters for the interactions the tests assert on. */
@@ -637,27 +599,26 @@ class ProviderSyncPipelineTest {
             errorMessage: String?,
         ) = Unit
 
-        override suspend fun findExistingBatch(
+        override suspend fun sourceInstanceId(
             providerCode: String,
             providerInstanceId: String,
-            batchExternalId: String,
             now: Instant,
+        ): Int = 1
+
+        override suspend fun findExistingBatch(
+            sourceInstanceId: Int,
+            batchExternalId: String,
         ): ExistingProviderBatch? = existingBatch
 
         override suspend fun reusableBatchId(
-            providerCode: String,
-            providerInstanceId: String,
+            sourceInstanceId: Int,
             windowKey: String,
             contentHash: String,
-            now: Instant,
         ): Int? =
             ingested
                 .withIndex()
-                .lastOrNull {
-                    it.value.providerCode == providerCode &&
-                        it.value.providerInstanceId == providerInstanceId &&
-                        it.value.snapshot.windowKey == windowKey
-                }?.takeIf { it.value.snapshot.contentHash == contentHash }
+                .lastOrNull { it.value.snapshot.windowKey == windowKey }
+                ?.takeIf { it.value.snapshot.contentHash == contentHash }
                 ?.let { it.index + 1 }
 
         override suspend fun ingest(
@@ -723,5 +684,5 @@ private fun syncAccount(
         encryptedAccessToken = "encrypted-access",
         encryptedRefreshToken = "encrypted-refresh",
         expiresAt = expiresAt,
-        accountStatus = "connected",
+        accountStatus = ProviderAccountStatus.Connected,
     )

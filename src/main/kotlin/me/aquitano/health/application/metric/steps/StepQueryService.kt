@@ -8,8 +8,6 @@ import me.aquitano.health.application.metric.common.SortFields
 import me.aquitano.health.application.metric.common.dailyReadFilters
 import me.aquitano.health.application.metric.common.pagedRead
 import me.aquitano.health.application.metric.common.readFilters
-import me.aquitano.health.application.metric.common.toResponse
-import me.aquitano.health.application.metric.steps.derived.CANONICAL_STEP_ALGORITHM_VERSION
 import me.aquitano.health.application.metric.steps.repository.CanonicalStepDerivationRepository
 import org.jetbrains.exposed.v1.jdbc.Database
 import java.time.Instant
@@ -22,14 +20,14 @@ class StepQueryService(
         val filters = params.readFilters()
         return pagedRead(database, filters, SortFields.START_AT, { it.startAt }, { it.id.toLong() }, ::StepSamplesResponse) {
             val (rows, sourceMetadata) =
-                canonicalRepository.listCanonicalStepSamples(filters, CANONICAL_STEP_ALGORITHM_VERSION)
+                canonicalRepository.listCanonicalStepSamples(filters)
             rows.map {
                 StepSampleResponse(
                     id = it.id,
                     startAt = it.startAt.toString(),
                     endAt = it.endAt.toString(),
                     steps = it.steps,
-                    source = sourceMetadata[it.sourceInstanceId].toResponse(),
+                    source = sourceMetadata[it.sourceInstanceId],
                 )
             }
         }

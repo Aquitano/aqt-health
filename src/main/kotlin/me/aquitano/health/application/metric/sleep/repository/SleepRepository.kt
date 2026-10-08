@@ -1,5 +1,6 @@
 package me.aquitano.health.application.metric.sleep.repository
 
+import me.aquitano.health.api.dto.SourceMetadataResponse
 import me.aquitano.health.application.metric.common.keysetFetchLimit
 import me.aquitano.health.application.metric.common.repository.*
 import me.aquitano.health.application.metric.common.repository.BaseMetricReadRepository
@@ -15,21 +16,18 @@ class SleepRepository : BaseMetricReadRepository() {
      * local date it ended on, so the label is computed in the requested timezone at read time
      * and the session id doubles as the night id for cursor pagination.
      */
-    fun listCanonicalSleepNights(filters: ReadFilters): Triple<List<SleepNightRow>, Map<Int, List<SleepStageRow>>, Map<Int, SourceMetadata>> {
+    fun listCanonicalSleepNights(filters: ReadFilters): Triple<List<SleepNightRow>, Map<Int, List<SleepStageRow>>, Map<Int, SourceMetadataResponse>> {
         val sourceIds = filters.sourceInstanceIds()
         if (sourceIds.hasNoMatchingSources()) return emptyTripleReadResult()
 
         val nightDate = LocalDayOf(CanonicalSleepSessionsTable.endAt, filters.timezone.id)
-        val conditions = mutableListOf<Op<Boolean>>()
-        filters.fromDate?.let { conditions.add(nightDate greaterEq it) }
-        filters.toDate?.let { conditions.add(nightDate lessEq it) }
-        sourceIds?.let { conditions.add(CanonicalSleepSessionsTable.sourceInstanceId inList it) }
-        dateKeyset(
-            filters.cursor,
-            filters.order,
-            nightDate,
-            CanonicalSleepSessionsTable.id,
-        )?.let { conditions.add(it) }
+        val conditions =
+            listOfNotNull(
+                filters.fromDate?.let { nightDate greaterEq it },
+                filters.toDate?.let { nightDate lessEq it },
+                sourceIds?.let { CanonicalSleepSessionsTable.sourceInstanceId inList it },
+                dateKeyset(filters.cursor, filters.order, nightDate, CanonicalSleepSessionsTable.id),
+            )
 
         val nights =
             CanonicalSleepSessionsTable

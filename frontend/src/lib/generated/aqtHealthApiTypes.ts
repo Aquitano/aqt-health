@@ -73,7 +73,7 @@ export interface paths {
         };
         /**
          * List provider discovery metadata
-         * @description Returns provider capabilities, supported data types, default sync selections, and workflow endpoint paths for client discovery.
+         * @description Returns provider capabilities, supported data types, and default sync selections for client discovery.
          */
         get: operations["listProviders"];
         put?: never;
@@ -967,26 +967,14 @@ export interface components {
             metricsSkipped: components["schemas"]["MetricSkippedCountsResponse"];
             affectedStepSummaryDates: string[];
         };
-        /** ProviderWorkflowEndpointsResponse */
-        ProviderWorkflowEndpointsResponse: {
-            oauthStart?: string | null;
-            oauthCallback?: string | null;
-            accounts?: string | null;
-            disconnect?: string | null;
-            reconnect?: string | null;
-            sync: string;
-        };
         /** ProviderDescriptorResponse */
         ProviderDescriptorResponse: {
             providerCode: string;
             displayName: string;
-            authType: string;
-            requiresAuthentication: boolean;
             supportedDataTypes: string[];
             defaultDataTypes: string[];
             maxSyncRangeDays: number;
             supportsPageSize: boolean;
-            workflowEndpoints: components["schemas"]["ProviderWorkflowEndpointsResponse"];
         };
         /** ProviderCatalogResponse */
         ProviderCatalogResponse: {
@@ -1247,7 +1235,8 @@ export interface components {
             count: number;
             limit: number;
             sort: string;
-            order: string;
+            /** @enum {string} */
+            order: "asc" | "desc";
             nextCursor?: string | null;
         };
         /** ScalarSamplesResponse */
@@ -1621,7 +1610,8 @@ export interface components {
         };
         /** ReplayRequest */
         ReplayRequest: {
-            scope?: string;
+            /** @enum {string} */
+            scope?: "projections" | "derived" | "all";
             metricTypes?: string[] | null;
             /** Format: date */
             fromDate?: string | null;
@@ -1640,7 +1630,8 @@ export interface components {
         /** ReplayJobStatusResponse */
         ReplayJobStatusResponse: {
             jobId: string;
-            scope: string;
+            /** @enum {string} */
+            scope: "projections" | "derived" | "all";
             metricTypes?: string[] | null;
             /** Format: date */
             fromDate?: string | null;

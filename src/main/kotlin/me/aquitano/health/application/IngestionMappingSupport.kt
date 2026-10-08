@@ -1,11 +1,7 @@
 package me.aquitano.health.application
 
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonObject
-import me.aquitano.health.api.dto.IngestionRecord
 import me.aquitano.health.domain.ValidationIssue
 import me.aquitano.health.domain.ValidationIssueCodes
-import me.aquitano.health.shared.AppJson
 import me.aquitano.health.shared.normalizeProviderCode
 import java.time.Instant
 import java.time.LocalDate
@@ -15,8 +11,6 @@ import java.time.LocalDate
  * per-record mappers. Each helper records issues on the shared list and returns
  * null (or nothing) for invalid input so the caller can keep collecting issues.
  */
-
-internal fun IngestionRecord.toNormalizedJsonObject(): JsonObject = AppJson.encodeToJsonElement(IngestionRecord.serializer(), this).jsonObject
 
 internal fun normalizeProvider(
     value: String?,
@@ -120,44 +114,12 @@ internal fun parseDate(
     }
 }
 
-internal fun validateNonNegativeInt(
-    value: Int?,
+internal fun validateNonNegative(
+    value: Number?,
     field: String,
     issues: MutableList<ValidationIssue>,
 ) {
-    if (value != null && value < 0) {
-        issues.add(
-            ValidationIssue(
-                field = field,
-                code = ValidationIssueCodes.OutOfRange,
-                message = "must be greater than or equal to 0",
-            ),
-        )
-    }
-}
-
-internal fun validateNonNegativeLong(
-    value: Long?,
-    field: String,
-    issues: MutableList<ValidationIssue>,
-) {
-    if (value != null && value < 0) {
-        issues.add(
-            ValidationIssue(
-                field = field,
-                code = ValidationIssueCodes.OutOfRange,
-                message = "must be greater than or equal to 0",
-            ),
-        )
-    }
-}
-
-internal fun validateNonNegativeDouble(
-    value: Double?,
-    field: String,
-    issues: MutableList<ValidationIssue>,
-) {
-    if (value != null && value < 0.0) {
+    if (value != null && value.toDouble() < 0.0) {
         issues.add(
             ValidationIssue(
                 field = field,

@@ -16,14 +16,17 @@ import me.aquitano.health.application.metric.sleep.repository.SleepRepository
 import me.aquitano.health.application.metric.steps.StepQueryService
 import me.aquitano.health.application.metric.steps.derived.CanonicalStepDerivationService
 import me.aquitano.health.application.metric.steps.repository.CanonicalStepDerivationRepository
+import me.aquitano.health.domain.NewIngestionRecord
 import me.aquitano.health.domain.ReplayJobStatus
 import me.aquitano.health.infrastructure.database.suspendDbTransaction
 import me.aquitano.health.infrastructure.repositories.*
-import me.aquitano.health.infrastructure.time.UtcClock
+import me.aquitano.health.shared.AppJson
 import me.aquitano.health.test.*
 import org.junit.After
+import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneOffset
 import kotlin.test.*
 
 class ProviderCorrectionTest : PostgresIntegrationTest() {
@@ -50,9 +53,9 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
             assertEquals(0, duplicate.metricsCreated.values.sum())
             assertEquals(projectionIds, fixture.projectionIds())
             assertEquals(18, fixture.config.countRows("ingestion_records"))
-            assertEquals(0, fixture.replay(ReplayRequest(scope = "all")).metricsWritten)
+            assertEquals(0, fixture.replay(ReplayRequest()).metricsWritten)
 
-            fixture.replay(ReplayRequest(scope = "all", wipe = true))
+            fixture.replay(ReplayRequest(wipe = true))
             fixture.assertCorrectedValues()
             assertEquals(18, fixture.config.countRows("ingestion_records"))
             projectionTables.forEach { assertEquals(1, fixture.config.countRows(it)) }
@@ -81,9 +84,9 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
 
             // The newest arrival is on an earlier date, so chronological replay sees it first.
             steps("2026-04-17", 300)
-            fixture.replay(ReplayRequest(scope = "all", fromDate = "2026-04-20", toDate = "2026-04-20", wipe = true))
+            fixture.replay(ReplayRequest(fromDate = "2026-04-20", toDate = "2026-04-20", wipe = true))
             assertEquals(300, fixture.config.queryInt("SELECT steps FROM step_samples"))
-            fixture.replay(ReplayRequest(scope = "all", wipe = true))
+            fixture.replay(ReplayRequest(wipe = true))
             assertEquals(300, fixture.config.queryInt("SELECT steps FROM step_samples"))
             assertEquals("2026-04-17", fixture.config.queryString("SELECT DISTINCT date::text FROM canonical_step_day_bucket_contributions"))
             assertEquals(300, fixture.config.queryInt("SELECT SUM(value)::int FROM canonical_step_day_bucket_contributions"))
@@ -117,7 +120,7 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
             assertEquals(3, fixture.config.queryInt("SELECT value::int FROM scalar_samples WHERE segment = 'right_arm'"))
             assertEquals(70, fixture.config.queryInt("SELECT value::int FROM scalar_samples WHERE context = 'sleep'"))
             assertEquals(170, fixture.config.queryInt("SELECT SUM(value)::int FROM scalar_samples WHERE context = 'unknown'"))
-            fixture.replay(ReplayRequest(scope = "all", wipe = true))
+            fixture.replay(ReplayRequest(wipe = true))
             assertEquals(5, fixture.config.countRows("scalar_samples"))
             assertEquals(170, fixture.config.queryInt("SELECT SUM(value)::int FROM scalar_samples WHERE context = 'unknown'"))
         }
@@ -131,9 +134,9 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
             fixture.ingest(listOf(original))
             fixture.ingest(listOf(corrected))
             fixture.appendFailed(corrected.copy(value = 99.0))
-            fixture.replay(ReplayRequest(scope = "all", fromDate = "2026-04-19", toDate = "2026-04-19", wipe = true))
+            fixture.replay(ReplayRequest(fromDate = "2026-04-19", toDate = "2026-04-19", wipe = true))
             assertEquals(81, fixture.config.queryInt("SELECT value::int FROM scalar_samples"))
-            fixture.replay(ReplayRequest(scope = "all", wipe = true))
+            fixture.replay(ReplayRequest(wipe = true))
             assertEquals(81, fixture.config.queryInt("SELECT value::int FROM scalar_samples"))
             assertEquals("2026-04-17", fixture.config.queryString("SELECT measured_at::date::text FROM scalar_samples"))
             assertEquals(3, fixture.config.countRows("ingestion_records"))
@@ -150,14 +153,14 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
             fixture.ingest(listOf(corrected))
             fixture.assertStepReadTotals(mapOf("2026-04-19" to 400))
             assertEquals(300, fixture.config.queryInt("SELECT steps FROM step_samples WHERE provider_record_id = 'first'"))
-            fixture.replay(ReplayRequest(scope = "all", wipe = true))
+            fixture.replay(ReplayRequest(wipe = true))
             fixture.assertStepReadTotals(mapOf("2026-04-19" to 400))
             assertEquals(300, fixture.config.queryInt("SELECT steps FROM step_samples WHERE provider_record_id = 'first'"))
             assertEquals(2, fixture.config.countRows("step_samples"))
             fixture.ingest(listOf(corrected.copy(steps = 100)))
             fixture.ingest(listOf(corrected))
             fixture.ingest(listOf(corrected))
-            fixture.replay(ReplayRequest(scope = "all", wipe = true))
+            fixture.replay(ReplayRequest(wipe = true))
             fixture.assertStepReadTotals(mapOf("2026-04-19" to 400))
             assertEquals(300, fixture.config.queryInt("SELECT steps FROM step_samples WHERE provider_record_id = 'first'"))
             assertEquals(2, fixture.config.countRows("step_samples"))
@@ -177,9 +180,9 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
             fixture.ingest(listOf(neighbor))
             assertEquals(projectionId, fixture.config.queryInt("SELECT id FROM step_samples WHERE provider_record_id = 'neighbor'"))
             fixture.assertStepReadTotals(mapOf("2026-04-19" to 600))
-            fixture.replay(ReplayRequest(scope = "all"))
+            fixture.replay(ReplayRequest())
             fixture.assertStepReadTotals(mapOf("2026-04-19" to 600))
-            fixture.replay(ReplayRequest(scope = "all", wipe = true))
+            fixture.replay(ReplayRequest(wipe = true))
             fixture.assertStepReadTotals(mapOf("2026-04-19" to 600))
 
             fixture.ingest(listOf(neighbor.copy(steps = 900)))
@@ -187,7 +190,7 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
             fixture.ingest(listOf(neighbor))
             fixture.ingest(listOf(neighbor))
             fixture.assertStepReadTotals(mapOf("2026-04-19" to 800))
-            fixture.replay(ReplayRequest(scope = "all", wipe = true))
+            fixture.replay(ReplayRequest(wipe = true))
             fixture.assertStepReadTotals(mapOf("2026-04-19" to 800))
         }
 
@@ -201,7 +204,7 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
             repeat(2) {
                 fixture.assertStepReadTotals(mapOf("2026-04-19" to 100, "2026-04-20" to 2400, "2026-04-21" to 100))
                 assertEquals(1, fixture.config.queryInt("SELECT COUNT(*) FROM canonical_step_samples WHERE date = '2026-04-20'"))
-                fixture.replay(ReplayRequest(scope = "all", wipe = true))
+                fixture.replay(ReplayRequest(wipe = true))
             }
         }
 
@@ -216,15 +219,15 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
                 assertEquals(1, fixture.ingest(listOf(overlapping)).metricsSkipped.duplicates)
                 assertEquals(1, fixture.config.countRows("step_samples"))
             }
-            fixture.replay(ReplayRequest(scope = "all", wipe = true))
+            fixture.replay(ReplayRequest(wipe = true))
             assertEquals(1, fixture.config.countRows("step_samples"))
             assertEquals("neighbor", fixture.config.queryString("SELECT provider_record_id FROM step_samples"))
             fixture.ingest(listOf(neighbor))
-            fixture.replay(ReplayRequest(scope = "all", wipe = true))
+            fixture.replay(ReplayRequest(wipe = true))
             assertEquals(1, fixture.config.countRows("step_samples"))
             assertEquals("neighbor", fixture.config.queryString("SELECT provider_record_id FROM step_samples"))
             fixture.ingest(listOf(neighbor.copy(steps = 300)))
-            fixture.replay(ReplayRequest(scope = "all", wipe = true))
+            fixture.replay(ReplayRequest(wipe = true))
             assertEquals(1, fixture.config.countRows("step_samples"))
             assertEquals(300, fixture.config.queryInt("SELECT steps FROM step_samples"))
             assertEquals(2, fixture.config.queryInt("SELECT COUNT(*) FROM ingestion_records WHERE google_step_projection_accepted = false"))
@@ -238,14 +241,14 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
             val skipped = StepInterval("skipped", "2026-04-20T01:00:00Z", "2026-04-20T02:00:00Z", 100)
             fixture.ingest(listOf(skipped))
             fixture.ingest(listOf(StepInterval("winner", "2026-04-18T23:00:00Z", "2026-04-19T02:00:00Z", 400)))
-            fixture.replay(ReplayRequest(scope = "all", wipe = true))
+            fixture.replay(ReplayRequest(wipe = true))
             assertEquals(1, fixture.config.countRows("step_samples"))
             assertEquals("winner", fixture.config.queryString("SELECT provider_record_id FROM step_samples"))
             assertEquals(400, fixture.config.queryInt("SELECT steps FROM step_samples"))
             // A new arrival for a previously skipped identity still gets the normal overlap check.
             fixture.ingest(listOf(skipped))
             assertEquals(2, fixture.config.countRows("step_samples"))
-            fixture.replay(ReplayRequest(scope = "all", wipe = true))
+            fixture.replay(ReplayRequest(wipe = true))
             assertEquals(2, fixture.config.countRows("step_samples"))
         }
 
@@ -264,7 +267,7 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
             assertEquals(1002, fixture.config.countRows("scalar_samples"))
             assertEquals(81, fixture.config.queryInt("SELECT value::int FROM scalar_samples WHERE provider_record_id = 'repeated'"))
             assertEquals(1003, fixture.config.countRows("ingestion_records"))
-            fixture.replay(ReplayRequest(scope = "all", wipe = true))
+            fixture.replay(ReplayRequest(wipe = true))
             assertEquals(81, fixture.config.queryInt("SELECT value::int FROM scalar_samples WHERE provider_record_id = 'repeated'"))
         }
 
@@ -275,11 +278,11 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
             val day = LocalDate.parse("2030-03-01")
             val sample = StepInterval("steps", "2030-03-01T08:00:00Z", "2030-03-01T09:00:00Z", 100)
             fixture.ingest(listOf(sample))
-            val derivation = CanonicalStepDerivationService(CanonicalStepDerivationRepository())
+            val derivation = CanonicalStepDerivationService(fixture.database, CanonicalStepDerivationRepository())
             PostgresTestDatabase.connection(fixture.config).use { lock ->
                 lock.autoCommit = false
                 lock.createStatement().use { it.execute("SELECT pg_advisory_xact_lock(384729, ${day.toEpochDay()})") }
-                val stale = async(Dispatchers.IO) { derivation.recompute(fixture.database, setOf(day), fixture.now) }
+                val stale = async(Dispatchers.IO) { derivation.recompute(setOf(day), fixture.now) }
                 try {
                     withTimeout(10_000) {
                         while (fixture.config.queryInt("SELECT COUNT(*) FROM pg_locks WHERE locktype = 'advisory' AND classid = 384729 AND objid = ${day.toEpochDay()} AND NOT granted") == 0) delay(20)
@@ -334,11 +337,10 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
                 mapping,
                 writer,
                 derived,
-                derivedRebuildRegistry(),
                 PendingDerivedRebuildRepository(database),
                 ReplayJobRepository(database),
                 ProjectionWipeRepository(),
-                UtcClock.fixed(now),
+                Clock.fixed(now, ZoneOffset.UTC),
             ).also { replayServices += it }
 
         suspend fun ingest(
@@ -363,16 +365,18 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
                 val batches =
                     values.chunked(1000).map { chunk ->
                         val batchId = records.insertBatch(source.id, null, "{}", now, now)
-                        batchId to records.insertRecords(batchId, chunk.map { mapping.mapRecord(it)!! }, now)
+                        batchId to records.insertRecords(batchId, chunk.map { it.toNewIngestionRecord() }, now)
                     }
                 batches.forEach { (batchId, _) -> records.markProcessed(batchId, now) }
                 writer.writeAll(provider, source.id, batches.flatMap { (_, inserted) -> inserted.map { MetricWrite(it.id, it.record) } }, now)
             }
 
+        private fun IngestionRecord.toNewIngestionRecord() = NewIngestionRecord(mapping.mapRecord(this)!!, AppJson.encodeToString(IngestionRecord.serializer(), this))
+
         suspend fun appendFailed(value: IngestionRecord) =
             suspendDbTransaction(db = database) {
                 val batchId = records.insertBatch(config.queryInt("SELECT id FROM source_instances LIMIT 1"), null, "{}", now, now)
-                records.insertRecords(batchId, listOf(mapping.mapRecord(value)!!), now)
+                records.insertRecords(batchId, listOf(value.toNewIngestionRecord()), now)
                 records.markFailed(batchId, now, "test failed projection write")
             }
 

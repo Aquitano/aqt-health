@@ -11,6 +11,7 @@ import me.aquitano.health.shared.AppJson
 import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.test.authorized
 import me.aquitano.health.test.configureTestApplication
+import me.aquitano.health.test.errorCode
 import me.aquitano.health.test.jsonBody
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -95,6 +96,22 @@ class ApplicationTest : PostgresIntegrationTest() {
             assertEquals("validation_failed", error["code"]!!.jsonPrimitive.content)
             assertEquals("invalid_format", detail["code"]!!.jsonPrimitive.content)
             assertEquals("fromDate", detail["field"]!!.jsonPrimitive.content)
+        }
+
+    @Test
+    fun unknownReplayScopeIsRejectedAsValidationFailure() =
+        testApplication {
+            configureTestApplication()
+
+            val response =
+                client.post("/api/v2/admin/replay") {
+                    authorized()
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"scope":"bogus"}""")
+                }
+
+            assertEquals(HttpStatusCode.BadRequest, response.status)
+            assertEquals("validation_failed", response.errorCode())
         }
 
     @Test

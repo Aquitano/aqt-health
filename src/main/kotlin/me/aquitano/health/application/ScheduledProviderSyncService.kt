@@ -7,7 +7,7 @@ import me.aquitano.health.api.dto.*
 import me.aquitano.health.domain.*
 import me.aquitano.health.domain.ProviderSyncRequest
 import me.aquitano.health.infrastructure.logging.*
-import me.aquitano.health.infrastructure.repositories.ACCOUNT_STATUS_NEEDS_REAUTH
+import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
 import me.aquitano.health.infrastructure.repositories.ScheduledSyncCheckpointRecord
 import me.aquitano.health.infrastructure.repositories.ScheduledSyncConfigRecord
 import me.aquitano.health.infrastructure.repositories.ScheduledSyncRepository
@@ -42,7 +42,7 @@ class ScheduledSyncRunGuard {
 
 class ScheduledProviderSyncService(
     private val providerRegistry: HealthProviderRegistry,
-    private val providerOAuthRepository: me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository,
+    private val providerOAuthRepository: ProviderOAuthRepository,
     private val repository: ScheduledSyncRepository,
     private val runGuard: ScheduledSyncRunGuard = ScheduledSyncRunGuard(),
 ) {
@@ -145,7 +145,7 @@ class ScheduledProviderSyncService(
         return ScheduledSyncRunResponse(
             providerCode = provider.providerCode,
             providerInstanceId = providerInstanceId,
-            status = SyncStatus.fromStored(result.status),
+            status = result.status,
             requestedFrom = result.requestedFrom?.toString(),
             requestedTo = result.requestedTo?.toString(),
             errors = result.errors,
@@ -232,7 +232,7 @@ class ScheduledProviderSyncService(
                 nextRunAt = ScheduledSyncPolicy.nextRunAfterSuccess(now, config.cadenceMinutes),
                 now = now,
             )
-            ScheduledSyncExecutionResult("processed", earliestFrom, latestTo, emptyList(), summaries)
+            ScheduledSyncExecutionResult(SyncStatus.Processed, earliestFrom, latestTo, emptyList(), summaries)
         } else {
             val failureCount = config.failureCount + 1
             val park = (hasNonRetryableError && failureCount >= FAILURES_BEFORE_PARKING) || needsReauth(config)
@@ -251,7 +251,7 @@ class ScheduledProviderSyncService(
                 "failureCount" to failureCount,
                 "parked" to park,
             )
-            ScheduledSyncExecutionResult("failed", earliestFrom, latestTo, errors, summaries)
+            ScheduledSyncExecutionResult(SyncStatus.Failed, earliestFrom, latestTo, errors, summaries)
         }
     }
 
@@ -274,7 +274,7 @@ class ScheduledProviderSyncService(
     private suspend fun needsReauth(config: ScheduledSyncConfigRecord): Boolean =
         providerOAuthRepository
             .accountByProviderInstanceForStatus(config.providerCode, config.providerInstanceId)
-            ?.accountStatus == ACCOUNT_STATUS_NEEDS_REAUTH
+            ?.accountStatus == ProviderAccountStatus.NeedsReauth
 
     private fun runKey(config: ScheduledSyncConfigRecord): String = "${config.providerCode}:${config.providerInstanceId}"
 
@@ -306,14 +306,14 @@ class ScheduledProviderSyncService(
         dataTypes: List<String>,
     ): List<String> {
         val selected = dataTypes.map { it.trim() }.filter { it.isNotBlank() }.distinct()
-        val unsupported = selected.filterNot { provider.descriptor.supportedDataTypes.contains(it) }
-        val issues = mutableListOf<ValidationIssue>()
-        if (selected.isEmpty()) {
-            issues += ValidationIssue("dataTypes", ValidationIssueCodes.Required, "must include at least one data type")
-        }
-        unsupported.forEach {
-            issues += ValidationIssue("dataTypes", ValidationIssueCodes.UnsupportedValue, "'$it' is not supported")
-        }
+        val issues =
+            listOfNotNull(
+                ValidationIssue("dataTypes", ValidationIssueCodes.Required, "must include at least one data type")
+                    .takeIf { selected.isEmpty() },
+            ) +
+                selected
+                    .filterNot { it in provider.descriptor.supportedDataTypes }
+                    .map { ValidationIssue("dataTypes", ValidationIssueCodes.UnsupportedValue, "'$it' is not supported") }
         if (issues.isNotEmpty()) throw RequestValidationException(issues)
         return selected
     }
@@ -325,9 +325,7 @@ class ScheduledProviderSyncService(
         max: Int,
     ): Int {
         if (value < min || value > max) {
-            throw RequestValidationException(
-                listOf(ValidationIssue(field, ValidationIssueCodes.OutOfRange, "must be between $min and $max")),
-            )
+            throw RequestValidationException(field, ValidationIssueCodes.OutOfRange, "must be between $min and $max")
         }
         return value
     }
@@ -350,7 +348,7 @@ object ScheduledSyncPolicy {
 }
 
 private data class ScheduledSyncExecutionResult(
-    val status: String,
+    val status: SyncStatus,
     val requestedFrom: Instant?,
     val requestedTo: Instant?,
     val errors: List<String>,
@@ -386,5 +384,5 @@ private fun ScheduledSyncCheckpointRecord.toDto(): ScheduledSyncCheckpointRespon
         dataType = dataType,
         checkpointAt = checkpointAt?.toString(),
         lastSuccessfulFrom = lastSuccessfulFrom?.toString(),
-        lastSuccessfulTo = lastSuccessfulTo?.toString(),
+        lastSuccessfulTo = checkpointAt?.toString(),
     )

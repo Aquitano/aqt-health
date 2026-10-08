@@ -1,36 +1,29 @@
 package me.aquitano.health.application.metric.common
 
 import me.aquitano.health.api.dto.*
-import me.aquitano.health.application.metric.common.repository.SourceMetadata
+import me.aquitano.health.api.dto.SourceMetadataResponse
 import me.aquitano.health.application.metric.sleep.repository.SleepNightRow
 import me.aquitano.health.application.metric.sleep.repository.SleepSessionRow
 import me.aquitano.health.application.metric.sleep.repository.SleepStageRow
 import me.aquitano.health.shared.Cursor
-
-internal fun SourceMetadata?.toResponse(): SourceMetadataResponse? =
-    this?.let {
-        SourceMetadataResponse(
-            provider = it.provider,
-            providerInstanceId = it.providerInstanceId,
-        )
-    }
+import me.aquitano.health.shared.SortDirection
 
 /**
  * Source attribution for an aggregate: reported only when every contributing row came from the
  * same source instance, so a merged multi-provider result is left unattributed.
  */
 internal fun <T> Iterable<T>.singleSource(
-    sourceMetadata: Map<Int, SourceMetadata>,
+    sourceMetadata: Map<Int, SourceMetadataResponse>,
     sourceInstanceId: (T) -> Int,
 ): SourceMetadataResponse? {
     val ids = mapTo(linkedSetOf(), sourceInstanceId)
     if (ids.size != 1) return null
-    return sourceMetadata[ids.single()].toResponse()
+    return sourceMetadata[ids.single()]
 }
 
 internal fun SleepSessionRow.toResponse(
     stagesBySession: Map<Int, List<SleepStageRow>>,
-    sourceMetadata: Map<Int, SourceMetadata>,
+    sourceMetadata: Map<Int, SourceMetadataResponse>,
 ): SleepSessionResponse =
     SleepSessionResponse(
         id = id,
@@ -46,12 +39,12 @@ internal fun SleepSessionRow.toResponse(
                     durationSeconds = it.durationSeconds,
                 )
             },
-        source = sourceMetadata[sourceInstanceId].toResponse(),
+        source = sourceMetadata[sourceInstanceId],
     )
 
 internal fun SleepNightRow.toResponse(
     stagesBySession: Map<Int, List<SleepStageRow>>,
-    sourceMetadata: Map<Int, SourceMetadata>,
+    sourceMetadata: Map<Int, SourceMetadataResponse>,
 ): SleepNightResponse =
     SleepNightResponse(
         date = date,
@@ -72,14 +65,14 @@ internal fun keysetFetchLimit(limit: Int): Int = if (limit == Int.MAX_VALUE) Int
 
 internal fun <T> List<T>.keysetPage(
     limit: Int,
-    order: String,
+    order: SortDirection,
     sortValue: (T) -> String,
     id: (T) -> Long,
 ): KeysetPage<T> =
     if (size > limit) {
         val items = take(limit)
         val last = items.last()
-        KeysetPage(items, Cursor.encode(sortValue(last), id(last), order = order))
+        KeysetPage(items, Cursor(sortValue(last), id(last), order).encode())
     } else {
         KeysetPage(this, null)
     }

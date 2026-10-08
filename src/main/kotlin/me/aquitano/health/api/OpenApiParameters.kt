@@ -11,6 +11,7 @@ import me.aquitano.health.application.metric.common.QueryParamSpecs
 import me.aquitano.health.domain.BatchStatus
 import me.aquitano.health.domain.BodyMetricTypes
 import me.aquitano.health.domain.ScalarMetricTypes
+import me.aquitano.health.shared.SortDirection
 
 private const val ReadCursorExample =
     "eyJzIjoiMjAyNi0wNC0wMlQwODowNTowMFoiLCJpZCI6MTIzLCJvIjoiYXNjIn0"
@@ -49,7 +50,7 @@ internal fun Operation.Builder.idempotencyKeyHeader() {
     }
 }
 
-internal fun Operation.Builder.readQueryParameters(includeLatest: Boolean = false) {
+internal fun Operation.Builder.readQueryParameters() {
     instantRangeParameters(
         fromDescription =
             "Inclusive start timestamp or date. Date-only values are interpreted by the endpoint's query service.",
@@ -57,12 +58,10 @@ internal fun Operation.Builder.readQueryParameters(includeLatest: Boolean = fals
             "Exclusive end timestamp or date. Date-only values are interpreted by the endpoint's query service.",
     )
     providerFilterParameters()
-    if (includeLatest) {
-        latestParameter(
-            "Return the latest matching item when true. Defaults to false. Cannot be combined with limit, order, or cursor.",
-        )
-    }
-    orderParameter("Sort direction. Defaults to ${QueryParamSpecs.order.default}. Use desc for newest-first reads.")
+    latestParameter(
+        "Return the latest matching item when true. Defaults to false. Cannot be combined with limit, order, or cursor.",
+    )
+    orderParameter("Sort direction. Defaults to ${QueryParamSpecs.order.default.wireName}. Use desc for newest-first reads.")
     limitParameter(
         spec = QueryParamSpecs.readLimit,
         description = defaultLimitDescription(QueryParamSpecs.readLimit),
@@ -88,7 +87,7 @@ internal fun Operation.Builder.multiScalarMetricQueryParameters() {
 }
 
 private fun Operation.Builder.scalarListQueryParameters() {
-    readQueryParameters(includeLatest = true)
+    readQueryParameters()
     parameters {
         query(QueryParamSpecs.raw.name) {
             description =
@@ -128,7 +127,7 @@ internal fun Operation.Builder.scalarDailySummaryQueryParameters() {
 
 internal fun Operation.Builder.dailyQueryParameters(localDays: Boolean) {
     providerFilterParameters()
-    orderParameter("Sort direction. Defaults to ${QueryParamSpecs.order.default}. Use desc for newest-first reads.")
+    orderParameter("Sort direction. Defaults to ${QueryParamSpecs.order.default.wireName}. Use desc for newest-first reads.")
     limitParameter(
         spec = QueryParamSpecs.readLimit,
         description = defaultLimitDescription(QueryParamSpecs.readLimit),
@@ -174,7 +173,7 @@ internal fun Operation.Builder.sleepNightQueryParameters() {
         example = 7,
     )
     orderParameter(
-        "Sort direction. Defaults to ${QueryParamSpecs.order.default}. Use desc for most recent sleep nights first.",
+        "Sort direction. Defaults to ${QueryParamSpecs.order.default.wireName}. Use desc for most recent sleep nights first.",
     )
     cursorParameter(CursorDescription, example = DateCursorExample)
 }
@@ -355,9 +354,9 @@ private fun Operation.Builder.orderParameter(orderDescription: String) {
             description = orderDescription
             schema =
                 stringSchema(
-                    enumValues = QueryParamSpecs.order.values,
-                    default = QueryParamSpecs.order.default,
-                    example = "desc",
+                    enumValues = SortDirection.entries.map { it.wireName },
+                    default = QueryParamSpecs.order.default.wireName,
+                    example = SortDirection.Desc.wireName,
                 )
         }
     }

@@ -8,7 +8,6 @@ import me.aquitano.health.domain.ProviderSyncBatch
 import me.aquitano.health.domain.ProviderSyncEmptyDataType
 import me.aquitano.health.domain.ProviderSyncError
 import me.aquitano.health.domain.ProviderSyncSummary
-import me.aquitano.health.domain.SyncStatus
 
 internal fun ProviderSyncSummary.toDto(): ProviderSyncResponse =
     ProviderSyncResponse(
@@ -16,7 +15,7 @@ internal fun ProviderSyncSummary.toDto(): ProviderSyncResponse =
         providerInstanceId = providerInstanceId,
         requestedFrom = requestedFrom.toString(),
         requestedTo = requestedTo.toString(),
-        status = SyncStatus.fromStored(status),
+        status = status,
         batches = batches.map { it.toDto() },
         emptyDataTypes = emptyDataTypes.map { it.toDto() },
         errors = errors.map { it.toDto() },

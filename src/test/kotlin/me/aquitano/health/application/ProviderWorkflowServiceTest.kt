@@ -59,7 +59,6 @@ class ProviderWorkflowServiceTest : PostgresIntegrationTest() {
                 ProviderWorkflowService(
                     providerRegistry = registry,
                     providerOAuthRepository = oAuthRepository,
-                    providerStatusService = ProviderStatusService(registry, oAuthRepository),
                     scheduledSyncRepository = scheduledSyncRepository,
                 )
             val parked =

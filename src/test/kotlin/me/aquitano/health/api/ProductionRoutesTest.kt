@@ -31,7 +31,6 @@ class ProductionRoutesTest {
     private fun productionConfig(): AppConfig =
         MapApplicationConfig(
             "aqtHealth.database.jdbcUrl" to "jdbc:postgresql://db.invalid/aqt_health",
-            "aqtHealth.database.driver" to "org.postgresql.Driver",
             "aqtHealth.database.user" to "user",
             "aqtHealth.database.password" to "password",
             "aqtHealth.database.maxPoolSize" to "1",

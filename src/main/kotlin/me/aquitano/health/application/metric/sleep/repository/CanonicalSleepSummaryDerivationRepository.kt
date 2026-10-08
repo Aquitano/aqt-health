@@ -18,7 +18,7 @@ class CanonicalSleepSummaryDerivationRepository : BaseMetricReadRepository() {
                 filters = filters,
                 sourceInstanceIdColumn = CanonicalSleepSummariesTable.sourceInstanceId,
                 fromColumn = CanonicalSleepSummariesTable.startAt,
-            ).whereOrNull() ?: return emptyList()
+            ) ?: return emptyList()
 
         val keyset =
             timestampKeyset(

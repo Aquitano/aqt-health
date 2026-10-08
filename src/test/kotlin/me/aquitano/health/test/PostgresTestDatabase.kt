@@ -83,7 +83,6 @@ object PostgresTestDatabase {
     private fun containerConfig(databaseName: String): DatabaseConfig =
         DatabaseConfig(
             jdbcUrl = "jdbc:postgresql://${container.host}:${container.getMappedPort(5432)}/$databaseName",
-            driver = "org.postgresql.Driver",
             user = container.username,
             password = container.password,
             maxPoolSize = 1,
@@ -94,7 +93,6 @@ object PostgresTestDatabase {
     fun ktorConfigEntries(config: DatabaseConfig): Array<Pair<String, String>> =
         arrayOf(
             "aqtHealth.database.jdbcUrl" to config.jdbcUrl,
-            "aqtHealth.database.driver" to config.driver,
             "aqtHealth.database.user" to config.user,
             "aqtHealth.database.password" to config.password,
             "aqtHealth.database.maxPoolSize" to config.maxPoolSize.toString(),
@@ -143,7 +141,6 @@ object PostgresTestDatabase {
         externalSchemas.add(ExternalSchema(jdbcUrl, user, password, schema))
         return DatabaseConfig(
             jdbcUrl = jdbcUrl.withJdbcParameter("currentSchema", "$schema,$extensionSchema"),
-            driver = "org.postgresql.Driver",
             user = user,
             password = password,
             maxPoolSize = 1,

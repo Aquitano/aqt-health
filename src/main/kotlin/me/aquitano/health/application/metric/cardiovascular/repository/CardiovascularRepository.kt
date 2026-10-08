@@ -16,7 +16,7 @@ class CardiovascularRepository : BaseMetricReadRepository() {
                 filters = filters,
                 sourceInstanceIdColumn = BloodPressureMeasurementsTable.sourceInstanceId,
                 fromColumn = BloodPressureMeasurementsTable.measuredAt,
-            ).whereOrNull() ?: return emptyList()
+            ) ?: return emptyList()
 
         val keyset =
             timestampKeyset(

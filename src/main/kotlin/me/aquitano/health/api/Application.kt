@@ -16,10 +16,10 @@ import me.aquitano.health.infrastructure.database.DatabaseFactory
 import me.aquitano.health.infrastructure.logging.*
 import me.aquitano.health.infrastructure.repositories.SupportRepository
 import me.aquitano.health.infrastructure.security.ApiKeyHasher
-import me.aquitano.health.infrastructure.time.UtcClock
 import org.koin.ktor.ext.inject
 import org.koin.ktor.plugin.Koin
 import org.koin.logger.slf4jLogger
+import java.time.Clock
 
 private val logger = KotlinLogging.logger("me.aquitano.health.api.Application")
 
@@ -31,7 +31,7 @@ fun main(args: Array<String>) {
 fun Application.module() {
     configureObservability()
     val appConfig = environment.config.toAppConfig()
-    logger.infoWithContext("app_starting", "databaseDriver" to appConfig.database.driver)
+    logger.info { "app_starting" }
 
     val databaseFactory = DatabaseFactory()
     val database = databaseFactory.initialize(appConfig.database)
@@ -60,7 +60,7 @@ fun Application.module() {
     )
 
     val httpClient by inject<io.ktor.client.HttpClient>()
-    val clock by inject<UtcClock>()
+    val clock by inject<Clock>()
     monitor.subscribe(ApplicationStopping) {
         httpClient.close()
     }
@@ -85,13 +85,13 @@ fun Application.module() {
     }
 
     val providerSyncJobService by inject<ProviderSyncJobService>()
-    providerSyncJobService.start(clock.now())
+    providerSyncJobService.start(clock.instant())
     monitor.subscribe(ApplicationStopping) {
         providerSyncJobService.stop()
     }
 
     val replayService by inject<ReplayService>()
-    replayService.start(clock.now())
+    replayService.start(clock.instant())
     monitor.subscribe(ApplicationStopping) {
         replayService.stop()
     }

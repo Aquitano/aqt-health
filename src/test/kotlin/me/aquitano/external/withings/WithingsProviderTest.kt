@@ -6,18 +6,17 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import me.aquitano.health.application.HealthProviderRegistry
-import me.aquitano.health.application.ProviderStatusService
 import me.aquitano.health.application.ProviderWorkflowService
 import me.aquitano.health.domain.ConflictException
 import me.aquitano.health.domain.ProviderSyncRequest
 import me.aquitano.health.domain.RequestValidationException
+import me.aquitano.health.domain.SyncStatus
 import me.aquitano.health.domain.UpstreamProviderException
 import me.aquitano.health.infrastructure.config.DatabaseConfig
 import me.aquitano.health.infrastructure.config.ProviderOAuthConfig
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
 import me.aquitano.health.infrastructure.repositories.ScheduledSyncRepository
 import me.aquitano.health.infrastructure.security.TokenCipher
-import me.aquitano.health.infrastructure.time.UtcClock
 import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.test.PostgresTestDatabase
 import me.aquitano.health.test.TEST_TOKEN_ENCRYPTION_KEY
@@ -27,7 +26,9 @@ import me.aquitano.health.test.ingestionService
 import me.aquitano.health.test.queryInt
 import me.aquitano.health.test.queryString
 import org.jetbrains.exposed.v1.jdbc.Database
+import java.time.Clock
 import java.time.Instant
+import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -119,7 +120,7 @@ class WithingsProviderTest : PostgresIntegrationTest() {
                     fixture.now,
                 )
 
-            assertEquals("processed", summary.status)
+            assertEquals(SyncStatus.Processed, summary.status)
             assertEquals(4, summary.batches.size)
             assertEquals(1, fixture.databaseConfig.countRows("step_samples"))
             assertEquals(1, fixture.databaseConfig.countRows("sleep_sessions"))
@@ -367,7 +368,7 @@ class WithingsProviderTest : PostgresIntegrationTest() {
                     fixture.now,
                 )
 
-            assertEquals("processed", summary.status)
+            assertEquals(SyncStatus.Processed, summary.status)
             assertTrue(summary.errors.isEmpty())
             // Empty windows are still stored as batches, so the next run dedupes them instead of
             // re-fetching the same empty day.
@@ -586,20 +587,14 @@ class WithingsProviderTest : PostgresIntegrationTest() {
                                 ingestionService = ingestionService(database),
                                 tokenEncryptionKeys = mapOf(WITHINGS_PROVIDER_CODE to config.tokenEncryptionKey),
                             ),
-                        clock = UtcClock.fixed(now),
+                        clock = Clock.fixed(now, ZoneOffset.UTC),
                     ),
             )
         private val providerRegistry = HealthProviderRegistry(listOf(provider))
-        val providerStatusService =
-            ProviderStatusService(
-                providerRegistry = providerRegistry,
-                providerOAuthRepository = providerRepository,
-            )
         val providerWorkflowService =
             ProviderWorkflowService(
                 providerRegistry = providerRegistry,
                 providerOAuthRepository = providerRepository,
-                providerStatusService = providerStatusService,
                 scheduledSyncRepository = ScheduledSyncRepository(database),
             )
 
@@ -684,7 +679,7 @@ class WithingsProviderTest : PostgresIntegrationTest() {
             failDataRequestIfConfigured(accessToken)
             if ("measures" in emptyDataTypes) return emptyFetchResult("measures")
             return WithingsFetchResult(
-                dataType = "measures",
+                dataType = WithingsDataType.Measures,
                 pages = page("measures"),
                 records =
                     listOf(
@@ -714,7 +709,7 @@ class WithingsProviderTest : PostgresIntegrationTest() {
             failDataRequestIfConfigured(accessToken)
             if ("activity" in emptyDataTypes) return emptyFetchResult("activity")
             return WithingsFetchResult(
-                dataType = "activity",
+                dataType = WithingsDataType.Activity,
                 pages = page("activity"),
                 records =
                     listOf(
@@ -737,7 +732,7 @@ class WithingsProviderTest : PostgresIntegrationTest() {
             failDataRequestIfConfigured(accessToken)
             if ("sleep" in emptyDataTypes) return emptyFetchResult("sleep")
             return WithingsFetchResult(
-                dataType = "sleep",
+                dataType = WithingsDataType.Sleep,
                 pages = page("sleep"),
                 records =
                     listOf(
@@ -766,7 +761,7 @@ class WithingsProviderTest : PostgresIntegrationTest() {
             failDataRequestIfConfigured(accessToken)
             if ("sleep-summary" in emptyDataTypes) return emptyFetchResult("sleep-summary")
             return WithingsFetchResult(
-                dataType = "sleep-summary",
+                dataType = WithingsDataType.SleepSummary,
                 pages = page("sleep-summary"),
                 records =
                     listOf(
@@ -794,7 +789,7 @@ class WithingsProviderTest : PostgresIntegrationTest() {
             }
         }
 
-        private fun emptyFetchResult(dataType: String): WithingsFetchResult = WithingsFetchResult(dataType, page(dataType), emptyList())
+        private fun emptyFetchResult(dataType: String): WithingsFetchResult = WithingsFetchResult(WithingsDataType.fromCode(dataType), page(dataType), emptyList())
 
         private fun page(dataType: String): List<WithingsPage> =
             listOf(

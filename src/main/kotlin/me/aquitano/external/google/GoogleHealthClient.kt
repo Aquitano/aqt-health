@@ -29,7 +29,7 @@ interface GoogleHealthOAuthClient {
 interface GoogleHealthClient : GoogleHealthOAuthClient {
     suspend fun fetchDataPoints(
         accessToken: String,
-        dataType: String,
+        dataType: GoogleHealthDataType,
         from: Instant,
         to: Instant,
         pageSize: Int,

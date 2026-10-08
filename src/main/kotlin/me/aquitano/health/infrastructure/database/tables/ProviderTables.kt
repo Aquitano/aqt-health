@@ -1,5 +1,7 @@
 package me.aquitano.health.infrastructure.database.tables
 
+import me.aquitano.health.domain.ProviderAccountStatus
+import me.aquitano.health.domain.SyncJobStatus
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
 import org.jetbrains.exposed.v1.javatime.timestampWithTimeZone
@@ -13,7 +15,8 @@ object ProviderOAuthAccountsTable : IntIdTable("provider_oauth_accounts") {
     val tokenType = text("token_type")
     val expiresAt = timestampWithTimeZone("expires_at")
     val scope = text("scope")
-    val accountStatus = text("account_status")
+    val accountStatus =
+        customEnumeration("account_status", "TEXT", { ProviderAccountStatus.fromStored(it as String) }, ProviderAccountStatus::stored)
     val connectedAt = timestampWithTimeZone("connected_at").nullable()
     val disconnectedAt = timestampWithTimeZone("disconnected_at").nullable()
     val lastTokenRefreshAt = timestampWithTimeZone("last_token_refresh_at").nullable()
@@ -59,7 +62,7 @@ object ProviderSyncJobsTable : Table("provider_sync_jobs") {
     val requestedTo = timestampWithTimeZone("requested_to")
     val dataTypes = text("data_types").nullable()
     val pageSize = integer("page_size").nullable()
-    val status = text("status")
+    val status = customEnumeration("status", "TEXT", { SyncJobStatus.fromStored(it as String) }, SyncJobStatus::stored)
     val totalItems = integer("total_items")
     val completedItems = integer("completed_items")
     val currentDataType = text("current_data_type").nullable()
@@ -109,7 +112,6 @@ object ProviderScheduledSyncCheckpointsTable : IntIdTable("provider_scheduled_sy
     val dataType = text("data_type")
     val checkpointAt = timestampWithTimeZone("checkpoint_at").nullable()
     val lastSuccessfulFrom = timestampWithTimeZone("last_successful_from").nullable()
-    val lastSuccessfulTo = timestampWithTimeZone("last_successful_to").nullable()
     val createdAt = timestampWithTimeZone("created_at")
     val updatedAt = timestampWithTimeZone("updated_at")
 

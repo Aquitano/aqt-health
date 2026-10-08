@@ -5,7 +5,6 @@ import io.ktor.http.URLBuilder
 import me.aquitano.external.oauthConfigurationIssues
 import me.aquitano.external.persistOAuthConnection
 import me.aquitano.external.requireProviderConfigured
-import me.aquitano.health.application.providersync.ProviderSyncAdapter
 import me.aquitano.health.application.providersync.ProviderSyncPipeline
 import me.aquitano.health.domain.*
 import me.aquitano.health.infrastructure.config.ProviderOAuthConfig
@@ -21,29 +20,18 @@ class WithingsProvider(
     private val client: WithingsClient,
     normalizer: WithingsNormalizer,
     private val syncPipeline: ProviderSyncPipeline,
-    private val syncAdapter: ProviderSyncAdapter = WithingsSyncAdapter(client, normalizer),
 ) : HealthProvider {
+    private val syncAdapter = WithingsSyncAdapter(client, normalizer)
     override val providerCode: String = WITHINGS_PROVIDER_CODE
 
     override val descriptor: HealthProviderDescriptor =
         HealthProviderDescriptor(
             providerCode = WITHINGS_PROVIDER_CODE,
-            displayName = "Withings",
-            authType = ProviderAuthType.OAUTH,
-            requiresAuthentication = true,
-            supportedDataTypes = WITHINGS_DEFAULT_DATA_TYPES,
-            defaultDataTypes = WITHINGS_DEFAULT_DATA_TYPES,
+            displayName = WITHINGS_DISPLAY_NAME,
+            supportedDataTypes = WithingsDataType.codes,
+            defaultDataTypes = WithingsDataType.codes,
             maxSyncRangeDays = 31,
             supportsPageSize = false,
-            workflowEndpoints =
-                ProviderWorkflowEndpoints(
-                    oauthStart = "/api/v2/providers/withings/oauth/start",
-                    oauthCallback = "/api/v2/providers/withings/oauth/callback",
-                    accounts = "/api/v2/providers/withings/accounts",
-                    disconnect = "/api/v2/providers/withings/accounts/{providerInstanceId}/disconnect",
-                    reconnect = "/api/v2/providers/withings/accounts/{providerInstanceId}/reconnect",
-                    sync = "/api/v2/providers/withings/sync-jobs",
-                ),
         )
     override val defaultProviderInstanceId: String = "withings-me"
 

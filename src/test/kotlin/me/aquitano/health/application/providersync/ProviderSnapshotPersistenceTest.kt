@@ -4,6 +4,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.buildJsonObject
 import me.aquitano.health.api.dto.IngestionBatchRequest
 import me.aquitano.health.api.dto.ScalarSample
+import me.aquitano.health.application.IngestionService
 import me.aquitano.health.domain.IngestionSnapshot
 import me.aquitano.health.domain.ScalarMetricTypes
 import me.aquitano.health.test.PostgresIntegrationTest
@@ -23,7 +24,7 @@ class ProviderSnapshotPersistenceTest : PostgresIntegrationTest() {
             val service = ingestionService(openDatabase())
             val original = sample("2026-04-01T08:00:00Z")
             val first = service.ingestBatch(request("first", original), now, IngestionSnapshot("day-a", "hash-a"))
-            assertEquals(first.batchId, service.reusableSyncBatchId("withings", "account", "day-a", "hash-a", now))
+            assertEquals(first.batchId, service.reusableBatchId("day-a", "hash-a"))
 
             service.ingestBatch(
                 request("moved", original.copy(measuredAt = "2026-04-02T08:00:00Z")),
@@ -31,14 +32,14 @@ class ProviderSnapshotPersistenceTest : PostgresIntegrationTest() {
                 IngestionSnapshot("day-b", "hash-b"),
             )
             // No empty day-a response needs to be observed before this return to the old window.
-            assertNull(service.reusableSyncBatchId("withings", "account", "day-a", "hash-a", now))
+            assertNull(service.reusableBatchId("day-a", "hash-a"))
             val returned = service.ingestBatch(request("returned", original), now, IngestionSnapshot("day-a", "hash-a"))
-            assertEquals(returned.batchId, service.reusableSyncBatchId("withings", "account", "day-a", "hash-a", now))
+            assertEquals(returned.batchId, service.reusableBatchId("day-a", "hash-a"))
 
             // An overlapping window can copy the same record without making either cache stale.
             service.ingestBatch(request("overlap", original), now, IngestionSnapshot("overlap", "hash-overlap"))
-            assertEquals(returned.batchId, service.reusableSyncBatchId("withings", "account", "day-a", "hash-a", now))
-            assertNotNull(service.reusableSyncBatchId("withings", "account", "overlap", "hash-overlap", now))
+            assertEquals(returned.batchId, service.reusableBatchId("day-a", "hash-a"))
+            assertNotNull(service.reusableBatchId("overlap", "hash-overlap"))
             Unit
         }
 
@@ -55,11 +56,16 @@ class ProviderSnapshotPersistenceTest : PostgresIntegrationTest() {
             service.ingestBatch(request("other-source", original.copy(value = 66.0)).copy(providerInstanceId = "another-account"), now)
             val failed = service.ingestBatch(request("failed", original.copy(value = 67.0)), now)
             databaseConfig.execute("UPDATE ingestion_batches SET status = 'failed' WHERE id = ${failed.batchId}")
-            assertNotNull(service.reusableSyncBatchId("withings", "account", "window", "hash", now))
+            assertNotNull(service.reusableBatchId("window", "hash"))
 
             service.ingestBatch(request("changed", original.copy(context = "unknown", value = 68.0)), now)
-            assertNull(service.reusableSyncBatchId("withings", "account", "window", "hash", now))
+            assertNull(service.reusableBatchId("window", "hash"))
         }
+
+    private suspend fun IngestionService.reusableBatchId(
+        windowKey: String,
+        contentHash: String,
+    ): Int? = reusableSyncBatchId(sourceInstanceId("withings", "account", now), windowKey, contentHash)
 
     private fun sample(measuredAt: String) =
         ScalarSample(

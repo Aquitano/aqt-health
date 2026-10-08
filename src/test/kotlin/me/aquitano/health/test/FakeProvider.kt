@@ -3,12 +3,11 @@ package me.aquitano.health.test
 import kotlinx.coroutines.CompletableDeferred
 import me.aquitano.health.domain.HealthProvider
 import me.aquitano.health.domain.HealthProviderDescriptor
-import me.aquitano.health.domain.ProviderAuthType
 import me.aquitano.health.domain.ProviderConnection
 import me.aquitano.health.domain.ProviderSyncProgressSink
 import me.aquitano.health.domain.ProviderSyncRequest
 import me.aquitano.health.domain.ProviderSyncSummary
-import me.aquitano.health.domain.ProviderWorkflowEndpoints
+import me.aquitano.health.domain.SyncStatus
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -25,13 +24,10 @@ open class FakeProvider(
         HealthProviderDescriptor(
             providerCode = providerCode,
             displayName = providerCode,
-            authType = ProviderAuthType.NONE,
-            requiresAuthentication = false,
             supportedDataTypes = listOf("steps"),
             defaultDataTypes = listOf("steps"),
             maxSyncRangeDays = 31,
             supportsPageSize = false,
-            workflowEndpoints = ProviderWorkflowEndpoints(sync = "/sync"),
         )
 
     override fun isConfigured(): Boolean = true
@@ -55,7 +51,7 @@ open class FakeProvider(
             providerInstanceId = request.providerInstanceId ?: defaultProviderInstanceId,
             requestedFrom = request.from,
             requestedTo = request.to,
-            status = "processed",
+            status = SyncStatus.Processed,
             batches = emptyList(),
             errors = emptyList(),
         )

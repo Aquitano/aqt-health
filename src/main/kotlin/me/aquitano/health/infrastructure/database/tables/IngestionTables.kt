@@ -1,5 +1,6 @@
 package me.aquitano.health.infrastructure.database.tables
 
+import me.aquitano.health.domain.BatchStatus
 import me.aquitano.health.infrastructure.database.jsonb
 import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
 import org.jetbrains.exposed.v1.javatime.date
@@ -12,7 +13,7 @@ object IngestionBatchesTable : IntIdTable("ingestion_batches") {
     val syncWindowKey = text("sync_window_key").nullable()
     val syncContentHash = text("sync_content_hash").nullable()
     val sourcePayloadJson = jsonb("source_payload_json")
-    val status = text("status")
+    val status = customEnumeration("status", "TEXT", { BatchStatus.fromStored(it as String) }, BatchStatus::stored)
     val ingestedAt = timestampWithTimeZone("ingested_at")
     val receivedAt = timestampWithTimeZone("received_at")
     val processedAt = timestampWithTimeZone("processed_at").nullable()

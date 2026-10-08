@@ -11,6 +11,7 @@ import me.aquitano.health.application.metric.steps.repository.CanonicalStepDeriv
 import me.aquitano.health.domain.BodyMetricTypes
 import me.aquitano.health.domain.ScalarMetricTypes
 import me.aquitano.health.infrastructure.database.suspendDbTransaction
+import me.aquitano.health.shared.SortDirection
 import org.jetbrains.exposed.v1.jdbc.Database
 import java.time.Instant
 import java.time.LocalDate
@@ -184,7 +185,7 @@ class TrendQueryService(
             providerInstanceId = null,
             includeSource = false,
             limit = Int.MAX_VALUE,
-            order = "asc",
+            order = SortDirection.Asc,
         )
 
     private fun latestBeforeFilters(before: Instant): ReadFilters =
@@ -195,7 +196,7 @@ class TrendQueryService(
             providerInstanceId = null,
             includeSource = false,
             limit = 1,
-            order = "desc",
+            order = SortDirection.Desc,
         )
 
     private fun readFilters(
@@ -210,7 +211,7 @@ class TrendQueryService(
             providerInstanceId = null,
             includeSource = false,
             limit = Int.MAX_VALUE,
-            order = "asc",
+            order = SortDirection.Asc,
         )
 
     private fun percentChange(

@@ -112,7 +112,6 @@ class SupportRepository(
             SourcesTable
                 .insertIgnoreAndGetId {
                     it[code] = providerCode
-                    it[displayName] = null
                     it[createdAt] = now.toDbTimestamp()
                 }?.value ?: SourcesTable
                 .select(SourcesTable.id)
@@ -126,7 +125,6 @@ class SupportRepository(
                 .insertIgnoreAndGetId {
                     it[this.sourceId] = sourceId
                     it[this.providerInstanceId] = providerInstanceId
-                    it[displayName] = null
                     it[createdAt] = now.toDbTimestamp()
                     it[updatedAt] = now.toDbTimestamp()
                 }?.value ?: SourceInstancesTable

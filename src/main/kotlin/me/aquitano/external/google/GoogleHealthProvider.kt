@@ -5,7 +5,6 @@ import io.ktor.http.*
 import me.aquitano.external.oauthConfigurationIssues
 import me.aquitano.external.persistOAuthConnection
 import me.aquitano.external.requireProviderConfigured
-import me.aquitano.health.application.providersync.ProviderSyncAdapter
 import me.aquitano.health.application.providersync.ProviderSyncPipeline
 import me.aquitano.health.domain.*
 import me.aquitano.health.infrastructure.config.ProviderOAuthConfig
@@ -21,28 +20,17 @@ class GoogleHealthProvider(
     private val client: GoogleHealthClient,
     normalizer: GoogleHealthNormalizer,
     private val syncPipeline: ProviderSyncPipeline,
-    private val syncAdapter: ProviderSyncAdapter = GoogleHealthSyncAdapter(client, normalizer),
 ) : HealthProvider {
+    private val syncAdapter = GoogleHealthSyncAdapter(client, normalizer)
     override val providerCode: String = GOOGLE_HEALTH_PROVIDER_CODE
     override val descriptor: HealthProviderDescriptor =
         HealthProviderDescriptor(
             providerCode = "google-health",
-            displayName = "Google Health",
-            authType = ProviderAuthType.OAUTH,
-            requiresAuthentication = true,
-            supportedDataTypes = GOOGLE_HEALTH_DEFAULT_DATA_TYPES,
-            defaultDataTypes = GOOGLE_HEALTH_DEFAULT_DATA_TYPES,
+            displayName = GOOGLE_HEALTH_DISPLAY_NAME,
+            supportedDataTypes = GoogleHealthDataType.codes,
+            defaultDataTypes = GoogleHealthDataType.codes,
             maxSyncRangeDays = 31,
             supportsPageSize = true,
-            workflowEndpoints =
-                ProviderWorkflowEndpoints(
-                    oauthStart = "/api/v2/providers/google-health/oauth/start",
-                    oauthCallback = "/api/v2/providers/google-health/oauth/callback",
-                    accounts = "/api/v2/providers/google-health/accounts",
-                    disconnect = "/api/v2/providers/google-health/accounts/{providerInstanceId}/disconnect",
-                    reconnect = "/api/v2/providers/google-health/accounts/{providerInstanceId}/reconnect",
-                    sync = "/api/v2/providers/google-health/sync-jobs",
-                ),
         )
     override val defaultProviderInstanceId: String = "google-health-me"
 

@@ -18,22 +18,14 @@ internal fun Operation.Builder.publicEndpoint() {
 
 internal inline fun <reified T : Any> Operation.Builder.jsonRequest(
     descriptionText: String,
-    exampleName: String? = null,
-    example: ExampleObject? = null,
+    namedExample: Pair<String, ExampleObject>? = null,
 ) {
-    require((exampleName == null) == (example == null)) {
-        "exampleName and example must either both be set or both be null."
-    }
-
     requestBody {
         description = descriptionText
         required = true
         content {
             schema = buildSchema(typeOf<T>())
-
-            if (exampleName != null && example != null) {
-                example(exampleName, example)
-            }
+            namedExample?.let { (name, value) -> example(name, value) }
         }
     }
 }
@@ -44,7 +36,6 @@ internal fun Operation.Builder.errorResponses(
     notFound: Boolean = false,
     conflict: Boolean = false,
     upstream: Boolean = false,
-    internal: Boolean = true,
 ) {
     responses {
         commonErrors(
@@ -53,7 +44,6 @@ internal fun Operation.Builder.errorResponses(
             notFound = notFound,
             conflict = conflict,
             upstream = upstream,
-            internal = internal,
         )
         defaultError()
     }
@@ -79,7 +69,6 @@ internal fun Responses.Builder.commonErrors(
     conflict: Boolean = false,
     payloadTooLarge: Boolean = false,
     upstream: Boolean = false,
-    internal: Boolean = true,
 ) {
     if (validation) {
         HttpStatusCode.BadRequest {
@@ -135,13 +124,11 @@ internal fun Responses.Builder.commonErrors(
             }
         }
     }
-    if (internal) {
-        HttpStatusCode.InternalServerError {
-            description = "Unexpected server error"
-            content {
-                schema = buildSchema(typeOf<ErrorResponse>())
-                example("internal", internalErrorExample())
-            }
+    HttpStatusCode.InternalServerError {
+        description = "Unexpected server error"
+        content {
+            schema = buildSchema(typeOf<ErrorResponse>())
+            example("internal", internalErrorExample())
         }
     }
 }
@@ -150,18 +137,17 @@ internal fun Route.describeReadOperation(
     operationId: String,
     summary: String,
     descriptionText: String,
-    includeLatest: Boolean = false,
 ): Route =
     describe {
         this.operationId = operationId
         tag("Read")
         this.summary = summary
         description = descriptionText
-        readQueryParameters(includeLatest = includeLatest)
+        readQueryParameters()
         errorResponses()
     }
 
-private fun Route.describeDailyReadOperation(
+internal fun Route.describeDailyReadOperation(
     id: String,
     operationSummary: String,
     operationDescription: String,
@@ -182,35 +168,5 @@ private fun Route.describeDailyReadOperation(
                 }
             }
         }
-        errorResponses()
-    }
-
-internal fun Route.describeDailyStepReadOperation(): Route =
-    describeDailyReadOperation(
-        id = "listDailyStepSummaries",
-        operationSummary = "List daily step summaries",
-        operationDescription =
-            "Returns daily step totals for the local days of `timezone` (UTC by default). Use `date` for one day, or `fromDate` and `toDate` for an inclusive date range.",
-        localDays = true,
-    )
-
-internal fun Route.describeActivitySummaryReadOperation(): Route =
-    describeDailyReadOperation(
-        id = "listActivitySummaries",
-        operationSummary = "List activity summaries",
-        operationDescription =
-            "Returns daily activity summary metrics such as distance, calories, elevation, activity minutes, and daily heart-rate summary values.",
-        latestDescription =
-            "Return the latest matching activity summary when true. Defaults to false. Cannot be combined with limit, order, or cursor.",
-    )
-
-internal fun Route.describeSleepNightReadOperation(): Route =
-    describe {
-        operationId = "listSleepNights"
-        tag("Read")
-        summary = "List sleep nights"
-        description =
-            "Returns sleep sessions classified by the localized date of `endAt`. Use `timezone` to control night boundaries."
-        sleepNightQueryParameters()
         errorResponses()
     }

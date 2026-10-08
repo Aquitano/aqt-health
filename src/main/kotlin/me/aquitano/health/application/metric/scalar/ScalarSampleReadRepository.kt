@@ -1,10 +1,10 @@
 package me.aquitano.health.application.metric.scalar
 
+import me.aquitano.health.api.dto.SourceMetadataResponse
 import me.aquitano.health.application.metric.common.keysetFetchLimit
 import me.aquitano.health.application.metric.common.repository.BaseMetricReadRepository
 import me.aquitano.health.application.metric.common.repository.LocalDayOf
 import me.aquitano.health.application.metric.common.repository.ReadFilters
-import me.aquitano.health.application.metric.common.repository.SourceMetadata
 import me.aquitano.health.application.metric.common.repository.TimeFilterMode
 import me.aquitano.health.infrastructure.database.tables.CanonicalScalarSamplesView
 import me.aquitano.health.infrastructure.database.tables.MetricCatalogTable
@@ -33,14 +33,14 @@ class ScalarSampleReadRepository : BaseMetricReadRepository() {
         filters: ReadFilters,
         metricTypes: Set<String>,
         canonical: Boolean,
-    ): Pair<List<ScalarSampleRow>, Map<Int, SourceMetadata>> {
+    ): Pair<List<ScalarSampleRow>, Map<Int, SourceMetadataResponse>> {
         val table = source(canonical)
         val where =
             timestampConditions(
                 filters = filters,
                 sourceInstanceIdColumn = table.sourceInstanceId,
                 fromColumn = table.measuredAt,
-            ).whereOrNull() ?: return emptyReadResult()
+            ) ?: return emptyReadResult()
 
         val keyset = timestampKeyset(filters.cursor, filters.order, table.measuredAt, table.idColumn)
         val rows =
@@ -63,8 +63,8 @@ class ScalarSampleReadRepository : BaseMetricReadRepository() {
         filters: ReadFilters,
         metricTypes: Set<String>,
         canonical: Boolean,
-        mode: TimeFilterMode = TimeFilterMode.START_AT_IN_RANGE,
-    ): Pair<ScalarSampleRow?, Map<Int, SourceMetadata>> {
+        mode: TimeFilterMode = TimeFilterMode.StartAtInRange,
+    ): Pair<ScalarSampleRow?, Map<Int, SourceMetadataResponse>> {
         val table = source(canonical)
         val where =
             timestampConditions(
@@ -72,7 +72,7 @@ class ScalarSampleReadRepository : BaseMetricReadRepository() {
                 sourceInstanceIdColumn = table.sourceInstanceId,
                 fromColumn = table.measuredAt,
                 mode = mode,
-            ).whereOrNull() ?: return emptyLatestResult()
+            ) ?: return emptyLatestResult()
 
         val row =
             table.query
@@ -95,7 +95,7 @@ class ScalarSampleReadRepository : BaseMetricReadRepository() {
         filters: ReadFilters,
         metricTypes: Set<String>,
         canonical: Boolean,
-    ): Pair<ScalarSampleRow?, Map<Int, SourceMetadata>> = latest(filters, metricTypes, canonical, mode = TimeFilterMode.BEFORE_FROM)
+    ): Pair<ScalarSampleRow?, Map<Int, SourceMetadataResponse>> = latest(filters, metricTypes, canonical, mode = TimeFilterMode.BeforeFrom)
 
     fun summarize(
         filters: ReadFilters,
@@ -108,7 +108,7 @@ class ScalarSampleReadRepository : BaseMetricReadRepository() {
                 filters = filters,
                 sourceInstanceIdColumn = table.sourceInstanceId,
                 fromColumn = table.measuredAt,
-            ).whereOrNull() ?: return ScalarSummaryRow(0, null, null, null)
+            ) ?: return ScalarSummaryRow(0, null, null, null)
 
         val countExpression = table.valueColumn.count()
         val minExpression = table.valueColumn.min()
@@ -144,7 +144,7 @@ class ScalarSampleReadRepository : BaseMetricReadRepository() {
                 filters = filters,
                 sourceInstanceIdColumn = table.sourceInstanceId,
                 fromColumn = table.measuredAt,
-            ).whereOrNull() ?: return emptyList()
+            ) ?: return emptyList()
 
         val dayExpression = LocalDayOf(table.measuredAt, zone.id)
         val countExpression = table.valueColumn.count()

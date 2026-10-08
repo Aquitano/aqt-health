@@ -3,6 +3,7 @@ package me.aquitano.health.application
 import kotlinx.serialization.json.*
 import me.aquitano.health.api.dto.*
 import me.aquitano.health.domain.*
+import me.aquitano.health.shared.AppJson
 
 /**
  * Validates an incoming ingestion batch and maps each record DTO to its domain
@@ -50,33 +51,35 @@ class IngestionMappingService {
         val records =
             inputRecords
                 ?.mapIndexedNotNull { index, dto ->
-                    mapRecord(index, dto, issues)
+                    mapRecord(index, dto, issues)?.let { record ->
+                        NewIngestionRecord(record, AppJson.encodeToString(IngestionRecord.serializer(), dto))
+                    }
                 }.orEmpty()
 
         val duplicateProviderIds =
             records
-                .mapNotNull { it.providerRecordId }
+                .mapNotNull { it.record.providerRecordId }
                 .groupingBy { it }
                 .eachCount()
                 .filterValues { it > 1 }
                 .keys
-        duplicateProviderIds.forEach {
-            issues.add(
-                ValidationIssue(
-                    field = "records",
-                    code = ValidationIssueCodes.InvalidState,
-                    message = "providerRecordId '$it' is duplicated in this batch",
-                ),
+        duplicateProviderIds.mapTo(issues) {
+            ValidationIssue(
+                field = "records",
+                code = ValidationIssueCodes.InvalidState,
+                message = "providerRecordId '$it' is duplicated in this batch",
             )
         }
 
-        if (issues.isNotEmpty()) throw RequestValidationException(issues)
+        if (issues.isNotEmpty() || provider == null || providerInstanceId == null || ingestedAt == null) {
+            throw RequestValidationException(issues)
+        }
 
         return ValidatedIngestionBatch(
-            provider = provider!!,
-            providerInstanceId = providerInstanceId!!,
+            provider = provider,
+            providerInstanceId = providerInstanceId,
             batchExternalId = batchExternalId,
-            ingestedAt = ingestedAt!!,
+            ingestedAt = ingestedAt,
             sourcePayload = sourcePayload,
             records = records,
         )

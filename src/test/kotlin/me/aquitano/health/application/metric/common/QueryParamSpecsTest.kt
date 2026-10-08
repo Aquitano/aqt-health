@@ -24,11 +24,4 @@ class QueryParamSpecsTest {
         assertEquals(false, QueryParams(emptyMap()).boolean(QueryParamSpecs.includeSource))
         assertEquals(true, QueryParams(mapOf("includeSource" to "true")).boolean(QueryParamSpecs.includeSource))
     }
-
-    @Test
-    fun `enum spec rejects a default outside its values`() {
-        assertFailsWith<IllegalArgumentException> {
-            EnumParamSpec("order", listOf("asc"), "desc")
-        }
-    }
 }

@@ -1,6 +1,7 @@
 package me.aquitano.health.infrastructure.repositories
 
 import kotlinx.coroutines.runBlocking
+import me.aquitano.health.domain.ProviderAccountStatus
 import me.aquitano.health.infrastructure.security.TokenCipher
 import me.aquitano.health.test.PostgresIntegrationTest
 import java.time.Instant
@@ -38,7 +39,7 @@ class ProviderOAuthRepositoryTest : PostgresIntegrationTest() {
                 assertFalse(repo.markTokenRefreshFailed(original.id, original.refreshTokenCiphertext, "stale", "stale", later))
             }
             assertStaleWritesRejected()
-            assertEquals(ACCOUNT_STATUS_DISCONNECTED, repo.account().accountStatus)
+            assertEquals(ProviderAccountStatus.Disconnected, repo.account().accountStatus)
             connect()
             val reconnected = repo.latestAccount(PROVIDER)!!
             assertNotEquals(original.refreshTokenCiphertext, reconnected.refreshTokenCiphertext)
@@ -55,7 +56,7 @@ class ProviderOAuthRepositoryTest : PostgresIntegrationTest() {
             repo.connect()
 
             val account = repo.account()
-            assertEquals(ACCOUNT_STATUS_CONNECTED, account.accountStatus)
+            assertEquals(ProviderAccountStatus.Connected, account.accountStatus)
             assertEquals("enc-access", account.accessTokenCiphertext)
             assertEquals("enc-refresh", account.refreshTokenCiphertext)
             assertEquals(now, account.connectedAt)
@@ -74,7 +75,7 @@ class ProviderOAuthRepositoryTest : PostgresIntegrationTest() {
             repo.connect(accessToken = "new-access", refreshToken = "new-refresh", at = later)
 
             val account = repo.account()
-            assertEquals(ACCOUNT_STATUS_CONNECTED, account.accountStatus)
+            assertEquals(ProviderAccountStatus.Connected, account.accountStatus)
             assertEquals("new-access", account.accessTokenCiphertext)
             assertEquals(later, account.connectedAt)
             assertNull(account.disconnectedAt)
@@ -91,7 +92,7 @@ class ProviderOAuthRepositoryTest : PostgresIntegrationTest() {
             repo.connect(accessToken = "new-access", refreshToken = "new-refresh", at = later)
 
             val account = repo.account()
-            assertEquals(ACCOUNT_STATUS_CONNECTED, account.accountStatus)
+            assertEquals(ProviderAccountStatus.Connected, account.accountStatus)
             assertEquals(later, account.connectedAt)
             assertNull(account.lastAuthErrorCode)
         }
@@ -105,7 +106,7 @@ class ProviderOAuthRepositoryTest : PostgresIntegrationTest() {
             assertTrue(repo.disconnectAccount(PROVIDER, INSTANCE, later))
 
             val account = repo.account()
-            assertEquals(ACCOUNT_STATUS_DISCONNECTED, account.accountStatus)
+            assertEquals(ProviderAccountStatus.Disconnected, account.accountStatus)
             assertEquals("", account.accessTokenCiphertext)
             assertEquals("", account.refreshTokenCiphertext)
             assertEquals(later, account.disconnectedAt)
@@ -130,7 +131,7 @@ class ProviderOAuthRepositoryTest : PostgresIntegrationTest() {
             repo.markNeedsReauth(repo.account().id, "enc-refresh", "google_health_needs_reauth", "Consent was revoked", later)
 
             val account = repo.account()
-            assertEquals(ACCOUNT_STATUS_NEEDS_REAUTH, account.accountStatus)
+            assertEquals(ProviderAccountStatus.NeedsReauth, account.accountStatus)
             assertEquals(later, account.lastTokenRefreshAt)
             assertEquals(TOKEN_REFRESH_STATUS_FAILED, account.lastTokenRefreshStatus)
             assertEquals("google_health_needs_reauth", account.lastAuthErrorCode)
@@ -159,7 +160,7 @@ class ProviderOAuthRepositoryTest : PostgresIntegrationTest() {
             repo.markTokenRefreshFailed(repo.account().id, "enc-refresh", "transient_error", "Network timeout", later)
 
             val account = repo.account()
-            assertEquals(ACCOUNT_STATUS_CONNECTED, account.accountStatus, "status should remain connected")
+            assertEquals(ProviderAccountStatus.Connected, account.accountStatus, "status should remain connected")
             assertEquals(later, account.lastTokenRefreshAt)
             assertEquals(TOKEN_REFRESH_STATUS_FAILED, account.lastTokenRefreshStatus)
             assertEquals("transient_error", account.lastAuthErrorCode)
@@ -186,7 +187,7 @@ class ProviderOAuthRepositoryTest : PostgresIntegrationTest() {
             )
 
             val account = repo.account()
-            assertEquals(ACCOUNT_STATUS_CONNECTED, account.accountStatus)
+            assertEquals(ProviderAccountStatus.Connected, account.accountStatus)
             assertEquals("new-access", account.accessTokenCiphertext)
             assertEquals("new-refresh", account.refreshTokenCiphertext)
             assertEquals(later, account.lastTokenRefreshAt)
@@ -219,7 +220,7 @@ class ProviderOAuthRepositoryTest : PostgresIntegrationTest() {
             repo.disconnectAccount(PROVIDER, INSTANCE, later)
 
             assertNull(repo.accountByProviderInstance(PROVIDER, INSTANCE))
-            assertEquals(listOf(ACCOUNT_STATUS_DISCONNECTED), repo.accountsByProvider(PROVIDER).map { it.accountStatus })
+            assertEquals(listOf(ProviderAccountStatus.Disconnected), repo.accountsByProvider(PROVIDER).map { it.accountStatus })
         }
 
     private fun repository() = ProviderOAuthRepository(openDatabase())

@@ -70,7 +70,10 @@ data class ActivitySummary(
     val averageHeartRateBpm: Int? = null,
     val minHeartRateBpm: Int? = null,
     val maxHeartRateBpm: Int? = null,
-) : IngestionRecord()
+) : IngestionRecord() {
+    /** Every metric defaults to null, so a summary with none set equals its identity-only form. */
+    fun hasAnyMetric(): Boolean = this != ActivitySummary(providerRecordId, date)
+}
 
 @Serializable
 @SerialName("sleep_summary")
@@ -108,7 +111,10 @@ data class SleepSummary(
     val rrAverage: Double? = null,
     val rrMin: Double? = null,
     val rrMax: Double? = null,
-) : IngestionRecord()
+) : IngestionRecord() {
+    /** Every metric defaults to null, so a summary with none set equals its identity-only form. */
+    fun hasAnyMetric(): Boolean = this != SleepSummary(providerRecordId, startAt, endAt)
+}
 
 @Serializable
 @SerialName("blood_pressure")

@@ -2,7 +2,6 @@ package me.aquitano.external.google
 
 import kotlinx.serialization.json.*
 import me.aquitano.health.api.dto.*
-import me.aquitano.health.application.providersync.NormalizedProviderBatch
 import me.aquitano.health.domain.BodyMetricTypes
 import me.aquitano.health.domain.ScalarMetricTypes
 import me.aquitano.health.shared.AppJson
@@ -15,46 +14,21 @@ import java.security.MessageDigest
 import java.util.*
 
 class GoogleHealthNormalizer {
-    fun normalize(fetchResult: GoogleHealthFetchResult): NormalizedProviderBatch {
-        val records =
-            fetchResult.dataPoints.flatMap {
-                normalizeDataPoint(
-                    fetchResult.dataType,
-                    it,
-                )
-            }
-        val sourcePayload =
-            buildJsonObject {
-                put("dataType", fetchResult.dataType)
-                put(
-                    "pages",
-                    JsonArray(
-                        fetchResult.pages.map {
-                            buildJsonObject {
-                                put("pageIndex", it.pageIndex)
-                                put("payload", it.payload)
-                            }
-                        },
-                    ),
-                )
-            }
-        return NormalizedProviderBatch(sourcePayload, records)
-    }
+    fun normalize(fetchResult: GoogleHealthFetchResult): List<IngestionRecord> = fetchResult.dataPoints.flatMap { normalizeDataPoint(fetchResult.dataType, it) }
 
     private fun normalizeDataPoint(
-        dataType: String,
-        dataPoint: JsonObject,
+        dataType: GoogleHealthDataType,
+        point: JsonObject,
     ): List<IngestionRecord> {
-        val point = (dataPoint["dataPoint"] as? JsonObject) ?: dataPoint
+        val code = dataType.code
         return when (dataType) {
-            "steps" -> listOfNotNull(normalizeSteps(dataType, point))
-            "sleep" -> normalizeSleep(dataType, point)
-            "heart-rate" -> listOfNotNull(normalizeHeartRate(dataType, point))
-            "weight" -> listOfNotNull(normalizeWeight(dataType, point))
-            "body-fat" -> listOfNotNull(normalizeBodyFat(dataType, point))
-            "heart-rate-variability" -> listOfNotNull(normalizeHeartRateVariability(dataType, point))
-            "respiratory-rate-sleep-summary" -> listOfNotNull(normalizeRespiratoryRate(dataType, point))
-            else -> emptyList()
+            GoogleHealthDataType.Steps -> listOfNotNull(normalizeSteps(code, point))
+            GoogleHealthDataType.Sleep -> normalizeSleep(code, point)
+            GoogleHealthDataType.HeartRate -> listOfNotNull(normalizeHeartRate(code, point))
+            GoogleHealthDataType.Weight -> listOfNotNull(normalizeWeight(code, point))
+            GoogleHealthDataType.BodyFat -> listOfNotNull(normalizeBodyFat(code, point))
+            GoogleHealthDataType.HeartRateVariability -> listOfNotNull(normalizeHeartRateVariability(code, point))
+            GoogleHealthDataType.RespiratoryRateSleepSummary -> listOfNotNull(normalizeRespiratoryRate(code, point))
         }
     }
 
@@ -140,7 +114,7 @@ class GoogleHealthNormalizer {
             summary["stagesSummary"]
                 ?.jsonArray
                 ?.filterIsInstance<JsonObject>()
-                ?.associateBy { it.stringOrNull("type")?.uppercase() }
+                ?.associateBy { it.stringOrNull("type") }
                 .orEmpty()
         val minutesAsleep = summary.nonNegativeLong("minutesAsleep")
         val minutesInSleepPeriod = summary.nonNegativeLong("minutesInSleepPeriod")
@@ -166,8 +140,7 @@ class GoogleHealthNormalizer {
                 wakeupCount = stageSummaries["AWAKE"]?.nonNegativeLong("count")?.toInt(),
                 remEpisodesCount = stageSummaries["REM"]?.nonNegativeLong("count")?.toInt(),
             )
-        val withoutMetrics = SleepSummary(record.providerRecordId, record.startAt, record.endAt)
-        return record.takeIf { it != withoutMetrics }
+        return record.takeIf { it.hasAnyMetric() }
     }
 
     private fun normalizeHeartRateVariability(
@@ -209,13 +182,10 @@ class GoogleHealthNormalizer {
         dataType: String,
         point: JsonObject,
     ): ScalarSample? {
-        val heartRate =
-            point.objOrNull("heartRate") ?: point.objOrNull("heart_rate") ?: return null
+        val heartRate = point.objOrNull("heartRate") ?: return null
         val sampleTime = heartRate.objOrNull("sampleTime") ?: return null
         val measuredAt = sampleTime.stringOrNull("physicalTime") ?: return null
-        val bpm =
-            heartRate.longOrNull("beatsPerMinute") ?: heartRate.longOrNull("bpm")
-                ?: return null
+        val bpm = heartRate.longOrNull("beatsPerMinute") ?: return null
         if (bpm !in 25..250) return null
         return ScalarSample(
             providerRecordId =
@@ -262,8 +232,7 @@ class GoogleHealthNormalizer {
         dataType: String,
         point: JsonObject,
     ): ScalarSample? {
-        val bodyFat =
-            point.objOrNull("bodyFat") ?: point.objOrNull("body_fat") ?: return null
+        val bodyFat = point.objOrNull("bodyFat") ?: return null
         val sampleTime = bodyFat.objOrNull("sampleTime") ?: return null
         val measuredAt = sampleTime.stringOrNull("physicalTime") ?: return null
         val percentage = bodyFat.doubleOrNull("percentage") ?: return null
@@ -292,7 +261,7 @@ class GoogleHealthNormalizer {
             ?: "$dataType:$startOrMeasuredAt:${endAt ?: "none"}:${point.sha256()}"
 
     private fun mapSleepStage(value: String?): String? =
-        when (value?.uppercase()) {
+        when (value) {
             "AWAKE" -> "awake"
             "RESTLESS" -> "restless"
             "ASLEEP" -> "asleep"
@@ -303,7 +272,7 @@ class GoogleHealthNormalizer {
         }
 
     private fun mapHeartRateContext(value: String?): String =
-        when (value?.uppercase()) {
+        when (value) {
             "ACTIVE" -> "active"
             "SEDENTARY" -> "resting"
             else -> "unknown"

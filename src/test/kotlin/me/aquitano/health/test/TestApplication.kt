@@ -35,12 +35,13 @@ fun ApplicationTestBuilder.configureTestApplication(
     return database
 }
 
-fun googleHealthTestConfig(withClientSecret: Boolean = true): Array<Pair<String, String>> = providerTestConfig("aqtHealth.googleHealth", "client-id", "client-secret".takeIf { withClientSecret })
+fun googleHealthTestConfig(withClientSecret: Boolean = true): Array<Pair<String, String>> = providerTestConfig("aqtHealth.googleHealth", "google-health", "client-id", "client-secret".takeIf { withClientSecret })
 
-fun withingsTestConfig(withClientSecret: Boolean = true): Array<Pair<String, String>> = providerTestConfig("aqtHealth.withings", "withings-client-id", "withings-client-secret".takeIf { withClientSecret })
+fun withingsTestConfig(withClientSecret: Boolean = true): Array<Pair<String, String>> = providerTestConfig("aqtHealth.withings", "withings", "withings-client-id", "withings-client-secret".takeIf { withClientSecret })
 
 private fun providerTestConfig(
     prefix: String,
+    routeCode: String,
     clientId: String,
     clientSecret: String?,
 ): Array<Pair<String, String>> =
@@ -48,6 +49,10 @@ private fun providerTestConfig(
         "$prefix.clientId" to clientId,
         clientSecret?.let { "$prefix.clientSecret" to it },
         "$prefix.tokenEncryptionKey" to TEST_TOKEN_ENCRYPTION_KEY,
+        "$prefix.redirectUri" to "http://localhost:8080/api/v2/providers/$routeCode/oauth/callback",
+        "$prefix.apiBaseUrl" to "https://$routeCode.test",
+        "$prefix.oauthTokenUrl" to "https://$routeCode.test/oauth/token",
+        "$prefix.oauthAuthUrl" to "https://$routeCode.test/oauth/authorize",
     ).toTypedArray()
 
 fun HttpRequestBuilder.authorized() = bearerAuth(TEST_API_KEY)

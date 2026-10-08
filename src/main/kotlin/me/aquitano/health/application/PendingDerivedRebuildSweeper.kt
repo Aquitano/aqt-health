@@ -4,8 +4,8 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CancellationException
 import me.aquitano.health.infrastructure.logging.*
 import me.aquitano.health.infrastructure.repositories.PendingDerivedRebuildRepository
-import me.aquitano.health.infrastructure.time.UtcClock
 import me.aquitano.health.shared.PollingWorker
+import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import kotlin.math.min
@@ -33,7 +33,7 @@ object PendingDerivedRebuildPolicy {
 class PendingDerivedRebuildSweeper(
     private val repository: PendingDerivedRebuildRepository,
     private val derivedRebuildExecutor: DerivedRebuildExecutor,
-    private val clock: UtcClock,
+    private val clock: Clock,
     pollInterval: Duration = Duration.ofMinutes(1),
 ) {
     private val worker =
@@ -42,7 +42,7 @@ class PendingDerivedRebuildSweeper(
             failureEvent = "pending_derived_rebuild_sweep_failed",
             interval = pollInterval,
         ) {
-            sweep(clock.now())
+            sweep(clock.instant())
         }
 
     fun start() = worker.start()
@@ -63,7 +63,7 @@ class PendingDerivedRebuildSweeper(
                     DerivedRebuildRequest(row.sourceInstanceId, setOf(date))
                 }
             try {
-                derivedRebuildExecutor.rebuild(requests, clock.now())
+                derivedRebuildExecutor.rebuild(requests, clock.instant())
                 repository.deleteCompleted(rows)
                 rebuilt += rows.size
                 sweeperLogger.infoWithContext("pending_derived_rebuild_repaired", "dateCount" to rows.size)

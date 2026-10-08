@@ -22,20 +22,10 @@ function descriptor(): ProviderDescriptor {
   return {
     providerCode: "google-health",
     displayName: "Google Health",
-    authType: "oauth2",
-    requiresAuthentication: true,
     supportedDataTypes: ["steps"],
     defaultDataTypes: ["steps"],
     maxSyncRangeDays: 90,
     supportsPageSize: false,
-    workflowEndpoints: {
-      oauthStart: "/api/v2/providers/google-health/oauth/start",
-      oauthCallback: "/api/v2/providers/google-health/oauth/callback",
-      accounts: "/api/v2/providers/google-health/accounts",
-      disconnect: "/api/v2/providers/google-health/accounts/{id}/disconnect",
-      reconnect: "/api/v2/providers/google-health/accounts/{id}/reconnect",
-      sync: "/api/v2/providers/google-health/sync-jobs",
-    },
   };
 }
 

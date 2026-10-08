@@ -1,11 +1,15 @@
 package me.aquitano.external.withings
 
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import me.aquitano.health.application.providersync.RefreshedTokenSet
 import java.time.Duration
 import java.time.Instant
 
 const val WITHINGS_PROVIDER_CODE = "withings"
+
+const val WITHINGS_DISPLAY_NAME = "Withings"
 
 val WITHINGS_SCOPES =
     listOf(
@@ -14,13 +18,21 @@ val WITHINGS_SCOPES =
         "user.activity",
     )
 
-val WITHINGS_DEFAULT_DATA_TYPES =
-    listOf(
-        "activity",
-        "measures",
-        "sleep-summary",
-        "sleep",
-    )
+enum class WithingsDataType(
+    val code: String,
+) {
+    Activity("activity"),
+    Measures("measures"),
+    SleepSummary("sleep-summary"),
+    Sleep("sleep"),
+    ;
+
+    companion object {
+        val codes: List<String> = entries.map { it.code }
+
+        fun fromCode(code: String): WithingsDataType = entries.first { it.code == code }
+    }
+}
 
 /** Measure types the normalizer maps; anything else would be fetched and silently dropped. */
 val WITHINGS_MEASURE_TYPES =
@@ -138,10 +150,18 @@ data class WithingsPage(
     val action: String,
     val pageIndex: Int,
     val payload: JsonObject,
-)
+) {
+    fun toJson(): JsonObject =
+        buildJsonObject {
+            put("endpoint", endpoint)
+            put("action", action)
+            put("pageIndex", pageIndex)
+            put("payload", payload)
+        }
+}
 
 data class WithingsFetchResult(
-    val dataType: String,
+    val dataType: WithingsDataType,
     val pages: List<WithingsPage>,
     val records: List<JsonObject>,
 )

@@ -1,7 +1,6 @@
 package me.aquitano.health.application.metric.common.repository
 
 import me.aquitano.health.api.dto.SourceMetadataResponse
-import me.aquitano.health.application.metric.common.toResponse
 import me.aquitano.health.domain.RequestValidationException
 import me.aquitano.health.domain.ValidationIssue
 import me.aquitano.health.domain.ValidationIssueCodes
@@ -9,6 +8,7 @@ import me.aquitano.health.infrastructure.database.tables.SourceInstancesTable
 import me.aquitano.health.infrastructure.database.tables.SourcesTable
 import me.aquitano.health.infrastructure.database.toDbTimestamp
 import me.aquitano.health.shared.Cursor
+import me.aquitano.health.shared.SortDirection
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.select
 import java.time.Instant
@@ -27,7 +27,7 @@ import java.time.ZoneOffset
  * query logic.
  */
 abstract class BaseMetricReadRepository {
-    fun sourceMetadataFor(sourceIds: Set<Int>): Map<Int, SourceMetadata> {
+    fun sourceMetadataFor(sourceIds: Set<Int>): Map<Int, SourceMetadataResponse> {
         if (sourceIds.isEmpty()) return emptyMap()
         return SourceInstancesTable
             .innerJoin(SourcesTable)
@@ -38,7 +38,7 @@ abstract class BaseMetricReadRepository {
             ).where { SourceInstancesTable.id inList sourceIds }
             .associate {
                 it[SourceInstancesTable.id].value to
-                    SourceMetadata(
+                    SourceMetadataResponse(
                         provider = it[SourcesTable.code],
                         providerInstanceId = it[SourceInstancesTable.providerInstanceId],
                     )
@@ -61,12 +61,12 @@ abstract class BaseMetricReadRepository {
             .innerJoin(SourcesTable)
             .select(SourceInstancesTable.id)
             .where {
-                val conditions = mutableListOf<Op<Boolean>>()
-                provider?.let { conditions.add(SourcesTable.code eq it) }
-                providerInstanceId?.let {
-                    conditions.add(SourceInstancesTable.providerInstanceId eq it)
-                }
-                combineConditions(conditions)
+                combineConditions(
+                    listOfNotNull(
+                        provider?.let { SourcesTable.code eq it },
+                        providerInstanceId?.let { SourceInstancesTable.providerInstanceId eq it },
+                    ),
+                )
             }.map { it[SourceInstancesTable.id].value }
     }
 
@@ -74,106 +74,64 @@ abstract class BaseMetricReadRepository {
 
     protected fun List<Int>?.hasNoMatchingSources(): Boolean = this != null && isEmpty()
 
-    protected fun <T> emptyReadResult(): Pair<List<T>, Map<Int, SourceMetadata>> = emptyList<T>() to emptyMap()
+    protected fun <T> emptyReadResult(): Pair<List<T>, Map<Int, SourceMetadataResponse>> = emptyList<T>() to emptyMap()
 
-    protected fun <T> emptyLatestResult(): Pair<T?, Map<Int, SourceMetadata>> = null to emptyMap()
+    protected fun <T> emptyLatestResult(): Pair<T?, Map<Int, SourceMetadataResponse>> = null to emptyMap()
 
-    protected fun <T, S> emptyTripleReadResult(): Triple<List<T>, Map<Int, List<S>>, Map<Int, SourceMetadata>> = Triple(emptyList(), emptyMap(), emptyMap())
+    protected fun <T, S> emptyTripleReadResult(): Triple<List<T>, Map<Int, List<S>>, Map<Int, SourceMetadataResponse>> = Triple(emptyList(), emptyMap(), emptyMap())
 
+    /** The read's where clause, or null when the source filters match no source instance. */
     protected fun timestampConditions(
         filters: ReadFilters,
         sourceInstanceIdColumn: Column<Int>,
         fromColumn: Column<OffsetDateTime>,
-        toColumn: Column<OffsetDateTime>? = null,
-        mode: TimeFilterMode = TimeFilterMode.START_AT_IN_RANGE,
-    ): MetricConditionResult {
+        mode: TimeFilterMode = TimeFilterMode.StartAtInRange,
+    ): Op<Boolean>? {
         val sourceIds = filters.sourceInstanceIds()
-
-        if (sourceIds.hasNoMatchingSources()) {
-            return MetricConditionResult.Empty
-        }
-
-        val conditions = mutableListOf<Op<Boolean>>()
-
-        when (mode) {
-            TimeFilterMode.START_AT_IN_RANGE -> {
-                filters.from?.let {
-                    conditions.add(fromColumn greaterEq it.toDbTimestamp())
-                }
-                filters.to?.let {
-                    conditions.add(fromColumn less it.toDbTimestamp())
-                }
-            }
-
-            TimeFilterMode.OVERLAPS_WINDOW -> {
-                requireNotNull(toColumn) {
-                    "toColumn is required for OVERLAPS_WINDOW filtering"
+        if (sourceIds.hasNoMatchingSources()) return null
+        val from = filters.from?.toDbTimestamp()
+        val to = filters.to?.toDbTimestamp()
+        val timeConditions =
+            when (mode) {
+                TimeFilterMode.StartAtInRange -> {
+                    listOf(from?.let { fromColumn greaterEq it }, to?.let { fromColumn less it })
                 }
 
-                filters.from?.let {
-                    conditions.add(toColumn greater it.toDbTimestamp())
+                TimeFilterMode.BeforeFrom -> {
+                    listOf(from?.let { fromColumn less it })
                 }
-                filters.to?.let {
-                    conditions.add(fromColumn less it.toDbTimestamp())
+
+                is TimeFilterMode.OverlapsWindow -> {
+                    listOf(
+                        from?.let { if (mode.inclusiveFrom) mode.toColumn greaterEq it else mode.toColumn greater it },
+                        to?.let { fromColumn less it },
+                    )
                 }
             }
-
-            TimeFilterMode.BEFORE_FROM -> {
-                filters.from?.let {
-                    conditions.add(fromColumn less it.toDbTimestamp())
-                }
-            }
-
-            TimeFilterMode.OVERLAPS_WINDOW_INCLUSIVE_FROM -> {
-                requireNotNull(toColumn) {
-                    "toColumn is required for OVERLAPS_WINDOW_INCLUSIVE_FROM filtering"
-                }
-
-                filters.from?.let {
-                    conditions.add(toColumn greaterEq it.toDbTimestamp())
-                }
-                filters.to?.let {
-                    conditions.add(fromColumn less it.toDbTimestamp())
-                }
-            }
-        }
-
-        sourceIds?.let {
-            conditions.add(sourceInstanceIdColumn inList it)
-        }
-
-        return MetricConditionResult.Conditions(combineConditions(conditions))
+        return combineConditions(timeConditions.filterNotNull() + listOfNotNull(sourceIds?.let { sourceInstanceIdColumn inList it }))
     }
 
+    /** The read's where clause, or null when the source filters match no source instance. */
     protected fun dateConditions(
         filters: ReadFilters,
         sourceInstanceIdColumn: Column<Int>,
         dateColumn: Column<LocalDate>,
-    ): MetricConditionResult {
+    ): Op<Boolean>? {
         val sourceIds = filters.sourceInstanceIds()
-
-        if (sourceIds.hasNoMatchingSources()) {
-            return MetricConditionResult.Empty
-        }
-
-        val conditions = mutableListOf<Op<Boolean>>()
-        filters.fromDate?.let { conditions.add(dateColumn greaterEq it) }
-        filters.toDate?.let { conditions.add(dateColumn lessEq it) }
-        sourceIds?.let { conditions.add(sourceInstanceIdColumn inList it) }
-
-        return MetricConditionResult.Conditions(combineConditions(conditions))
+        if (sourceIds.hasNoMatchingSources()) return null
+        return combineConditions(
+            listOfNotNull(
+                filters.fromDate?.let { dateColumn greaterEq it },
+                filters.toDate?.let { dateColumn lessEq it },
+                sourceIds?.let { sourceInstanceIdColumn inList it },
+            ),
+        )
     }
-
-    protected fun MetricConditionResult.whereOrNull(): Op<Boolean>? =
-        when (this) {
-            MetricConditionResult.Empty -> null
-            is MetricConditionResult.Conditions -> where
-        }
 
     protected fun sourceMetadata(
         sourceInstanceIds: Set<Int>,
         includeSource: Boolean,
-    ): Map<Int, SourceMetadata> = if (includeSource) sourceMetadataFor(sourceInstanceIds) else emptyMap()
+    ): Map<Int, SourceMetadataResponse> = if (includeSource) sourceMetadataFor(sourceInstanceIds) else emptyMap()
 
     protected fun <T> List<ResultRow>.mapWithSource(
         sourceInstanceId: Column<Int>,
@@ -181,7 +139,7 @@ abstract class BaseMetricReadRepository {
         toItem: (row: ResultRow, source: SourceMetadataResponse?) -> T,
     ): List<T> {
         val metadata = sourceMetadata(mapTo(HashSet()) { it[sourceInstanceId] }, includeSource)
-        return map { toItem(it, metadata[it[sourceInstanceId]].toResponse()) }
+        return map { toItem(it, metadata[it[sourceInstanceId]]) }
     }
 
     /**
@@ -197,7 +155,7 @@ abstract class BaseMetricReadRepository {
      */
     protected fun timestampKeyset(
         cursor: Cursor?,
-        order: String,
+        order: SortDirection,
         sortColumn: Column<OffsetDateTime>,
         idExpression: Expression<*>,
     ): Op<Boolean>? {
@@ -212,7 +170,7 @@ abstract class BaseMetricReadRepository {
     /** Keyset predicate for cursor pagination over a date sort column or expression. */
     protected fun dateKeyset(
         cursor: Cursor?,
-        order: String,
+        order: SortDirection,
         sortExpression: ExpressionWithColumnType<LocalDate>,
         idExpression: Expression<*>,
     ): Op<Boolean>? {
@@ -224,14 +182,14 @@ abstract class BaseMetricReadRepository {
     }
 
     private fun keyset(
-        order: String,
+        order: SortDirection,
         sortExpression: Expression<*>,
         sortValue: Expression<*>,
         idExpression: Expression<*>,
         lastId: Long,
     ): Op<Boolean> {
         val idValue = longParam(lastId)
-        return if (sortOrder(order) == SortOrder.DESC) {
+        return if (order == SortDirection.Desc) {
             LessOp(sortExpression, sortValue) or
                 (EqOp(sortExpression, sortValue) and LessOp(idExpression, idValue))
         } else {
@@ -240,45 +198,23 @@ abstract class BaseMetricReadRepository {
         }
     }
 
-    private fun invalidCursor(): RequestValidationException =
-        RequestValidationException(
-            listOf(
-                ValidationIssue(
-                    field = "cursor",
-                    code = ValidationIssueCodes.InvalidFormat,
-                    message = "is not a valid cursor",
-                ),
-            ),
-        )
+    private fun invalidCursor(): RequestValidationException = RequestValidationException(field = "cursor", code = ValidationIssueCodes.InvalidFormat, message = "is not a valid cursor")
 
-    /**
-     * Converts a string order ("asc" / "desc") into an Exposed [SortOrder].
-     */
-    protected fun sortOrder(order: String): SortOrder =
-        if (order.equals(
-                "desc",
-                ignoreCase = true,
-            )
-        ) {
-            SortOrder.DESC
-        } else {
-            SortOrder.ASC
+    protected fun ReadFilters.sortOrder(): SortOrder =
+        when (order) {
+            SortDirection.Asc -> SortOrder.ASC
+            SortDirection.Desc -> SortOrder.DESC
         }
-
-    protected fun ReadFilters.sortOrder(): SortOrder = sortOrder(order)
 }
 
-enum class TimeFilterMode {
-    START_AT_IN_RANGE,
-    OVERLAPS_WINDOW,
-    BEFORE_FROM,
-    OVERLAPS_WINDOW_INCLUSIVE_FROM,
-}
+sealed interface TimeFilterMode {
+    data object StartAtInRange : TimeFilterMode
 
-sealed interface MetricConditionResult {
-    data object Empty : MetricConditionResult
+    data object BeforeFrom : TimeFilterMode
 
-    data class Conditions(
-        val where: Op<Boolean>,
-    ) : MetricConditionResult
+    /** The row's span up to [toColumn] overlaps the window; [inclusiveFrom] also keeps spans ending exactly at `from`. */
+    data class OverlapsWindow(
+        val toColumn: Column<OffsetDateTime>,
+        val inclusiveFrom: Boolean = false,
+    ) : TimeFilterMode
 }

@@ -46,12 +46,12 @@ import me.aquitano.health.infrastructure.repositories.ReplayJobRepository
 import me.aquitano.health.infrastructure.repositories.ScheduledSyncRepository
 import me.aquitano.health.infrastructure.repositories.SupportRepository
 import me.aquitano.health.infrastructure.security.ApiKeyHasher
-import me.aquitano.health.infrastructure.time.UtcClock
 import me.aquitano.health.shared.AppJson
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.koin.core.module.dsl.bind
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.module
+import java.time.Clock
 
 /**
  * Cross-cutting platform beans shared by every feature: the [database] handle, clock, hashing,
@@ -63,7 +63,7 @@ fun coreModule(
     config: AppConfig,
 ) = module {
     single<Database> { database }
-    single { UtcClock() }
+    single { Clock.systemUTC() }
     singleOf(::ApiKeyHasher)
     singleOf(::SupportRepository)
     singleOf(::MetricCatalogBootstrap)
@@ -116,11 +116,7 @@ fun ingestionModule() =
         // Derived-projection rebuild
         singleOf(::PendingDerivedRebuildRepository)
         singleOf(::ProjectionWipeRepository)
-        single { CanonicalStepDerivationService(get<CanonicalStepDerivationRepository>()) }
-        single {
-            DerivedRebuildModuleRegistry(derivedRebuildModules(canonicalStepService = get()))
-        }
-        singleOf(::PerDateDerivedRebuildExecutor) { bind<DerivedRebuildExecutor>() }
+        singleOf(::CanonicalStepDerivationService) { bind<DerivedRebuildExecutor>() }
         single {
             PendingDerivedRebuildSweeper(
                 repository = get(),
@@ -134,8 +130,8 @@ fun ingestionModule() =
     }
 
 /**
- * Read side: read repositories, the health-day module registry, and the query services that back
- * the metric, structural, dashboard, and trend read routes.
+ * Read side: read repositories and the query services that back the metric, structural,
+ * dashboard, and trend read routes.
  */
 fun metricsReadModule() =
     module {
@@ -147,17 +143,6 @@ fun metricsReadModule() =
         singleOf(::CanonicalStepDerivationRepository)
         singleOf(::CanonicalSleepSessionDerivationRepository)
         singleOf(::CanonicalSleepSummaryDerivationRepository)
-
-        single {
-            HealthDayModuleRegistry(
-                listOf(
-                    StepsDayModule(get()),
-                    HeartRateDayModule(get()),
-                    WeightDayModule(get()),
-                    SleepDayModule(get()),
-                ),
-            )
-        }
 
         // Query services
         singleOf(::ActivityQueryService)
@@ -276,7 +261,6 @@ fun adminReplayModule() =
                 mappingService = get(),
                 metricWriteService = get(),
                 derivedRebuildExecutor = get(),
-                derivedRebuildRegistry = get(),
                 pendingDerivedRebuildRepository = get(),
                 replayJobRepository = get(),
                 projectionWipeRepository = get(),

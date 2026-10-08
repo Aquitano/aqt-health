@@ -2,47 +2,24 @@ package me.aquitano.health.domain
 
 import java.time.Instant
 
-/**
- * Common interface for all health data providers.
- * Unifies authentication, token management, and data synchronization.
- */
 interface HealthProvider {
-    /**
-     * Unique identifier for the provider (e.g., "google_health", "apple_health").
-     */
+    /** Stored spelling, e.g. `google_health`; [HealthProviderDescriptor.providerCode] is the wire spelling. */
     val providerCode: String
-
-    /**
-     * Public provider discovery metadata.
-     */
     val descriptor: HealthProviderDescriptor
 
-    /**
-     * Stable instance ID used until the provider can return an account-specific identifier.
-     */
+    /** Instance id used until the provider can return an account-specific identifier. */
     val defaultProviderInstanceId: String
 
-    /**
-     * True when required provider credentials and encryption settings are available.
-     */
     fun isConfigured(): Boolean
 
-    /**
-     * Generates the URL to redirect the user to for authentication.
-     */
     fun getAuthUrl(state: String): String
 
-    /**
-     * Exchanges an authorization code and stores the resulting provider account.
-     */
+    /** Exchanges an authorization code and stores the resulting provider account. */
     suspend fun connect(
         code: String,
         now: Instant,
     ): ProviderConnection
 
-    /**
-     * Synchronizes health data for a specific account and time range.
-     */
     suspend fun sync(
         request: ProviderSyncRequest,
         now: Instant,
@@ -53,27 +30,10 @@ interface HealthProvider {
 data class HealthProviderDescriptor(
     val providerCode: String,
     val displayName: String,
-    val authType: ProviderAuthType,
-    val requiresAuthentication: Boolean,
     val supportedDataTypes: List<String>,
     val defaultDataTypes: List<String>,
     val maxSyncRangeDays: Int,
     val supportsPageSize: Boolean,
-    val workflowEndpoints: ProviderWorkflowEndpoints,
-)
-
-enum class ProviderAuthType {
-    OAUTH,
-    NONE,
-}
-
-data class ProviderWorkflowEndpoints(
-    val oauthStart: String? = null,
-    val oauthCallback: String? = null,
-    val accounts: String? = null,
-    val disconnect: String? = null,
-    val reconnect: String? = null,
-    val sync: String,
 )
 
 data class ProviderConnection(
@@ -97,7 +57,7 @@ data class ProviderSyncSummary(
     val providerInstanceId: String,
     val requestedFrom: Instant,
     val requestedTo: Instant,
-    val status: String, // "processed", "failed", "partial_failed"
+    val status: SyncStatus,
     val batches: List<ProviderSyncBatch>,
     val errors: List<ProviderSyncError>,
     val emptyDataTypes: List<ProviderSyncEmptyDataType> = emptyList(),

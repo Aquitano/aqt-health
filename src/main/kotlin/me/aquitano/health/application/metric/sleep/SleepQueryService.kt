@@ -4,9 +4,9 @@ import me.aquitano.health.api.dto.SleepNightsResponse
 import me.aquitano.health.api.dto.SleepSessionsResponse
 import me.aquitano.health.application.metric.common.QueryParams
 import me.aquitano.health.application.metric.common.SortFields
+import me.aquitano.health.application.metric.common.dailyReadFilters
 import me.aquitano.health.application.metric.common.pagedRead
 import me.aquitano.health.application.metric.common.readFilters
-import me.aquitano.health.application.metric.common.sleepNightReadFilters
 import me.aquitano.health.application.metric.common.toResponse
 import me.aquitano.health.application.metric.sleep.repository.CanonicalSleepSessionDerivationRepository
 import me.aquitano.health.application.metric.sleep.repository.SleepRepository
@@ -32,7 +32,7 @@ class SleepQueryService(
         now: Instant,
     ): SleepNightsResponse {
         params.rejectLatest()
-        val filters = params.sleepNightReadFilters(now)
+        val filters = params.dailyReadFilters(now, params.timezone())
         return pagedRead(database, filters, SortFields.DATE, { it.date }, { it.session.id.toLong() }, ::SleepNightsResponse) {
             val (nights, stagesBySession, sourceMetadata) = sleepRepository.listCanonicalSleepNights(filters)
             nights.map { it.toResponse(stagesBySession, sourceMetadata) }

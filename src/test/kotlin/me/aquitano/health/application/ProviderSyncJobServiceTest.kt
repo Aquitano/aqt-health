@@ -14,10 +14,10 @@ import me.aquitano.health.domain.SyncJobStatus
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
 import me.aquitano.health.infrastructure.repositories.ProviderSyncJobRepository
 import me.aquitano.health.infrastructure.repositories.ScheduledSyncRepository
-import me.aquitano.health.infrastructure.time.UtcClock
 import me.aquitano.health.test.BlockingProvider
 import me.aquitano.health.test.FakeProvider
 import me.aquitano.health.test.PostgresIntegrationTest
+import java.time.Clock
 import java.time.Instant
 import java.util.UUID
 import kotlin.test.Test
@@ -94,7 +94,7 @@ class ProviderSyncJobServiceTest : PostgresIntegrationTest() {
             repository.markRunning(finishedId, now)
             repository.finish(
                 id = finishedId,
-                status = "processed",
+                status = SyncJobStatus.Processed,
                 batchesCount = 0,
                 emptyCount = 0,
                 errorCount = 0,
@@ -111,7 +111,7 @@ class ProviderSyncJobServiceTest : PostgresIntegrationTest() {
                 assertTrue(result.abandoned.isEmpty())
                 assertEquals(attempt + 1, result.resumed.single().restartCount)
                 val requeued = repository.get(interruptedId)!!
-                assertEquals("queued", requeued.status)
+                assertEquals(SyncJobStatus.Queued, requeued.status)
                 assertEquals(0, requeued.completedItems)
             }
 
@@ -121,9 +121,9 @@ class ProviderSyncJobServiceTest : PostgresIntegrationTest() {
             assertEquals(listOf(interruptedId), capped.abandoned.map { it.id })
 
             val abandoned = repository.get(interruptedId)!!
-            assertEquals("failed", abandoned.status)
+            assertEquals(SyncJobStatus.Failed, abandoned.status)
             assertEquals(3, abandoned.restartCount)
-            assertEquals("processed", repository.get(finishedId)!!.status)
+            assertEquals(SyncJobStatus.Processed, repository.get(finishedId)!!.status)
         }
 
     @Test
@@ -147,7 +147,7 @@ class ProviderSyncJobServiceTest : PostgresIntegrationTest() {
             repository.markRunning(runningId, now)
             repository.finish(
                 id = finishedId,
-                status = "processed",
+                status = SyncJobStatus.Processed,
                 batchesCount = 0,
                 emptyCount = 0,
                 errorCount = 0,
@@ -160,7 +160,7 @@ class ProviderSyncJobServiceTest : PostgresIntegrationTest() {
 
             repository.finish(
                 id = runningId,
-                status = "failed",
+                status = SyncJobStatus.Failed,
                 batchesCount = 0,
                 emptyCount = 0,
                 errorCount = 1,
@@ -221,7 +221,6 @@ class ProviderSyncJobServiceTest : PostgresIntegrationTest() {
             ProviderWorkflowService(
                 providerRegistry = registry,
                 providerOAuthRepository = oAuthRepository,
-                providerStatusService = ProviderStatusService(registry, oAuthRepository),
                 scheduledSyncRepository = ScheduledSyncRepository(database),
             )
         val service =
@@ -229,7 +228,7 @@ class ProviderSyncJobServiceTest : PostgresIntegrationTest() {
                 providerRegistry = registry,
                 workflowService = workflowService,
                 repository = ProviderSyncJobRepository(database),
-                clock = UtcClock(),
+                clock = Clock.systemUTC(),
             )
 
         suspend fun awaitTerminal(

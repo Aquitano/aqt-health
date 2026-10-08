@@ -22,7 +22,6 @@ fun metricWriteService(): MetricWriteService =
         activitySummaryWriteRepository = ActivitySummaryWriteRepository(),
         cardiovascularWriteRepository = CardiovascularWriteRepository(),
         scalarSampleWriteRepository = ScalarSampleWriteRepository(),
-        derivedRebuildRegistry = derivedRebuildRegistry(),
     )
 
 fun ingestionService(

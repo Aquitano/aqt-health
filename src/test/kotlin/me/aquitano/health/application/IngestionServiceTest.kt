@@ -13,7 +13,6 @@ import me.aquitano.health.domain.IngestionSnapshot
 import me.aquitano.health.domain.RequestValidationException
 import me.aquitano.health.domain.ScalarMetricTypes
 import me.aquitano.health.infrastructure.repositories.PendingDerivedRebuildRepository
-import me.aquitano.health.infrastructure.time.UtcClock
 import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.test.PostgresTestDatabase
 import me.aquitano.health.test.countRows
@@ -22,6 +21,7 @@ import me.aquitano.health.test.ingestionService
 import me.aquitano.health.test.queryInt
 import me.aquitano.health.test.queryString
 import me.aquitano.health.test.realDerivedRebuildExecutor
+import java.time.Clock
 import java.time.Instant
 import java.util.concurrent.CancellationException
 import kotlin.test.Test
@@ -49,7 +49,8 @@ class IngestionServiceTest : PostgresIntegrationTest() {
             val stored = service.ingestBatch(request, now, IngestionSnapshot("window", "empty"), allowEmptyRecords = true)
             assertEquals(BatchStatus.Processed, stored.status)
             assertEquals(0, stored.ingestionRecordsStored)
-            assertEquals(stored.batchId, service.reusableSyncBatchId("withings", "empty-account", "window", "empty", now))
+            val sourceInstanceId = service.sourceInstanceId("withings", "empty-account", now)
+            assertEquals(stored.batchId, service.reusableSyncBatchId(sourceInstanceId, "window", "empty"))
 
             val record = StepInterval("duplicate", "2026-04-19T08:00:00Z", "2026-04-19T09:00:00Z", 100)
             assertFailsWith<RequestValidationException> {
@@ -157,7 +158,7 @@ class IngestionServiceTest : PostgresIntegrationTest() {
                 PendingDerivedRebuildSweeper(
                     pending,
                     realDerivedRebuildExecutor(database),
-                    UtcClock(),
+                    Clock.systemUTC(),
                 )
             assertEquals(1, sweeper.sweep(now))
             assertEquals(0, pending.due(now, 10).size)

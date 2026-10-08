@@ -78,7 +78,6 @@ class AppConfigValidationTest {
             database =
                 DatabaseConfig(
                     jdbcUrl = "jdbc:postgresql://db.aqt-health.internal:5432/aqt_health",
-                    driver = "org.postgresql.Driver",
                     user = "aqt_health_app",
                     password = "a-real-database-password",
                     maxPoolSize = 10,

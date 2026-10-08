@@ -1,5 +1,6 @@
 package me.aquitano.health.infrastructure.repositories
 
+import me.aquitano.health.domain.SyncJobStatus
 import me.aquitano.health.infrastructure.database.suspendDbTransaction
 import me.aquitano.health.infrastructure.database.tables.ProviderSyncJobsTable
 import me.aquitano.health.infrastructure.database.toDbTimestamp
@@ -25,7 +26,7 @@ data class ProviderSyncJobRecord(
     val requestedTo: Instant,
     val dataTypes: List<String>?,
     val pageSize: Int?,
-    val status: String,
+    val status: SyncJobStatus,
     val totalItems: Int,
     val completedItems: Int,
     val currentDataType: String?,
@@ -86,7 +87,7 @@ class ProviderSyncJobRepository(
                         it[this.requestedTo] = requestedTo.toDbTimestamp()
                         it[this.dataTypes] = dataTypes?.let(::encodeDataTypes)
                         it[this.pageSize] = pageSize
-                        it[status] = "queued"
+                        it[status] = SyncJobStatus.Queued
                         it[totalItems] = 0
                         it[completedItems] = 0
                         it[batchesCount] = 0
@@ -98,7 +99,8 @@ class ProviderSyncJobRepository(
                     }.insertedCount > 0
             val record =
                 getByIdInTransaction(id)
-                    ?: findByIdempotencyKeyInTransaction(providerCode, idempotencyKey!!)!!
+                    ?: idempotencyKey?.let { findByIdempotencyKeyInTransaction(providerCode, it) }
+                    ?: error("Provider sync job '$id' was neither inserted nor found by its idempotency key")
             ProviderSyncJobCreateResult(record, created = inserted)
         }
 
@@ -123,7 +125,7 @@ class ProviderSyncJobRepository(
     ) {
         suspendDbTransaction(db = database) {
             ProviderSyncJobsTable.update({ ProviderSyncJobsTable.id eq id }) {
-                it[status] = "running"
+                it[status] = SyncJobStatus.Running
                 it[startedAt] = now.toDbTimestamp()
                 it[updatedAt] = now.toDbTimestamp()
                 it[errorMessage] = null
@@ -185,7 +187,7 @@ class ProviderSyncJobRepository(
 
     suspend fun finish(
         id: String,
-        status: String,
+        status: SyncJobStatus,
         batchesCount: Int,
         emptyCount: Int,
         errorCount: Int,
@@ -222,13 +224,13 @@ class ProviderSyncJobRepository(
             val interrupted =
                 ProviderSyncJobsTable
                     .selectAll()
-                    .where { ProviderSyncJobsTable.status inList listOf("queued", "running") }
+                    .where { ProviderSyncJobsTable.status inList ACTIVE_STATUSES }
                     .map { it.toRecord() }
             val (abandoned, resumable) = interrupted.partition { it.restartCount >= maxRestarts }
 
             abandoned.forEach { job ->
                 ProviderSyncJobsTable.update({ ProviderSyncJobsTable.id eq job.id }) {
-                    it[status] = "failed"
+                    it[status] = SyncJobStatus.Failed
                     it[errorMessage] =
                         "Backend restarted $maxRestarts times while this job was unfinished; not resuming again. Start a new sync to resume from completed chunks."
                     it[updatedAt] = now.toDbTimestamp()
@@ -237,7 +239,7 @@ class ProviderSyncJobRepository(
             }
             resumable.forEach { job ->
                 ProviderSyncJobsTable.update({ ProviderSyncJobsTable.id eq job.id }) {
-                    it[status] = "queued"
+                    it[status] = SyncJobStatus.Queued
                     it[restartCount] = job.restartCount + 1
                     // The relaunch reruns the full request, so completed progress starts over.
                     it[completedItems] = 0
@@ -250,7 +252,7 @@ class ProviderSyncJobRepository(
             }
 
             ProviderSyncJobRequeueResult(
-                resumed = resumable.map { it.copy(status = "queued", restartCount = it.restartCount + 1, completedItems = 0) },
+                resumed = resumable.map { it.copy(status = SyncJobStatus.Queued, restartCount = it.restartCount + 1, completedItems = 0) },
                 abandoned = abandoned,
             )
         }
@@ -263,7 +265,7 @@ class ProviderSyncJobRepository(
             .selectAll()
             .apply {
                 providerCode?.let { andWhere { ProviderSyncJobsTable.providerCode eq it } }
-                if (activeOnly) andWhere { ProviderSyncJobsTable.status inList listOf("queued", "running") }
+                if (activeOnly) andWhere { ProviderSyncJobsTable.status inList ACTIVE_STATUSES }
             }.orderBy(ProviderSyncJobsTable.createdAt to SortOrder.DESC)
             .limit(1)
             .map { it.toRecord() }
@@ -321,3 +323,5 @@ class ProviderSyncJobRepository(
             finishedAt = this[ProviderSyncJobsTable.finishedAt]?.toInstant(),
         )
 }
+
+private val ACTIVE_STATUSES = SyncJobStatus.entries.filterNot { it.terminal }

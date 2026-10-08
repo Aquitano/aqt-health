@@ -33,7 +33,6 @@ data class ScheduledSyncCheckpointRecord(
     val dataType: String,
     val checkpointAt: Instant?,
     val lastSuccessfulFrom: Instant?,
-    val lastSuccessfulTo: Instant?,
     val createdAt: Instant,
     val updatedAt: Instant,
 )
@@ -153,7 +152,6 @@ class ScheduledSyncRepository(
                 it[this.dataType] = dataType
                 it[checkpointAt] = to.toDbTimestamp()
                 it[lastSuccessfulFrom] = from.toDbTimestamp()
-                it[lastSuccessfulTo] = to.toDbTimestamp()
                 it[createdAt] = nowTimestamp
                 it[updatedAt] = nowTimestamp
             }
@@ -233,7 +231,6 @@ class ScheduledSyncRepository(
                 it[this.dataType] = dataType
                 it[checkpointAt] = null
                 it[lastSuccessfulFrom] = null
-                it[lastSuccessfulTo] = null
                 it[createdAt] = nowTimestamp
                 it[updatedAt] = nowTimestamp
             }
@@ -280,7 +277,6 @@ class ScheduledSyncRepository(
             dataType = this[ProviderScheduledSyncCheckpointsTable.dataType],
             checkpointAt = this[ProviderScheduledSyncCheckpointsTable.checkpointAt]?.toInstant(),
             lastSuccessfulFrom = this[ProviderScheduledSyncCheckpointsTable.lastSuccessfulFrom]?.toInstant(),
-            lastSuccessfulTo = this[ProviderScheduledSyncCheckpointsTable.lastSuccessfulTo]?.toInstant(),
             createdAt = this[ProviderScheduledSyncCheckpointsTable.createdAt].toInstant(),
             updatedAt = this[ProviderScheduledSyncCheckpointsTable.updatedAt].toInstant(),
         )

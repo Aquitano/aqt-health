@@ -21,6 +21,7 @@ import me.aquitano.health.domain.ValidationIssueCodes
 import me.aquitano.health.infrastructure.database.suspendDbTransaction
 import me.aquitano.health.infrastructure.repositories.IngestionRepository
 import me.aquitano.health.shared.AppJson
+import me.aquitano.health.shared.SortDirection
 import org.jetbrains.exposed.v1.jdbc.Database
 
 class AdminService(
@@ -29,30 +30,23 @@ class AdminService(
 ) {
     suspend fun listBatches(params: QueryParams): IngestionBatchesResponse = listBatches(params, statusOverride = null)
 
-    suspend fun listFailures(params: QueryParams): IngestionBatchesResponse = listBatches(params, statusOverride = "failed")
+    suspend fun listFailures(params: QueryParams): IngestionBatchesResponse = listBatches(params, statusOverride = BatchStatus.Failed)
 
     /** [statusOverride] pins the status filter for the failures endpoint; the rest of the
      * filters, paging, and sorting are identical either way. */
     private suspend fun listBatches(
         params: QueryParams,
-        statusOverride: String?,
+        statusOverride: BatchStatus?,
     ): IngestionBatchesResponse {
-        val status = statusOverride ?: params.optional("status")
-        if (status != null && BatchStatus.entries.none { it.stored == status }) {
-            throw RequestValidationException(
-                listOf(
-                    ValidationIssue(
-                        field = "status",
-                        code = ValidationIssueCodes.UnsupportedValue,
-                        message = "unsupported batch status",
-                    ),
-                ),
-            )
-        }
+        val status =
+            statusOverride ?: params.optional("status")?.let {
+                BatchStatus.fromStoredOrNull(it)
+                    ?: throw RequestValidationException(field = "status", code = ValidationIssueCodes.UnsupportedValue, message = "unsupported batch status")
+            }
         val from = params.instant("from")
         val to = params.instant("to")
         validateRange(from, to, "from", "to")
-        val order = "desc"
+        val order = SortDirection.Desc
         val cursor = params.cursor(order)
         val limit = params.int(QueryParamSpecs.adminLimit)
         return suspendDbTransaction(db = database) {
@@ -74,7 +68,7 @@ class AdminService(
                                 provider = it.provider,
                                 providerInstanceId = it.providerInstanceId,
                                 batchExternalId = it.batchExternalId,
-                                status = BatchStatus.fromStored(it.status),
+                                status = it.status,
                                 ingestedAt = it.ingestedAt,
                                 receivedAt = it.receivedAt,
                                 processedAt = it.processedAt,
@@ -100,15 +94,7 @@ class AdminService(
     ): IngestionBatchDetailResponse {
         val batchId = batchIdValue?.toIntOrNull()
         if (batchId == null || batchId <= 0) {
-            throw RequestValidationException(
-                listOf(
-                    ValidationIssue(
-                        field = "id",
-                        code = ValidationIssueCodes.InvalidFormat,
-                        message = "must be a positive integer",
-                    ),
-                ),
-            )
+            throw RequestValidationException(field = "id", code = ValidationIssueCodes.InvalidFormat, message = "must be a positive integer")
         }
         val includeSourcePayload =
             params.boolean("includeSourcePayload", default = false)
@@ -133,7 +119,7 @@ class AdminService(
             provider = batch.provider,
             providerInstanceId = batch.providerInstanceId,
             batchExternalId = batch.batchExternalId,
-            status = BatchStatus.fromStored(batch.status),
+            status = batch.status,
             ingestedAt = batch.ingestedAt,
             receivedAt = batch.receivedAt,
             processedAt = batch.processedAt,

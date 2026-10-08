@@ -3,7 +3,6 @@ package me.aquitano.external.google
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.*
 import me.aquitano.health.application.HealthProviderRegistry
-import me.aquitano.health.application.ProviderStatusService
 import me.aquitano.health.application.ProviderWorkflowService
 import me.aquitano.health.application.providersync.RefreshedTokenSet
 import me.aquitano.health.domain.ConflictException
@@ -16,7 +15,6 @@ import me.aquitano.health.infrastructure.config.ProviderOAuthConfig
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
 import me.aquitano.health.infrastructure.repositories.ScheduledSyncRepository
 import me.aquitano.health.infrastructure.security.TokenCipher
-import me.aquitano.health.infrastructure.time.UtcClock
 import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.test.PostgresTestDatabase
 import me.aquitano.health.test.TEST_TOKEN_ENCRYPTION_KEY
@@ -26,7 +24,9 @@ import me.aquitano.health.test.queryInt
 import me.aquitano.health.test.queryString
 import me.aquitano.health.test.realDerivedRebuildExecutor
 import org.jetbrains.exposed.v1.jdbc.Database
+import java.time.Clock
 import java.time.Instant
+import java.time.ZoneOffset
 import kotlin.test.*
 
 class GoogleHealthProviderTest : PostgresIntegrationTest() {
@@ -315,7 +315,7 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
             fixture.client.fetchResults +=
                 listOf(
                     fetchResult(
-                        "steps",
+                        GoogleHealthDataType.Steps,
                         stepsPoint(
                             name = "google-steps-minute",
                             startAt = "2026-04-01T08:00:00Z",
@@ -327,7 +327,7 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
             fixture.client.fetchResults +=
                 listOf(
                     fetchResult(
-                        "steps",
+                        GoogleHealthDataType.Steps,
                         stepsPoint(
                             name = "google-steps-short",
                             startAt = "2026-04-01T08:00:30Z",
@@ -371,7 +371,7 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
             fixture.client.fetchResults +=
                 listOf(
                     fetchResult(
-                        "steps",
+                        GoogleHealthDataType.Steps,
                         stepsPoint(
                             name = "google-steps-1",
                             startAt = "2026-04-01T08:00:00Z",
@@ -383,7 +383,7 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
             fixture.client.fetchResults +=
                 listOf(
                     fetchResult(
-                        "steps",
+                        GoogleHealthDataType.Steps,
                         stepsPoint(
                             name = "google-steps-2",
                             startAt = "2026-04-01T10:00:00Z",
@@ -505,20 +505,14 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
                                 ingestionService = ingestionService(database, realDerivedRebuildExecutor(database)),
                                 tokenEncryptionKeys = mapOf(GOOGLE_HEALTH_PROVIDER_CODE to config.tokenEncryptionKey),
                             ),
-                        clock = UtcClock.fixed(now),
+                        clock = Clock.fixed(now, ZoneOffset.UTC),
                     ),
             )
         private val providerRegistry = HealthProviderRegistry(listOf(provider))
-        val providerStatusService =
-            ProviderStatusService(
-                providerRegistry = providerRegistry,
-                providerOAuthRepository = providerRepository,
-            )
         val providerWorkflowService =
             ProviderWorkflowService(
                 providerRegistry = providerRegistry,
                 providerOAuthRepository = providerRepository,
-                providerStatusService = providerStatusService,
                 scheduledSyncRepository = ScheduledSyncRepository(database),
             )
 
@@ -591,7 +585,7 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
 
         override suspend fun fetchDataPoints(
             accessToken: String,
-            dataType: String,
+            dataType: GoogleHealthDataType,
             from: Instant,
             to: Instant,
             pageSize: Int,
@@ -614,7 +608,7 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
     }
 
     private data class FetchRequest(
-        val dataType: String,
+        val dataType: GoogleHealthDataType,
         val from: Instant,
         val to: Instant,
     )
@@ -622,18 +616,18 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
     private fun allMetricFetchResults(): List<GoogleHealthFetchResult> =
         listOf(
             stepsFetchResult(),
-            fetchResult("sleep", sleepPoint()),
-            fetchResult("heart-rate", heartRatePoint()),
-            fetchResult("weight", weightPoint()),
-            fetchResult("body-fat", bodyFatPoint()),
-            fetchResult("heart-rate-variability", heartRateVariabilityPoint()),
-            fetchResult("respiratory-rate-sleep-summary", respiratoryRatePoint()),
+            fetchResult(GoogleHealthDataType.Sleep, sleepPoint()),
+            fetchResult(GoogleHealthDataType.HeartRate, heartRatePoint()),
+            fetchResult(GoogleHealthDataType.Weight, weightPoint()),
+            fetchResult(GoogleHealthDataType.BodyFat, bodyFatPoint()),
+            fetchResult(GoogleHealthDataType.HeartRateVariability, heartRateVariabilityPoint()),
+            fetchResult(GoogleHealthDataType.RespiratoryRateSleepSummary, respiratoryRatePoint()),
         )
 
-    private fun stepsFetchResult(): GoogleHealthFetchResult = fetchResult("steps", stepsPoint())
+    private fun stepsFetchResult(): GoogleHealthFetchResult = fetchResult(GoogleHealthDataType.Steps, stepsPoint())
 
     private fun fetchResult(
-        dataType: String,
+        dataType: GoogleHealthDataType,
         point: JsonObject,
     ): GoogleHealthFetchResult {
         val payload =

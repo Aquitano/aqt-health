@@ -108,3 +108,19 @@ enum class ReplayJobStatus(
                 ?: error("Unknown replay job status '$value'")
     }
 }
+
+/** Stored `provider_oauth_accounts.account_status`; the API reports the derived lifecycle status instead. */
+enum class ProviderAccountStatus(
+    val stored: String,
+) {
+    Connected("connected"),
+    NeedsReauth("needs_reauth"),
+    Disconnected("disconnected"),
+    ;
+
+    companion object {
+        fun fromStored(value: String): ProviderAccountStatus =
+            entries.firstOrNull { it.stored == value }
+                ?: error("Unknown provider account status '$value'")
+    }
+}

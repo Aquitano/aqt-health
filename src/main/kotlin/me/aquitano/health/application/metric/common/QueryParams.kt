@@ -4,6 +4,7 @@ import me.aquitano.health.domain.RequestValidationException
 import me.aquitano.health.domain.ValidationIssue
 import me.aquitano.health.domain.ValidationIssueCodes
 import me.aquitano.health.shared.Cursor
+import me.aquitano.health.shared.SortDirection
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -14,175 +15,68 @@ class QueryParams(
 ) {
     fun optional(name: String): String? = values[name]?.takeIf { it.isNotBlank() }
 
-    fun required(name: String): String =
-        optional(name) ?: throw RequestValidationException(
-            listOf(
-                ValidationIssue(
-                    field = name,
-                    code = ValidationIssueCodes.Required,
-                    message = "is required",
-                ),
-            ),
-        )
+    fun required(name: String): String = optional(name) ?: throw RequestValidationException(field = name, code = ValidationIssueCodes.Required, message = "is required")
 
-    fun instant(name: String): Instant? {
-        val value = optional(name) ?: return null
-        return runCatching { Instant.parse(value) }.getOrElse {
-            throw RequestValidationException(
-                listOf(
-                    ValidationIssue(
-                        field = name,
-                        code = ValidationIssueCodes.InvalidFormat,
-                        message = "must be an ISO-8601 instant",
-                    ),
-                ),
-            )
-        }
-    }
+    fun instant(name: String): Instant? = parsed(name, "an ISO-8601 instant", Instant::parse)
 
-    fun date(name: String): LocalDate? {
-        val value = optional(name) ?: return null
-        return runCatching { LocalDate.parse(value) }.getOrElse {
-            throw RequestValidationException(
-                listOf(
-                    ValidationIssue(
-                        field = name,
-                        code = ValidationIssueCodes.InvalidFormat,
-                        message = "must be an ISO-8601 date",
-                    ),
-                ),
-            )
-        }
-    }
+    fun date(name: String): LocalDate? = parsed(name, "an ISO-8601 date", LocalDate::parse)
 
     fun dateOrToday(
         name: String,
         now: Instant,
         timezone: ZoneId = ZoneOffset.UTC,
-    ): LocalDate? {
-        val value = optional(name) ?: return null
-        if (value == "today") return now.atZone(timezone).toLocalDate()
-        return runCatching { LocalDate.parse(value) }.getOrElse {
-            throw RequestValidationException(
-                listOf(
-                    ValidationIssue(
-                        field = name,
-                        code = ValidationIssueCodes.InvalidFormat,
-                        message = "must be an ISO-8601 date or today",
-                    ),
-                ),
-            )
+    ): LocalDate? =
+        parsed(name, "an ISO-8601 date or today") {
+            if (it == "today") now.atZone(timezone).toLocalDate() else LocalDate.parse(it)
         }
-    }
 
-    fun timezone(name: String = "timezone"): ZoneId {
-        val value = optional(name) ?: return ZoneOffset.UTC
-        return runCatching { ZoneId.of(value) }.getOrElse {
-            throw RequestValidationException(
-                listOf(
-                    ValidationIssue(
-                        field = name,
-                        code = ValidationIssueCodes.InvalidFormat,
-                        message = "must be an IANA timezone",
-                    ),
-                ),
-            )
-        }
-    }
+    fun timezone(name: String = "timezone"): ZoneId = parsed(name, "an IANA timezone", ZoneId::of) ?: ZoneOffset.UTC
 
-    fun requiredDate(name: String): LocalDate =
-        date(name) ?: throw RequestValidationException(
-            listOf(
-                ValidationIssue(
-                    field = name,
-                    code = ValidationIssueCodes.Required,
-                    message = "is required",
-                ),
-            ),
-        )
+    fun requiredDate(name: String): LocalDate = date(name) ?: throw RequestValidationException(field = name, code = ValidationIssueCodes.Required, message = "is required")
 
     internal fun boolean(spec: BooleanParamSpec): Boolean = boolean(spec.name, spec.default)
 
     fun boolean(
         name: String,
         default: Boolean,
-    ): Boolean {
-        val value = optional(name) ?: return default
-        return when (value.lowercase()) {
-            "true" -> true
-
-            "false" -> false
-
-            else -> throw RequestValidationException(
-                listOf(
-                    ValidationIssue(
-                        field = name,
-                        code = ValidationIssueCodes.InvalidFormat,
-                        message = "must be true or false",
-                    ),
-                ),
-            )
-        }
-    }
+    ): Boolean = parsed(name, "true or false") { it.lowercase().toBooleanStrict() } ?: default
 
     internal fun int(spec: IntParamSpec): Int {
-        val value = optional(spec.name) ?: return spec.default
-        val parsed =
-            value.toIntOrNull()
-                ?: throw RequestValidationException(
-                    listOf(
-                        ValidationIssue(
-                            field = spec.name,
-                            code = ValidationIssueCodes.InvalidFormat,
-                            message = "must be an integer",
-                        ),
-                    ),
-                )
+        val parsed = parsed(spec.name, "an integer", String::toInt) ?: return spec.default
         if (parsed !in spec.min..spec.max) {
-            throw RequestValidationException(
-                listOf(
-                    ValidationIssue(
-                        field = spec.name,
-                        code = ValidationIssueCodes.OutOfRange,
-                        message = "must be between ${spec.min} and ${spec.max}",
-                    ),
-                ),
-            )
+            throw RequestValidationException(field = spec.name, code = ValidationIssueCodes.OutOfRange, message = "must be between ${spec.min} and ${spec.max}")
         }
         return parsed
     }
 
-    fun order(default: String = Orders.ASC): String {
-        val value = optional("order") ?: return default
-        val normalized = value.lowercase()
-        if (normalized != Orders.ASC && normalized != Orders.DESC) {
-            throw RequestValidationException(
-                listOf(
-                    ValidationIssue(
-                        field = "order",
-                        code = ValidationIssueCodes.UnsupportedValue,
-                        message = "must be asc or desc",
-                    ),
-                ),
-            )
+    private fun <T> parsed(
+        name: String,
+        expected: String,
+        parse: (String) -> T,
+    ): T? =
+        optional(name)?.let { value ->
+            runCatching { parse(value) }.getOrElse {
+                throw RequestValidationException(field = name, code = ValidationIssueCodes.InvalidFormat, message = "must be $expected")
+            }
         }
-        return normalized
+
+    fun order(): SortDirection {
+        val spec = QueryParamSpecs.order
+        val value = optional(spec.name) ?: return spec.default
+        return SortDirection.fromWireName(value.lowercase())
+            ?: throw RequestValidationException(
+                field = spec.name,
+                code = ValidationIssueCodes.UnsupportedValue,
+                message = "must be ${SortDirection.entries.joinToString(" or ") { it.wireName }}",
+            )
     }
 
     /** Decodes the cursor parameter, rejecting cursors issued under a different order. */
-    fun cursor(order: String): Cursor? = optional("cursor")?.let { Cursor.decode(it, expectedOrder = order) }
+    fun cursor(order: SortDirection): Cursor? = optional("cursor")?.let { Cursor.decode(it, expectedOrder = order) }
 
     fun rejectLatest() {
         if (boolean("latest", default = false)) {
-            throw RequestValidationException(
-                listOf(
-                    ValidationIssue(
-                        field = "latest",
-                        code = ValidationIssueCodes.UnsupportedValue,
-                        message = "latest is not supported for this endpoint",
-                    ),
-                ),
-            )
+            throw RequestValidationException(field = "latest", code = ValidationIssueCodes.UnsupportedValue, message = "latest is not supported for this endpoint")
         }
     }
 

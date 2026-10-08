@@ -28,12 +28,11 @@ class GeneratedGoogleHealthClient(
 
     override suspend fun fetchDataPoints(
         accessToken: String,
-        dataType: String,
+        dataType: GoogleHealthDataType,
         from: Instant,
         to: Instant,
         pageSize: Int,
     ): GoogleHealthFetchResult {
-        validateSupportedDataType(dataType)
         // gax calls block the calling thread, so they stay off the Ktor worker threads.
         return withContext(Dispatchers.IO) {
             services.use(accessToken) { service ->
@@ -49,7 +48,7 @@ class GeneratedGoogleHealthClient(
 
     private fun fetchDataPoints(
         service: GoogleHealthDataPointsService,
-        dataType: String,
+        dataType: GoogleHealthDataType,
         from: Instant,
         to: Instant,
         pageSize: Int,
@@ -64,16 +63,16 @@ class GeneratedGoogleHealthClient(
             if (pageIndex >= maxPages) {
                 throw GoogleHealthHttpException(
                     "google_health_page_limit_exceeded",
-                    "Google Health $dataType pagination exceeded $maxPages pages",
+                    "Google Health ${dataType.code} pagination exceeded $maxPages pages",
                 )
             }
 
             val request =
                 ListDataPointsRequest
                     .newBuilder()
-                    .setParent(DataTypeName.of("me", dataType).toString())
+                    .setParent(DataTypeName.of("me", dataType.code).toString())
                     .setPageSize(pageSize)
-                    .setFilter(filterFor(dataType, from, to))
+                    .setFilter(dataType.filter(from, to))
                     .also { builder ->
                         if (pageToken.isNotBlank()) builder.setPageToken(pageToken)
                     }.build()
@@ -99,7 +98,7 @@ class GeneratedGoogleHealthClient(
             if (pageIndex == 1 || pageIndex % 25 == 0) {
                 generatedClientLogger.infoWithContext(
                     "google_health_generated_page_fetched",
-                    "dataType" to dataType,
+                    "dataType" to dataType.code,
                     "pages" to pageIndex,
                     "dataPoints" to dataPoints.size,
                 )
@@ -108,7 +107,7 @@ class GeneratedGoogleHealthClient(
             if (nextPageToken != null && !seenPageTokens.add(nextPageToken)) {
                 throw GoogleHealthHttpException(
                     "google_health_pagination_loop",
-                    "Google Health $dataType returned a repeated page token after $pageIndex pages",
+                    "Google Health ${dataType.code} returned a repeated page token after $pageIndex pages",
                 )
             }
             pageToken = nextPageToken.orEmpty()
@@ -120,7 +119,7 @@ class GeneratedGoogleHealthClient(
     private fun callListDataPoints(
         service: GoogleHealthDataPointsService,
         request: ListDataPointsRequest,
-        dataType: String,
+        dataType: GoogleHealthDataType,
     ): ListDataPointsResponse =
         try {
             service.listDataPoints(request)
@@ -130,7 +129,7 @@ class GeneratedGoogleHealthClient(
 
     private fun mapApiException(
         exception: ApiException,
-        dataType: String,
+        dataType: GoogleHealthDataType,
     ): RuntimeException =
         when (exception.statusCode.code) {
             StatusCode.Code.UNAUTHENTICATED -> {
@@ -142,44 +141,9 @@ class GeneratedGoogleHealthClient(
             else -> {
                 GoogleHealthHttpException(
                     "google_health_upstream_failed",
-                    "Google Health $dataType request failed with ${exception.statusCode.code}",
+                    "Google Health ${dataType.code} request failed with ${exception.statusCode.code}",
                 )
             }
-        }
-
-    private fun validateSupportedDataType(dataType: String) {
-        if (dataType !in GOOGLE_HEALTH_DEFAULT_DATA_TYPES) {
-            throw GoogleHealthHttpException(
-                "google_health_unsupported_data_type",
-                "Unsupported Google Health data type: $dataType",
-            )
-        }
-    }
-
-    private fun filterFor(
-        dataType: String,
-        from: Instant,
-        to: Instant,
-    ): String =
-        when (dataType) {
-            "steps" -> """steps.interval.start_time >= "$from" AND steps.interval.start_time < "$to""""
-
-            "sleep" -> """sleep.interval.end_time >= "$from" AND sleep.interval.end_time < "$to""""
-
-            "heart-rate" -> """heart_rate.sample_time.physical_time >= "$from" AND heart_rate.sample_time.physical_time < "$to""""
-
-            "weight" -> """weight.sample_time.physical_time >= "$from" AND weight.sample_time.physical_time < "$to""""
-
-            "body-fat" -> """body_fat.sample_time.physical_time >= "$from" AND body_fat.sample_time.physical_time < "$to""""
-
-            "heart-rate-variability" -> """heart_rate_variability.sample_time.physical_time >= "$from" AND heart_rate_variability.sample_time.physical_time < "$to""""
-
-            "respiratory-rate-sleep-summary" -> """respiratory_rate_sleep_summary.sample_time.physical_time >= "$from" AND respiratory_rate_sleep_summary.sample_time.physical_time < "$to""""
-
-            else -> throw GoogleHealthHttpException(
-                "google_health_unsupported_data_type",
-                "Unsupported Google Health data type: $dataType",
-            )
         }
 
     private fun dataPointJson(dataPoint: DataPoint): JsonObject = AppJson.parseToJsonElement(PROTO_JSON_PRINTER.print(dataPoint)).jsonObject

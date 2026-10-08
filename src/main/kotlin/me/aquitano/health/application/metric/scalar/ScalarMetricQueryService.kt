@@ -7,7 +7,6 @@ import me.aquitano.health.api.dto.ScalarDailySummariesResponse
 import me.aquitano.health.api.dto.ScalarDailySummaryResponse
 import me.aquitano.health.api.dto.ScalarSamplesResponse
 import me.aquitano.health.api.dto.ScalarSummaryResponse
-import me.aquitano.health.application.metric.common.Orders
 import me.aquitano.health.application.metric.common.QueryParamSpecs
 import me.aquitano.health.application.metric.common.QueryParams
 import me.aquitano.health.application.metric.common.SortFields
@@ -20,6 +19,7 @@ import me.aquitano.health.domain.ScalarMetricRegistry
 import me.aquitano.health.domain.ValidationIssue
 import me.aquitano.health.domain.ValidationIssueCodes
 import me.aquitano.health.infrastructure.database.suspendDbTransaction
+import me.aquitano.health.shared.SortDirection
 import org.jetbrains.exposed.v1.jdbc.Database
 
 /**
@@ -76,18 +76,14 @@ class ScalarMetricQueryService(
         val unknown = metricTypes.filter { ScalarMetricRegistry.find(it) == null }
         if (metricTypes.isEmpty() || unknown.isNotEmpty()) {
             throw RequestValidationException(
-                listOf(
-                    ValidationIssue(
-                        field = "metricTypes",
-                        code = ValidationIssueCodes.UnsupportedValue,
-                        message =
-                            if (unknown.isEmpty()) {
-                                "must contain at least one metric type"
-                            } else {
-                                "unknown metric types ${unknown.joinToString(", ")}"
-                            },
-                    ),
-                ),
+                field = "metricTypes",
+                code = ValidationIssueCodes.UnsupportedValue,
+                message =
+                    if (unknown.isEmpty()) {
+                        "must contain at least one metric type"
+                    } else {
+                        "unknown metric types ${unknown.joinToString(", ")}"
+                    },
             )
         }
         return metricTypes
@@ -122,15 +118,7 @@ class ScalarMetricQueryService(
         return suspendDbTransaction(db = database) {
             val filters = params.summaryFilters()
             if (filters.from == null && filters.to == null) {
-                throw RequestValidationException(
-                    listOf(
-                        ValidationIssue(
-                            field = "from",
-                            code = ValidationIssueCodes.Required,
-                            message = "at least one of from or to is required",
-                        ),
-                    ),
-                )
+                throw RequestValidationException(field = "from", code = ValidationIssueCodes.Required, message = "at least one of from or to is required")
             }
             val zone = params.timezone()
             val items =
@@ -152,7 +140,7 @@ class ScalarMetricQueryService(
                         count = items.size,
                         limit = items.size,
                         sort = SortFields.DATE,
-                        order = Orders.ASC,
+                        order = SortDirection.Asc,
                     ),
             )
         }

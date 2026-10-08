@@ -5,7 +5,7 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.testing.*
 import kotlinx.serialization.json.*
-import me.aquitano.health.domain.BodyMetricTypes
+import me.aquitano.health.domain.ScalarMetricRegistry
 import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.test.authorized
 import me.aquitano.health.test.configureTestApplication
@@ -323,10 +323,7 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
             assertEquals(HttpStatusCode.OK, response.status)
             val items = response.jsonBody()["items"]!!.jsonArray.map { it.jsonObject }
             val metricTypes = items.map { it["metricType"]!!.jsonPrimitive.content }.toSet()
-            assertContains(metricTypes, "heart_rate")
-            assertContains(metricTypes, "respiratory_rate")
-            assertContains(metricTypes, "hrv_rmssd")
-            BodyMetricTypes.supported.forEach { assertContains(metricTypes, it) }
+            assertEquals(ScalarMetricRegistry.metricTypes, metricTypes)
 
             val weight = items.single { it["metricType"]!!.jsonPrimitive.content == "weight" }
             assertEquals("body_measurement", weight["family"]!!.jsonPrimitive.content)

@@ -1,18 +1,12 @@
 package me.aquitano.health.application.providersync
 
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import me.aquitano.health.api.dto.IngestionRecord
 import me.aquitano.health.domain.BatchStatus
 import me.aquitano.health.domain.IngestionSnapshot
-import me.aquitano.health.domain.ProviderSyncItem
+import me.aquitano.health.domain.ProviderAccountStatus
 import java.time.Instant
-
-data class ProviderSyncPlan(
-    val providerInstanceId: String?,
-    val requestedFrom: Instant,
-    val requestedTo: Instant,
-    val items: List<ProviderSyncItem>,
-)
 
 data class SyncAccount(
     val id: Int,
@@ -22,7 +16,7 @@ data class SyncAccount(
     val encryptedAccessToken: String,
     val encryptedRefreshToken: String,
     val expiresAt: Instant,
-    val accountStatus: String,
+    val accountStatus: ProviderAccountStatus,
 )
 
 data class ProviderAccessToken(
@@ -38,25 +32,13 @@ data class RefreshedTokenSet(
     val scope: String?,
 )
 
+/**
+ * One window's upstream response: the raw response [pages], stored verbatim in the batch's source
+ * payload, the raw [sourceRecords] read from them, and the [records] they normalize to.
+ */
 data class ProviderFetchedBatch(
-    val dataType: String,
-    val pagesFetched: Int,
-    val sourceRecordsReceived: Int,
-    val sourcePayload: JsonObject,
-    val records: List<IngestionRecord>,
-    val sourceRecords: List<JsonObject> = emptyList(),
-)
-
-data class ProviderSourcePayloadContext(
-    val providerCode: String,
-    val providerInstanceId: String,
-    val item: ProviderSyncItem,
-    val fetched: ProviderFetchedBatch,
-)
-
-/** Normalizer hand-off: raw source payload plus the records mapped from it. */
-data class NormalizedProviderBatch(
-    val sourcePayload: JsonObject,
+    val pages: JsonArray,
+    val sourceRecords: List<JsonObject>,
     val records: List<IngestionRecord>,
 )
 

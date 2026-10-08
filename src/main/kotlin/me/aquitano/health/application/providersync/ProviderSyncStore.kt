@@ -3,9 +3,9 @@ package me.aquitano.health.application.providersync
 import me.aquitano.health.api.dto.IngestionBatchRequest
 import me.aquitano.health.application.IngestionService
 import me.aquitano.health.domain.MetricCreatedCounts
+import me.aquitano.health.domain.ProviderAccountStatus
 import me.aquitano.health.domain.ProviderSyncBatch
 import me.aquitano.health.domain.SyncStatus
-import me.aquitano.health.infrastructure.repositories.ACCOUNT_STATUS_NEEDS_REAUTH
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthAccount
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
 import me.aquitano.health.infrastructure.security.TokenCipher
@@ -67,20 +67,23 @@ interface ProviderSyncStore {
         errorMessage: String?,
     )
 
-    suspend fun findExistingBatch(
+    /** Resolves, creating it on first use, the source instance an account's batches are stored under. */
+    suspend fun sourceInstanceId(
         providerCode: String,
         providerInstanceId: String,
-        batchExternalId: String,
         now: Instant,
+    ): Int
+
+    suspend fun findExistingBatch(
+        sourceInstanceId: Int,
+        batchExternalId: String,
     ): ExistingProviderBatch?
 
     /** The processed batch whose snapshot still matches [contentHash] for this window, if any. */
     suspend fun reusableBatchId(
-        providerCode: String,
-        providerInstanceId: String,
+        sourceInstanceId: Int,
         windowKey: String,
         contentHash: String,
-        now: Instant,
     ): Int?
 
     suspend fun ingest(
@@ -129,7 +132,7 @@ class OAuthProviderSyncStore(
                 ?.let { repository.accountByProviderInstanceForStatus(providerCode, it) }
                 ?: repository
                     .accountsByProvider(providerCode)
-                    .firstOrNull { it.accountStatus == ACCOUNT_STATUS_NEEDS_REAUTH }
+                    .firstOrNull { it.accountStatus == ProviderAccountStatus.NeedsReauth }
         return account?.toSyncAccount()
     }
 
@@ -190,32 +193,28 @@ class OAuthProviderSyncStore(
         finishedAt: Instant,
         errorMessage: String?,
     ) {
-        repository.finishSyncRun(runId, status.stored, finishedAt, errorMessage)
+        repository.finishSyncRun(runId, status, finishedAt, errorMessage)
     }
 
-    override suspend fun findExistingBatch(
+    override suspend fun sourceInstanceId(
         providerCode: String,
         providerInstanceId: String,
-        batchExternalId: String,
         now: Instant,
+    ): Int = ingestionService.sourceInstanceId(providerCode, providerInstanceId, now)
+
+    override suspend fun findExistingBatch(
+        sourceInstanceId: Int,
+        batchExternalId: String,
     ): ExistingProviderBatch? =
         ingestionService
-            .findExistingBatch(
-                provider = providerCode,
-                providerInstanceId = providerInstanceId,
-                batchExternalId = batchExternalId,
-                now = now,
-            )?.let { batch ->
-                batch.status?.let { ExistingProviderBatch(batch.id, it) }
-            }
+            .findExistingBatch(sourceInstanceId, batchExternalId)
+            ?.let { batch -> ExistingProviderBatch(batch.id, batch.status) }
 
     override suspend fun reusableBatchId(
-        providerCode: String,
-        providerInstanceId: String,
+        sourceInstanceId: Int,
         windowKey: String,
         contentHash: String,
-        now: Instant,
-    ): Int? = ingestionService.reusableSyncBatchId(providerCode, providerInstanceId, windowKey, contentHash, now)
+    ): Int? = ingestionService.reusableSyncBatchId(sourceInstanceId, windowKey, contentHash)
 
     override suspend fun ingest(
         command: ProviderIngestionCommand,

@@ -40,13 +40,13 @@ class GeneratedGoogleHealthClientTest {
             val fixture = Fixture()
             val pointsByDataType =
                 mapOf(
-                    "steps" to (stepsPoint() to "steps.interval.start_time"),
-                    "sleep" to (sleepPoint() to "sleep.interval.end_time"),
-                    "heart-rate" to (heartRatePoint() to "heart_rate.sample_time.physical_time"),
-                    "weight" to (weightPoint() to "weight.sample_time.physical_time"),
-                    "body-fat" to (bodyFatPoint() to "body_fat.sample_time.physical_time"),
-                    "heart-rate-variability" to (heartRateVariabilityPoint() to "heart_rate_variability.sample_time.physical_time"),
-                    "respiratory-rate-sleep-summary" to
+                    GoogleHealthDataType.Steps to (stepsPoint() to "steps.interval.start_time"),
+                    GoogleHealthDataType.Sleep to (sleepPoint() to "sleep.interval.end_time"),
+                    GoogleHealthDataType.HeartRate to (heartRatePoint() to "heart_rate.sample_time.physical_time"),
+                    GoogleHealthDataType.Weight to (weightPoint() to "weight.sample_time.physical_time"),
+                    GoogleHealthDataType.BodyFat to (bodyFatPoint() to "body_fat.sample_time.physical_time"),
+                    GoogleHealthDataType.HeartRateVariability to (heartRateVariabilityPoint() to "heart_rate_variability.sample_time.physical_time"),
+                    GoogleHealthDataType.RespiratoryRateSleepSummary to
                         (respiratoryRatePoint() to "respiratory_rate_sleep_summary.sample_time.physical_time"),
                 )
 
@@ -68,21 +68,21 @@ class GeneratedGoogleHealthClientTest {
                     )
 
                 val request = fixture.service.requests.last()
-                assertEquals("users/me/dataTypes/$dataType", request.parent, dataType)
+                assertEquals("users/me/dataTypes/${dataType.code}", request.parent, dataType.code)
                 assertEquals(
                     """$filterField >= "${fixture.from}" AND $filterField < "${fixture.to}"""",
                     request.filter,
-                    dataType,
+                    dataType.code,
                 )
                 val normalized = GoogleHealthNormalizer().normalize(result)
-                assertEquals(1, normalized.records.size, dataType)
+                assertEquals(1, normalized.size, dataType.code)
                 assertEquals(
                     point.name,
                     result.dataPoints
                         .single()["name"]
                         ?.jsonPrimitive
                         ?.content,
-                    dataType,
+                    dataType.code,
                 )
             }
         }
@@ -103,7 +103,7 @@ class GeneratedGoogleHealthClientTest {
                     .addDataPoints(stepsPoint("steps-2"))
                     .build()
 
-            val result = fixture.client.fetchDataPoints("access-token", "steps", fixture.from, fixture.to, 1000)
+            val result = fixture.client.fetchDataPoints("access-token", GoogleHealthDataType.Steps, fixture.from, fixture.to, 1000)
 
             assertEquals(listOf(0, 1), result.pages.map { it.pageIndex })
             assertEquals(listOf("steps-1", "steps-2"), result.dataPoints.map { it["name"]?.jsonPrimitive?.content })
@@ -119,7 +119,7 @@ class GeneratedGoogleHealthClientTest {
 
             val error =
                 assertFailsWith<GoogleHealthHttpException> {
-                    fixture.client.fetchDataPoints("access-token", "steps", fixture.from, fixture.to, 1000)
+                    fixture.client.fetchDataPoints("access-token", GoogleHealthDataType.Steps, fixture.from, fixture.to, 1000)
                 }
 
             assertEquals("google_health_pagination_loop", error.code)
@@ -133,7 +133,7 @@ class GeneratedGoogleHealthClientTest {
 
             val error =
                 assertFailsWith<GoogleHealthHttpException> {
-                    fixture.client.fetchDataPoints("access-token", "steps", fixture.from, fixture.to, 1000)
+                    fixture.client.fetchDataPoints("access-token", GoogleHealthDataType.Steps, fixture.from, fixture.to, 1000)
                 }
 
             assertEquals("google_health_page_limit_exceeded", error.code)
@@ -146,7 +146,7 @@ class GeneratedGoogleHealthClientTest {
             fixture.service.nextFailure = apiException(StatusCode.Code.UNAUTHENTICATED)
 
             assertFailsWith<GoogleHealthUnauthorizedException> {
-                fixture.client.fetchDataPoints("access-token", "steps", fixture.from, fixture.to, 1000)
+                fixture.client.fetchDataPoints("access-token", GoogleHealthDataType.Steps, fixture.from, fixture.to, 1000)
             }
             Unit
         }
@@ -159,7 +159,7 @@ class GeneratedGoogleHealthClientTest {
 
             val error =
                 assertFailsWith<GoogleHealthHttpException> {
-                    fixture.client.fetchDataPoints("access-token", "steps", fixture.from, fixture.to, 1000)
+                    fixture.client.fetchDataPoints("access-token", GoogleHealthDataType.Steps, fixture.from, fixture.to, 1000)
                 }
 
             assertEquals("google_health_upstream_failed", error.code)
@@ -173,12 +173,12 @@ class GeneratedGoogleHealthClientTest {
                 fixture.service.responses += ListDataPointsResponse.newBuilder().build()
             }
 
-            fixture.client.fetchDataPoints("token-1", "steps", fixture.from, fixture.to, 1000)
-            fixture.client.fetchDataPoints("token-1", "sleep", fixture.from, fixture.to, 1000)
+            fixture.client.fetchDataPoints("token-1", GoogleHealthDataType.Steps, fixture.from, fixture.to, 1000)
+            fixture.client.fetchDataPoints("token-1", GoogleHealthDataType.Sleep, fixture.from, fixture.to, 1000)
             assertEquals(listOf("token-1"), fixture.createdTokens)
 
             // A refreshed token replaces the transport, and the retired one is closed.
-            fixture.client.fetchDataPoints("token-2", "steps", fixture.from, fixture.to, 1000)
+            fixture.client.fetchDataPoints("token-2", GoogleHealthDataType.Steps, fixture.from, fixture.to, 1000)
             assertEquals(listOf("token-1", "token-2"), fixture.createdTokens)
             assertEquals(1, fixture.service.closes)
 
@@ -217,10 +217,10 @@ class GeneratedGoogleHealthClientTest {
                 )
             val from = Instant.parse("2026-04-01T00:00:00Z")
             val to = from.plusSeconds(86400)
-            val first = async { client.fetchDataPoints("old", "steps", from, to, 1000) }
+            val first = async { client.fetchDataPoints("old", GoogleHealthDataType.Steps, from, to, 1000) }
             try {
                 withTimeout(10_000) { started.await() }
-                client.fetchDataPoints("new", "steps", from, to, 1000)
+                client.fetchDataPoints("new", GoogleHealthDataType.Steps, from, to, 1000)
                 client.close()
                 assertEquals(0, oldCloses.get())
                 assertEquals(1, newService.closes)
@@ -241,25 +241,11 @@ class GeneratedGoogleHealthClientTest {
 
             val error =
                 assertFailsWith<GoogleHealthHttpException> {
-                    fixture.client.fetchDataPoints("token-1", "steps", fixture.from, fixture.to, 1000)
+                    fixture.client.fetchDataPoints("token-1", GoogleHealthDataType.Steps, fixture.from, fixture.to, 1000)
                 }
 
             assertEquals("google_health_client_closed", error.code)
             assertTrue(fixture.createdTokens.isEmpty())
-        }
-
-    @Test
-    fun fetchDataPointsRejectsUnsupportedDataType() =
-        runBlocking {
-            val fixture = Fixture()
-
-            val error =
-                assertFailsWith<GoogleHealthHttpException> {
-                    fixture.client.fetchDataPoints("access-token", "oxygen", fixture.from, fixture.to, 1000)
-                }
-
-            assertEquals("google_health_unsupported_data_type", error.code)
-            assertTrue(fixture.service.requests.isEmpty())
         }
 
     private class Fixture(
@@ -316,7 +302,7 @@ class GeneratedGoogleHealthClientTest {
 
         override suspend fun fetchDataPoints(
             accessToken: String,
-            dataType: String,
+            dataType: GoogleHealthDataType,
             from: Instant,
             to: Instant,
             pageSize: Int,

@@ -15,23 +15,10 @@ data class ProviderCatalogResponse(
 data class ProviderDescriptorResponse(
     val providerCode: String,
     val displayName: String,
-    val authType: String,
-    val requiresAuthentication: Boolean,
     val supportedDataTypes: List<String>,
     val defaultDataTypes: List<String>,
     val maxSyncRangeDays: Int,
     val supportsPageSize: Boolean,
-    val workflowEndpoints: ProviderWorkflowEndpointsResponse,
-)
-
-@Serializable
-data class ProviderWorkflowEndpointsResponse(
-    val oauthStart: String? = null,
-    val oauthCallback: String? = null,
-    val accounts: String? = null,
-    val disconnect: String? = null,
-    val reconnect: String? = null,
-    val sync: String,
 )
 
 @Serializable

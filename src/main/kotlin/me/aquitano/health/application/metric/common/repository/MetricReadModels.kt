@@ -1,15 +1,11 @@
 package me.aquitano.health.application.metric.common.repository
 
 import me.aquitano.health.shared.Cursor
+import me.aquitano.health.shared.SortDirection
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZoneOffset
-
-data class SourceMetadata(
-    val provider: String,
-    val providerInstanceId: String,
-)
 
 /**
  * Timestamp reads use [from]/[to]; date-keyed reads use [fromDate]/[toDate], and sleep nights
@@ -25,7 +21,7 @@ data class ReadFilters(
     val providerInstanceId: String?,
     val includeSource: Boolean,
     val limit: Int,
-    val order: String,
+    val order: SortDirection,
     val cursor: Cursor? = null,
     val latest: Boolean = false,
 )

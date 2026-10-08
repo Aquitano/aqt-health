@@ -5,6 +5,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import me.aquitano.health.domain.BatchStatus
 import me.aquitano.health.domain.ReplayJobStatus
+import me.aquitano.health.domain.ReplayScope
 
 @Serializable
 data class IngestionBatchesResponse(
@@ -65,7 +66,7 @@ data class IngestionRecordAdminResponse(
 
 @Serializable
 data class ReplayRequest(
-    val scope: String = "all",
+    val scope: ReplayScope = ReplayScope.All,
     val metricTypes: List<String>? = null,
     @JsonSchema.Format("date")
     val fromDate: String? = null,
@@ -85,7 +86,7 @@ data class ReplayJobStartResponse(
 @Serializable
 data class ReplayJobStatusResponse(
     val jobId: String,
-    val scope: String,
+    val scope: ReplayScope,
     val metricTypes: List<String>?,
     @JsonSchema.Format("date")
     val fromDate: String?,

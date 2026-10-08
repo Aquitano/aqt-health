@@ -1,5 +1,7 @@
 package me.aquitano.health.application.metric.common
 
+import me.aquitano.health.shared.SortDirection
+
 /**
  * Single source of truth for query-parameter contracts. Both the runtime parsers
  * ([QueryParams], QueryFilters) and the OpenAPI parameter builders consume these
@@ -17,15 +19,10 @@ internal data class IntParamSpec(
     val max: Int,
 )
 
-internal data class EnumParamSpec(
+internal data class OrderParamSpec(
     val name: String,
-    val values: List<String>,
-    val default: String,
-) {
-    init {
-        require(default in values) { "default '$default' must be one of $values" }
-    }
-}
+    val default: SortDirection,
+)
 
 internal object QueryParamSpecs {
     val includeSource = BooleanParamSpec("includeSource", default = false)
@@ -36,5 +33,5 @@ internal object QueryParamSpecs {
     val adminLimit = IntParamSpec("limit", default = 100, min = 1, max = 1000)
     val periodDays = IntParamSpec("periodDays", default = 7, min = 1, max = 90)
 
-    val order = EnumParamSpec("order", listOf(Orders.ASC, Orders.DESC), Orders.ASC)
+    val order = OrderParamSpec("order", default = SortDirection.Asc)
 }

@@ -1,13 +1,11 @@
 package me.aquitano.health.domain
 
-import kotlinx.serialization.json.JsonObject
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
 
 sealed interface HealthRecord {
     val providerRecordId: String?
-    val normalizedRecordJson: JsonObject
     val recordType: String
     val recordStartAt: Instant?
     val recordEndAt: Instant?
@@ -15,7 +13,6 @@ sealed interface HealthRecord {
 
 data class StepIntervalRecord(
     override val providerRecordId: String?,
-    override val normalizedRecordJson: JsonObject,
     val startAt: Instant,
     val endAt: Instant,
     val steps: Int,
@@ -27,7 +24,6 @@ data class StepIntervalRecord(
 
 data class SleepSessionRecord(
     override val providerRecordId: String?,
-    override val normalizedRecordJson: JsonObject,
     val startAt: Instant,
     val endAt: Instant,
     val stages: List<SleepStageRecord>,
@@ -46,7 +42,6 @@ data class SleepStageRecord(
 /** One point-in-time scalar metric record destined for scalar_samples. */
 data class ScalarSampleRecord(
     override val providerRecordId: String?,
-    override val normalizedRecordJson: JsonObject,
     val measuredAt: Instant,
     val value: ScalarValue,
 ) : HealthRecord {
@@ -64,7 +59,6 @@ data class ScalarValue(
 
 data class ActivitySummaryRecord(
     override val providerRecordId: String?,
-    override val normalizedRecordJson: JsonObject,
     val date: LocalDate,
     val distanceMeters: Double?,
     val activeEnergyKcal: Double?,
@@ -87,7 +81,6 @@ data class ActivitySummaryRecord(
 
 data class SleepSummaryRecord(
     override val providerRecordId: String?,
-    override val normalizedRecordJson: JsonObject,
     val startAt: Instant,
     val endAt: Instant,
     val timeInBedSeconds: Long?,
@@ -126,7 +119,6 @@ data class SleepSummaryRecord(
 
 data class BloodPressureRecord(
     override val providerRecordId: String?,
-    override val normalizedRecordJson: JsonObject,
     val measuredAt: Instant,
     val systolicMmhg: Int,
     val diastolicMmhg: Int,

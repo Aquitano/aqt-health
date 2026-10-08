@@ -1,6 +1,7 @@
 package me.aquitano.health.application
 
 import me.aquitano.health.api.dto.ProviderAccountLifecycleStatus
+import me.aquitano.health.api.dto.ProviderAccountListResponse
 import me.aquitano.health.api.dto.ProviderAccountStatusResponse
 import me.aquitano.health.api.dto.ProviderNextAction
 import me.aquitano.health.api.dto.ProviderStatusCatalogResponse
@@ -8,9 +9,7 @@ import me.aquitano.health.api.dto.ProviderStatusResponse
 import me.aquitano.health.api.dto.ProviderTokenStatus
 import me.aquitano.health.domain.HealthProvider
 import me.aquitano.health.domain.NotFoundException
-import me.aquitano.health.infrastructure.repositories.ACCOUNT_STATUS_CONNECTED
-import me.aquitano.health.infrastructure.repositories.ACCOUNT_STATUS_DISCONNECTED
-import me.aquitano.health.infrastructure.repositories.ACCOUNT_STATUS_NEEDS_REAUTH
+import me.aquitano.health.domain.ProviderAccountStatus
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthAccount
 import me.aquitano.health.infrastructure.repositories.ProviderOAuthRepository
 import me.aquitano.health.shared.normalizeProviderCode
@@ -37,17 +36,21 @@ class ProviderStatusService(
             ?.toStatusDto(now)
             ?: throw NotFoundException("Provider '$providerCode' not found")
 
-    suspend fun listAccountStatuses(
+    suspend fun listAccounts(
         providerCode: String,
         now: Instant,
-    ): List<ProviderAccountStatusResponse> {
+    ): ProviderAccountListResponse {
         val provider =
             providerRegistry.getProvider(providerCode)
                 ?: throw NotFoundException("Provider '$providerCode' not found")
-        val normalizedCode = normalizeProviderCode(providerCode)
-        return providerOAuthRepository
-            .accountsByProvider(normalizedCode)
-            .map { it.toStatusDto(now, configured = provider.isConfigured()) }
+        val configured = provider.isConfigured()
+        return ProviderAccountListResponse(
+            provider = provider.descriptor.providerCode,
+            accounts =
+                providerOAuthRepository
+                    .accountsByProvider(normalizeProviderCode(providerCode))
+                    .map { it.toStatusDto(now, configured) },
+        )
     }
 
     suspend fun getAccountStatus(
@@ -128,9 +131,9 @@ class ProviderStatusService(
     private fun ProviderOAuthAccount.lifecycleStatus(configured: Boolean): ProviderAccountLifecycleStatus =
         when {
             !configured -> ProviderAccountLifecycleStatus.ConfigurationError
-            accountStatus == ACCOUNT_STATUS_NEEDS_REAUTH -> ProviderAccountLifecycleStatus.NeedsReauth
-            accountStatus == ACCOUNT_STATUS_DISCONNECTED -> ProviderAccountLifecycleStatus.Disconnected
-            accountStatus == ACCOUNT_STATUS_CONNECTED && hasStoredTokens() -> ProviderAccountLifecycleStatus.Connected
+            accountStatus == ProviderAccountStatus.NeedsReauth -> ProviderAccountLifecycleStatus.NeedsReauth
+            accountStatus == ProviderAccountStatus.Disconnected -> ProviderAccountLifecycleStatus.Disconnected
+            hasStoredTokens() -> ProviderAccountLifecycleStatus.Connected
             else -> ProviderAccountLifecycleStatus.NotConnected
         }
 

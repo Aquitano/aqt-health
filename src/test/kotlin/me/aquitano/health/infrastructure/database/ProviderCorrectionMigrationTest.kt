@@ -14,10 +14,11 @@ import me.aquitano.health.infrastructure.repositories.IngestionRepository
 import me.aquitano.health.infrastructure.repositories.PendingDerivedRebuildRepository
 import me.aquitano.health.infrastructure.repositories.ProjectionWipeRepository
 import me.aquitano.health.infrastructure.repositories.ReplayJobRepository
-import me.aquitano.health.infrastructure.time.UtcClock
 import me.aquitano.health.test.*
 import org.flywaydb.core.Flyway
+import java.time.Clock
 import java.time.Instant
+import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -103,14 +104,13 @@ class ProviderCorrectionMigrationTest : PostgresIntegrationTest() {
                     IngestionMappingService(),
                     metricWriteService(),
                     realDerivedRebuildExecutor(database),
-                    derivedRebuildRegistry(),
                     PendingDerivedRebuildRepository(database),
                     ReplayJobRepository(database),
                     ProjectionWipeRepository(),
-                    UtcClock.fixed(now),
+                    Clock.fixed(now, ZoneOffset.UTC),
                 )
             try {
-                val job = replay.create(ReplayRequest(scope = "all", wipe = true), now)
+                val job = replay.create(ReplayRequest(wipe = true), now)
                 val result =
                     withTimeout(30_000) {
                         var status = replay.get(job.jobId)

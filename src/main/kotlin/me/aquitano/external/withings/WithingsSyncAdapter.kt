@@ -1,21 +1,12 @@
 package me.aquitano.external.withings
 
+import kotlinx.serialization.json.JsonArray
 import me.aquitano.health.application.providersync.PROVIDER_REQUEST_INTERVAL
 import me.aquitano.health.application.providersync.ProviderFetchedBatch
 import me.aquitano.health.application.providersync.ProviderSyncAdapter
-import me.aquitano.health.application.providersync.ProviderSyncPlan
 import me.aquitano.health.application.providersync.RefreshedTokenSet
-import me.aquitano.health.application.providersync.SyncAccount
 import me.aquitano.health.application.providersync.SyncWindow
-import me.aquitano.health.application.providersync.dailySyncWindows
-import me.aquitano.health.domain.ConflictException
 import me.aquitano.health.domain.ProviderSyncItem
-import me.aquitano.health.domain.ProviderSyncRequest
-import me.aquitano.health.domain.RequestValidationException
-import me.aquitano.health.domain.UpstreamProviderException
-import me.aquitano.health.domain.ValidationIssue
-import me.aquitano.health.domain.ValidationIssueCodes
-import me.aquitano.health.infrastructure.repositories.ACCOUNT_STATUS_NEEDS_REAUTH
 import java.time.Duration
 import java.time.Instant
 
@@ -24,93 +15,27 @@ class WithingsSyncAdapter(
     private val normalizer: WithingsNormalizer,
 ) : ProviderSyncAdapter {
     override val providerCode: String = WITHINGS_PROVIDER_CODE
-    override val defaultSyncFailureMessage: String = "Withings sync failed"
-    override val tokenRefreshFailureCode: String = "withings_token_refresh_failed"
-    override val tokenRefreshFailureMessage: String = "Withings OAuth token refresh failed"
-    override val needsReauthCode: String = "withings_needs_reauth"
-    override val needsReauthMessage: String = "Withings needs reconnect before syncing"
+    override val displayName: String = WITHINGS_DISPLAY_NAME
+    override val dataTypes: List<String> = WithingsDataType.codes
     override val recordEmptyDataTypes: Boolean = true
     override val providerRequestInterval: Duration = PROVIDER_REQUEST_INTERVAL
 
-    override fun validate(request: ProviderSyncRequest): ProviderSyncPlan {
-        val issues = mutableListOf<ValidationIssue>()
-        val dataTypes =
-            request.dataTypes?.takeIf { it.isNotEmpty() }
-                ?: WITHINGS_DEFAULT_DATA_TYPES
-        dataTypes.forEachIndexed { index, dataType ->
-            if (dataType !in WITHINGS_DEFAULT_DATA_TYPES) {
-                issues +=
-                    ValidationIssue(
-                        field = "dataTypes[$index]",
-                        code = ValidationIssueCodes.UnsupportedValue,
-                        message = "unsupported Withings data type",
-                    )
-            }
-        }
-        if (issues.isNotEmpty()) throw RequestValidationException(issues)
-
-        return ProviderSyncPlan(
-            providerInstanceId = request.providerInstanceId,
-            requestedFrom = request.from,
-            requestedTo = request.to,
-            items =
-                dataTypes.distinct().flatMap { dataType ->
-                    dailySyncWindows(request.from, request.to).map { window ->
-                        ProviderSyncItem(
-                            dataType = dataType,
-                            from = window.from,
-                            to = window.to,
-                        )
-                    }
-                },
-        )
-    }
-
-    override fun accountUnavailable(
-        providerInstanceId: String?,
-        statusHint: SyncAccount?,
-    ): Throwable {
-        if (statusHint?.accountStatus == ACCOUNT_STATUS_NEEDS_REAUTH) {
-            return ConflictException(needsReauthCode, needsReauthMessage)
-        }
-        return if (providerInstanceId == null) {
-            ConflictException("withings_not_connected", "Withings is not connected")
-        } else {
-            ConflictException(
-                "withings_account_not_found",
-                "Withings account is not connected for providerInstanceId: $providerInstanceId",
-            )
-        }
-    }
-
     override suspend fun refreshAccessToken(
         refreshToken: String,
-        account: SyncAccount,
         now: Instant,
     ): RefreshedTokenSet = client.refreshToken(refreshToken, now).toRefreshedTokenSet()
 
     override suspend fun fetch(
         accessToken: String,
-        account: SyncAccount,
         item: ProviderSyncItem,
-        now: Instant,
     ): ProviderFetchedBatch {
-        val result = fetchDataType(accessToken, item.dataType, item.from, item.to)
-        val normalized = normalizer.normalize(result, SyncWindow(item.from, item.to))
+        val result = fetchDataType(accessToken, WithingsDataType.fromCode(item.dataType), item.from, item.to)
         return ProviderFetchedBatch(
-            dataType = result.dataType,
-            pagesFetched = result.pages.size,
-            sourceRecordsReceived = result.records.size,
-            sourcePayload = normalized.sourcePayload,
-            records = normalized.records,
+            pages = JsonArray(result.pages.map { it.toJson() }),
             sourceRecords = result.records,
+            records = normalizer.normalize(result, SyncWindow(item.from, item.to)),
         )
     }
-
-    override fun batchExternalId(
-        providerInstanceId: String,
-        item: ProviderSyncItem,
-    ): String = batchExternalId(providerInstanceId, item.dataType, item.from, item.to)
 
     override fun isUnauthorized(error: Throwable): Boolean =
         error is WithingsHttpException &&
@@ -122,12 +47,7 @@ class WithingsSyncAdapter(
             error.code == "withings_token_request_failed" &&
             error.providerStatus == 401
 
-    override fun errorCode(error: Throwable): String =
-        when (error) {
-            is WithingsHttpException -> error.code
-            is UpstreamProviderException -> error.code
-            else -> "withings_sync_failed"
-        }
+    override fun providerErrorCode(error: Throwable): String? = (error as? WithingsHttpException)?.code
 
     override fun errorAttributes(error: Throwable): Map<String, String> =
         when (error) {
@@ -147,62 +67,27 @@ class WithingsSyncAdapter(
 
     private suspend fun fetchDataType(
         accessToken: String,
-        dataType: String,
+        dataType: WithingsDataType,
         from: Instant,
         to: Instant,
     ): WithingsFetchResult =
         when (dataType) {
-            "activity" -> {
-                client.fetchActivity(
-                    accessToken,
-                    from,
-                    to,
-                    WITHINGS_ACTIVITY_FIELDS,
-                )
+            WithingsDataType.Activity -> {
+                client.fetchActivity(accessToken, from, to, WITHINGS_ACTIVITY_FIELDS)
             }
 
-            "measures" -> {
-                client.fetchMeasures(
-                    accessToken,
-                    from,
-                    to,
-                    WITHINGS_MEASURE_TYPES,
-                    1,
-                )
+            WithingsDataType.Measures -> {
+                client.fetchMeasures(accessToken, from, to, WITHINGS_MEASURE_TYPES, 1)
             }
 
-            "sleep-summary" -> {
-                client.fetchSleepSummary(
-                    accessToken,
-                    from,
-                    to,
-                    WITHINGS_SLEEP_SUMMARY_FIELDS,
-                )
+            WithingsDataType.SleepSummary -> {
+                client.fetchSleepSummary(accessToken, from, to, WITHINGS_SLEEP_SUMMARY_FIELDS)
             }
 
             // Reaches back past the window start so a night that began on the previous UTC day is
             // fetched whole; the normalizer keeps the sessions that end inside the window.
-            "sleep" -> {
-                client.fetchSleep(
-                    accessToken,
-                    from.minus(WITHINGS_SLEEP_LOOKBEHIND),
-                    to,
-                    WITHINGS_SLEEP_FIELDS,
-                )
-            }
-
-            else -> {
-                throw WithingsHttpException(
-                    "withings_unsupported_data_type",
-                    "Unsupported Withings data type: $dataType",
-                )
+            WithingsDataType.Sleep -> {
+                client.fetchSleep(accessToken, from.minus(WITHINGS_SLEEP_LOOKBEHIND), to, WITHINGS_SLEEP_FIELDS)
             }
         }
-
-    private fun batchExternalId(
-        providerInstanceId: String,
-        dataType: String,
-        from: Instant,
-        to: Instant,
-    ): String = "withings:$providerInstanceId:$dataType:$from:$to"
 }

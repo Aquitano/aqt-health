@@ -18,7 +18,7 @@ class CanonicalActivitySummaryDerivationRepository : BaseMetricReadRepository() 
                 filters = filters,
                 sourceInstanceIdColumn = CanonicalActivitySummariesTable.sourceInstanceId,
                 dateColumn = CanonicalActivitySummariesTable.date,
-            ).whereOrNull() ?: return emptyList()
+            ) ?: return emptyList()
 
         val keyset =
             dateKeyset(

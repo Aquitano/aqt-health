@@ -2,7 +2,6 @@ package me.aquitano.external.withings
 
 import kotlinx.serialization.json.*
 import me.aquitano.health.api.dto.*
-import me.aquitano.health.application.providersync.NormalizedProviderBatch
 import me.aquitano.health.application.providersync.SyncWindow
 import me.aquitano.health.domain.BodyMetricTypes
 import me.aquitano.health.domain.BodySegments
@@ -29,36 +28,13 @@ class WithingsNormalizer {
     fun normalize(
         fetchResult: WithingsFetchResult,
         window: SyncWindow,
-    ): NormalizedProviderBatch {
-        val records =
-            when (fetchResult.dataType) {
-                "activity" -> normalizeActivity(fetchResult.records)
-                "measures" -> normalizeMeasures(fetchResult.records)
-                "sleep-summary" -> normalizeSleepSummary(fetchResult.records)
-                "sleep" -> normalizeSleep(fetchResult.records, window)
-                else -> emptyList()
-            }
-        // Raw records are not repeated here: the pipeline stores only `pages`, which already holds
-        // every raw payload verbatim.
-        val sourcePayload =
-            buildJsonObject {
-                put("dataType", fetchResult.dataType)
-                put(
-                    "pages",
-                    JsonArray(
-                        fetchResult.pages.map {
-                            buildJsonObject {
-                                put("endpoint", it.endpoint)
-                                put("action", it.action)
-                                put("pageIndex", it.pageIndex)
-                                put("payload", it.payload)
-                            }
-                        },
-                    ),
-                )
-            }
-        return NormalizedProviderBatch(sourcePayload, records)
-    }
+    ): List<IngestionRecord> =
+        when (fetchResult.dataType) {
+            WithingsDataType.Activity -> normalizeActivity(fetchResult.records)
+            WithingsDataType.Measures -> normalizeMeasures(fetchResult.records)
+            WithingsDataType.SleepSummary -> normalizeSleepSummary(fetchResult.records)
+            WithingsDataType.Sleep -> normalizeSleep(fetchResult.records, window)
+        }
 
     private fun normalizeActivity(records: List<JsonObject>): List<IngestionRecord> =
         buildList {
@@ -519,49 +495,6 @@ class WithingsNormalizer {
             minHeartRateBpm = validHeartRate("hr_min"),
             maxHeartRateBpm = validHeartRate("hr_max"),
         )
-
-    private fun ActivitySummary.hasAnyMetric(): Boolean =
-        distanceMeters != null ||
-            activeEnergyKcal != null ||
-            totalEnergyKcal != null ||
-            elevationMeters != null ||
-            softMinutes != null ||
-            moderateMinutes != null ||
-            intenseMinutes != null ||
-            activeMinutes != null ||
-            averageHeartRateBpm != null ||
-            minHeartRateBpm != null ||
-            maxHeartRateBpm != null
-
-    private fun SleepSummary.hasAnyMetric(): Boolean =
-        timeInBedSeconds != null ||
-            totalSleepSeconds != null ||
-            lightSleepSeconds != null ||
-            deepSleepSeconds != null ||
-            remSleepSeconds != null ||
-            sleepEfficiencyPercent != null ||
-            sleepLatencySeconds != null ||
-            wakeupLatencySeconds != null ||
-            wakeupDurationSeconds != null ||
-            wakeupCount != null ||
-            wasoSeconds != null ||
-            sleepScore != null ||
-            remEpisodesCount != null ||
-            outOfBedCount != null ||
-            awakeDurationSeconds != null ||
-            overnightHrvRmssd != null ||
-            respiratoryRhythm != null ||
-            breathingQuality != null ||
-            snoringDurationSeconds != null ||
-            apneaHypopneaIndex != null ||
-            movementScore != null ||
-            snoringEpisodeCount != null ||
-            hrAverageBpm != null ||
-            hrMinBpm != null ||
-            hrMaxBpm != null ||
-            rrAverage != null ||
-            rrMin != null ||
-            rrMax != null
 
     private fun JsonObject.int(key: String): Int? {
         val primitive = this[key]?.primitiveOrNull() ?: return null

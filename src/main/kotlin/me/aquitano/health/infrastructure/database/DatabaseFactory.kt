@@ -14,7 +14,6 @@ class DatabaseFactory(
     private var database: Database? = null
 
     fun initialize(config: AppDatabaseConfig): Database {
-        Class.forName(config.driver)
         migrator.migrate(config)
 
         val hikariConfig =

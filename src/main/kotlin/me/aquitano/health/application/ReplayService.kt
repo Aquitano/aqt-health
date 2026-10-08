@@ -16,6 +16,7 @@ import me.aquitano.health.domain.ConflictException
 import me.aquitano.health.domain.NotFoundException
 import me.aquitano.health.domain.RecordTypes
 import me.aquitano.health.domain.ReplayJobStatus
+import me.aquitano.health.domain.ReplayScope
 import me.aquitano.health.domain.RequestValidationException
 import me.aquitano.health.domain.ValidationIssue
 import me.aquitano.health.domain.ValidationIssueCodes
@@ -29,10 +30,10 @@ import me.aquitano.health.infrastructure.repositories.ProjectionWipeRepository
 import me.aquitano.health.infrastructure.repositories.ReplayJobRecord
 import me.aquitano.health.infrastructure.repositories.ReplayJobRepository
 import me.aquitano.health.infrastructure.repositories.ReplayRecordRow
-import me.aquitano.health.infrastructure.time.UtcClock
 import me.aquitano.health.shared.AppJson
 import me.aquitano.health.shared.utcDate
 import org.jetbrains.exposed.v1.jdbc.Database
+import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -40,14 +41,6 @@ import java.util.UUID
 import java.util.concurrent.CancellationException
 
 private val replayLogger = KotlinLogging.logger {}
-
-object ReplayScopes {
-    const val PROJECTIONS = "projections"
-    const val DERIVED = "derived"
-    const val ALL = "all"
-
-    val supported = setOf(PROJECTIONS, DERIVED, ALL)
-}
 
 private val replayableRecordTypes =
     setOf(
@@ -70,11 +63,10 @@ class ReplayService(
     private val mappingService: IngestionMappingService,
     private val metricWriteService: MetricWriteService,
     private val derivedRebuildExecutor: DerivedRebuildExecutor,
-    private val derivedRebuildRegistry: DerivedRebuildModuleRegistry,
     private val pendingDerivedRebuildRepository: PendingDerivedRebuildRepository,
     private val replayJobRepository: ReplayJobRepository,
     private val projectionWipeRepository: ProjectionWipeRepository,
-    private val clock: UtcClock,
+    private val clock: Clock,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
 ) {
     fun start(now: Instant) {
@@ -137,7 +129,7 @@ class ReplayService(
     private fun ReplayJobRecord.toStartDto(): ReplayJobStartResponse =
         ReplayJobStartResponse(
             jobId = id,
-            status = ReplayJobStatus.fromStored(status),
+            status = status,
             createdAt = createdAt.toString(),
         )
 
@@ -161,17 +153,17 @@ class ReplayService(
     ) {
         try {
             val days = planDays(plan)
-            replayJobRepository.markRunning(jobId, days.size, clock.now())
+            replayJobRepository.markRunning(jobId, days.size, clock.instant())
             replayLogger.infoWithContext(
                 "replay_job_started",
                 "jobId" to jobId,
-                "scope" to plan.scope,
+                "scope" to plan.scope.stored,
                 "days" to days.size,
                 "wipe" to plan.wipe,
             )
 
             days.forEach { day ->
-                replayJobRepository.markItemStarted(jobId, day.toString(), clock.now())
+                replayJobRepository.markItemStarted(jobId, day.toString(), clock.instant())
                 val result = replayDay(day, plan)
                 replayJobRepository.markItemCompleted(
                     id = jobId,
@@ -179,11 +171,11 @@ class ReplayService(
                     metricsWritten = result.metricsWritten,
                     duplicatesSkipped = result.duplicatesSkipped,
                     mappingFailures = result.mappingFailures,
-                    now = clock.now(),
+                    now = clock.instant(),
                 )
             }
 
-            replayJobRepository.finish(jobId, "completed", null, clock.now())
+            replayJobRepository.finish(jobId, ReplayJobStatus.Completed, null, clock.instant())
             replayLogger.infoWithContext(
                 "replay_job_completed",
                 "jobId" to jobId,
@@ -193,9 +185,9 @@ class ReplayService(
             if (exception is CancellationException) throw exception
             replayJobRepository.finish(
                 jobId,
-                "failed",
+                ReplayJobStatus.Failed,
                 exception.message ?: "Replay failed.",
-                clock.now(),
+                clock.instant(),
             )
             replayLogger.warnWithContext(
                 "replay_job_failed",
@@ -234,7 +226,7 @@ class ReplayService(
     ): DayReplayResult? {
         val dayStart = day.atStartOfDay(ZoneOffset.UTC).toInstant()
         val dayEnd = day.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant()
-        val now = clock.now()
+        val now = clock.instant()
         val affectedBySource = mutableMapOf<Int, MutableSet<LocalDate>>()
 
         val rows =
@@ -242,7 +234,7 @@ class ReplayService(
                 ingestionRepository.listRecordsForReplay(dayStart, dayEnd, plan.recordTypes)
             }
         val prepared =
-            if (plan.includesProjections) {
+            if (plan.scope.includesProjections) {
                 rows.mapNotNull { row ->
                     decodeAndMap(row)?.let { record -> row to MetricWrite(row.id, record) }
                 }
@@ -250,9 +242,9 @@ class ReplayService(
                 emptyList()
             }
         val writesBySource = prepared.groupBy { it.first.sourceInstanceId }.toSortedMap()
-        if (plan.includesDerived) {
+        if (plan.scope.includesDerived) {
             rows.forEach { row ->
-                val dates = derivedRebuildRegistry.affectedDatesFor(row.recordType, row.recordStartAt, row.recordEndAt)
+                val dates = stepRebuildDates(row.recordType, row.recordStartAt, row.recordEndAt)
                 if (dates.isNotEmpty()) {
                     affectedBySource.getOrPut(row.sourceInstanceId) { linkedSetOf() }.addAll(dates)
                 }
@@ -260,7 +252,7 @@ class ReplayService(
         }
         val replayed =
             suspendDbTransaction(db = database) {
-                if (plan.includesProjections && plan.wipe) {
+                if (plan.scope.includesProjections && plan.wipe) {
                     // Ingestion takes a write lock here before touching projections. Taking the
                     // conflicting lock first waits for commits and prevents new writes during wipe.
                     exec("LOCK TABLE ingestion_records IN SHARE ROW EXCLUSIVE MODE")
@@ -269,53 +261,51 @@ class ReplayService(
                         return@suspendDbTransaction null
                     }
                 }
-                var recordsReplayed = 0
-                var metricsWritten = 0
-                var duplicatesSkipped = 0
-                val mappingFailures = if (plan.includesProjections) rows.size - prepared.size else 0
-
-                if (plan.includesProjections) {
-                    if (plan.wipe) {
-                        projectionWipeRepository.wipeDay(
-                            day = day,
-                            dayStart = dayStart,
-                            dayEnd = dayEnd,
-                            recordTypes = plan.recordTypes ?: replayableRecordTypes,
-                        )
-                    }
-                    writesBySource.forEach { (sourceId, entries) ->
-                        val writeResult =
-                            metricWriteService.writeAll(
+                if (plan.scope.includesProjections && plan.wipe) {
+                    projectionWipeRepository.wipeDay(
+                        day = day,
+                        dayStart = dayStart,
+                        dayEnd = dayEnd,
+                        recordTypes = plan.recordTypes ?: replayableRecordTypes,
+                    )
+                }
+                val writeResults =
+                    writesBySource.map { (sourceId, entries) ->
+                        metricWriteService
+                            .writeAll(
                                 provider = entries.first().first.provider,
                                 sourceInstanceId = sourceId,
                                 writes = entries.map { it.second },
                                 now = now,
-                            )
-                        if (plan.includesDerived) {
-                            if (writeResult.affectedStepDates.isNotEmpty()) {
-                                affectedBySource.getOrPut(sourceId) { linkedSetOf() }.addAll(writeResult.affectedStepDates)
+                            ).also { writeResult ->
+                                if (plan.scope.includesDerived && writeResult.affectedStepDates.isNotEmpty()) {
+                                    affectedBySource.getOrPut(sourceId) { linkedSetOf() }.addAll(writeResult.affectedStepDates)
+                                }
                             }
-                        }
-                        recordsReplayed += entries.size
-                        metricsWritten +=
-                            writeResult.created.counts.values
-                                .sum()
-                        duplicatesSkipped += writeResult.duplicateSkipped
                     }
-                }
 
                 val rebuildRequests =
                     affectedBySource.map { (sourceInstanceId, dates) ->
                         DerivedRebuildRequest(sourceInstanceId, dates.toSet())
                     }
                 ReplayedDay(
-                    result = DayReplayResult(recordsReplayed, metricsWritten, duplicatesSkipped, mappingFailures),
+                    result =
+                        DayReplayResult(
+                            recordsReplayed = prepared.size,
+                            metricsWritten =
+                                writeResults.sumOf {
+                                    it.created.counts.values
+                                        .sum()
+                                },
+                            duplicatesSkipped = writeResults.sumOf { it.duplicateSkipped },
+                            mappingFailures = if (plan.scope.includesProjections) rows.size - prepared.size else 0,
+                        ),
                     rebuildRequests = rebuildRequests,
                     queuedRebuilds = rebuildRequests.flatMap { pendingDerivedRebuildRepository.enqueueInTransaction(it, now) },
                 )
             } ?: return null
 
-        derivedRebuildExecutor.rebuild(replayed.rebuildRequests, clock.now())
+        derivedRebuildExecutor.rebuild(replayed.rebuildRequests, clock.instant())
         pendingDerivedRebuildRepository.deleteCompleted(replayed.queuedRebuilds)
 
         return replayed.result
@@ -347,24 +337,12 @@ class ReplayService(
     private fun validate(request: ReplayRequest): ReplayPlan {
         val issues = mutableListOf<ValidationIssue>()
 
-        if (request.scope !in ReplayScopes.supported) {
-            issues.add(
-                ValidationIssue(
-                    field = "scope",
-                    code = ValidationIssueCodes.UnsupportedValue,
-                    message = "must be one of ${ReplayScopes.supported.sorted()}",
-                ),
-            )
-        }
-
         val recordTypes = request.metricTypes?.toSet()
-        recordTypes?.minus(replayableRecordTypes)?.forEach { unknown ->
-            issues.add(
-                ValidationIssue(
-                    field = "metricTypes",
-                    code = ValidationIssueCodes.UnsupportedValue,
-                    message = "unsupported record type '$unknown'",
-                ),
+        recordTypes?.minus(replayableRecordTypes)?.mapTo(issues) { unknown ->
+            ValidationIssue(
+                field = "metricTypes",
+                code = ValidationIssueCodes.UnsupportedValue,
+                message = "unsupported record type '$unknown'",
             )
         }
 
@@ -379,7 +357,7 @@ class ReplayService(
                 ),
             )
         }
-        if (request.wipe && request.scope == ReplayScopes.DERIVED) {
+        if (request.wipe && !request.scope.includesProjections) {
             issues.add(
                 ValidationIssue(
                     field = "wipe",
@@ -408,7 +386,7 @@ class ReplayService(
             fromDate = fromDate?.toString(),
             toDate = toDate?.toString(),
             wipe = wipe,
-            status = ReplayJobStatus.fromStored(status),
+            status = status,
             totalItems = totalItems,
             completedItems = completedItems,
             currentItem = currentItem,
@@ -426,7 +404,7 @@ class ReplayService(
 
 private fun ReplayPlan.idempotencyRequestHash(): String =
     idempotencyRequestHash(
-        scope,
+        scope.stored,
         recordTypes?.idempotencyListPart(),
         fromDate?.toString(),
         toDate?.toString(),
@@ -434,18 +412,12 @@ private fun ReplayPlan.idempotencyRequestHash(): String =
     )
 
 private data class ReplayPlan(
-    val scope: String,
+    val scope: ReplayScope,
     val recordTypes: Set<String>?,
     val fromDate: LocalDate?,
     val toDate: LocalDate?,
     val wipe: Boolean,
-) {
-    val includesProjections: Boolean
-        get() = scope == ReplayScopes.PROJECTIONS || scope == ReplayScopes.ALL
-
-    val includesDerived: Boolean
-        get() = scope == ReplayScopes.DERIVED || scope == ReplayScopes.ALL
-}
+)
 
 private data class DayReplayResult(
     val recordsReplayed: Int,

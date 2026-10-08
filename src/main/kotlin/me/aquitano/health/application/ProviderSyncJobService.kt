@@ -20,10 +20,12 @@ import me.aquitano.health.domain.NotFoundException
 import me.aquitano.health.domain.ProviderSyncItem
 import me.aquitano.health.domain.ProviderSyncProgressSink
 import me.aquitano.health.domain.SyncJobStatus
+import me.aquitano.health.domain.SyncStatus
 import me.aquitano.health.infrastructure.logging.*
 import me.aquitano.health.infrastructure.repositories.ProviderSyncJobRecord
 import me.aquitano.health.infrastructure.repositories.ProviderSyncJobRepository
 import me.aquitano.health.shared.AppJson
+import java.time.Clock
 import java.time.Instant
 import java.util.UUID
 import me.aquitano.health.domain.ProviderSyncRequest as DomainProviderSyncRequest
@@ -34,7 +36,7 @@ class ProviderSyncJobService(
     private val providerRegistry: HealthProviderRegistry,
     private val workflowService: ProviderWorkflowService,
     private val repository: ProviderSyncJobRepository,
-    private val clock: me.aquitano.health.infrastructure.time.UtcClock,
+    private val clock: Clock,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
 ) {
     /**
@@ -152,7 +154,7 @@ class ProviderSyncJobService(
         providerCode: String,
         request: DomainProviderSyncRequest,
     ) {
-        repository.markRunning(jobId, clock.now())
+        repository.markRunning(jobId, clock.instant())
         providerSyncJobLogger.infoWithContext(
             "provider_sync_job_started",
             "provider" to providerCode,
@@ -164,12 +166,12 @@ class ProviderSyncJobService(
                 workflowService.sync(
                     providerCode = providerCode,
                     request = request,
-                    now = clock.now(),
+                    now = clock.instant(),
                     progress = JobProgressSink(jobId, repository, clock),
                 )
             repository.finish(
                 id = jobId,
-                status = summary.status.stored,
+                status = summary.status.toJobStatus(),
                 batchesCount = summary.batches.size,
                 emptyCount = summary.emptyDataTypes.size,
                 errorCount = summary.errors.size,
@@ -178,7 +180,7 @@ class ProviderSyncJobService(
                     summary.errors
                         .joinToString("; ") { "${it.dataType}: ${it.message}" }
                         .ifBlank { null },
-                now = clock.now(),
+                now = clock.instant(),
             )
             providerSyncJobLogger.infoWithContext(
                 "provider_sync_job_completed",
@@ -190,13 +192,13 @@ class ProviderSyncJobService(
             currentCoroutineContext().ensureActive()
             repository.finish(
                 id = jobId,
-                status = "failed",
+                status = SyncJobStatus.Failed,
                 batchesCount = 0,
                 emptyCount = 0,
                 errorCount = 1,
                 summaryJson = null,
                 errorMessage = exception.message ?: "Provider sync failed.",
-                now = clock.now(),
+                now = clock.instant(),
             )
             providerSyncJobLogger.warnWithContext(
                 "provider_sync_job_failed",
@@ -210,28 +212,28 @@ class ProviderSyncJobService(
     private class JobProgressSink(
         private val jobId: String,
         private val repository: ProviderSyncJobRepository,
-        private val clock: me.aquitano.health.infrastructure.time.UtcClock,
+        private val clock: Clock,
     ) : ProviderSyncProgressSink {
         override suspend fun started(
             totalItems: Int,
             providerInstanceId: String,
         ) {
-            repository.markStarted(jobId, providerInstanceId, totalItems, clock.now())
+            repository.markStarted(jobId, providerInstanceId, totalItems, clock.instant())
         }
 
         override suspend fun itemStarted(item: ProviderSyncItem) {
-            repository.markItemStarted(jobId, item.dataType, item.from, item.to, clock.now())
+            repository.markItemStarted(jobId, item.dataType, item.from, item.to, clock.instant())
         }
 
         override suspend fun itemCompleted(item: ProviderSyncItem) {
-            repository.markItemCompleted(jobId, item.dataType, item.from, item.to, clock.now())
+            repository.markItemCompleted(jobId, item.dataType, item.from, item.to, clock.instant())
         }
     }
 
     private fun ProviderSyncJobRecord.toStartDto(): ProviderSyncJobStartResponse =
         ProviderSyncJobStartResponse(
             jobId = id,
-            status = SyncJobStatus.fromStored(status),
+            status = status,
             createdAt = createdAt.toString(),
         )
 
@@ -249,17 +251,16 @@ class ProviderSyncJobService(
      */
     private fun wireProviderCode(providerCode: String): String = providerRegistry.getProvider(providerCode)?.descriptor?.providerCode ?: providerCode
 
-    private fun ProviderSyncJobRecord.toDto(): ProviderSyncJobStatusResponse {
-        val jobStatus = SyncJobStatus.fromStored(status)
-        return ProviderSyncJobStatusResponse(
+    private fun ProviderSyncJobRecord.toDto(): ProviderSyncJobStatusResponse =
+        ProviderSyncJobStatusResponse(
             jobId = id,
             providerCode = wireProviderCode(providerCode),
             providerInstanceId = providerInstanceId,
             requestedFrom = requestedFrom.toString(),
             requestedTo = requestedTo.toString(),
             dataTypes = dataTypes,
-            status = jobStatus,
-            terminal = jobStatus.terminal,
+            status = status,
+            terminal = status.terminal,
             totalItems = totalItems,
             completedItems = completedItems,
             currentItem = itemDto(currentDataType, currentFrom, currentTo),
@@ -278,7 +279,6 @@ class ProviderSyncJobService(
                     runCatching { AppJson.decodeFromString<ProviderSyncResponse>(it) }.getOrNull()
                 },
         )
-    }
 
     private fun itemDto(
         dataType: String?,
@@ -293,6 +293,13 @@ class ProviderSyncJobService(
 }
 
 private const val MAX_JOB_RESTARTS = 3
+
+private fun SyncStatus.toJobStatus(): SyncJobStatus =
+    when (this) {
+        SyncStatus.Processed -> SyncJobStatus.Processed
+        SyncStatus.PartialFailed -> SyncJobStatus.PartialFailed
+        SyncStatus.Failed -> SyncJobStatus.Failed
+    }
 
 private fun ProviderSyncJobRecord.toDomainRequest(): DomainProviderSyncRequest =
     DomainProviderSyncRequest(

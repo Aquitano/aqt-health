@@ -14,17 +14,16 @@ import me.aquitano.health.api.dto.SleepSession
 import me.aquitano.health.api.dto.StepInterval
 import me.aquitano.health.domain.RecordTypes
 import me.aquitano.health.domain.ReplayJobStatus
+import me.aquitano.health.domain.ReplayScope
 import me.aquitano.health.domain.RequestValidationException
 import me.aquitano.health.infrastructure.config.DatabaseConfig
 import me.aquitano.health.infrastructure.repositories.IngestionRepository
 import me.aquitano.health.infrastructure.repositories.PendingDerivedRebuildRepository
 import me.aquitano.health.infrastructure.repositories.ProjectionWipeRepository
 import me.aquitano.health.infrastructure.repositories.ReplayJobRepository
-import me.aquitano.health.infrastructure.time.UtcClock
 import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.test.PostgresTestDatabase
 import me.aquitano.health.test.countRows
-import me.aquitano.health.test.derivedRebuildRegistry
 import me.aquitano.health.test.execute
 import me.aquitano.health.test.ingestionService
 import me.aquitano.health.test.metricWriteService
@@ -32,6 +31,7 @@ import me.aquitano.health.test.queryInt
 import me.aquitano.health.test.queryString
 import me.aquitano.health.test.realDerivedRebuildExecutor
 import org.jetbrains.exposed.v1.jdbc.Database
+import java.time.Clock
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -55,8 +55,8 @@ class ReplayServiceTest : PostgresIntegrationTest() {
                         }
                         val start =
                             fixture.replayService.create(
-                                ReplayRequest(scope = "projections", metricTypes = listOf(RecordTypes.SCALAR), wipe = true),
-                                fixture.clock.now(),
+                                ReplayRequest(scope = ReplayScope.Projections, metricTypes = listOf(RecordTypes.SCALAR), wipe = true),
+                                fixture.clock.instant(),
                             )
                         withTimeout(10_000) {
                             while (fixture.waitingLocks("ingestion_records", "ShareRowExclusiveLock") == 0) delay(10)
@@ -89,7 +89,7 @@ class ReplayServiceTest : PostgresIntegrationTest() {
             assertEquals(0, fixture.config.countRows("scalar_samples"))
             assertEquals(0, fixture.config.countRows("canonical_scalar_samples"))
 
-            val job = fixture.runReplay(ReplayRequest(scope = "all"))
+            val job = fixture.runReplay(ReplayRequest())
 
             assertEquals(ReplayJobStatus.Completed, job.status)
             assertTrue(job.metricsWritten >= 1, "expected restored metrics, got ${job.metricsWritten}")
@@ -106,7 +106,7 @@ class ReplayServiceTest : PostgresIntegrationTest() {
             val fixture = Fixture()
             fixture.ingestMixedBatch()
 
-            val job = fixture.runReplay(ReplayRequest(scope = "projections"))
+            val job = fixture.runReplay(ReplayRequest(scope = ReplayScope.Projections))
 
             assertEquals(ReplayJobStatus.Completed, job.status)
             assertEquals(0, job.metricsWritten)
@@ -122,7 +122,7 @@ class ReplayServiceTest : PostgresIntegrationTest() {
 
             fixture.config.execute("DELETE FROM canonical_step_samples")
 
-            val job = fixture.runReplay(ReplayRequest(scope = "derived"))
+            val job = fixture.runReplay(ReplayRequest(scope = ReplayScope.Derived))
 
             assertEquals(ReplayJobStatus.Completed, job.status)
             assertEquals(0, job.recordsReplayed)
@@ -140,7 +140,6 @@ class ReplayServiceTest : PostgresIntegrationTest() {
             val job =
                 fixture.runReplay(
                     ReplayRequest(
-                        scope = "all",
                         metricTypes = listOf(RecordTypes.SCALAR),
                         fromDate = "2026-04-19",
                         toDate = "2026-04-19",
@@ -169,7 +168,7 @@ class ReplayServiceTest : PostgresIntegrationTest() {
             fixture.ingestScalar("hr-in-range", "2026-04-21T08:00:00Z")
             fixture.config.execute("DELETE FROM scalar_samples")
 
-            val job = fixture.runReplay(ReplayRequest(scope = "projections", fromDate = "2026-04-21", toDate = "2026-04-21"))
+            val job = fixture.runReplay(ReplayRequest(scope = ReplayScope.Projections, fromDate = "2026-04-21", toDate = "2026-04-21"))
 
             assertEquals(ReplayJobStatus.Completed, job.status)
             assertEquals(1, job.recordsReplayed)
@@ -177,22 +176,19 @@ class ReplayServiceTest : PostgresIntegrationTest() {
         }
 
     @Test
-    fun replayRejectsUnknownScopeAndRecordTypes(): Unit =
+    fun replayRejectsUnknownRecordTypesAndDerivedWipe(): Unit =
         runBlocking {
             val fixture = Fixture()
             assertFailsWith<RequestValidationException> {
-                fixture.replayService.create(ReplayRequest(scope = "bogus"), fixture.clock.now())
-            }
-            assertFailsWith<RequestValidationException> {
                 fixture.replayService.create(
                     ReplayRequest(metricTypes = listOf("not_a_record_type")),
-                    fixture.clock.now(),
+                    fixture.clock.instant(),
                 )
             }
             assertFailsWith<RequestValidationException> {
                 fixture.replayService.create(
-                    ReplayRequest(scope = "derived", wipe = true),
-                    fixture.clock.now(),
+                    ReplayRequest(scope = ReplayScope.Derived, wipe = true),
+                    fixture.clock.instant(),
                 )
             }
         }
@@ -202,7 +198,7 @@ class ReplayServiceTest : PostgresIntegrationTest() {
     ) {
         val config: DatabaseConfig = PostgresTestDatabase.config().copy(maxPoolSize = poolSize)
         val database: Database = openDatabase(config)
-        val clock = UtcClock()
+        val clock = Clock.systemUTC()
         private val derivedRebuildExecutor = realDerivedRebuildExecutor(database)
         private val ingestionService = ingestionService(database, derivedRebuildExecutor)
         val replayService =
@@ -212,7 +208,6 @@ class ReplayServiceTest : PostgresIntegrationTest() {
                 mappingService = IngestionMappingService(),
                 metricWriteService = metricWriteService(),
                 derivedRebuildExecutor = derivedRebuildExecutor,
-                derivedRebuildRegistry = derivedRebuildRegistry(),
                 pendingDerivedRebuildRepository = PendingDerivedRebuildRepository(database),
                 replayJobRepository = ReplayJobRepository(database),
                 projectionWipeRepository = ProjectionWipeRepository(),
@@ -285,7 +280,7 @@ class ReplayServiceTest : PostgresIntegrationTest() {
         }
 
         suspend fun runReplay(request: ReplayRequest): ReplayJobStatusResponse {
-            val start = replayService.create(request, clock.now())
+            val start = replayService.create(request, clock.instant())
             return awaitReplay(start.jobId)
         }
 
