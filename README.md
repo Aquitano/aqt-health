@@ -161,7 +161,7 @@ OTEL_EXPORTER_OTLP_HEADERS=Authorization=Basic%20<base64 user:password>
 OTEL_RESOURCE_ATTRIBUTES=deployment.environment.name=production
 ```
 
-Keep the `Authorization` value in deployment secrets, and rotate any OpenObserve credential that has been pasted into chat, issue trackers, shell history, or logs.
+The SDK URL-decodes header values, so a `+` in the base64 credential must be written as `%2B`. Keep the `Authorization` value in deployment secrets, and rotate any OpenObserve credential that has been pasted into chat, issue trackers, shell history, or logs.
 
 ## Frontend Proxy
 
