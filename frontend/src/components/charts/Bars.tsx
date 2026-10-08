@@ -1,12 +1,9 @@
 import type { HealthDayBucket } from "@/lib/types";
 
-type BarsProps = {
-  buckets: HealthDayBucket[];
-  height?: number;
-};
+const width = 240;
+const height = 56;
 
-export function Bars({ buckets, height = 56 }: BarsProps) {
-  const width = 240;
+export function Bars({ buckets }: { buckets: HealthDayBucket[] }) {
   const max = Math.max(...buckets.map((bucket) => bucket.value ?? 0), 1);
   const gap = 1;
   const barWidth = buckets.length ? width / buckets.length : width;

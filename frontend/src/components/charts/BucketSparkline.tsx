@@ -1,13 +1,10 @@
 import type { HealthDayBucket } from "@/lib/types";
 
-type BucketSparklineProps = {
-  buckets: HealthDayBucket[];
-  height?: number;
-};
+const width = 240;
+const height = 56;
 
-export function BucketSparkline({ buckets, height = 56 }: BucketSparklineProps) {
-  const width = 240;
-  const values = buckets.map((bucket) => bucket.value).filter((value): value is number => value !== undefined);
+export function BucketSparkline({ buckets }: { buckets: HealthDayBucket[] }) {
+  const values = buckets.flatMap((bucket) => bucket.value ?? []);
   const min = values.length ? Math.min(...values) : 0;
   const max = values.length ? Math.max(...values) : 1;
   const range = max - min || 1;

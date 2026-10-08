@@ -3,18 +3,15 @@ import { useId } from "react";
 type ValueSparklineProps = {
   values: number[];
   color: string;
-  width?: number;
-  height?: number;
   className?: string;
 };
 
-/** Minimal inline trend glyph: an area-filled polyline normalized to its range. */
-export function ValueSparkline({ values, color, width = 120, height = 36, className }: ValueSparklineProps) {
-  const gradientId = useId();
-  if (values.length === 0) {
-    return <svg className={className} viewBox={`0 0 ${width} ${height}`} aria-hidden="true" />;
-  }
+const width = 120;
+const height = 36;
 
+/** Minimal inline trend glyph: an area-filled polyline normalized to its range. */
+export function ValueSparkline({ values, color, className }: ValueSparklineProps) {
+  const gradientId = useId();
   const min = Math.min(...values);
   const max = Math.max(...values);
   const span = max - min || 1;
@@ -27,6 +24,10 @@ export function ValueSparkline({ values, color, width = 120, height = 36, classN
     const y = pad + usable - ((value - min) / span) * usable;
     return [x, y] as const;
   });
+  const last = points.at(-1);
+  if (!last) {
+    return <svg className={className} viewBox={`0 0 ${width} ${height}`} aria-hidden="true" />;
+  }
 
   const line = points.map(([x, y], index) => `${index === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`).join(" ");
   const area = `${line} L${width} ${height} L0 ${height} Z`;
@@ -54,7 +55,7 @@ export function ValueSparkline({ values, color, width = 120, height = 36, classN
         strokeLinejoin="round"
         vectorEffect="non-scaling-stroke"
       />
-      <circle cx={points.at(-1)![0]} cy={points.at(-1)![1]} r="2.4" fill={color} />
+      <circle cx={last[0]} cy={last[1]} r="2.4" fill={color} />
     </svg>
   );
 }

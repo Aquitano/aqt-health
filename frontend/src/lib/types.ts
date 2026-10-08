@@ -25,7 +25,6 @@ export type DashboardSummaryResponse = ApiSchema<"DashboardSummaryResponse">;
 export type HealthDayBucket = ApiSchema<"HealthDayBucketResponse">;
 export type HealthDayResponse = ApiSchema<"HealthDayResponse">;
 export type IngestionBatch = ApiSchema<"IngestionBatchAdminResponse">;
-export type IngestionBatchesResponse = ApiSchema<"IngestionBatchesResponse">;
 export type IngestionBatchDetailResponse = ApiSchema<"IngestionBatchDetailResponse">;
 export type ProviderCatalogResponse = ApiSchema<"ProviderCatalogResponse">;
 export type ProviderDescriptor = ApiSchema<"ProviderDescriptorResponse">;
@@ -46,60 +45,3 @@ export type BloodPressureMeasurement = ApiSchema<"BloodPressureMeasurementRespon
 export type BloodPressureMeasurementsResponse = ApiSchema<"BloodPressureMeasurementsResponse">;
 
 export type HealthDayModuleName = HealthDayResponse["modules"][number];
-export type HealthStatusData = {
-  apiBaseUrl: string;
-  health: ApiResult<HealthResponse>;
-};
-
-export type HealthDataPageData = HealthStatusData & {
-  summary: ApiResult<DashboardSummaryResponse>;
-  trends: ApiResult<DashboardTrendsResponse>;
-  healthDay: ApiResult<HealthDayResponse>;
-  dailySteps: ApiResult<StepDailySummariesResponse>;
-  activitySummaries: ApiResult<ActivitySummariesResponse>;
-  bodyMeasurements: ApiResult<ScalarSamplesResponse>;
-  heartRateDaily: ApiResult<ScalarDailySummariesResponse>;
-  sleepNights: ApiResult<SleepNightsResponse>;
-  sleepSummaries: ApiResult<SleepSummariesResponse>;
-  respiratoryRates: ApiResult<ScalarSamplesResponse>;
-  hrvSamples: ApiResult<ScalarSamplesResponse>;
-  latestActivity: ApiResult<ActivitySummariesResponse>;
-  latestSleepSummary: ApiResult<SleepSummariesResponse>;
-  latestRespiratoryRate: ApiResult<ScalarSamplesResponse>;
-  latestHrv: ApiResult<ScalarSamplesResponse>;
-  latestBloodPressure: ApiResult<BloodPressureMeasurementsResponse>;
-};
-
-/**
- * The page data with each field left as an unresolved promise, so the route can
- * fire every request up front and stream sections in as their own data settles
- * rather than blocking first paint on the slowest fetch.
- */
-export type HealthDataPageSources = {
-  [K in keyof HealthDataPageData]: K extends "apiBaseUrl"
-    ? HealthDataPageData[K]
-    : Promise<HealthDataPageData[K]>;
-};
-
-export type TrendsPageData = HealthStatusData & {
-  fromDate: string;
-  toDate: string;
-  weight: ApiResult<ScalarSamplesResponse>;
-  steps: ApiResult<StepDailySummariesResponse>;
-  sleep: ApiResult<SleepSummariesResponse>;
-  hrv: ApiResult<ScalarDailySummariesResponse>;
-  activity: ApiResult<ActivitySummariesResponse>;
-  respiratory: ApiResult<ScalarDailySummariesResponse>;
-};
-
-export type ProviderSyncPageData = HealthStatusData & {
-  providerCatalog: ApiResult<ProviderCatalogResponse>;
-  providerStatuses: ApiResult<ProviderStatusCatalogResponse>;
-  scheduledSyncConfigs: ApiResult<ScheduledSyncConfig>[];
-  runningSyncJob: ProviderSyncJobStatusResponse | null;
-};
-
-export type IngestionsPageData = HealthStatusData & {
-  batches: ApiResult<IngestionBatchesResponse>;
-  failures: ApiResult<IngestionBatchesResponse>;
-};

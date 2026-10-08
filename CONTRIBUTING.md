@@ -31,16 +31,21 @@ All commit messages must follow this structure:
 
 Use the following scopes to keep commits organized. If a change spans multiple components, choose the most specific scope or omit the scope (e.g., `refactor: clean up bootstrap config`).
 
-- **`api`**: Routing, HTTP endpoints, OpenAPI generation, authentication, and HTTP request validation.
-- **`providers`**: OAuth configuration, credentials management, and provider-specific integrations (Google Health, Withings).
-- **`sync`**: Synchronization pipelines, scheduling, provider sync adapters, and ingestion runs.
-- **`sleep`**: Sleep session parsing, calendar sleep-night categorization, and timezone adjustments.
-- **`ingestion`**: Raw health batches, records parsing, and source database audits.
-- **`metrics`**: Daily step summaries, heart-rate queries, body measurements, database models, and Exposed DSL interactions.
-- **`frontend`**: Frontend UI, HTML, CSS, JavaScript, and trends dashboard components.
-- **`db`**: Database migrations (Flyway scripts), schema definitions, and connection pool configurations.
-- **`docs`**: Documentation, README, user manuals, and API contracts.
-- **`test`**: Test helpers, Testcontainers setup, integration testing suite, and mock providers.
+- **`api`**: Routing, HTTP endpoints, OpenAPI, authentication, and request validation.
+- **`providers`**: Provider OAuth, accounts, and the provider catalog.
+- **`withings`**, **`google`**: One provider's client, normalizer, or sync adapter.
+- **`sync`**: The sync pipeline, sync jobs, and scheduled syncs.
+- **`ingestion`**: Batch ingestion and record mapping.
+- **`replay`**: Replay jobs and projection rebuilds.
+- **`metrics`**: Metric reads and writes, canonical derivations, dashboards, and trends.
+- **`sleep`**: Sleep sessions, stages, and nights.
+- **`db`**: Flyway migrations, schema, and connection setup.
+- **`config`**: Application configuration and its validation.
+- **`frontend`**: The Next.js app.
+- **`deploy`**: Dockerfiles and Compose files.
+- **`deps`**: Dependency updates.
+- **`docs`**: Documentation.
+- **`test`**: Shared test helpers and test infrastructure.
 
 ### Commit Guidelines & Best Practices
 

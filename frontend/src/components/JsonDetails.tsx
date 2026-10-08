@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import styles from "./JsonDetails.module.css";
 
 type JsonDetailsProps = {
@@ -9,16 +9,14 @@ type JsonDetailsProps = {
 };
 
 export function JsonDetails({ title, value }: JsonDetailsProps) {
-  const preRef = useRef<HTMLPreElement>(null);
   const [copied, setCopied] = useState(false);
+  const json = JSON.stringify(value, null, 2);
 
-  const handleCopy = useCallback(() => {
-    const text = preRef.current?.textContent ?? JSON.stringify(value, null, 2);
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
-  }, [value]);
+  useEffect(() => {
+    if (!copied) return;
+    const timeout = setTimeout(() => setCopied(false), 1500);
+    return () => clearTimeout(timeout);
+  }, [copied]);
 
   return (
     <details className={styles.details}>
@@ -26,11 +24,15 @@ export function JsonDetails({ title, value }: JsonDetailsProps) {
       <div className={styles.content}>
         <div className={styles.header}>
           <span />
-          <button className={styles.copyBtn} type="button" onClick={handleCopy}>
+          <button
+            className={styles.copyBtn}
+            type="button"
+            onClick={() => void navigator.clipboard.writeText(json).then(() => setCopied(true))}
+          >
             {copied ? "Copied" : "Copy"}
           </button>
         </div>
-        <pre ref={preRef} className={styles.pre}>{JSON.stringify(value, null, 2)}</pre>
+        <pre className={styles.pre}>{json}</pre>
       </div>
     </details>
   );

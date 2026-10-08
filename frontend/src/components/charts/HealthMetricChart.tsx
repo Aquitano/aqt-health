@@ -85,7 +85,7 @@ export function HealthMetricChart({
       : new Set(defaultVisibleMetricKeys?.length ? defaultVisibleMetricKeys : series.map((item) => item.key));
   const visibleSeries = series.filter((item) => visibleMetricKeys.has(item.key));
   const numericValues = visibleSeries.flatMap((item) =>
-    data.map((datum) => datum[item.key]).filter((value): value is number => typeof value === "number"),
+    data.map((datum) => datum[item.key]).filter((value) => typeof value === "number"),
   );
   const referenceValue = numericValues.length
     ? numericValues.reduce((total, value) => total + value, 0) / numericValues.length

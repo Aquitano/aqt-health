@@ -55,22 +55,21 @@ function dailyAverages(response?: ScalarDailySummariesResponse): TrendPoint[] {
   );
 }
 
+const dayMs = 86_400_000;
+
+const dayStartMs = (date: string) => Date.parse(`${date}T00:00:00Z`);
+
 /** Compare with the closest day near the target, leaving sparse comparisons unavailable. */
 function changeOverDays(points: TrendPoint[], days: number): TrendChange | null {
-  if (points.length < 2) return null;
-  const latest = points[points.length - 1];
-  const latestMs = Date.parse(`${latest.date}T00:00:00Z`);
-  const targetMs = latestMs - days * 86_400_000;
-  const toleranceMs = (days === 7 ? 2 : 7) * 86_400_000;
-  let base: TrendPoint | null = null;
-  let closestDistance = Infinity;
-  for (let i = 0; i < points.length - 1; i += 1) {
-    const distance = Math.abs(Date.parse(`${points[i].date}T00:00:00Z`) - targetMs);
-    if (distance <= toleranceMs && distance < closestDistance) {
-      base = points[i];
-      closestDistance = distance;
-    }
-  }
+  const latest = points.at(-1);
+  if (!latest) return null;
+  const targetMs = dayStartMs(latest.date) - days * dayMs;
+  const toleranceMs = (days === 7 ? 2 : 7) * dayMs;
+  const base = points
+    .slice(0, -1)
+    .map((point) => ({ point, distance: Math.abs(dayStartMs(point.date) - targetMs) }))
+    .filter(({ distance }) => distance <= toleranceMs)
+    .sort((a, b) => a.distance - b.distance)[0]?.point;
   if (!base) return null;
 
   const abs = latest.value - base.value;
@@ -79,7 +78,7 @@ function changeOverDays(points: TrendPoint[], days: number): TrendChange | null 
 }
 
 function summarize(
-  config: { key: string; label: string; unit: string; color: string; goodWhen: "up" | "down" | null },
+  config: Pick<TrendStat, "key" | "label" | "unit" | "color" | "goodWhen">,
   points: TrendPoint[],
 ): TrendStat {
   const values = points.map((point) => point.value);
@@ -97,7 +96,7 @@ function summarize(
   };
 }
 
-export type TrendsInput = {
+type TrendsInput = {
   weight?: ScalarSamplesResponse;
   steps?: StepDailySummariesResponse;
   sleep?: SleepSummariesResponse;
@@ -107,77 +106,52 @@ export type TrendsInput = {
 };
 
 export function buildTrendStats(input: TrendsInput, timeZone: string): TrendStat[] {
-  const stats: TrendStat[] = [];
   const dayKey = (isoTimestamp: string) => dateInTimeZone(Date.parse(isoTimestamp), timeZone);
-
   const weightItems = (input.weight?.items ?? []).filter((item) => item.metricType === "weight");
-  const weightUnit = weightItems[0]?.unit ?? "kg";
-  stats.push(
-    summarize(
-      { key: "weight", label: "Weight", unit: weightUnit, color: "var(--hue-weight)", goodWhen: null },
-      dailyLast(
-        weightItems.map((item) => ({ date: dayKey(item.measuredAt), value: item.value })),
-      ),
-    ),
-  );
+  const sleepItems = input.sleep?.items ?? [];
 
-  stats.push(
+  return [
+    summarize(
+      { key: "weight", label: "Weight", unit: weightItems[0]?.unit ?? "kg", color: "var(--hue-weight)", goodWhen: null },
+      dailyLast(weightItems.map((item) => ({ date: dayKey(item.measuredAt), value: item.value }))),
+    ),
     summarize(
       { key: "steps", label: "Steps", unit: "steps", color: "var(--hue-steps)", goodWhen: "up" },
-      dailyLast(
-        (input.steps?.items ?? []).map((item) => ({ date: item.date, value: item.steps })),
-      ),
+      dailyLast((input.steps?.items ?? []).map((item) => ({ date: item.date, value: item.steps }))),
     ),
-  );
-
-  stats.push(
     summarize(
       { key: "sleep", label: "Sleep", unit: "h", color: "var(--hue-sleep)", goodWhen: "up" },
       dailyLast(
-        (input.sleep?.items ?? [])
-          .filter((item) => typeof item.totalSleepSeconds === "number")
-          .map((item) => ({ date: dayKey(item.endAt), value: (item.totalSleepSeconds ?? 0) / 3600 })),
+        sleepItems.flatMap((item) =>
+          item.totalSleepSeconds == null ? [] : [{ date: dayKey(item.endAt), value: item.totalSleepSeconds / 3600 }],
+        ),
       ),
     ),
-  );
-
-  stats.push(
     summarize(
       { key: "sleep_score", label: "Sleep score", unit: "", color: "var(--hue-score)", goodWhen: "up" },
       dailyLast(
-        (input.sleep?.items ?? [])
-          .filter((item) => typeof item.sleepScore === "number")
-          .map((item) => ({ date: dayKey(item.endAt), value: item.sleepScore ?? 0 })),
+        sleepItems.flatMap((item) =>
+          item.sleepScore == null ? [] : [{ date: dayKey(item.endAt), value: item.sleepScore }],
+        ),
       ),
     ),
-  );
-
-  stats.push(
     summarize(
       { key: "hrv", label: "HRV", unit: "ms", color: "var(--hue-hrv)", goodWhen: "up" },
       dailyAverages(input.hrv),
     ),
-  );
-
-  stats.push(
     summarize(
       { key: "resting_hr", label: "Resting HR", unit: "bpm", color: "var(--hue-heart)", goodWhen: "down" },
       dailyLast(
-        (input.activity?.items ?? [])
-          .filter((item) => typeof item.minHeartRateBpm === "number")
-          .map((item) => ({ date: item.date, value: item.minHeartRateBpm ?? 0 })),
+        (input.activity?.items ?? []).flatMap((item) =>
+          item.minHeartRateBpm == null ? [] : [{ date: item.date, value: item.minHeartRateBpm }],
+        ),
       ),
     ),
-  );
-
-  stats.push(
     summarize(
       { key: "respiratory", label: "Respiratory", unit: "rpm", color: "var(--hue-resp)", goodWhen: null },
       dailyAverages(input.respiratory),
     ),
-  );
-
-  return stats.filter((stat) => stat.points.length > 0);
+  ].filter((stat) => stat.points.length > 0);
 }
 
 /** Short human sentence describing the dominant 30d (or 7d) movement. */

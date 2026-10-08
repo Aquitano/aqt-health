@@ -5,11 +5,6 @@ import type { IngestionBatch } from "@/lib/types";
 import { DataTable, type Column } from "./DataTable";
 import styles from "./tables.module.css";
 
-type Props = {
-  items: IngestionBatch[];
-  getHref?: (item: IngestionBatch) => string;
-};
-
 function badgeClass(status: string): string {
   switch (status) {
     case "processed":
@@ -21,16 +16,16 @@ function badgeClass(status: string): string {
   }
 }
 
-export function IngestionBatchesTable({ items, getHref }: Props) {
-  const columns: Column<IngestionBatch>[] = [
-    { header: "ID", cell: (item) => (getHref ? <Link href={getHref(item)}>{item.id}</Link> : item.id) },
-    { header: "Status", cell: (item) => <span className={badgeClass(item.status)}>{item.status}</span> },
-    { header: "Provider", cell: (item) => item.providerInstanceId || item.provider, muted: true },
-    { header: "Records", cell: (item) => formatNumber(item.recordCount) },
-    { header: "Ingested", cell: (item) => formatDateTime(item.ingestedAt, serverConfig.timeZone), muted: true },
-    { header: "Error", cell: (item) => item.errorMessage ?? "", muted: true },
-  ];
+const columns: Column<IngestionBatch>[] = [
+  { header: "ID", cell: (item) => <Link href={`/ingestions/${item.id}`}>{item.id}</Link> },
+  { header: "Status", cell: (item) => <span className={badgeClass(item.status)}>{item.status}</span> },
+  { header: "Provider", cell: (item) => item.providerInstanceId || item.provider, muted: true },
+  { header: "Records", cell: (item) => formatNumber(item.recordCount) },
+  { header: "Ingested", cell: (item) => formatDateTime(item.ingestedAt, serverConfig.timeZone), muted: true },
+  { header: "Error", cell: (item) => item.errorMessage ?? "", muted: true },
+];
 
+export function IngestionBatchesTable({ items }: { items: IngestionBatch[] }) {
   return (
     <DataTable
       items={items}

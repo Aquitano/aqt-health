@@ -1,7 +1,7 @@
 # ADR 0001: Single-user event log with projections
 
 Date: 2026-06-10
-Status: Accepted
+Status: Accepted (decision 3 amended 2026-10-05)
 
 ## Context
 
@@ -19,10 +19,10 @@ data volumes are bounded by what one person's devices produce.
    the append-only source of truth. Everything else (metric sample tables, canonical
    views, daily summaries) is a projection that must be rebuildable by replaying the log.
    New features extend a projection or add a new one, never mutate the log.
-3. **Projections are keyed by metric kind, not by field.** `MetricKind` / `DerivedKind`
-   enums plus `Map<Kind, ...>` shapes and module registries are the extension mechanism.
-   Adding a metric family must not require touching per-field accumulators, result DTO
-   fields, or executor branches.
+3. **Projections are keyed by metric kind, not by field.** Kinds are enums or sealed types
+   handled with exhaustive `when`, so adding one is a compile error everywhere it must be
+   handled. A plug-in registry is only worth its indirection once a second implementation
+   exists; the derived-rebuild and health-day registries each had one and were removed.
 
 ## Consequences
 

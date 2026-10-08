@@ -22,7 +22,6 @@ type TrendChartProps = {
   unit: string;
   label: string;
   average?: number | null;
-  height?: number;
 };
 
 type ChartDatum = {
@@ -34,7 +33,7 @@ type ChartDatum = {
 type TooltipEntry = { payload?: ChartDatum };
 type TooltipProps = { active?: boolean; payload?: TooltipEntry[] };
 
-export function TrendChart({ points, color, unit, label, average, height = 340 }: TrendChartProps) {
+export function TrendChart({ points, color, unit, label, average }: TrendChartProps) {
   const gradientId = useId();
   const isClient = useHydrated();
   const data: ChartDatum[] = points.map((point) => ({
@@ -48,7 +47,7 @@ export function TrendChart({ points, color, unit, label, average, height = 340 }
   }
 
   return (
-    <div className={styles.chart} style={{ height }}>
+    <div className={styles.chart}>
       {isClient ? (
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: 12, right: 16, bottom: 6, left: -10 }}>

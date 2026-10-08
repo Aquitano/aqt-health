@@ -46,17 +46,8 @@ export function ProviderAccountRow({
     setPendingAction(action);
     setError(null);
     setScheduledResult(null);
-    try {
-      await execute();
-    } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : "Account action failed. Try again."
-      );
-    } finally {
-      setPendingAction(null);
-    }
+    await execute();
+    setPendingAction(null);
   }
 
   function onAccountAction(action: "disconnect" | "reconnect") {

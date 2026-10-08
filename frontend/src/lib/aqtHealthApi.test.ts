@@ -15,11 +15,7 @@ const mocks = vi.hoisted(() => {
     "getHealthDay",
     "listBodyMeasurements",
     "listSleepNights",
-    "listRespiratoryRateSamples",
-    "listHrvSamples",
-    "getLatestActivitySummary",
-    "getLatestSleepSummary",
-    "getLatestBloodPressure",
+    "listBloodPressure",
     "listIngestionBatches",
     "listIngestionFailures",
   ] as const;
@@ -30,7 +26,7 @@ const mocks = vi.hoisted(() => {
 });
 vi.mock("./aqtHealthClient", () => ({
   toProviderCode: (value: string) => value,
-  aqtHealthClient: { apiBaseUrl: "http://test", ...mocks },
+  aqtHealthClient: mocks,
 }));
 function response(items: unknown[] = [], nextCursor?: string) {
   return {

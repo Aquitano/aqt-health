@@ -10,7 +10,6 @@
 .tab,
 .tabActive {
   padding: 6px 14px;
-  border: none;
   border-radius: var(--r-full);
   background: transparent;
   color: var(--fg-muted);
@@ -18,10 +17,14 @@
   font-size: 0.74rem;
   font-weight: 600;
   letter-spacing: 0.04em;
-  cursor: pointer;
   transition:
     color var(--dur-fast) var(--ease-out),
     background var(--dur-fast) var(--ease-out);
+}
+
+.tab:hover,
+.tabActive:hover {
+  text-decoration: none;
 }
 
 .tab:hover {

@@ -4,7 +4,7 @@ import { SleepTimeline } from "@/components/charts/SleepTimeline";
 import { BucketSparkline } from "@/components/charts/BucketSparkline";
 import { AnimatedNumber } from "@/components/motion/AnimatedNumber";
 import { formatDuration, formatMeasurement, formatNumber } from "@/lib/format";
-import type { HealthDayBucket, HealthDayResponse } from "@/lib/types";
+import type { HealthDayResponse } from "@/lib/types";
 import styles from "./DayOverview.module.css";
 
 type DayOverviewProps = {
@@ -14,14 +14,13 @@ type DayOverviewProps = {
 };
 
 export function DayOverview({ day, weightDelta7d, weightDelta7dUnit }: DayOverviewProps) {
-  const emptyBuckets: HealthDayBucket[] = [];
   const weightBuckets =
     day?.weight?.points.map((point) => ({
       startAt: point.measuredAt,
       endAt: point.measuredAt,
       value: point.value,
       count: 1,
-    })) ?? emptyBuckets;
+    })) ?? [];
 
   return (
     <section className={styles.overview} aria-label="One-day overview">
@@ -95,7 +94,7 @@ export function DayOverview({ day, weightDelta7d, weightDelta7dUnit }: DayOvervi
 }
 
 function formatDelta(value?: number | null, unit?: string | null): string {
-  if (value === undefined || value === null) return "n/a";
+  if (value == null) return "n/a";
   const sign = value > 0 ? "+" : "";
   return `${sign}${new Intl.NumberFormat("en", { maximumFractionDigits: 1 }).format(value)} ${unit ?? ""}`.trim();
 }

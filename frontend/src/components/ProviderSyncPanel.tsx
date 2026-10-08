@@ -65,7 +65,7 @@ export function ProviderSyncPanel({ catalog, statuses, scheduledSyncConfigs, run
   const canSync = Boolean(selectedProvider?.status?.canSync);
   const scheduledConfigByAccount = new Map(
     scheduledSyncConfigs
-      .filter((config): config is { ok: true; data: ScheduledSyncConfig } => config.ok)
+      .filter((config) => config.ok)
       .map((config) => [`${config.data.providerCode}:${config.data.providerInstanceId}`, config.data]),
   );
 
@@ -94,19 +94,15 @@ export function ProviderSyncPanel({ catalog, statuses, scheduledSyncConfigs, run
     setOAuthError(null);
 
     startOAuthTransition(async () => {
-      try {
-        const body = await proxyFetch(
-          `/providers/${encodeURIComponent(selectedProvider.descriptor.providerCode)}/oauth/start`,
-          readOAuthStart,
-          { method: "POST" },
-        );
-        if (body.ok) {
-          window.location.assign(body.data.authorizationUrl);
-        } else {
-          setOAuthError(body.message);
-        }
-      } catch (error) {
-        setOAuthError(error instanceof Error ? error.message : "OAuth start failed. Try again.");
+      const body = await proxyFetch(
+        `/providers/${encodeURIComponent(selectedProvider.descriptor.providerCode)}/oauth/start`,
+        readOAuthStart,
+        { method: "POST" },
+      );
+      if (body.ok) {
+        window.location.assign(body.data.authorizationUrl);
+      } else {
+        setOAuthError(body.message);
       }
     });
   }
