@@ -121,6 +121,14 @@ fun AppConfig.validateForStartup() {
             if (ingestion.maxBodyBytes <= 0) {
                 add(ConfigValidationIssue("aqtHealth.ingestion.maxBodyBytes", "must be positive"))
             }
+            if (auth.bootstrapApiKey.isNotBlank() && !auth.bootstrapApiKey.matches(bearerTokenPattern)) {
+                add(
+                    ConfigValidationIssue(
+                        "aqtHealth.auth.bootstrapApiKey",
+                        "must be a valid Bearer token: letters, digits and -._~+/ with optional trailing =",
+                    ),
+                )
+            }
             if (environment.isProduction) {
                 requireTokenKey("aqtHealth.auth.bootstrapApiKey", auth.bootstrapApiKey)
                 requireValue("aqtHealth.auth.bootstrapClientName", auth.bootstrapClientName)
@@ -156,6 +164,8 @@ fun AppConfig.validateForStartup() {
         throw AppConfigValidationException(issues)
     }
 }
+
+private val bearerTokenPattern = Regex("[A-Za-z0-9._~+/-]+=*")
 
 private fun ProviderOAuthConfig.isProviderConfigured(): Boolean = clientId.isNotBlank() || clientSecret.isNotBlank()
 

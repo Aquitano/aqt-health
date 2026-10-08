@@ -65,6 +65,21 @@ class ApplicationTest : PostgresIntegrationTest() {
         }
 
     @Test
+    fun malformedAuthorizationHeaderIsUnauthorized() =
+        testApplication {
+            configureTestApplication()
+
+            val response =
+                client.get("/api/v2/admin/ingestion/batches") {
+                    header(HttpHeaders.Authorization, "Bearer not a token")
+                }
+
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
+            val error = response.jsonBody()["error"]!!.jsonObject
+            assertEquals("unauthorized", error["code"]!!.jsonPrimitive.content)
+        }
+
+    @Test
     fun validationErrorDetailsIncludeMachineReadableCodes() =
         testApplication {
             configureTestApplication()
