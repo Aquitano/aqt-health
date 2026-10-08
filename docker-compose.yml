@@ -40,8 +40,6 @@ services:
       AQT_HEALTH_WITHINGS_TOKEN_ENCRYPTION_KEY: ${AQT_HEALTH_WITHINGS_TOKEN_ENCRYPTION_KEY:-}
       AQT_HEALTH_INGESTION_MAX_BODY_BYTES: ${AQT_HEALTH_INGESTION_MAX_BODY_BYTES:-33554432}
       AQT_HEALTH_LOG_FORMAT: ${AQT_HEALTH_LOG_FORMAT:-text}
-      # Never empty: logback falls back to its own default only when unset.
-      AQT_HEALTH_LOG_APPENDER: ${AQT_HEALTH_LOG_APPENDER:-no-file}
     depends_on:
       postgres:
         condition: service_healthy

@@ -44,113 +44,15 @@
         </encoder>
     </appender>
 
-    <!-- File logging is opt-in: containers run as a non-root user with no writable working
-         directory, so the root logger points at the no-op appender unless AQT_HEALTH_LOG_APPENDER
-         selects openobserve-json-file. Logback skips unreferenced appenders, so the file below is
-         never opened while file logging is off. -->
-    <appender name="no-file" class="ch.qos.logback.core.helpers.NOPAppender"/>
-
-    <appender name="openobserve-json-file" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>${AQT_HEALTH_LOG_FILE:-build/logs/aqt-health.jsonl}</file>
-        <append>true</append>
-        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
-            <fileNamePattern>${AQT_HEALTH_LOG_FILE_ROLLOVER:-build/logs/aqt-health.%d{yyyy-MM-dd}.%i.jsonl.gz}</fileNamePattern>
-            <maxFileSize>10MB</maxFileSize>
-            <maxHistory>7</maxHistory>
-            <totalSizeCap>100MB</totalSizeCap>
-        </rollingPolicy>
-        <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
-            <providers>
-                <timestamp>
-                    <fieldName>timestamp</fieldName>
-                </timestamp>
-                <logLevel>
-                    <fieldName>level</fieldName>
-                </logLevel>
-                <loggerName>
-                    <fieldName>logger</fieldName>
-                </loggerName>
-                <threadName>
-                    <fieldName>thread</fieldName>
-                </threadName>
-                <message/>
-                <mdc/>
-                <arguments/>
-                <stackTrace>
-                    <fieldName>stack_trace</fieldName>
-                </stackTrace>
-            </providers>
-            <jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator">
-                <path>accessToken</path>
-                <path>refreshToken</path>
-                <path>clientSecret</path>
-                <path>password</path>
-                <path>apiKey</path>
-                <path>Authorization</path>
-                <path>access_token</path>
-                <path>refresh_token</path>
-                <path>client_secret</path>
-                <path>api_key</path>
-                <path>bootstrapApiKey</path>
-                <path>bootstrap_api_key</path>
-            </jsonGeneratorDecorator>
-        </encoder>
-    </appender>
-
-    <appender name="openobserve-http" class="me.aquitano.health.infrastructure.logging.OpenObserveHttpAppender">
-        <url>${OPENOBSERVE_LOG_URL:-}</url>
-        <authorization>${OPENOBSERVE_AUTHORIZATION:-}</authorization>
-        <service>aqt-health</service>
-        <environment>${AQT_HEALTH_ENV:-local}</environment>
-        <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
-            <providers>
-                <timestamp>
-                    <fieldName>timestamp</fieldName>
-                </timestamp>
-                <logLevel>
-                    <fieldName>level</fieldName>
-                </logLevel>
-                <loggerName>
-                    <fieldName>logger</fieldName>
-                </loggerName>
-                <threadName>
-                    <fieldName>thread</fieldName>
-                </threadName>
-                <message/>
-                <mdc/>
-                <arguments/>
-                <stackTrace>
-                    <fieldName>stack_trace</fieldName>
-                </stackTrace>
-            </providers>
-            <jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator">
-                <path>accessToken</path>
-                <path>refreshToken</path>
-                <path>clientSecret</path>
-                <path>password</path>
-                <path>apiKey</path>
-                <path>Authorization</path>
-                <path>access_token</path>
-                <path>refresh_token</path>
-                <path>client_secret</path>
-                <path>api_key</path>
-                <path>bootstrapApiKey</path>
-                <path>bootstrap_api_key</path>
-            </jsonGeneratorDecorator>
-        </encoder>
-    </appender>
-
-    <appender name="openobserve-async" class="ch.qos.logback.classic.AsyncAppender">
-        <queueSize>1024</queueSize>
-        <discardingThreshold>0</discardingThreshold>
-        <neverBlock>true</neverBlock>
-        <appender-ref ref="openobserve-http"/>
+    <!-- Exports nothing until configureObservability() installs an SDK (OTEL_EXPORTER_OTLP_ENDPOINT set). -->
+    <appender name="otlp" class="io.opentelemetry.instrumentation.logback.appender.v1_0.OpenTelemetryAppender">
+        <mdcAttributesIncluded>*</mdcAttributesIncluded>
+        <captureExperimentalAttributes>true</captureExperimentalAttributes>
     </appender>
 
     <root level="INFO">
         <appender-ref ref="${AQT_HEALTH_LOG_FORMAT:-text}"/>
-        <appender-ref ref="${AQT_HEALTH_LOG_APPENDER:-no-file}"/>
-        <appender-ref ref="openobserve-async"/>
+        <appender-ref ref="otlp"/>
     </root>
 
     <logger name="io.netty" level="INFO"/>

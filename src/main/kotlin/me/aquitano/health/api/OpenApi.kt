@@ -64,17 +64,6 @@ internal fun openApiBaseDoc(): OpenApiDoc =
 private fun openApiComponents(): Components =
     Components(
         schemas = emptyMap(),
-        securitySchemes =
-            mapOf(
-                BearerApiKeySecurityScheme to
-                    ReferenceOr.Value<SecurityScheme>(
-                        HttpSecurityScheme(
-                            scheme = "bearer",
-                            bearerFormat = "API key",
-                            description = "Use `Authorization: Bearer <api-key>` with an API key registered in aqt-health.",
-                        ),
-                    ),
-            ),
         examples =
             mapOf(
                 "ErrorResponse" to

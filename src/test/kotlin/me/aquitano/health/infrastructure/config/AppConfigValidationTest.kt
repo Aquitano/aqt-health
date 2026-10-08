@@ -29,6 +29,21 @@ class AppConfigValidationTest {
     }
 
     @Test
+    fun rejectsABootstrapApiKeyThatCannotBeSentAsABearerToken() {
+        val config = productionConfig(bootstrapApiKey = "0123456789abcdef0123456789abcde#")
+
+        val issues =
+            runCatching { config.validateForStartup() }
+                .exceptionOrNull()
+                .let { it as? AppConfigValidationException }
+                ?.issues
+                ?: fail("expected validation to fail")
+
+        assertEquals("aqtHealth.auth.bootstrapApiKey", issues.single().path)
+        assertTrue("Bearer token" in issues.single().message)
+    }
+
+    @Test
     fun rejectsANonPositiveIngestionBodyLimit() {
         val config = productionConfig(maxBodyBytes = 0)
 
@@ -76,7 +91,6 @@ class AppConfigValidationTest {
             googleHealth = providerConfig("https://api.aqt-health.app/api/v2/providers/google-health/oauth/callback"),
             withings = providerConfig("https://api.aqt-health.app/api/v2/providers/withings/oauth/callback"),
             ingestion = IngestionConfig(maxBodyBytes = maxBodyBytes),
-            openObserve = OpenObserveConfig(url = "", org = "", user = "", password = ""),
         )
 
     private fun providerConfig(redirectUri: String): ProviderOAuthConfig =

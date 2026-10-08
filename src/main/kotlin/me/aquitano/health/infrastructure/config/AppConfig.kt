@@ -10,7 +10,6 @@ data class AppConfig(
     val googleHealth: ProviderOAuthConfig,
     val withings: ProviderOAuthConfig,
     val ingestion: IngestionConfig,
-    val openObserve: OpenObserveConfig,
 )
 
 enum class RuntimeEnvironment {
@@ -30,13 +29,6 @@ enum class RuntimeEnvironment {
             }
     }
 }
-
-data class OpenObserveConfig(
-    val url: String,
-    val org: String,
-    val user: String,
-    val password: String,
-)
 
 data class IngestionConfig(
     val maxBodyBytes: Long,
@@ -121,13 +113,6 @@ fun ApplicationConfig.toAppConfig(): AppConfig =
             IngestionConfig(
                 maxBodyBytes = optional("aqtHealth.ingestion.maxBodyBytes", "33554432").toLong(),
             ),
-        openObserve =
-            OpenObserveConfig(
-                url = optional("aqtHealth.openObserve.url"),
-                org = optional("aqtHealth.openObserve.org"),
-                user = optional("aqtHealth.openObserve.user"),
-                password = optional("aqtHealth.openObserve.password"),
-            ),
     ).also { it.validateForStartup() }
 
 fun AppConfig.validateForStartup() {
@@ -135,6 +120,14 @@ fun AppConfig.validateForStartup() {
         buildList {
             if (ingestion.maxBodyBytes <= 0) {
                 add(ConfigValidationIssue("aqtHealth.ingestion.maxBodyBytes", "must be positive"))
+            }
+            if (auth.bootstrapApiKey.isNotBlank() && !auth.bootstrapApiKey.matches(bearerTokenPattern)) {
+                add(
+                    ConfigValidationIssue(
+                        "aqtHealth.auth.bootstrapApiKey",
+                        "must be a valid Bearer token: letters, digits and -._~+/ with optional trailing =",
+                    ),
+                )
             }
             if (environment.isProduction) {
                 requireTokenKey("aqtHealth.auth.bootstrapApiKey", auth.bootstrapApiKey)
@@ -171,6 +164,8 @@ fun AppConfig.validateForStartup() {
         throw AppConfigValidationException(issues)
     }
 }
+
+private val bearerTokenPattern = Regex("[A-Za-z0-9._~+/-]+=*")
 
 private fun ProviderOAuthConfig.isProviderConfigured(): Boolean = clientId.isNotBlank() || clientSecret.isNotBlank()
 

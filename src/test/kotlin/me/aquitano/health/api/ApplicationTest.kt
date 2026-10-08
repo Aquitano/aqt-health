@@ -30,18 +30,6 @@ class ApplicationTest : PostgresIntegrationTest() {
         }
 
     @Test
-    fun metricsEndpointRequiresApiKeyAndReturnsRegistryScrape() =
-        testApplication {
-            configureTestApplication()
-
-            assertEquals(HttpStatusCode.Unauthorized, client.get("/metrics").status)
-
-            val response = client.get("/metrics") { authorized() }
-            assertEquals(HttpStatusCode.OK, response.status)
-            assertTrue(response.bodyAsText().isNotBlank())
-        }
-
-    @Test
     fun requestIdIsEchoedFromHeaderOrGeneratedWhenAbsent() =
         testApplication {
             configureTestApplication()
@@ -74,6 +62,21 @@ class ApplicationTest : PostgresIntegrationTest() {
             assertEquals("unauthorized", error["code"]!!.jsonPrimitive.content)
             assertEquals("Missing or invalid API key", error["message"]!!.jsonPrimitive.content)
             assertEquals("test-request-123", error["requestId"]!!.jsonPrimitive.content)
+        }
+
+    @Test
+    fun malformedAuthorizationHeaderIsUnauthorized() =
+        testApplication {
+            configureTestApplication()
+
+            val response =
+                client.get("/api/v2/admin/ingestion/batches") {
+                    header(HttpHeaders.Authorization, "Bearer not a token")
+                }
+
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
+            val error = response.jsonBody()["error"]!!.jsonObject
+            assertEquals("unauthorized", error["code"]!!.jsonPrimitive.content)
         }
 
     @Test

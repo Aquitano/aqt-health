@@ -16,12 +16,6 @@ internal fun Operation.Builder.publicEndpoint() {
     }
 }
 
-internal fun Operation.Builder.requiresBearerAuth() {
-    security {
-        requirement(BearerApiKeySecurityScheme)
-    }
-}
-
 internal inline fun <reified T : Any> Operation.Builder.jsonRequest(
     descriptionText: String,
     exampleName: String? = null,
@@ -163,7 +157,6 @@ internal fun Route.describeReadOperation(
         tag("Read")
         this.summary = summary
         description = descriptionText
-        requiresBearerAuth()
         readQueryParameters(includeLatest = includeLatest)
         errorResponses()
     }
@@ -180,7 +173,6 @@ private fun Route.describeDailyReadOperation(
         tag("Read")
         summary = operationSummary
         description = operationDescription
-        requiresBearerAuth()
         dailyQueryParameters(localDays)
         latestDescription?.let {
             parameters {
@@ -219,7 +211,6 @@ internal fun Route.describeSleepNightReadOperation(): Route =
         summary = "List sleep nights"
         description =
             "Returns sleep sessions classified by the localized date of `endAt`. Use `timezone` to control night boundaries."
-        requiresBearerAuth()
         sleepNightQueryParameters()
         errorResponses()
     }

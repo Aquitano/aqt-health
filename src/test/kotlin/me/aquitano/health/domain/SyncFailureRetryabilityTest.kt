@@ -6,10 +6,9 @@ import kotlin.test.assertTrue
 
 class SyncFailureRetryabilityTest {
     @Test
-    fun requestAuthAndConfigurationFailuresAreNotRetryable() {
+    fun requestAndConfigurationFailuresAreNotRetryable() {
         assertFalse(isRetryableSyncFailure(RequestValidationException(emptyList())))
         assertFalse(isRetryableSyncFailure(NotFoundException("no such account")))
-        assertFalse(isRetryableSyncFailure(UnauthorizedException()))
         assertFalse(isRetryableSyncFailure(ServerConfigurationException("google_health_not_configured", "Provider is misconfigured")))
     }
 

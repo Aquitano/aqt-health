@@ -2,8 +2,6 @@ plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.ktor)
     alias(libs.plugins.kotlin.serialization)
-
-    alias(libs.plugins.ben.manes.versions)
     alias(libs.plugins.ktlint)
 }
 
@@ -38,8 +36,6 @@ dependencies {
     implementation("io.ktor:ktor-server-core")
     implementation("io.ktor:ktor-server-content-negotiation")
     implementation("io.ktor:ktor-server-metrics-micrometer")
-    implementation(libs.micrometer.registry.prometheus)
-    implementation(libs.snappy.java)
     implementation("io.ktor:ktor-server-netty")
     implementation("io.ktor:ktor-server-routing-openapi")
     implementation("io.ktor:ktor-openapi-schema")
@@ -52,12 +48,14 @@ dependencies {
 
     implementation(libs.logback.classic)
     implementation(libs.logstash.logback.encoder)
-    implementation(libs.kotlinx.coroutines.slf4j)
     implementation(libs.kotlin.logging.jvm)
-    implementation(libs.okhttp)
+    implementation(platform(libs.opentelemetry.instrumentation.bom))
+    implementation(libs.opentelemetry.sdk.autoconfigure)
+    implementation(libs.opentelemetry.exporter.otlp)
+    implementation(libs.opentelemetry.logback.appender)
+    implementation(libs.opentelemetry.micrometer)
 
     implementation(libs.exposed.core)
-    implementation(libs.exposed.dao)
     implementation(libs.exposed.java.time)
     implementation(libs.exposed.jdbc)
     implementation(libs.postgresql)

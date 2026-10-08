@@ -1,16 +1,11 @@
 package me.aquitano.health.api
 
-import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
-import io.ktor.util.*
-import me.aquitano.health.domain.UnauthorizedException
-import me.aquitano.health.infrastructure.repositories.ApiClientRef
+import io.ktor.server.plugins.BadRequestException
 import me.aquitano.health.infrastructure.repositories.SupportRepository
 import me.aquitano.health.infrastructure.security.ApiKeyHasher
 import me.aquitano.health.infrastructure.time.UtcClock
-
-val ApiClientAttributeKey = AttributeKey<ApiClientRef>("ApiClient")
 
 /** Matches the OpenAPI security scheme name so inferred route security stays consistent. */
 const val ApiKeyAuthProviderName = BearerApiKeySecurityScheme
@@ -21,55 +16,21 @@ fun Application.configureAuthentication(
     clock: UtcClock,
 ) {
     install(Authentication) {
-        register(ApiKeyAuthenticationProvider(supportRepository, apiKeyHasher, clock))
+        bearer(
+            name = ApiKeyAuthProviderName,
+            description = "Use `Authorization: Bearer <api-key>` with an API key registered in aqt-health.",
+        ) {
+            // Ktor answers an unparseable Authorization header with 400; keep it a 401 like any bad key.
+            authHeader { call ->
+                try {
+                    call.request.parseAuthorizationHeader()
+                } catch (_: BadRequestException) {
+                    null
+                }
+            }
+            authenticate { credential ->
+                supportRepository.findEnabledApiClientByHash(apiKeyHasher.hash(credential.token), clock.now())
+            }
+        }
     }
-}
-
-private class ApiKeyAuthProviderConfig : AuthenticationProvider.Config(ApiKeyAuthProviderName)
-
-/**
- * Bearer API-key authentication for `authenticate(ApiKeyAuthProviderName)` route blocks.
- * Failures (missing header included) throw [UnauthorizedException] so StatusPages keeps
- * producing the structured error envelope.
- */
-private class ApiKeyAuthenticationProvider(
-    private val supportRepository: SupportRepository,
-    private val apiKeyHasher: ApiKeyHasher,
-    private val clock: UtcClock,
-) : AuthenticationProvider(ApiKeyAuthProviderConfig()) {
-    override suspend fun onAuthenticate(context: AuthenticationContext) {
-        val client =
-            context.call.requireApiClient(
-                supportRepository = supportRepository,
-                apiKeyHasher = apiKeyHasher,
-                clock = clock,
-            )
-        context.principal(client)
-    }
-}
-
-private suspend fun ApplicationCall.requireApiClient(
-    supportRepository: SupportRepository,
-    apiKeyHasher: ApiKeyHasher,
-    clock: UtcClock,
-): ApiClientRef {
-    val cached = attributes.getOrNull(ApiClientAttributeKey)
-    if (cached != null) return cached
-
-    val header =
-        request.headers[HttpHeaders.Authorization]
-            ?: throw UnauthorizedException()
-    val apiKey =
-        header.removePrefix("Bearer ").takeIf { it != header }?.trim()
-            ?: throw UnauthorizedException()
-    if (apiKey.isBlank()) throw UnauthorizedException()
-
-    val client =
-        supportRepository.findEnabledApiClientByHash(
-            apiKeyHash = apiKeyHasher.hash(apiKey),
-            now = clock.now(),
-        ) ?: throw UnauthorizedException()
-
-    attributes.put(ApiClientAttributeKey, client)
-    return client
 }

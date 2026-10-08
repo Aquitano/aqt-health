@@ -44,16 +44,10 @@ services:
       AQT_HEALTH_WITHINGS_TOKEN_ENCRYPTION_KEY: ${AQT_HEALTH_WITHINGS_TOKEN_ENCRYPTION_KEY:-}
       AQT_HEALTH_INGESTION_MAX_BODY_BYTES: ${AQT_HEALTH_INGESTION_MAX_BODY_BYTES:-33554432}
       AQT_HEALTH_LOG_FORMAT: ${AQT_HEALTH_LOG_FORMAT:-json}
-      # Never empty: logback falls back to its own default only when unset.
-      AQT_HEALTH_LOG_APPENDER: ${AQT_HEALTH_LOG_APPENDER:-no-file}
-      # Metrics remote write.
-      OPENOBSERVE_URL: ${OPENOBSERVE_URL:-}
-      OPENOBSERVE_ORG: ${OPENOBSERVE_ORG:-}
-      OPENOBSERVE_USER: ${OPENOBSERVE_USER:-}
-      OPENOBSERVE_PASSWORD: ${OPENOBSERVE_PASSWORD:-}
-      # Direct log delivery; the appender stays off unless both are set.
-      OPENOBSERVE_LOG_URL: ${OPENOBSERVE_LOG_URL:-}
-      OPENOBSERVE_AUTHORIZATION: ${OPENOBSERVE_AUTHORIZATION:-}
+      # Metrics and logs go out over OTLP only when the endpoint is set.
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
+      OTEL_RESOURCE_ATTRIBUTES: ${OTEL_RESOURCE_ATTRIBUTES:-deployment.environment.name=${AQT_HEALTH_ENV:-production}}
     depends_on:
       postgres:
         condition: service_healthy
