@@ -812,12 +812,12 @@ class WithingsProviderTest : PostgresIntegrationTest() {
                         buildJsonObject {
                             put("timestamp", 1775001600)
                             put("state", 1)
-                            put("hr", 58)
+                            putJsonObject("hr") { put("1775001600", 58) }
                         },
                         buildJsonObject {
                             put("timestamp", 1775005200)
                             put("state", 2)
-                            put("hr", 56)
+                            putJsonObject("hr") { put("1775005200", 56) }
                         },
                     ),
             )

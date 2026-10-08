@@ -168,4 +168,10 @@ describe("page data requests", () => {
     expect(mocks.listBloodPressure).not.toHaveBeenCalled();
     expect(mocks.listScalarSamples).not.toHaveBeenCalled();
   });
+
+  it("passes a heart-rate summary failure through instead of an empty series", async () => {
+    mocks.getScalarDailySummaries.mockResolvedValue({ ok: false, status: 503, message: "offline" });
+    const sources = getHealthDataPageSources("2026-03-01", "2026-03-08", "UTC");
+    expect(await sources.heartRateDaily).toEqual({ ok: false, status: 503, message: "offline" });
+  });
 });

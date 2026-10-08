@@ -9,7 +9,6 @@ import type {
   ProviderSyncPageData,
   TrendsPageData,
   HealthStatusData,
-  HeartRateDailyPoint,
 } from "./types";
 import { aqtHealthClient, toProviderCode } from "./aqtHealthClient";
 import { toPositiveInteger } from "./format";
@@ -58,7 +57,7 @@ export function getHealthDataPageSources(
       order: "desc",
       limit: 5000,
     }),
-    heartRateDaily: fetchHeartRateDaily(fromDate, toDate, timezone),
+    heartRateDaily: client.getScalarDailySummaries("heart_rate", { from: measurementsFrom, to: measurementsTo, timezone }),
     sleepNights: client.listSleepNights({ fromDate, toDate, timezone, includeSource: true }),
     sleepSummaries: client.listSleepSummaries({
       from: measurementsFrom,
@@ -234,34 +233,6 @@ async function getHealthDay(paramsValue: {
     modules: paramsValue.modules.join(","),
     includeSource: paramsValue.includeSource ?? false,
   });
-}
-
-/**
- * Builds a per-day heart-rate series (avg/min/max) across the range in one request. The scalar
- * `/daily` endpoint buckets by the selected calendar timezone, so we send the full range instead of
- * charting hundreds of thousands of raw samples or fanning out one request per day.
- */
-async function fetchHeartRateDaily(
-  fromDate: string,
-  toDate: string,
-  timezone: string,
-): Promise<HeartRateDailyPoint[]> {
-  const result = await aqtHealthClient.getScalarDailySummaries("heart_rate", {
-    from: startOfDayInstant(fromDate, timezone),
-    to: startOfDayInstant(addUtcDays(toDate, 1), timezone),
-    timezone,
-  });
-  if (!result.ok) return [];
-
-  return result.data.items
-    .filter((item) => item.count > 0)
-    .map((item) => ({
-      date: item.date,
-      count: item.count,
-      avg: item.avgValue ?? null,
-      min: item.minValue ?? null,
-      max: item.maxValue ?? null,
-    }));
 }
 
 function ingestionStatus(value?: string): "received" | "processed" | "failed" | undefined {

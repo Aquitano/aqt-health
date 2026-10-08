@@ -1,6 +1,6 @@
 import type { ChartSummary } from "@/components/ExpandedChartModal";
 import type { HealthChartDatum, HealthChartSeries, ChartPointDetail } from "@/components/charts/HealthMetricChart";
-import type { ActivitySummariesResponse, HeartRateDailyPoint, ScalarSample, ScalarSamplesResponse, SleepNightsResponse, SleepSummariesResponse, StepDailySummariesResponse } from "./types";
+import type { ActivitySummariesResponse, ScalarDailySummariesResponse, ScalarSample, ScalarSamplesResponse, SleepNightsResponse, SleepSummariesResponse, StepDailySummariesResponse } from "./types";
 import { dateInTimeZone, isDateOnly } from "./dates";
 import { formatAxisDate, formatChartValue, formatDateTime, formatFullDate } from "./format";
 import { scalarMetricLabels } from "./metrics";
@@ -30,7 +30,7 @@ export function buildHealthCharts(
     activitySummaries?: ActivitySummariesResponse;
     bodyMeasurements?: ScalarSamplesResponse;
     dailySteps?: StepDailySummariesResponse;
-    heartRateDaily: HeartRateDailyPoint[];
+    heartRateDaily?: ScalarDailySummariesResponse;
     hrvSamples?: ScalarSamplesResponse;
     sleepNights?: SleepNightsResponse;
     respiratoryRates?: ScalarSamplesResponse;
@@ -44,7 +44,7 @@ export function buildHealthCharts(
     weight: buildWeightChart(body, timeZone),
     steps: buildStepsChart(sources.dailySteps?.items ?? [], timeZone),
     activity: buildActivityChart(sources.activitySummaries?.items ?? [], timeZone),
-    heartRate: buildHeartRateDailyChart(sources.heartRateDaily, timeZone),
+    heartRate: buildHeartRateDailyChart(sources.heartRateDaily?.items ?? [], timeZone),
     sleep: buildSleepChart(sources.sleepNights, timeZone),
     sleepSummary: buildSleepSummaryChart(sources.sleepSummaries?.items ?? [], timeZone),
     respiratoryRate: buildRespiratoryRateChart(sources.respiratoryRates?.items ?? [], timeZone),
@@ -160,19 +160,19 @@ function buildActivityChart(items: ActivitySummariesResponse["items"], timeZone:
   );
 }
 
-function buildHeartRateDailyChart(items: HeartRateDailyPoint[], timeZone: string): NormalizedChart {
+function buildHeartRateDailyChart(items: ScalarDailySummariesResponse["items"], timeZone: string): NormalizedChart {
   const points: ChartPoint[] = [];
-  for (const item of [...items].sort((a, b) => a.date.localeCompare(b.date))) {
+  for (const item of items.filter((day) => day.count > 0).sort((a, b) => a.date.localeCompare(b.date))) {
     const at = item.date;
     const source = `${item.count} samples`;
-    if (typeof item.avg === "number") {
-      points.push({ id: `hr-avg-${item.date}`, at, metricKey: "hr_avg", label: "Average", value: item.avg, unit: "bpm", source });
+    if (typeof item.avgValue === "number") {
+      points.push({ id: `hr-avg-${item.date}`, at, metricKey: "hr_avg", label: "Average", value: item.avgValue, unit: "bpm", source });
     }
-    if (typeof item.min === "number") {
-      points.push({ id: `hr-min-${item.date}`, at, metricKey: "hr_min", label: "Min", value: item.min, unit: "bpm", source });
+    if (typeof item.minValue === "number") {
+      points.push({ id: `hr-min-${item.date}`, at, metricKey: "hr_min", label: "Min", value: item.minValue, unit: "bpm", source });
     }
-    if (typeof item.max === "number") {
-      points.push({ id: `hr-max-${item.date}`, at, metricKey: "hr_max", label: "Max", value: item.max, unit: "bpm", source });
+    if (typeof item.maxValue === "number") {
+      points.push({ id: `hr-max-${item.date}`, at, metricKey: "hr_max", label: "Max", value: item.maxValue, unit: "bpm", source });
     }
   }
 

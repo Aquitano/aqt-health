@@ -7,29 +7,12 @@ import me.aquitano.health.application.metric.common.repository.SourceMetadata
 import me.aquitano.health.application.metric.common.repository.TimeFilterMode
 import me.aquitano.health.infrastructure.database.tables.CanonicalSleepSessionsTable
 import me.aquitano.health.infrastructure.database.tables.SleepSessionsTable
-import me.aquitano.health.infrastructure.database.tables.SleepStagesTable
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 
 /** Reads through the canonical_sleep_sessions view (winning provider per UTC date keeps all sessions, see V15). */
 class CanonicalSleepSessionDerivationRepository : BaseMetricReadRepository() {
-    fun listRawStagesForSessions(sessionIds: Set<Int>): Map<Int, List<SleepStageRow>> {
-        if (sessionIds.isEmpty()) return emptyMap()
-        return SleepStagesTable
-            .selectAll()
-            .where { SleepStagesTable.sleepSessionId inList sessionIds }
-            .map {
-                it[SleepStagesTable.sleepSessionId] to
-                    SleepStageRow(
-                        stage = it[SleepStagesTable.stage],
-                        startAt = it[SleepStagesTable.startAt].toInstant(),
-                        endAt = it[SleepStagesTable.endAt].toInstant(),
-                        durationSeconds = it[SleepStagesTable.durationSeconds],
-                    )
-            }.groupBy({ it.first }, { it.second })
-    }
-
     fun listCanonicalSleepSessions(
         filters: ReadFilters,
     ): Pair<List<SleepSessionRow>, Map<Int, SourceMetadata>> {

@@ -172,7 +172,7 @@ async function VisualizationsSection({
   ]);
 
   const responses = [
-    activitySummaries, bodyMeasurements, dailySteps, hrvSamples,
+    activitySummaries, bodyMeasurements, dailySteps, heartRateDaily, hrvSamples,
     sleepNights, respiratoryRates, sleepSummaries,
   ];
   const limited = responses.some((response) => response.ok && Boolean(response.data.meta.nextCursor));
@@ -194,7 +194,7 @@ async function VisualizationsSection({
             activitySummaries: activitySummaries.ok ? activitySummaries.data : undefined,
             bodyMeasurements: bodyMeasurements.ok ? bodyMeasurements.data : undefined,
             dailySteps: dailySteps.ok ? dailySteps.data : undefined,
-            heartRateDaily,
+            heartRateDaily: heartRateDaily.ok ? heartRateDaily.data : undefined,
             hrvSamples: hrvSamples.ok ? hrvSamples.data : undefined,
             sleepNights: sleepNights.ok ? sleepNights.data : undefined,
             respiratoryRates: respiratoryRates.ok ? respiratoryRates.data : undefined,

@@ -3,6 +3,8 @@ package me.aquitano.health.api
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.server.application.*
 import me.aquitano.external.google.GeneratedGoogleHealthClient
+import me.aquitano.external.google.GoogleHealthProvider
+import me.aquitano.external.withings.WithingsProvider
 import me.aquitano.health.application.*
 import me.aquitano.health.di.adminReplayModule
 import me.aquitano.health.di.coreModule
@@ -37,20 +39,6 @@ fun Application.module() {
         databaseFactory.close()
     }
 
-    logger.infoWithContext(
-        "app_configured",
-        "googleHealthConfigured" to (
-            appConfig.googleHealth.clientId.isNotBlank() &&
-                appConfig.googleHealth.clientSecret.isNotBlank() &&
-                appConfig.googleHealth.tokenEncryptionKey.isNotBlank()
-        ),
-        "withingsConfigured" to (
-            appConfig.withings.clientId.isNotBlank() &&
-                appConfig.withings.clientSecret.isNotBlank() &&
-                appConfig.withings.tokenEncryptionKey.isNotBlank()
-        ),
-    )
-
     install(Koin) {
         slf4jLogger()
         modules(
@@ -61,6 +49,14 @@ fun Application.module() {
             adminReplayModule(),
         )
     }
+
+    val googleHealthProvider by inject<GoogleHealthProvider>()
+    val withingsProvider by inject<WithingsProvider>()
+    logger.infoWithContext(
+        "app_configured",
+        "googleHealthConfigured" to googleHealthProvider.isConfigured(),
+        "withingsConfigured" to withingsProvider.isConfigured(),
+    )
 
     val httpClient by inject<io.ktor.client.HttpClient>()
     val clock by inject<UtcClock>()

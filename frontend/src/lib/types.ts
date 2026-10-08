@@ -51,14 +51,6 @@ export type HealthStatusData = {
   health: ApiResult<HealthResponse>;
 };
 
-export type HeartRateDailyPoint = {
-  date: string;
-  count: number;
-  avg: number | null;
-  min: number | null;
-  max: number | null;
-};
-
 export type HealthDataPageData = HealthStatusData & {
   summary: ApiResult<DashboardSummaryResponse>;
   trends: ApiResult<DashboardTrendsResponse>;
@@ -66,7 +58,7 @@ export type HealthDataPageData = HealthStatusData & {
   dailySteps: ApiResult<StepDailySummariesResponse>;
   activitySummaries: ApiResult<ActivitySummariesResponse>;
   bodyMeasurements: ApiResult<ScalarSamplesResponse>;
-  heartRateDaily: HeartRateDailyPoint[];
+  heartRateDaily: ApiResult<ScalarDailySummariesResponse>;
   sleepNights: ApiResult<SleepNightsResponse>;
   sleepSummaries: ApiResult<SleepSummariesResponse>;
   respiratoryRates: ApiResult<ScalarSamplesResponse>;

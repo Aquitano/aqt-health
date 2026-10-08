@@ -392,7 +392,7 @@ class WithingsNormalizerTest {
     }
 
     @Test
-    fun highFrequencySleepCreatesSleepHeartRateAndTimestampedStages() {
+    fun highFrequencySleepReadsTimestampKeyedVitalsAndTimestampedStages() {
         val result =
             normalize(
                 fetchResult(
@@ -400,14 +400,17 @@ class WithingsNormalizerTest {
                     buildJsonObject {
                         put("timestamp", 1775001600)
                         put("state", 1)
-                        put("hr", 58)
-                        put("rr", 14)
-                        put("rmssd", 42.5)
+                        putJsonObject("hr") {
+                            put("1775001600", 58)
+                            put("1775001660", 57)
+                        }
+                        putJsonObject("rr") { put("1775001600", 14) }
+                        putJsonObject("rmssd") { put("1775001600", 42) }
                     },
                     buildJsonObject {
                         put("timestamp", 1775005200)
                         put("state", 2)
-                        put("hr", 56)
+                        putJsonObject("hr") { put("1775005200", 56) }
                     },
                 ),
             )
@@ -417,14 +420,16 @@ class WithingsNormalizerTest {
         assertEquals("light", sleep.stages[0].stage)
         val samples = result.records.filterIsInstance<ScalarSample>()
         val heartRates = samples.filter { it.metricType == "heart_rate" }
-        assertEquals(2, heartRates.size)
+        assertEquals(listOf(58.0, 57.0, 56.0), heartRates.map { it.value })
+        assertEquals("withings:sleep:hr:1775001660", heartRates[1].providerRecordId)
+        assertEquals("2026-04-01T00:01:00Z", heartRates[1].measuredAt)
         assertEquals("sleep", heartRates.first().context)
         val respiratoryRate = samples.single { it.metricType == "respiratory_rate" }
         assertEquals("withings:sleep:rr:1775001600", respiratoryRate.providerRecordId)
         assertEquals(14.0, respiratoryRate.value, 0.000001)
         val hrv = samples.single { it.metricType == "hrv_rmssd" }
         assertEquals("withings:sleep:rmssd:1775001600", hrv.providerRecordId)
-        assertEquals(42.5, hrv.value, 0.000001)
+        assertEquals(42.0, hrv.value, 0.000001)
     }
 
     @Test
@@ -471,12 +476,6 @@ class WithingsNormalizerTest {
                                 put("state", 1)
                             },
                         )
-                        put(
-                            "data",
-                            buildJsonObject {
-                                put("hr", 58)
-                            },
-                        )
                     },
                     buildJsonObject {
                         put("timestamp", 1775005200)
@@ -495,7 +494,6 @@ class WithingsNormalizerTest {
                 .first()
                 .stage,
         )
-        assertEquals(1, result.records.filterIsInstance<ScalarSample>().size)
     }
 
     @Test
@@ -565,13 +563,13 @@ class WithingsNormalizerTest {
                     put("startdate", 1775077200) // 2026-04-01T21:00:00Z
                     put("enddate", 1775088000)
                     put("state", 1)
-                    put("hr", 58)
+                    putJsonObject("hr") { put("1775077200", 58) }
                 },
                 buildJsonObject {
                     put("startdate", 1775088000) // 2026-04-02T00:00:00Z
                     put("enddate", 1775106000)
                     put("state", 2)
-                    put("hr", 56)
+                    putJsonObject("hr") { put("1775088000", 56) }
                 },
             )
 

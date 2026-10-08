@@ -1,5 +1,6 @@
 package me.aquitano.health.infrastructure.config
 
+import io.ktor.server.config.MapApplicationConfig
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -39,6 +40,18 @@ class AppConfigValidationTest {
                 ?: fail("expected validation to fail")
 
         assertEquals("aqtHealth.ingestion.maxBodyBytes", issues.single().path)
+    }
+
+    @Test
+    fun rejectsAnUnknownRuntimeEnvironmentInsteadOfFallingBackToLocal() {
+        val issues =
+            runCatching { MapApplicationConfig("aqtHealth.environment" to "prd").toAppConfig() }
+                .exceptionOrNull()
+                .let { it as? AppConfigValidationException }
+                ?.issues
+                ?: fail("expected an unknown environment to fail startup")
+
+        assertEquals("aqtHealth.environment", issues.single().path)
     }
 
     private fun productionConfig(
