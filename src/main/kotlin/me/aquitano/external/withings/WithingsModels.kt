@@ -1,7 +1,8 @@
 package me.aquitano.external.withings
 
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import me.aquitano.health.application.providersync.RefreshedTokenSet
 import java.time.Duration
 import java.time.Instant
@@ -144,13 +145,20 @@ data class WithingsTokenSet(
         )
 }
 
-@Serializable
 data class WithingsPage(
     val endpoint: String,
     val action: String,
     val pageIndex: Int,
     val payload: JsonObject,
-)
+) {
+    fun toJson(): JsonObject =
+        buildJsonObject {
+            put("endpoint", endpoint)
+            put("action", action)
+            put("pageIndex", pageIndex)
+            put("payload", payload)
+        }
+}
 
 data class WithingsFetchResult(
     val dataType: WithingsDataType,

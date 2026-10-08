@@ -1,13 +1,11 @@
 package me.aquitano.external.google
 
-import kotlinx.serialization.json.encodeToJsonElement
-import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.JsonArray
 import me.aquitano.health.application.providersync.PROVIDER_REQUEST_INTERVAL
 import me.aquitano.health.application.providersync.ProviderFetchedBatch
 import me.aquitano.health.application.providersync.ProviderSyncAdapter
 import me.aquitano.health.application.providersync.RefreshedTokenSet
 import me.aquitano.health.domain.ProviderSyncItem
-import me.aquitano.health.shared.AppJson
 import java.time.Duration
 import java.time.Instant
 
@@ -40,7 +38,7 @@ class GoogleHealthSyncAdapter(
                 item.pageSize?.coerceAtMost(dataType.maxPageSize) ?: dataType.maxPageSize,
             )
         return ProviderFetchedBatch(
-            pages = AppJson.encodeToJsonElement(result.pages).jsonArray,
+            pages = JsonArray(result.pages.map { it.toJson() }),
             sourceRecords = result.dataPoints,
             records = normalizer.normalize(result),
         )

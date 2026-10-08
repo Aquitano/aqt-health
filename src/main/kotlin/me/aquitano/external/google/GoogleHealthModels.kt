@@ -1,7 +1,8 @@
 package me.aquitano.external.google
 
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import java.time.Instant
 
 const val GOOGLE_HEALTH_PROVIDER_CODE = "google_health"
@@ -41,11 +42,16 @@ enum class GoogleHealthDataType(
     }
 }
 
-@Serializable
 data class GoogleHealthPage(
     val pageIndex: Int,
     val payload: JsonObject,
-)
+) {
+    fun toJson(): JsonObject =
+        buildJsonObject {
+            put("pageIndex", pageIndex)
+            put("payload", payload)
+        }
+}
 
 data class GoogleHealthFetchResult(
     val dataType: GoogleHealthDataType,

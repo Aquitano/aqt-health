@@ -1,14 +1,12 @@
 package me.aquitano.external.withings
 
-import kotlinx.serialization.json.encodeToJsonElement
-import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.JsonArray
 import me.aquitano.health.application.providersync.PROVIDER_REQUEST_INTERVAL
 import me.aquitano.health.application.providersync.ProviderFetchedBatch
 import me.aquitano.health.application.providersync.ProviderSyncAdapter
 import me.aquitano.health.application.providersync.RefreshedTokenSet
 import me.aquitano.health.application.providersync.SyncWindow
 import me.aquitano.health.domain.ProviderSyncItem
-import me.aquitano.health.shared.AppJson
 import java.time.Duration
 import java.time.Instant
 
@@ -33,7 +31,7 @@ class WithingsSyncAdapter(
     ): ProviderFetchedBatch {
         val result = fetchDataType(accessToken, WithingsDataType.fromCode(item.dataType), item.from, item.to)
         return ProviderFetchedBatch(
-            pages = AppJson.encodeToJsonElement(result.pages).jsonArray,
+            pages = JsonArray(result.pages.map { it.toJson() }),
             sourceRecords = result.records,
             records = normalizer.normalize(result, SyncWindow(item.from, item.to)),
         )
