@@ -17,6 +17,16 @@ it.each([
   expect(result).toMatchObject({ ok: false, message: expect.stringContaining("Unexpected response") });
 });
 
+it.each([
+  ["https://account.withings.com/oauth2_user/authorize2?state=s", true],
+  ["http://account.withings.com/oauth2_user/authorize2", false],
+  ["javascript:alert(1)", false],
+  ["/oauth2_user/authorize2", false],
+])("follows only absolute https OAuth authorization URLs: %s", async (authorizationUrl, ok) => {
+  const data = { provider: "withings", authorizationUrl, expiresAt: "2026-10-15T12:00:00Z" };
+  expect(await readOAuthStart(Response.json({ ok: true, data }))).toMatchObject({ ok });
+});
+
 it("preserves backend failures and accepts acknowledgements without assuming an OAuth payload", async () => {
   const failure = { ok: false, status: 409, message: "Account disconnected." };
   expect(await readSyncJobStart(Response.json(failure))).toEqual(failure);
