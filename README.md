@@ -178,7 +178,7 @@ Set these variables in the frontend runtime:
 - `AQT_HEALTH_TIMEZONE`: IANA zone, such as `Europe/Berlin`, that defines calendar days and rendered timestamps on every page; default `UTC`. An unknown zone fails server rendering with a configuration error.
 - `AQT_HEALTH_BACKEND_TIMEOUT_MS`: per-request timeout for backend reads made while rendering pages; default `8000`. Raise it when a slow host aborts long date ranges.
 
-In production the frontend refuses to start a request path without `AQT_HEALTH_API_BASE_URL`; there is no silent localhost fallback outside dev and build.
+In production the frontend refuses to start a request path without `AQT_HEALTH_API_BASE_URL` or `AQT_HEALTH_API_KEY`; there is no silent localhost fallback outside dev and build.
 
 ### Frontend Container
 
@@ -214,7 +214,7 @@ How it differs from the local compose file:
 - `image:` instead of `build:`, tagged by `AQT_HEALTH_API_TAG` and `AQT_HEALTH_FRONTEND_TAG` (both default to `latest`). Pin them to `sha-<short-commit>`, the other tag CI pushes, so an update is a tag edit plus `up -d` and a rollback is editing it back.
 - `AQT_HEALTH_ENV` defaults to `production`, so [production validation](#production-validation) applies at startup, and `AQT_HEALTH_LOG_FORMAT` defaults to `json`.
 - Published ports bind to `127.0.0.1`, so nothing is reachable from off the host. Put a reverse proxy or Tailscale in front. PostgreSQL publishes no host port at all.
-- `AQT_HEALTH_DB_PASSWORD` has no default; compose refuses to start without it.
+- `AQT_HEALTH_DB_PASSWORD` and `AQT_HEALTH_API_KEY` have no default; compose refuses to start without them.
 - Host ports come from `AQT_HEALTH_API_PORT` and `AQT_HEALTH_FRONTEND_PORT`; the containers always listen on 8080 and 3000, so changing a host port cannot desync the mapping.
 
 Both images carry their own `HEALTHCHECK`, so the deploy file does not repeat them.

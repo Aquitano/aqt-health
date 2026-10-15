@@ -10,6 +10,8 @@ const timeZone = type("string").narrow((value, ctx) => {
   }
 });
 
+const requiredInProduction = ["AQT_HEALTH_API_BASE_URL", "AQT_HEALTH_API_KEY"] as const;
+
 const serverEnv = type({
   AQT_HEALTH_TIMEZONE: timeZone.default("UTC"),
   AQT_HEALTH_BACKEND_TIMEOUT_MS: type("string.integer.parse").to("number.integer > 0").default("8000"),
@@ -19,13 +21,16 @@ const serverEnv = type({
   "NEXT_PHASE?": "string",
 }).narrow(
   // Mirror the backend's fail-fast production validation: a production server must not
-  // silently fall back to localhost. `next build` prerenders no backend-dependent pages,
-  // so the default is only allowed there and in dev.
-  (env, ctx) =>
-    Boolean(env.AQT_HEALTH_API_BASE_URL) ||
-    env.NODE_ENV !== "production" ||
-    env.NEXT_PHASE === "phase-production-build" ||
-    ctx.reject({ path: ["AQT_HEALTH_API_BASE_URL"], expected: "set when running the production server", actual: "" }),
+  // silently fall back to localhost or run without its backend key. `next build` prerenders
+  // no backend-dependent pages, so both may be missing there and in dev.
+  (env, ctx) => {
+    if (env.NODE_ENV !== "production" || env.NEXT_PHASE === "phase-production-build") return true;
+    const missing = requiredInProduction.filter((key) => !env[key]);
+    for (const key of missing) {
+      ctx.reject({ path: [key], expected: "set when running the production server", actual: "" });
+    }
+    return missing.length === 0;
+  },
 );
 
 const env = serverEnv.assert(process.env);
