@@ -1,3 +1,4 @@
+import "server-only";
 import { type } from "arktype";
 
 const timeZone = type("string").narrow((value, ctx) => {

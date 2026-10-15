@@ -5,6 +5,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src"),
+      "server-only": "next/dist/compiled/server-only/empty.js",
     },
   },
   test: {
