@@ -196,7 +196,7 @@ Compose variables:
 - `AQT_HEALTH_TIMEZONE`: app timezone, default `UTC`
 - `AQT_HEALTH_BACKEND_TIMEOUT_MS`: backend request timeout, default `8000`
 
-The container exposes `GET /api/health` as an unauthenticated liveness probe. The frontend has no authentication of its own; deploy it behind an authenticating reverse proxy. Compose binds both the frontend and the backend port to `127.0.0.1` so neither is reachable without that proxy.
+The container exposes `GET /api/health` as an unauthenticated liveness probe. The frontend has no authentication of its own; deploy it behind an authenticating reverse proxy. Compose binds both the frontend and the backend port to `127.0.0.1` so neither is reachable without that proxy. Host ports come from `AQT_HEALTH_API_PORT` and `AQT_HEALTH_FRONTEND_PORT`; the containers always listen on 8080 and 3000, so changing a host port cannot desync the mapping.
 
 ## Deployment
 
@@ -215,7 +215,6 @@ How it differs from the local compose file:
 - `AQT_HEALTH_ENV` defaults to `production`, so [production validation](#production-validation) applies at startup, and `AQT_HEALTH_LOG_FORMAT` defaults to `json`.
 - Published ports bind to `127.0.0.1`, so nothing is reachable from off the host. Put a reverse proxy or Tailscale in front. PostgreSQL publishes no host port at all.
 - `AQT_HEALTH_DB_PASSWORD` and `AQT_HEALTH_API_KEY` have no default; compose refuses to start without them.
-- Host ports come from `AQT_HEALTH_API_PORT` and `AQT_HEALTH_FRONTEND_PORT`; the containers always listen on 8080 and 3000, so changing a host port cannot desync the mapping.
 
 Both images carry their own `HEALTHCHECK`, so the deploy file does not repeat them.
 
