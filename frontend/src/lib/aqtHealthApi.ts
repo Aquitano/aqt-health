@@ -30,7 +30,6 @@ export function getHealthDataPageSources(fromDate: string, toDate: string, timez
       date: toDate,
       timezone,
       modules: healthDayModules.join(","),
-      includeSource: true,
     }),
     dailySteps: client.listDailyStepSummaries({ fromDate, toDate, timezone, includeSource: true }),
     activitySummaries: client.listActivitySummaries({
@@ -46,11 +45,11 @@ export function getHealthDataPageSources(fromDate: string, toDate: string, timez
     sleepSummaries: client.listSleepSummaries(samplesQuery),
     respiratoryRates: client.listScalarSamples("respiratory_rate", samplesQuery),
     hrvSamples: client.listScalarSamples("hrv_rmssd", samplesQuery),
-    latestActivity: client.listActivitySummaries({ date: toDate, includeSource: true, latest: true }),
-    latestSleepSummary: client.listSleepSummaries({ includeSource: true, latest: true }),
-    latestRespiratoryRate: client.listScalarSamples("respiratory_rate", { includeSource: true, latest: true }),
-    latestHrv: client.listScalarSamples("hrv_rmssd", { includeSource: true, latest: true }),
-    latestBloodPressure: client.listBloodPressure({ includeSource: true, latest: true }),
+    latestActivity: client.listActivitySummaries({ date: toDate, latest: true }),
+    latestSleepSummary: client.listSleepSummaries({ latest: true }),
+    latestRespiratoryRate: client.listScalarSamples("respiratory_rate", { latest: true }),
+    latestHrv: client.listScalarSamples("hrv_rmssd", { latest: true }),
+    latestBloodPressure: client.listBloodPressure({ latest: true }),
   };
 }
 
@@ -63,7 +62,6 @@ export async function getTrendsPageData(toDate: string, days: number, timezone: 
   const sampleQuery = {
     from,
     to,
-    includeSource: true,
     order: "asc" as const,
     limit: 5000,
   };
@@ -78,7 +76,6 @@ export async function getTrendsPageData(toDate: string, days: number, timezone: 
       cursor,
       fromDate,
       toDate,
-      includeSource: true,
       order: "asc",
       limit: 5000,
     })),
