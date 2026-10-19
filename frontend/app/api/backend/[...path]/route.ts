@@ -6,9 +6,6 @@ import { readProviderSyncRequest, readScheduledSyncConfigUpdate } from "@/lib/sy
 
 // Single server-side proxy for the browser-triggered provider actions. It keeps
 // AQT_HEALTH_API_KEY out of the client and only forwards the allowlisted paths below.
-// Scheduled-sync runs and long backfill kickoffs can be slow, so the long ceiling
-// applies to every proxied call.
-export const maxDuration = 300;
 
 type RouteContext = {
   params: Promise<{ path: string[] }>;

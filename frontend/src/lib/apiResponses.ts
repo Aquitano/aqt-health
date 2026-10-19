@@ -87,9 +87,13 @@ const providerSyncJobStart = type({
   createdAt: "string",
 });
 
+const httpsUrl = type("string.url").narrow(
+  (url, ctx) => new URL(url).protocol === "https:" || ctx.mustBe("an absolute https URL"),
+);
+
 const providerOAuthStart = type({
   provider: "string",
-  authorizationUrl: "string",
+  authorizationUrl: httpsUrl,
   expiresAt: "string",
 });
 
