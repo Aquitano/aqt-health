@@ -1,5 +1,5 @@
 [versions]
-kotlin = "2.4.20"
+kotlin = "2.4.21"
 ktor = "3.6.0"
 exposed = "1.5.0"
 flyway = "13.9.0"
@@ -15,7 +15,7 @@ testcontainers = "2.0.5"
 konsist = "0.17.3"
 ktlint = "1.8.0"
 # Compile-only: Konsist supplies its own Kotlin compiler at runtime.
-konsist-kotlin-compiler = "2.0.21"
+konsist-kotlin-compiler = "2.4.21"
 
 [libraries]
 koin-ktor = { module = "io.insert-koin:koin-ktor", version.ref = "koin" }
