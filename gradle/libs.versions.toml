@@ -1,21 +1,21 @@
 [versions]
-kotlin = "2.4.20"
+kotlin = "2.4.21"
 ktor = "3.6.0"
-exposed = "1.5.0"
-flyway = "13.9.0"
+exposed = "1.6.0"
+flyway = "13.10.3"
 hikari = "7.1.0"
 koin = "4.2.2"
 kotlin-logging = "8.0.4"
 logback = "1.6.5"
 logstash-logback-encoder = "9.0"
 opentelemetry-instrumentation = "2.32.0-alpha"
-postgresql-jdbc = "42.7.13"
+postgresql-jdbc = "42.7.14"
 google-cloud-health = "0.8.0"
 testcontainers = "2.0.5"
-konsist = "0.17.3"
+konsist = "0.18.1"
 ktlint = "1.8.0"
 # Compile-only: Konsist supplies its own Kotlin compiler at runtime.
-konsist-kotlin-compiler = "2.0.21"
+konsist-kotlin-compiler = "2.4.21"
 
 [libraries]
 koin-ktor = { module = "io.insert-koin:koin-ktor", version.ref = "koin" }
