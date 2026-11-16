@@ -6,14 +6,14 @@ export type Env = Readonly<Record<string, string | undefined>>;
 
 const DEFAULT_URL = "http://localhost:8080";
 const DEFAULT_MAX_ITEMS = 50_000;
-const MAX_PAGE_SIZE = "5000";
 
 const HELP = `aqt-health reads health data from an aqt-health API and prints it as JSON.
 
 Usage:
   aqt-health endpoints [path]            List the read endpoints, or one endpoint's parameters
   aqt-health get <path> [name=value]...  Read one endpoint
-    --all             Follow meta.nextCursor and return every page as one items array
+    --all             Follow meta.nextCursor and return every page as one items array;
+                      add limit=5000 to read a big range in fewer requests
     --max-items <n>   With --all, stop once at least n items are read (default ${DEFAULT_MAX_ITEMS});
                       meta.nextCursor then continues the read
   --pretty            Indent the JSON
@@ -112,16 +112,17 @@ function readConfig(env: Env): Result<Config> {
 }
 
 const isOAuthPath = (path: string) => path.includes("/oauth/");
+const basePath = (config: Config) => config.baseUrl.pathname.replace(/\/$/, "");
 
-function apiPath(path: string): Result<string> {
-  const relative = path.replace(/^\/+/, "");
+/** Checks the path the request will really use: the URL parser also turns backslashes into slashes. */
+function resolve(config: Config, path: string): Result<{ url: URL; apiPath: string }> {
+  const relative = path.replace(/^[\\/]+/, "");
   const absolute = relative.startsWith("api/") ? `/${relative}` : `/api/v2/${relative}`;
-  if (isOAuthPath(absolute)) return usageError("OAuth endpoints change provider connections, and this CLI only reads");
-  return ok(absolute);
+  const url = new URL(basePath(config) + absolute, config.baseUrl);
+  const apiPath = url.pathname.slice(basePath(config).length);
+  if (isOAuthPath(apiPath)) return usageError("OAuth endpoints change provider connections, and this CLI only reads");
+  return ok({ url, apiPath });
 }
-
-const endpointUrl = (config: Config, path: string) =>
-  new URL(config.baseUrl.pathname.replace(/\/$/, "") + path, config.baseUrl);
 
 function parseJson(text: string): unknown {
   try {
@@ -133,14 +134,15 @@ function parseJson(text: string): unknown {
 
 async function requestJson(config: Config, url: URL): Promise<Result<unknown>> {
   let response: Response;
+  let text: string;
   try {
     response = await fetch(url, {
       headers: { authorization: `Bearer ${config.apiKey}`, accept: "application/json" },
     });
+    text = await response.text();
   } catch (error) {
-    return requestError("network_error", `Could not reach ${url.origin}: ${String(error)}`);
+    return requestError("network_error", `Could not read ${url.pathname} from ${url.origin}: ${String(error)}`);
   }
-  const text = await response.text();
   const body = parseJson(text);
   if (!response.ok) {
     return {
@@ -155,9 +157,6 @@ async function requestJson(config: Config, url: URL): Promise<Result<unknown>> {
 const Page = type({ items: "unknown[]", meta: { "nextCursor?": "string" } });
 
 async function readAllPages(config: Config, url: URL, maxItems: number): Promise<Result<unknown>> {
-  // The first request goes out as asked, so an endpoint without pages answers instead of
-  // rejecting a limit the caller never passed. Later pages use the largest page size.
-  const largestPages = !url.searchParams.has("limit");
   const items: unknown[] = [];
   const cursors = new Set<string>();
   for (;;) {
@@ -175,14 +174,13 @@ async function readAllPages(config: Config, url: URL, maxItems: number): Promise
     if (cursors.has(next)) return requestError("repeated_cursor", `${url.pathname} returned the cursor ${next} twice`);
     cursors.add(next);
     url.searchParams.set("cursor", next);
-    if (largestPages) url.searchParams.set("limit", MAX_PAGE_SIZE);
   }
 }
 
 async function read(config: Config, command: GetCommand): Promise<Result<unknown>> {
-  const path = apiPath(command.path);
-  if (!path.ok) return path;
-  const url = endpointUrl(config, path.value);
+  const target = resolve(config, command.path);
+  if (!target.ok) return target;
+  const { url } = target.value;
   for (const [name, value] of command.params) url.searchParams.append(name, value);
   return command.all ? readAllPages(config, url, command.maxItems) : requestJson(config, url);
 }
@@ -200,7 +198,7 @@ const OpenApi = type({ paths: { "[string]": { "get?": Operation } } });
 const templatePattern = (template: string) => new RegExp(`^${template.replace(/\{[^}]+\}/g, "[^/]+")}$`);
 
 async function describeEndpoints(config: Config, path: string | undefined): Promise<Result<unknown>> {
-  const spec = await requestJson(config, endpointUrl(config, "/openapi"));
+  const spec = await requestJson(config, new URL(`${basePath(config)}/openapi`, config.baseUrl));
   if (!spec.ok) return spec;
   const doc = OpenApi(spec.value);
   if (doc instanceof type.errors) return requestError("invalid_openapi", `The API's OpenAPI document is not readable: ${doc.summary}`);
@@ -218,9 +216,9 @@ async function describeEndpoints(config: Config, path: string | undefined): Prom
     });
   }
 
-  const wanted = apiPath(path);
+  const wanted = resolve(config, path);
   if (!wanted.ok) return wanted;
-  const [wantedPath = ""] = wanted.value.split("?");
+  const wantedPath = wanted.value.apiPath;
   const match =
     reads.find(({ template }) => template === wantedPath) ??
     reads.find(({ template }) => templatePattern(template).test(wantedPath));

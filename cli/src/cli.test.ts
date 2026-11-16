@@ -21,9 +21,16 @@ const server = Bun.serve({
       case "/api/v2/metrics/heart_rate":
         return Response.json({ items: [{ value: 60 }], meta: { count: 1, nextCursor: "same" } });
       case "/api/v2/health/day":
-        return url.searchParams.has("limit")
-          ? Response.json({ error: { code: "validation_failed", message: "unknown_parameter: limit" } }, { status: 400 })
-          : Response.json({ date: "2026-11-10", steps: { steps: 1 } });
+        return Response.json({ date: "2026-11-10", steps: { steps: 1 } });
+      case "/api/v2/dropped":
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode('{"items":['));
+              controller.error(new Error("connection dropped"));
+            },
+          }),
+        );
       case "/api/v2/sleep/nights":
         return Response.json(
           { error: { code: "validation_failed", message: "unknown_parameter: fromdate" } },
@@ -74,10 +81,10 @@ describe("get", () => {
     const { json } = await cli("get", "/api/v2/steps/daily", "fromDate=2026-11-01", "--all");
 
     expect(json).toEqual({ items: [{ steps: 1 }, { steps: 2 }, { steps: 3 }], meta: { count: 3 } });
-    expect(seen.at(-1)?.search).toBe("?fromDate=2026-11-01&cursor=page-2&limit=5000");
+    expect(seen.at(-1)?.search).toBe("?fromDate=2026-11-01&cursor=page-2");
   });
 
-  test("--all on an endpoint without pages says so instead of failing on a limit nobody passed", async () => {
+  test("--all on an endpoint without pages says so", async () => {
     const { exitCode, error } = await cli("get", "health/day", "date=2026-11-10", "--all");
 
     expect(exitCode).toBe(1);
@@ -112,10 +119,19 @@ describe("get", () => {
     expect(error).toMatchObject({ error: { message: expect.stringContaining("name=value") } });
   });
 
-  test("refuses OAuth endpoints, which change provider connections", async () => {
-    const { exitCode } = await cli("get", "providers/google-health/oauth/callback", "code=x");
+  test("refuses OAuth endpoints, which change provider connections, however the path is written", async () => {
+    const requestsBefore = seen.length;
 
-    expect(exitCode).toBe(2);
+    expect((await cli("get", "providers/google-health/oauth/callback", "code=x")).exitCode).toBe(2);
+    expect((await cli("get", "providers\\google-health\\oauth\\start")).exitCode).toBe(2);
+    expect(seen.length).toBe(requestsBefore);
+  });
+
+  test("a connection dropped while reading the body is a JSON error", async () => {
+    const { exitCode, error } = await cli("get", "dropped");
+
+    expect(exitCode).toBe(1);
+    expect(error).toMatchObject({ error: { code: "network_error" } });
   });
 });
 
