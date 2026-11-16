@@ -12,7 +12,8 @@ import kotlin.test.assertEquals
  * date_bin keep only the top-ranked provider's rows, single-provider bins pass through
  * untouched, and context/segment values partition independently. Heart-rate samples with
  * context='sleep' rank by the sleep family (withings first) instead of heart_rate
- * (google_health first).
+ * (google_health first). A lower-ranked body measurement that repeats a better-ranked value a
+ * whole number of quarter hours away is a time-zone-shifted echo and is hidden.
  */
 class CanonicalScalarSamplesViewTest : PostgresIntegrationTest() {
     @Test
@@ -75,6 +76,26 @@ class CanonicalScalarSamplesViewTest : PostgresIntegrationTest() {
         )
 
         assertEquals(listOf(3.2, 3.4), fixture.canonicalValues("segmental_muscle_mass"))
+    }
+
+    @Test
+    fun bodyMeasurementEchoShiftedByAWholeUtcOffsetIsHidden() {
+        val fixture = Fixture()
+        fixture.insertSample(WITHINGS, "2026-04-19T05:36:37Z", "weight", 70.123000000000005)
+        // a Google Health writer stored the scale's local time (UTC+2) as UTC
+        fixture.insertSample(GOOGLE, "2026-04-19T07:36:37Z", "weight", 70.123)
+
+        assertEquals(listOf(70.123000000000005), fixture.canonicalValues("weight"))
+    }
+
+    @Test
+    fun lowerRankedBodyMeasurementsThatAreNotShiftedEchoesSurvive() {
+        val fixture = Fixture()
+        fixture.insertSample(WITHINGS, "2026-04-19T05:36:37Z", "weight", 70.1)
+        fixture.insertSample(GOOGLE, "2026-04-19T07:36:52Z", "weight", 70.1)
+        fixture.insertSample(GOOGLE, "2026-04-19T09:36:37Z", "weight", 70.6)
+
+        assertEquals(listOf(70.1, 70.1, 70.6), fixture.canonicalValues("weight"))
     }
 
     private inner class Fixture {

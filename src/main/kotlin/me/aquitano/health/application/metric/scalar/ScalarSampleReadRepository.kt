@@ -25,7 +25,7 @@ import java.time.ZoneId
 
 /**
  * Reads for all point-in-time scalar metrics. `canonical = true` reads through the
- * canonical_scalar_samples view (cross-provider dedup per 30s bin); `canonical = false`
+ * canonical_scalar_samples view (cross-provider dedup, see V37); `canonical = false`
  * reads every stored sample.
  */
 class ScalarSampleReadRepository : BaseMetricReadRepository() {
