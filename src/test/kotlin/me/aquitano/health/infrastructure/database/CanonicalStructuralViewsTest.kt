@@ -8,10 +8,10 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * Semantics of the structural canonical views (V15): per partition the top-ranked provider
- * wins via provider_ranks; DISTINCT ON families keep one row, while the window-function
- * families (sleep sessions/nights) keep ALL rows of the winning provider so naps survive.
- * Activity ranks google_health first; sleep and sleep_summary rank withings first.
+ * Semantics of the structural canonical views: activity keeps the top-ranked provider per date
+ * (V15); sleep sessions and summaries are deduplicated by time overlap (V38), so a better-ranked
+ * device hides only what it also recorded. Activity ranks google_health first; sleep and
+ * sleep_summary rank withings first.
  */
 class CanonicalStructuralViewsTest : PostgresIntegrationTest() {
     @Test
@@ -25,13 +25,12 @@ class CanonicalStructuralViewsTest : PostgresIntegrationTest() {
     }
 
     @Test
-    fun sleepSummaryRankWinnerPerUtcStartDate() {
+    fun overlappingSleepSummariesKeepTheBestRankedProvider() {
         val fixture = Fixture()
-        // sleep_summary family: withings (rank 0) beats google_health
-        fixture.insertSleepSummary(id = 1, sourceInstanceId = GOOGLE, startAt = "2026-04-19T22:00:00Z", endAt = "2026-04-20T06:00:00Z")
-        fixture.insertSleepSummary(id = 2, sourceInstanceId = WITHINGS, startAt = "2026-04-19T22:30:00Z", endAt = "2026-04-20T06:30:00Z")
-        // next UTC start date is its own partition
-        fixture.insertSleepSummary(id = 3, sourceInstanceId = GOOGLE, startAt = "2026-04-20T22:00:00Z", endAt = "2026-04-21T06:00:00Z")
+        // the same night straddling UTC midnight; sleep_summary ranks withings (0) over google_health
+        fixture.insertSleepSummary(id = 1, sourceInstanceId = GOOGLE, startAt = "2026-04-20T00:05:00Z", endAt = "2026-04-20T06:05:00Z")
+        fixture.insertSleepSummary(id = 2, sourceInstanceId = WITHINGS, startAt = "2026-04-19T23:55:00Z", endAt = "2026-04-20T06:00:00Z")
+        fixture.insertSleepSummary(id = 3, sourceInstanceId = GOOGLE, startAt = "2026-04-21T22:00:00Z", endAt = "2026-04-22T06:00:00Z")
 
         assertEquals(listOf(2, 3), fixture.canonicalIds("canonical_sleep_summaries", "date"))
     }
@@ -45,6 +44,33 @@ class CanonicalStructuralViewsTest : PostgresIntegrationTest() {
         fixture.insertSleepSession(id = 3, sourceInstanceId = GOOGLE, startAt = "2026-04-19T01:05:00Z", endAt = "2026-04-19T07:05:00Z")
 
         assertEquals(listOf(1, 2), fixture.canonicalIds("canonical_sleep_sessions", "start_at"))
+    }
+
+    @Test
+    fun sleepSessionsAreDeduplicatedByOverlapNotByUtcStartDate() {
+        val fixture = Fixture()
+        // the same night from both devices, straddling UTC midnight: withings wins
+        fixture.insertSleepSession(id = 1, sourceInstanceId = WITHINGS, startAt = "2026-04-19T23:55:00Z", endAt = "2026-04-20T06:00:00Z")
+        fixture.insertSleepSession(id = 2, sourceInstanceId = GOOGLE, startAt = "2026-04-20T00:05:00Z", endAt = "2026-04-20T06:05:00Z")
+        // a nap only google recorded survives
+        fixture.insertSleepSession(id = 3, sourceInstanceId = GOOGLE, startAt = "2026-04-20T12:00:00Z", endAt = "2026-04-20T12:40:00Z")
+
+        assertEquals(listOf(1, 3), fixture.canonicalIds("canonical_sleep_sessions", "start_at"))
+    }
+
+    @Test
+    fun equallyRankedOverlappingSessionsKeepTheLowerSourceInstance() {
+        val fixture = Fixture()
+        fixture.config.execute(
+            """
+            INSERT INTO source_instances (id, source_id, provider_instance_id, created_at, updated_at)
+            VALUES (3, 1, 'withings-2', '2026-04-19T00:00:00Z', '2026-04-19T00:00:00Z')
+            """.trimIndent(),
+        )
+        fixture.insertSleepSession(id = 1, sourceInstanceId = 3, startAt = "2026-04-19T22:00:00Z", endAt = "2026-04-20T06:00:00Z")
+        fixture.insertSleepSession(id = 2, sourceInstanceId = WITHINGS, startAt = "2026-04-19T22:10:00Z", endAt = "2026-04-20T06:10:00Z")
+
+        assertEquals(listOf(2), fixture.canonicalIds("canonical_sleep_sessions", "start_at"))
     }
 
     @Test

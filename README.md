@@ -254,8 +254,8 @@ Default source priorities are code-based in `MetricCatalogBootstrap.providerRank
 Overlap handling:
 
 - Steps: overlapping intervals from different sources keep the higher-priority interval; non-overlapping intervals are preserved.
-- Sleep sessions: per UTC start date, every session from the best-ranked provider is kept and other providers' sessions are hidden, so naps from the winning device survive.
-- Sleep summaries: one per UTC start date, from the best-ranked provider.
+- Sleep sessions: a session is hidden when a session from a better-ranked provider overlaps it in time; between equal ranks the lower source instance id wins. Overlapping sessions from one device all survive, and so do naps from another device that the winner did not record.
+- Sleep summaries: among summaries that overlap in time, the best-ranked provider's newest one is kept.
 - Scalar samples (heart rate, HRV, respiratory rate, body measurements, cardiovascular): within each 30-second bin per metric type, context and segment, only the best-ranked provider's samples are kept.
 
 Inspect raw provider-specific rows directly in the database when auditing ingestion output.
@@ -504,6 +504,7 @@ Sleep reads have two modes:
 
 - `/api/v2/sleep/sessions` is the instant-based read. Its `from` and `to` filters apply to session `startAt`.
 - `/api/v2/sleep/nights` is the calendar sleep-night read. It returns complete sessions, including all stages, and classifies each session by the localized date of `endAt`. `timezone` is an IANA timezone and defaults to `UTC`; pass it when clients need local calendar behavior. For example, `date=2026-04-20&timezone=Europe/Berlin` returns a session that starts at `2026-04-19T22:00:00Z` and ends at `2026-04-20T06:00:00Z` as the `2026-04-20` sleep night in `Europe/Berlin`. A session from the evening of April 20 to the morning of April 21 is returned for `date=2026-04-21`, not April 20, under those semantics.
+- `/api/v2/health/day` reports the same sessions as `/sleep/nights` for its date, whole: a night that started the previous evening counts in full toward the day it ended.
 
 ## Storage Model
 
