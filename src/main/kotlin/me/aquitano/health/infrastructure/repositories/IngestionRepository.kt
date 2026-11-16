@@ -133,7 +133,7 @@ class IngestionRepository {
                           AND newer.id > snapshot.id
                           AND batch.source_instance_id = $sourceInstanceId
                           AND batch.status = 'processed'
-                          AND ${sameScalarIdentity("newer", "snapshot")}
+                          AND ${sameRecordIdentity("newer", "snapshot")}
                         ORDER BY newer.id DESC LIMIT 1
                     ) latest ON TRUE
                     WHERE snapshot.batch_id = $batchId

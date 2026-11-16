@@ -793,6 +793,17 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
             assertEquals("bpm", restingHeartRate["unit"]!!.jsonPrimitive.content)
             assertEquals("google_health", restingHeartRate["source"]!!.jsonObject["provider"]!!.jsonPrimitive.content)
             assertEquals(2, authorizedGet("/api/v2/daily-metrics?fromDate=2026-04-19&toDate=2026-04-19").items().size)
+
+            // A reused provider record id under another metric type is a separate value, not a correction.
+            client.post("/api/v2/ingestion/batches") {
+                authorized()
+                contentType(ContentType.Application.Json)
+                setBody("""{"provider":"google_health","providerInstanceId":"google_health","ingestedAt":"2026-04-21T10:00:00Z","sourcePayload":{},"records":[{"type":"daily_metric","providerRecordId":"rhr-2026-04-19","date":"2026-04-19","metricType":"nightly_respiratory_rate","value":17.0}]}""")
+            }
+            assertEquals(
+                setOf("resting_heart_rate", "oxygen_saturation", "nightly_respiratory_rate"),
+                authorizedGet("/api/v2/daily-metrics?date=2026-04-19").items().map { it.jsonObject["metricType"]!!.jsonPrimitive.content }.toSet(),
+            )
             assertEquals(HttpStatusCode.BadRequest, authorizedGet("/api/v2/daily-metrics?metricTypes=resting_heartrate").status)
         }
 
