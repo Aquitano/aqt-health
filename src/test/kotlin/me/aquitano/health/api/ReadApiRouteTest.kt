@@ -450,6 +450,26 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
         }
 
     @Test
+    fun healthDayHeartRateKeepsDecimalExtremes() =
+        testApplication {
+            configureTestApplication()
+            client.post("/api/v2/ingestion/batches") {
+                authorized()
+                contentType(ContentType.Application.Json)
+                setBody(
+                    """{"provider":"health_connect","providerInstanceId":"hc-1","ingestedAt":"2026-05-02T12:00:00Z","sourcePayload":{},"records":[""" +
+                        """{"type":"scalar","providerRecordId":"hr-a","measuredAt":"2026-05-02T08:00:00Z","metricType":"heart_rate","value":61.5,"context":"resting"},""" +
+                        """{"type":"scalar","providerRecordId":"hr-b","measuredAt":"2026-05-02T09:00:00Z","metricType":"heart_rate","value":72.25,"context":"resting"}]}""",
+                )
+            }
+
+            val heartRate = authorizedGet("/api/v2/health/day?date=2026-05-02&timezone=UTC&modules=heartRate").jsonBody()["heartRate"]!!.jsonObject
+
+            assertEquals(61.5, heartRate["minValue"]!!.jsonPrimitive.double)
+            assertEquals(72.25, heartRate["maxValue"]!!.jsonPrimitive.double)
+        }
+
+    @Test
     fun healthDaySleepFallsBackToSessionDurationWithoutStages() =
         testApplication {
             configureTestApplication()
