@@ -66,7 +66,7 @@ function parseFlags(argv: string[]) {
   try {
     return ok(parseArgs({ args: argv, allowPositionals: true, options }));
   } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
+    const reason = error instanceof Error ? error.message.split(". ", 1)[0] : String(error);
     return usageError(`${reason}. Pass query parameters as name=value, for example fromDate=2026-11-01.`);
   }
 }
@@ -107,11 +107,23 @@ function readConfig(env: Env): Result<Config> {
   const apiKey = env.AQT_HEALTH_API_KEY;
   if (!apiKey) return usageError("Set AQT_HEALTH_API_KEY to an aqt-health API key");
   const url = env.AQT_HEALTH_URL ?? DEFAULT_URL;
-  if (!URL.canParse(url)) return usageError(`AQT_HEALTH_URL is not a URL: ${url}`);
-  return ok({ baseUrl: new URL(url), apiKey });
+  const baseUrl = URL.canParse(url) ? new URL(url) : undefined;
+  if (baseUrl === undefined || !["http:", "https:"].includes(baseUrl.protocol)) {
+    return usageError(`AQT_HEALTH_URL must be an http or https URL, got ${url}`);
+  }
+  return ok({ baseUrl, apiKey });
 }
 
-const isOAuthPath = (path: string) => path.includes("/oauth/");
+/** Ktor decodes each path segment before it matches a route, so %6Fauth reaches the OAuth routes too. */
+function isOAuthPath(path: string) {
+  return path.split("/").some((segment) => {
+    try {
+      return decodeURIComponent(segment) === "oauth";
+    } catch {
+      return false;
+    }
+  });
+}
 const basePath = (config: Config) => config.baseUrl.pathname.replace(/\/$/, "");
 
 /** Checks the path the request will really use: the URL parser also turns backslashes into slashes. */

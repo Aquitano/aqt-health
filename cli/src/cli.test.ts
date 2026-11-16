@@ -116,6 +116,7 @@ describe("get", () => {
     const { exitCode, error } = await cli("get", "steps/daily", "--fromDate", "2026-11-01");
 
     expect(exitCode).toBe(2);
+    expect(JSON.stringify(error)).not.toContain("'--'");
     expect(error).toMatchObject({ error: { message: expect.stringContaining("name=value") } });
   });
 
@@ -124,6 +125,7 @@ describe("get", () => {
 
     expect((await cli("get", "providers/google-health/oauth/callback", "code=x")).exitCode).toBe(2);
     expect((await cli("get", "providers\\google-health\\oauth\\start")).exitCode).toBe(2);
+    expect((await cli("get", "providers/google-health/%6Fauth/start")).exitCode).toBe(2);
     expect(seen.length).toBe(requestsBefore);
   });
 
@@ -155,6 +157,15 @@ describe("endpoints", () => {
       parameters: [{ name: "metricType", in: "path", required: true, schema: { type: "string" } }],
     });
   });
+});
+
+test("a base URL that is not http or https is a usage error", async () => {
+  let stderr = "";
+  const env = { AQT_HEALTH_URL: "localhost:8080", AQT_HEALTH_API_KEY: API_KEY };
+  const exitCode = await run(["get", "steps/daily"], env, { out: () => {}, err: (text) => (stderr += text) });
+
+  expect(exitCode).toBe(2);
+  expect(stderr).toContain("AQT_HEALTH_URL");
 });
 
 test("a missing API key is a usage error", async () => {
