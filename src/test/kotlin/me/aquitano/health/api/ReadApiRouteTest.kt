@@ -801,8 +801,10 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
                 setBody("""{"provider":"google_health","providerInstanceId":"google_health","ingestedAt":"2026-04-21T10:00:00Z","sourcePayload":{},"records":[{"type":"daily_metric","providerRecordId":"rhr-2026-04-19","date":"2026-04-19","metricType":"nightly_respiratory_rate","value":17.0}]}""")
             }
             assertEquals(
-                setOf("resting_heart_rate", "oxygen_saturation", "nightly_respiratory_rate"),
-                authorizedGet("/api/v2/daily-metrics?date=2026-04-19").items().map { it.jsonObject["metricType"]!!.jsonPrimitive.content }.toSet(),
+                mapOf("resting_heart_rate" to 61.0, "oxygen_saturation" to 96.5, "nightly_respiratory_rate" to 17.0),
+                authorizedGet("/api/v2/daily-metrics?date=2026-04-19").items().associate {
+                    it.jsonObject["metricType"]!!.jsonPrimitive.content to it.jsonObject["value"]!!.jsonPrimitive.double
+                },
             )
             assertEquals(HttpStatusCode.BadRequest, authorizedGet("/api/v2/daily-metrics?metricTypes=resting_heartrate").status)
         }
