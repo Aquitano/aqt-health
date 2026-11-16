@@ -5,6 +5,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.test.fail
+import kotlin.time.Duration.Companion.minutes
 
 class AppConfigValidationTest {
     @Test
@@ -81,6 +82,7 @@ class AppConfigValidationTest {
                     user = "aqt_health_app",
                     password = "a-real-database-password",
                     maxPoolSize = 10,
+                    idleInTransactionTimeout = 1.minutes,
                 ),
             auth =
                 AuthConfig(

@@ -2,6 +2,7 @@ package me.aquitano.health.infrastructure.config
 
 import io.ktor.server.config.*
 import java.net.URI
+import kotlin.time.Duration
 
 data class AppConfig(
     val environment: RuntimeEnvironment,
@@ -39,6 +40,7 @@ data class DatabaseConfig(
     val user: String,
     val password: String,
     val maxPoolSize: Int,
+    val idleInTransactionTimeout: Duration,
 )
 
 data class AuthConfig(
@@ -85,6 +87,7 @@ fun ApplicationConfig.toAppConfig(): AppConfig =
                     property("aqtHealth.database.maxPoolSize")
                         .getString()
                         .toInt(),
+                idleInTransactionTimeout = Duration.parse(optional("aqtHealth.database.idleInTransactionTimeout", "1m")),
             ),
         auth =
             AuthConfig(

@@ -24,6 +24,10 @@ class DatabaseFactory(
                 maximumPoolSize = config.maxPoolSize
                 isAutoCommit = false
                 transactionIsolation = "TRANSACTION_READ_COMMITTED"
+                // Ends sessions a dead client left inside a transaction, which would otherwise keep
+                // their locks. Flyway has its own connections: its lock connection stays idle in a
+                // transaction for a whole migration.
+                addDataSourceProperty("options", "-c idle_in_transaction_session_timeout=${config.idleInTransactionTimeout.inWholeMilliseconds}")
             }
         close()
         val newDataSource = HikariDataSource(hikariConfig)
