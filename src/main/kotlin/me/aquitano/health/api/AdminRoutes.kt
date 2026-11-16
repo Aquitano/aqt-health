@@ -33,7 +33,7 @@ internal fun Route.adminRoutes() {
         summary = "List ingestion batches"
         description =
             "Lists ingestion batches by received timestamp and optional status for administrative inspection."
-        adminQueryParameters()
+        adminQueryParameters(statusFilter = true)
         errorResponses()
     }
     get("/api/v2/admin/ingestion/batches/{id}") {
@@ -69,7 +69,7 @@ internal fun Route.adminRoutes() {
         summary = "List failed ingestion batches"
         description =
             "Lists ingestion batches with failure status for administrative inspection."
-        adminQueryParameters()
+        adminQueryParameters(statusFilter = false)
         errorResponses()
     }
     post("/api/v2/admin/replay") {

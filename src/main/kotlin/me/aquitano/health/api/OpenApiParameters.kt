@@ -164,9 +164,7 @@ internal fun Operation.Builder.sleepNightQueryParameters() {
     providerFilterParameters()
     limitParameter(
         spec = QueryParamSpecs.readLimit,
-        description =
-            "Maximum number of items. Defaults to ${QueryParamSpecs.readLimit.default}, cannot exceed " +
-                "${QueryParamSpecs.readLimit.max}, and is ignored as 1 when date is provided.",
+        description = defaultLimitDescription(QueryParamSpecs.readLimit),
         example = 7,
     )
     orderParameter(
@@ -230,15 +228,17 @@ internal fun Operation.Builder.healthDayQueryParameters() {
     )
 }
 
-internal fun Operation.Builder.adminQueryParameters() {
-    parameters {
-        query("status") {
-            description = "Batch status filter."
-            schema =
-                stringSchema(
-                    enumValues = BatchStatus.entries.map { it.stored },
-                    example = BatchStatus.Failed.stored,
-                )
+internal fun Operation.Builder.adminQueryParameters(statusFilter: Boolean) {
+    if (statusFilter) {
+        parameters {
+            query("status") {
+                description = "Batch status filter."
+                schema =
+                    stringSchema(
+                        enumValues = BatchStatus.entries.map { it.stored },
+                        example = BatchStatus.Failed.stored,
+                    )
+            }
         }
     }
     instantRangeParameters(

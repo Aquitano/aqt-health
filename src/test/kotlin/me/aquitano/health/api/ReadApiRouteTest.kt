@@ -762,6 +762,8 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
                 listOf("from" to "unknown_parameter"),
                 issues.map { it.jsonObject["field"]!!.jsonPrimitive.content to it.jsonObject["code"]!!.jsonPrimitive.content },
             )
+            // limit is read together with date, not skipped
+            assertEquals(HttpStatusCode.OK, authorizedGet("/api/v2/sleep/nights?date=2026-04-19&limit=7").status)
         }
 
     @Test
