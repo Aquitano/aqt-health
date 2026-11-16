@@ -21,16 +21,6 @@ import kotlin.test.assertTrue
 
 class ApplicationTest : PostgresIntegrationTest() {
     @Test
-    fun healthEndpointResponds() =
-        testApplication {
-            configureTestApplication()
-            val response = client.get("/api/v2/admin/health")
-
-            assertEquals(HttpStatusCode.OK, response.status)
-            assertEquals("ok", response.jsonBody()["status"]!!.jsonPrimitive.content)
-        }
-
-    @Test
     fun requestIdIsEchoedFromHeaderOrGeneratedWhenAbsent() =
         testApplication {
             configureTestApplication()
@@ -39,6 +29,7 @@ class ApplicationTest : PostgresIntegrationTest() {
                 client.get("/api/v2/admin/health") {
                     header(HttpHeaders.XRequestId, "test-request-123")
                 }
+            assertEquals(HttpStatusCode.OK, withId.status)
             assertEquals("test-request-123", withId.headers[HttpHeaders.XRequestId])
 
             val withoutId = client.get("/api/v2/admin/health")
@@ -115,7 +106,7 @@ class ApplicationTest : PostgresIntegrationTest() {
         }
 
     @Test
-    fun openApiUsesSecuritySchemeInsteadOfAuthorizationParameter() =
+    fun openApiDeclaresBearerAuthAndOneSetOfErrorSchemas() =
         testApplication {
             configureTestApplication()
 
@@ -137,5 +128,14 @@ class ApplicationTest : PostgresIntegrationTest() {
             assertTrue(securityOf("/api/v2/providers/{providerCode}/oauth/callback").isEmpty())
             assertFalse(specText.contains("\"name\":\"Authorization\""))
             assertFalse(specText.contains("\"name\": \"Authorization\""))
+            assertEquals(
+                setOf("ErrorResponse", "ErrorBody", "ErrorDetail"),
+                spec["components"]!!
+                    .jsonObject["schemas"]!!
+                    .jsonObject.keys
+                    .filter { it.startsWith("Error") }
+                    .toSet(),
+                "OpenAPI schema inference must not duplicate the shared error schemas",
+            )
         }
 }

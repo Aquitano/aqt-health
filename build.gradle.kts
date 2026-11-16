@@ -106,28 +106,8 @@ tasks.register<Test>("integrationTest") {
     useJUnit {
         includeCategories("me.aquitano.health.test.PostgresIntegration")
     }
-    exclude("**/OpenApiExportTest.class")
 }
 
 tasks.check {
     dependsOn(tasks.named("integrationTest"))
-}
-
-tasks.register<Test>("generateOpenApi") {
-    description = "Generates the runtime OpenAPI contract at build/openapi/openapi.json."
-    group = "documentation"
-    testClassesDirs =
-        sourceSets.test
-            .get()
-            .output.classesDirs
-    classpath = sourceSets.test.get().runtimeClasspath
-    include("**/OpenApiExportTest.class")
-    systemProperty(
-        "aqtHealth.openapi.output",
-        layout.buildDirectory
-            .file("openapi/openapi.json")
-            .get()
-            .asFile.absolutePath,
-    )
-    outputs.file(layout.buildDirectory.file("openapi/openapi.json"))
 }

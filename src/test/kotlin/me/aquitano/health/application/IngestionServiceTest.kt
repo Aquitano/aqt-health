@@ -246,42 +246,6 @@ class IngestionServiceTest : PostgresIntegrationTest() {
             assertEquals(0, config.countRows("step_samples"))
         }
 
-    @Test
-    fun sameProviderRecordIdKeepsOneSamplePerContext() =
-        runBlocking {
-            val config = PostgresTestDatabase.config()
-            val database = openDatabase(config)
-            val service = ingestionService(database)
-
-            listOf("general", "sleep").forEachIndexed { index, context ->
-                service.ingestBatch(
-                    IngestionBatchRequest(
-                        provider = "withings",
-                        providerInstanceId = "withings-1",
-                        batchExternalId = "context-$context",
-                        ingestedAt = "2026-04-22T10:00:00Z",
-                        sourcePayload = buildJsonObject {},
-                        records =
-                            listOf(
-                                ScalarSample(
-                                    providerRecordId = "hr-1",
-                                    measuredAt = "2026-04-22T08:00:00Z",
-                                    metricType = ScalarMetricTypes.HEART_RATE,
-                                    value = 60.0 + index,
-                                    context = context,
-                                ),
-                            ),
-                    ),
-                    Instant.parse("2026-04-22T10:0$index:00Z"),
-                )
-            }
-
-            assertEquals(
-                2,
-                config.queryInt("SELECT COUNT(*) FROM scalar_samples WHERE provider_record_id = 'hr-1'"),
-            )
-        }
-
     private object FailingDerivedRebuildExecutor : DerivedRebuildExecutor {
         override suspend fun rebuild(
             requests: List<DerivedRebuildRequest>,

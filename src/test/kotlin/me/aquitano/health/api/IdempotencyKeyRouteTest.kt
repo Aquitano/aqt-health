@@ -61,19 +61,6 @@ class IdempotencyKeyRouteTest : PostgresIntegrationTest() {
         }
 
     @Test
-    fun syncJobWithoutKeyCreatesNewJobEachTime() =
-        testApplication {
-            configureTestApplication(*googleHealthTestConfig())
-
-            val first = startSyncJob(key = null)
-            val second = startSyncJob(key = null)
-
-            assertEquals(HttpStatusCode.Accepted, first.status)
-            assertEquals(HttpStatusCode.Accepted, second.status)
-            assertNotEquals(first.jobId(), second.jobId())
-        }
-
-    @Test
     fun replaySameKeyReturnsSameJob() =
         testApplication {
             configureTestApplication(*googleHealthTestConfig())

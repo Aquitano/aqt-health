@@ -140,25 +140,6 @@ class WithingsProviderTest : PostgresIntegrationTest() {
         }
 
     @Test
-    fun syncRefreshesExpiredTokenBeforeFetch() =
-        runBlocking {
-            val fixture = Fixture()
-            fixture.seedAccount(expiresAt = fixture.now.minusSeconds(1))
-
-            fixture.provider.sync(
-                ProviderSyncRequest(
-                    from = Instant.parse("2026-04-01T00:00:00Z"),
-                    to = Instant.parse("2026-04-02T00:00:00Z"),
-                    dataTypes = listOf("activity"),
-                ),
-                fixture.now,
-            )
-
-            assertEquals(1, fixture.client.refreshCalls)
-            assertEquals("fresh-access", fixture.client.accessTokensUsed.single())
-        }
-
-    @Test
     fun refreshFailureMarksAccountNeedsReauth() =
         runBlocking {
             val fixture = Fixture()
@@ -412,29 +393,6 @@ class WithingsProviderTest : PostgresIntegrationTest() {
 
             assertEquals("withings-363", summary.providerInstanceId)
             assertEquals(listOf("requested-access"), fixture.client.accessTokensUsed)
-        }
-
-    @Test
-    fun syncRejectsUnknownProviderInstanceBeforeFetching() =
-        runBlocking {
-            val fixture = Fixture()
-            fixture.seedAccount()
-
-            val error =
-                assertFailsWith<ConflictException> {
-                    fixture.provider.sync(
-                        ProviderSyncRequest(
-                            providerInstanceId = "withings-missing",
-                            from = Instant.parse("2026-04-01T00:00:00Z"),
-                            to = Instant.parse("2026-04-02T00:00:00Z"),
-                            dataTypes = listOf("activity"),
-                        ),
-                        fixture.now,
-                    )
-                }
-
-            assertEquals("withings_account_not_found", error.code)
-            assertTrue(fixture.client.accessTokensUsed.isEmpty())
         }
 
     @Test

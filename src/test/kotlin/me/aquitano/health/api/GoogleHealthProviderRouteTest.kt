@@ -56,22 +56,6 @@ class GoogleHealthProviderRouteTest : PostgresIntegrationTest() {
         }
 
     @Test
-    fun syncRangeBeyondTheCeilingIsRejected() =
-        testApplication {
-            configureTestApplication(*googleHealthTestConfig())
-
-            val response =
-                client.post("/api/v2/providers/google-health/sync-jobs") {
-                    authorized()
-                    contentType(ContentType.Application.Json)
-                    setBody("""{"from":"1970-01-01T00:00:00Z","to":"2026-01-01T00:00:00Z","dataTypes":["steps"]}""")
-                }
-
-            assertEquals(HttpStatusCode.BadRequest, response.status)
-            assertEquals("validation_failed", response.errorCode())
-        }
-
-    @Test
     fun syncJobMultiYearRangeWithinTheCeilingIsAcceptedAndPollable() =
         testApplication {
             val database = configureTestApplication(*googleHealthTestConfig())

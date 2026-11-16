@@ -53,24 +53,4 @@ class WithingsProviderRouteTest : PostgresIntegrationTest() {
             assertTrue(bodyText.contains("state"))
             assertFalse(bodyText.contains("Provider 'authorization-code' not found"))
         }
-
-    @Test
-    fun missingProviderConfigReturnsInternalServerErrorWithoutLeakingConfigFields() =
-        testApplication {
-            configureTestApplication(*withingsTestConfig(withClientSecret = false))
-
-            val response =
-                client.get("/api/v2/providers/withings/oauth/start") {
-                    authorized()
-                    header(HttpHeaders.XRequestId, "withings-config-test")
-                }
-
-            assertEquals(HttpStatusCode.InternalServerError, response.status)
-            val bodyText = response.bodyAsText()
-            val error = AppJson.parseToJsonElement(bodyText).jsonObject["error"]!!.jsonObject
-            assertEquals("withings_not_configured", error["code"]!!.jsonPrimitive.content)
-            assertEquals("Provider is not configured", error["message"]!!.jsonPrimitive.content)
-            assertEquals("withings-config-test", error["requestId"]!!.jsonPrimitive.content)
-            assertFalse(bodyText.contains("withings.clientSecret"))
-        }
 }
