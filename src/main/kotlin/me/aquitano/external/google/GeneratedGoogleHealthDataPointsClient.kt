@@ -5,6 +5,7 @@ import com.google.api.gax.rpc.ApiException
 import com.google.api.gax.rpc.StatusCode
 import com.google.auth.oauth2.AccessToken
 import com.google.auth.oauth2.GoogleCredentials
+import com.google.auth.oauth2.OAuth2Credentials
 import com.google.devicesandservices.health.v4.*
 import com.google.protobuf.MessageOrBuilder
 import com.google.protobuf.util.JsonFormat
@@ -193,20 +194,23 @@ class GeneratedGoogleHealthClient(
         exception: ApiException,
         dataType: GoogleHealthDataType,
     ): RuntimeException =
-        when (exception.statusCode.code) {
-            StatusCode.Code.UNAUTHENTICATED -> {
-                GoogleHealthUnauthorizedException(
-                    "Google Health access token is unauthorized",
-                )
-            }
+        if (exception.statusCode.code == StatusCode.Code.UNAUTHENTICATED || exception.isRejectedFixedAccessToken()) {
+            GoogleHealthUnauthorizedException("Google Health access token is unauthorized")
+        } else {
+            GoogleHealthHttpException(
+                "google_health_upstream_failed",
+                "Google Health ${dataType.code} request failed with ${exception.statusCode.code}",
+                cause = exception,
+            )
+        }
 
-            else -> {
-                GoogleHealthHttpException(
-                    "google_health_upstream_failed",
-                    "Google Health ${dataType.code} request failed with ${exception.statusCode.code}",
-                    cause = exception,
-                )
-            }
+    /**
+     * On a 401 the auth library tries to refresh the fixed access token it was given, cannot, and
+     * gax reports that as UNKNOWN. It means the token expired, so the pipeline must refresh it.
+     */
+    private fun ApiException.isRejectedFixedAccessToken(): Boolean =
+        generateSequence<Throwable>(this) { it.cause }.any { cause ->
+            cause is IllegalStateException && cause.stackTrace.firstOrNull()?.className == OAuth2Credentials::class.java.name
         }
 
     private fun toJson(message: MessageOrBuilder): JsonObject = AppJson.parseToJsonElement(PROTO_JSON_PRINTER.print(message)).jsonObject

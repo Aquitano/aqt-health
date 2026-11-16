@@ -2,6 +2,8 @@ package me.aquitano.external.google
 
 import com.google.api.gax.rpc.ApiException
 import com.google.api.gax.rpc.StatusCode
+import com.google.auth.oauth2.AccessToken
+import com.google.auth.oauth2.GoogleCredentials
 import com.google.devicesandservices.health.v4.DailyRollUpDataPointsRequest
 import com.google.devicesandservices.health.v4.DailyRollUpDataPointsResponse
 import com.google.devicesandservices.health.v4.DailyRollupDataPoint
@@ -214,6 +216,22 @@ class GeneratedGoogleHealthClientTest {
         }
 
     @Test
+    fun anExpiredTokenTheAuthLibraryCannotRefreshCountsAsUnauthorized() =
+        runBlocking {
+            val fixture = Fixture()
+            val refreshFailure =
+                assertFailsWith<IllegalStateException> {
+                    GoogleCredentials.create(AccessToken.newBuilder().setTokenValue("expired").build()).refresh()
+                }
+            fixture.service.nextFailure = apiException(StatusCode.Code.UNKNOWN, cause = refreshFailure)
+
+            assertFailsWith<GoogleHealthUnauthorizedException> {
+                fixture.client.fetchDataPoints("access-token", GoogleHealthDataType.HeartRate, fixture.from, fixture.to, 1000)
+            }
+            Unit
+        }
+
+    @Test
     fun fetchDataPointsMapsResourceExhaustedToUpstreamFailure() =
         runBlocking {
             val fixture = Fixture()
@@ -380,10 +398,13 @@ class GeneratedGoogleHealthClientTest {
         ): GoogleHealthFetchResult = error("not used")
     }
 
-    private fun apiException(code: StatusCode.Code): ApiException =
+    private fun apiException(
+        code: StatusCode.Code,
+        cause: Throwable? = null,
+    ): ApiException =
         ApiException(
             "failure",
-            null,
+            cause,
             object : StatusCode {
                 override fun getCode(): StatusCode.Code = code
 
