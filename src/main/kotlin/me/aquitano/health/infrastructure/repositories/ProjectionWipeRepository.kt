@@ -4,6 +4,7 @@ import me.aquitano.health.domain.RecordTypes
 import me.aquitano.health.domain.ScalarMetricRegistry
 import me.aquitano.health.infrastructure.database.tables.ActivitySummariesTable
 import me.aquitano.health.infrastructure.database.tables.BloodPressureMeasurementsTable
+import me.aquitano.health.infrastructure.database.tables.DailyMetricValuesTable
 import me.aquitano.health.infrastructure.database.tables.ScalarSamplesTable
 import me.aquitano.health.infrastructure.database.tables.SleepSessionsTable
 import me.aquitano.health.infrastructure.database.tables.SleepSummariesTable
@@ -49,6 +50,12 @@ class ProjectionWipeRepository {
 
                 RecordTypes.ACTIVITY_SUMMARY -> {
                     ActivitySummariesTable.deleteWhere {
+                        date eq day
+                    }
+                }
+
+                RecordTypes.DAILY_METRIC -> {
+                    DailyMetricValuesTable.deleteWhere {
                         date eq day
                     }
                 }

@@ -181,6 +181,7 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
                 ProviderSyncRequest(
                     from = Instant.parse("2026-04-01T00:00:00Z"),
                     to = Instant.parse("2026-04-02T00:00:00Z"),
+                    dataTypes = allMetricFetchResults().map { it.dataType.code },
                 )
             val first = fixture.provider.sync(request, fixture.now)
             fixture.client.fetchResults += allMetricFetchResults()
@@ -620,7 +621,7 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
         count: Int = 1200,
     ): JsonObject =
         buildJsonObject {
-            put("name", name)
+            put("dataPointName", name)
             putJsonObject("steps") {
                 putJsonObject("interval") {
                     put("startTime", startAt)
@@ -632,7 +633,7 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
 
     private fun sleepPoint(): JsonObject =
         buildJsonObject {
-            put("name", "google-sleep-1")
+            put("dataPointName", "google-sleep-1")
             putJsonObject("sleep") {
                 putJsonObject("interval") {
                     put("startTime", "2026-03-31T22:00:00Z")
@@ -663,7 +664,7 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
 
     private fun heartRatePoint(): JsonObject =
         buildJsonObject {
-            put("name", "google-hr-1")
+            put("dataPointName", "google-hr-1")
             putJsonObject("heartRate") {
                 putJsonObject("sampleTime") {
                     put("physicalTime", "2026-04-01T08:30:00Z")
@@ -677,7 +678,7 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
 
     private fun weightPoint(): JsonObject =
         buildJsonObject {
-            put("name", "google-weight-1")
+            put("dataPointName", "google-weight-1")
             putJsonObject("weight") {
                 putJsonObject("sampleTime") {
                     put("physicalTime", "2026-04-01T07:00:00Z")
@@ -688,7 +689,7 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
 
     private fun bodyFatPoint(): JsonObject =
         buildJsonObject {
-            put("name", "google-body-fat-1")
+            put("dataPointName", "google-body-fat-1")
             putJsonObject("bodyFat") {
                 putJsonObject("sampleTime") {
                     put("physicalTime", "2026-04-01T07:00:00Z")
@@ -699,7 +700,7 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
 
     private fun heartRateVariabilityPoint(): JsonObject =
         buildJsonObject {
-            put("name", "google-hrv-1")
+            put("dataPointName", "google-hrv-1")
             putJsonObject("heartRateVariability") {
                 putJsonObject("sampleTime") {
                     put("physicalTime", "2026-04-01T03:15:00Z")
@@ -710,7 +711,7 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
 
     private fun respiratoryRatePoint(): JsonObject =
         buildJsonObject {
-            put("name", "google-respiratory-rate-1")
+            put("dataPointName", "google-respiratory-rate-1")
             putJsonObject("respiratoryRateSleepSummary") {
                 putJsonObject("sampleTime") {
                     put("physicalTime", "2026-04-01T06:00:00Z")

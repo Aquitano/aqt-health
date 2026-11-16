@@ -774,6 +774,29 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
         }
 
     @Test
+    fun dailyMetricsReturnTheBestRankedProvidersValuePerDateWithItsUnit() =
+        testApplication {
+            configureTestApplication()
+            for ((provider, value) in listOf("withings" to 58.0, "google_health" to 61.0)) {
+                val response =
+                    client.post("/api/v2/ingestion/batches") {
+                        authorized()
+                        contentType(ContentType.Application.Json)
+                        setBody("""{"provider":"$provider","providerInstanceId":"$provider","ingestedAt":"2026-04-20T10:00:00Z","sourcePayload":{},"records":[{"type":"daily_metric","providerRecordId":"rhr-2026-04-19","date":"2026-04-19","metricType":"resting_heart_rate","value":$value},{"type":"daily_metric","providerRecordId":"spo2-2026-04-19","date":"2026-04-19","metricType":"oxygen_saturation","value":96.5}]}""")
+                    }
+                assertEquals(HttpStatusCode.Created, response.status)
+            }
+
+            val restingHeartRate =
+                authorizedGet("/api/v2/daily-metrics?metricTypes=resting_heart_rate&date=2026-04-19&includeSource=true").items().single().jsonObject
+            assertEquals(61.0, restingHeartRate["value"]!!.jsonPrimitive.double)
+            assertEquals("bpm", restingHeartRate["unit"]!!.jsonPrimitive.content)
+            assertEquals("google_health", restingHeartRate["source"]!!.jsonObject["provider"]!!.jsonPrimitive.content)
+            assertEquals(2, authorizedGet("/api/v2/daily-metrics?fromDate=2026-04-19&toDate=2026-04-19").items().size)
+            assertEquals(HttpStatusCode.BadRequest, authorizedGet("/api/v2/daily-metrics?metricTypes=resting_heartrate").status)
+        }
+
+    @Test
     fun readsRejectQueryParametersTheEndpointDoesNotSupport() =
         testApplication {
             configureTestApplication()

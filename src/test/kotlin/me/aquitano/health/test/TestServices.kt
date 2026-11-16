@@ -6,6 +6,7 @@ import me.aquitano.health.application.IngestionService
 import me.aquitano.health.application.metric.activity.repository.ActivitySummaryWriteRepository
 import me.aquitano.health.application.metric.cardiovascular.repository.CardiovascularWriteRepository
 import me.aquitano.health.application.metric.common.MetricWriteService
+import me.aquitano.health.application.metric.daily.repository.DailyMetricWriteRepository
 import me.aquitano.health.application.metric.scalar.ScalarSampleWriteRepository
 import me.aquitano.health.application.metric.sleep.repository.SleepWriteRepository
 import me.aquitano.health.application.metric.steps.repository.StepWriteRepository
@@ -22,6 +23,7 @@ fun metricWriteService(): MetricWriteService =
         activitySummaryWriteRepository = ActivitySummaryWriteRepository(),
         cardiovascularWriteRepository = CardiovascularWriteRepository(),
         scalarSampleWriteRepository = ScalarSampleWriteRepository(),
+        dailyMetricWriteRepository = DailyMetricWriteRepository(),
     )
 
 fun ingestionService(

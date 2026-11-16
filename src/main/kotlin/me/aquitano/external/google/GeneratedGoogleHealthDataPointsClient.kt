@@ -6,7 +6,9 @@ import com.google.api.gax.rpc.StatusCode
 import com.google.auth.oauth2.AccessToken
 import com.google.auth.oauth2.GoogleCredentials
 import com.google.devicesandservices.health.v4.*
+import com.google.protobuf.MessageOrBuilder
 import com.google.protobuf.util.JsonFormat
+import com.google.type.Date
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -14,6 +16,7 @@ import kotlinx.serialization.json.*
 import me.aquitano.health.infrastructure.logging.*
 import me.aquitano.health.shared.AppJson
 import java.time.Instant
+import java.time.LocalDate
 
 private val generatedClientLogger = KotlinLogging.logger {}
 
@@ -52,6 +55,17 @@ class GeneratedGoogleHealthClient(
         from: Instant,
         to: Instant,
         pageSize: Int,
+    ): GoogleHealthFetchResult =
+        when (val fetch = dataType.fetch) {
+            is GoogleHealthFetch.Reconcile -> reconcile(service, dataType, fetch.filter(from, to), pageSize)
+            GoogleHealthFetch.ActivityRollUp -> activityRollUp(service, dataType, from, to)
+        }
+
+    private fun reconcile(
+        service: GoogleHealthDataPointsService,
+        dataType: GoogleHealthDataType,
+        filter: String,
+        pageSize: Int,
     ): GoogleHealthFetchResult {
         val pages = mutableListOf<GoogleHealthPage>()
         val dataPoints = mutableListOf<JsonObject>()
@@ -68,17 +82,18 @@ class GeneratedGoogleHealthClient(
             }
 
             val request =
-                ListDataPointsRequest
+                ReconcileDataPointsRequest
                     .newBuilder()
-                    .setParent(DataTypeName.of("me", dataType.code).toString())
+                    .setParent(dataTypeParent(dataType.code))
                     .setPageSize(pageSize)
-                    .setFilter(dataType.filter(from, to))
+                    .setFilter(filter)
+                    .setDataSourceFamily(ALL_SOURCES)
                     .also { builder ->
                         if (pageToken.isNotBlank()) builder.setPageToken(pageToken)
                     }.build()
 
-            val response = callListDataPoints(service, request, dataType)
-            val pageDataPoints = response.dataPointsList.map(::dataPointJson)
+            val response = callUpstream(dataType) { service.reconcileDataPoints(request) }
+            val pageDataPoints = response.dataPointsList.map(::toJson)
             val nextPageToken =
                 response.nextPageToken.takeIf { it.isNotBlank() }
 
@@ -116,13 +131,60 @@ class GeneratedGoogleHealthClient(
         return GoogleHealthFetchResult(dataType, pages, dataPoints)
     }
 
-    private fun callListDataPoints(
+    /**
+     * One daily roll-up call per roll-up type, merged into one point per date keyed by each
+     * roll-up value field (distance, totalCalories, ...). A type without a value for a date
+     * (nothing worn) contributes nothing.
+     */
+    private fun activityRollUp(
         service: GoogleHealthDataPointsService,
-        request: ListDataPointsRequest,
         dataType: GoogleHealthDataType,
-    ): ListDataPointsResponse =
+        from: Instant,
+        to: Instant,
+    ): GoogleHealthFetchResult {
+        val (fromDate, toDate) = civilDates(from, to)
+        val range =
+            CivilTimeInterval
+                .newBuilder()
+                .setStart(CivilDateTime.newBuilder().setDate(fromDate.toProtoDate()))
+                .setEnd(CivilDateTime.newBuilder().setDate(toDate.toProtoDate()))
+                .build()
+        val byDate = sortedMapOf<String, MutableMap<String, JsonElement>>()
+        val pages =
+            GoogleHealthFetch.ActivityRollUp.rollUpTypes.mapIndexed { pageIndex, rollUpType ->
+                val request =
+                    DailyRollUpDataPointsRequest
+                        .newBuilder()
+                        .setParent(dataTypeParent(rollUpType))
+                        .setRange(range)
+                        .setWindowSizeDays(1)
+                        .setDataSourceFamily(ALL_SOURCES)
+                        .build()
+                val points = callUpstream(dataType) { service.dailyRollUpDataPoints(request) }.rollupDataPointsList.map(::toJson)
+                points.forEach { point ->
+                    val date = point.civilStartDate() ?: return@forEach
+                    point
+                        .filterKeys { it != "civilStartTime" && it != "civilEndTime" }
+                        .forEach { (field, value) -> byDate.getOrPut(date) { mutableMapOf("date" to JsonPrimitive(date)) }[field] = value }
+                }
+                GoogleHealthPage(
+                    pageIndex = pageIndex,
+                    payload =
+                        buildJsonObject {
+                            put("rollUpType", rollUpType)
+                            put("rollupDataPoints", JsonArray(points))
+                        },
+                )
+            }
+        return GoogleHealthFetchResult(dataType, pages, byDate.values.map(::JsonObject))
+    }
+
+    private fun <T> callUpstream(
+        dataType: GoogleHealthDataType,
+        call: () -> T,
+    ): T =
         try {
-            service.listDataPoints(request)
+            call()
         } catch (exception: ApiException) {
             throw mapApiException(exception, dataType)
         }
@@ -142,17 +204,37 @@ class GeneratedGoogleHealthClient(
                 GoogleHealthHttpException(
                     "google_health_upstream_failed",
                     "Google Health ${dataType.code} request failed with ${exception.statusCode.code}",
+                    cause = exception,
                 )
             }
         }
 
-    private fun dataPointJson(dataPoint: DataPoint): JsonObject = AppJson.parseToJsonElement(PROTO_JSON_PRINTER.print(dataPoint)).jsonObject
+    private fun toJson(message: MessageOrBuilder): JsonObject = AppJson.parseToJsonElement(PROTO_JSON_PRINTER.print(message)).jsonObject
+
+    private fun JsonObject.civilStartDate(): String? {
+        val date = this["civilStartTime"]?.jsonObject?.get("date")?.jsonObject ?: return null
+        val part = { key: String -> date[key]?.jsonPrimitive?.intOrNull }
+        return LocalDate.of(part("year") ?: return null, part("month") ?: return null, part("day") ?: return null).toString()
+    }
 
     companion object {
         private val PROTO_JSON_PRINTER: JsonFormat.Printer =
             JsonFormat
                 .printer()
                 .omittingInsignificantWhitespace()
+
+        /** Every source Google holds. Narrower families drop real data, such as scale weights written through Health Connect. */
+        private const val ALL_SOURCES = "users/me/dataSourceFamilies/all-sources"
+
+        private fun dataTypeParent(code: String) = DataTypeName.of("me", code).toString()
+
+        private fun LocalDate.toProtoDate(): Date =
+            Date
+                .newBuilder()
+                .setYear(year)
+                .setMonth(monthValue)
+                .setDay(dayOfMonth)
+                .build()
     }
 }
 
@@ -244,7 +326,9 @@ open class GoogleHealthDataPointsServiceFactory(
 }
 
 interface GoogleHealthDataPointsService : AutoCloseable {
-    fun listDataPoints(request: ListDataPointsRequest): ListDataPointsResponse
+    fun reconcileDataPoints(request: ReconcileDataPointsRequest): ReconcileDataPointsResponse
+
+    fun dailyRollUpDataPoints(request: DailyRollUpDataPointsRequest): DailyRollUpDataPointsResponse
 }
 
 private class GeneratedGoogleHealthDataPointsService(
@@ -259,7 +343,9 @@ private class GeneratedGoogleHealthDataPointsService(
             ),
         )
 
-    override fun listDataPoints(request: ListDataPointsRequest): ListDataPointsResponse = client.listDataPointsCallable().call(request)
+    override fun reconcileDataPoints(request: ReconcileDataPointsRequest): ReconcileDataPointsResponse = client.reconcileDataPointsCallable().call(request)
+
+    override fun dailyRollUpDataPoints(request: DailyRollUpDataPointsRequest): DailyRollUpDataPointsResponse = client.dailyRollUpDataPointsCallable().call(request)
 
     override fun close() {
         client.close()

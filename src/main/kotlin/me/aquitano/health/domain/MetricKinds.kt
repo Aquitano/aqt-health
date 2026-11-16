@@ -12,4 +12,5 @@ object StructuralMetricKinds {
     const val SLEEP_SUMMARIES = "sleep_summaries"
     const val ACTIVITY_SUMMARIES = "activity_summaries"
     const val BLOOD_PRESSURE_MEASUREMENTS = "blood_pressure_measurements"
+    const val DAILY_METRIC_VALUES = "daily_metric_values"
 }

@@ -232,6 +232,7 @@ Supported record types:
 - `activity_summary`
 - `blood_pressure`
 - `scalar`
+- `daily_metric`
 
 `scalar` carries every point-in-time metric (heart rate, HRV, respiratory rate, body composition, cardiovascular) as `metricType` plus `value`. The metric types and their units come from `ScalarMetricRegistry`; `unit` is optional on the wire and must match the registry when given.
 
@@ -250,6 +251,7 @@ Default source priorities are code-based in `MetricCatalogBootstrap.providerRank
 - Sleep sessions and sleep summaries: Withings first, then Google Health or Health Connect.
 - Heart rate: Google Health, then Health Connect, then Withings; sleep-context samples use the sleep ranking, so Withings wins there.
 - Respiratory rate and HRV: Withings first, then Google Health or Health Connect.
+- Daily metrics: Google Health first, then Withings, then Health Connect.
 
 Overlap handling:
 
@@ -326,7 +328,13 @@ If a refresh token is expired, invalid, or revoked, sync marks the account `need
 
 The Google Health provider is a server-owned OAuth integration. It reads Google Health data, normalizes it into the same ingestion batch contract shown above, stores the original Google response pages in `sourcePayload`, and writes the existing metric tables through the normal ingestion service.
 
-Google's Google Health API docs currently recommend waiting until the end of May 2026 for an official launch and warn that breaking changes may occur before then. Sync uses Google's official generated Health client library for datapoint reads; the remaining Ktor Google client code is OAuth-only.
+Sync uses Google's generated Health client library (`com.google.cloud:google-cloud-health`, API v4); the remaining Ktor Google client code is OAuth-only. Every data type is read with `reconcile` over all of the account's sources (`dataSourceFamily=all-sources`), not `list`:
+
+- Google merges overlapping sources into one stream per data type. A watch and a phone counting the same walk count once, and daily step totals match Google's own daily roll-up. `list` returned every source's copy, which over-counted steps on days with phone or Health Connect data.
+- Wearable readings from periods the device was not worn are left out.
+- Narrower source families drop real data: `google-sources` and `google-wearables` return no weights for a Withings scale that writes into Google Health through Health Connect.
+
+Points Google names (sleep, weight, body fat, respiratory rate) keep that name as their record id; others are keyed by data type and time, so a re-read of the same window updates instead of duplicating.
 
 Google Cloud setup:
 
@@ -360,18 +368,32 @@ curl -X POST http://localhost:8080/api/v2/providers/google-health/sync-jobs \
   -d '{
     "from": "2026-04-01T00:00:00Z",
     "to": "2026-04-20T00:00:00Z",
-    "dataTypes": ["steps", "sleep", "heart-rate", "weight", "body-fat", "heart-rate-variability", "respiratory-rate-sleep-summary"],
+    "dataTypes": ["steps", "sleep", "heart-rate", "daily-resting-heart-rate", "activity"],
     "pageSize": 10000
   }'
 ```
 
-If `dataTypes` is omitted, the sync reads `steps`, `sleep`, `heart-rate`, `weight`, `body-fat`, `heart-rate-variability`, and `respiratory-rate-sleep-summary`. Each `sleep` point also yields a sleep summary unless Google marks it as a nap. If both `from` and `to` are omitted, the sync defaults to the last seven days. Long explicit ranges are accepted for historical backfill and are split into UTC-day-aligned one-day windows before fetching. Completed days are skipped on repeated syncs over the same range; only the current, still-open day is re-fetched.
+If `dataTypes` is omitted, the sync reads every type:
+
+| Data type | Stored as |
+|---|---|
+| `steps` | step intervals |
+| `sleep` | sleep sessions with stages, plus a sleep summary for the main sleep (Google's `mainSleep`; when a window has none, every session that is not a nap) |
+| `heart-rate`, `heart-rate-variability`, `respiratory-rate-sleep-summary`, `weight`, `body-fat` | scalar samples |
+| `daily-resting-heart-rate` | daily metric `resting_heart_rate` |
+| `daily-heart-rate-variability` | daily metrics `nightly_hrv_rmssd`, `deep_sleep_hrv_rmssd`, `non_rem_heart_rate` |
+| `daily-oxygen-saturation` | daily metrics `oxygen_saturation`, `oxygen_saturation_low` |
+| `daily-respiratory-rate` | daily metric `nightly_respiratory_rate` |
+| `daily-sleep-temperature-derivations` | daily metrics `nightly_temperature`, `temperature_baseline` |
+| `activity` | one activity summary per date from Google's daily roll-ups: distance, total calories, light/moderate/vigorous minutes (`activeMinutes` is moderate plus vigorous), and heart-rate average, minimum and maximum |
+
+Daily values are dated by Google's calendar date; overnight metrics carry the date of the morning the night ended. A day nothing was worn yields no activity summary rather than zeros. If both `from` and `to` are omitted, the sync defaults to the last seven days. Long explicit ranges are accepted for historical backfill and are split into UTC-day-aligned one-day windows before fetching. Completed days are skipped on repeated syncs over the same range; only the current, still-open day is re-fetched.
 
 Poll `/api/v2/providers/google-health/sync-jobs/{jobId}` for progress and the final summary. The backend owns the provider-safe sequential work after the job is accepted, so a client that disconnects does not stop the sync job.
 
 Sync jobs also survive backend restarts: unfinished jobs are requeued and rerun on startup, which is safe because ingestion dedupes by provider record ID. The job status reports how often this happened in `restartCount`; after three restarts a job is failed instead of resumed to stop crash loops.
 
-Google Health may return overlapping step intervals with different provider record IDs. To avoid inflated future totals, overlapping Google Health step intervals for the same account are skipped as duplicate metrics during ingestion. This guard is forward-looking only; it does not repair or remove historical rows that were ingested before the guard existed.
+Overlapping Google Health step intervals for the same account are still skipped as duplicates during ingestion. Steps stored before the switch to `reconcile` keep their old, inflated totals: raw rows are never deleted, so only a backfill into a fresh database repairs them. Google serves the full history to `reconcile`.
 
 ## Withings Provider
 
@@ -464,7 +486,12 @@ curl "http://localhost:8080/api/v2/metrics/heart_rate/summary?from=2026-04-19T00
 
 curl "http://localhost:8080/api/v2/metrics/heart_rate/daily?fromDate=2026-04-13&toDate=2026-04-19&timezone=Europe/Berlin" \
   -H "Authorization: Bearer local-dev-key"
+
+curl "http://localhost:8080/api/v2/daily-metrics?metricTypes=resting_heart_rate,nightly_hrv_rmssd&fromDate=2026-04-13&toDate=2026-04-19" \
+  -H "Authorization: Bearer local-dev-key"
 ```
+
+`/api/v2/daily-metrics` returns values a provider computes once per calendar day (`resting_heart_rate`, `non_rem_heart_rate`, `nightly_hrv_rmssd`, `deep_sleep_hrv_rmssd`, `oxygen_saturation`, `oxygen_saturation_low`, `nightly_respiratory_rate`, `nightly_temperature`, `temperature_baseline`), each with its unit. `metricTypes` defaults to all of them. Ingest them as `daily_metric` records with `date`, `metricType` and `value`; per date and metric the best-ranked provider wins (Google first).
 
 Admin ingestion views:
 
@@ -516,9 +543,9 @@ Sleep reads have two modes:
 ## Storage Model
 
 - Ingestion log: `ingestion_batches`, `ingestion_records`
-- Raw metrics: `step_samples`, `sleep_sessions`, `sleep_stages`, `sleep_summaries`, `activity_summaries`, `blood_pressure_measurements`, `scalar_samples`
+- Raw metrics: `step_samples`, `sleep_sessions`, `sleep_stages`, `sleep_summaries`, `activity_summaries`, `blood_pressure_measurements`, `scalar_samples`, `daily_metric_values`
 - Derived steps: `canonical_step_samples`, `canonical_step_day_bucket_contributions`, and the `pending_derived_rebuilds` retry queue
-- Canonical views: `canonical_scalar_samples`, `canonical_sleep_sessions`, `canonical_sleep_summaries`, `canonical_activity_summaries`
+- Canonical views: `canonical_scalar_samples`, `canonical_sleep_sessions`, `canonical_sleep_summaries`, `canonical_activity_summaries`, `canonical_daily_metric_values`
 - Reference data: `metric_catalog`, `provider_ranks` (both re-seeded from code at startup)
 - Sources and access: `sources`, `source_instances`, `api_clients`
 - Providers and jobs: `provider_oauth_accounts`, `provider_oauth_states`, `provider_sync_jobs`, `provider_sync_runs`, `provider_scheduled_sync_configs`, `provider_scheduled_sync_checkpoints`, `replay_jobs`

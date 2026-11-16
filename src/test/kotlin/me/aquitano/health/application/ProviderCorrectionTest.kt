@@ -44,20 +44,20 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
             fixture.ingest(original)
             fixture.ingest(corrected)
             fixture.assertCorrectedValues()
-            assertEquals(12, fixture.config.countRows("ingestion_records"))
+            assertEquals(14, fixture.config.countRows("ingestion_records"))
             assertEquals(100, fixture.config.queryInt("SELECT (normalized_record_json->>'steps')::int FROM ingestion_records WHERE record_type = 'step_interval' ORDER BY id LIMIT 1"))
             val projectionIds = fixture.projectionIds()
 
             val duplicate = fixture.ingest(corrected)
-            assertEquals(6, duplicate.metricsSkipped.duplicates)
+            assertEquals(7, duplicate.metricsSkipped.duplicates)
             assertEquals(0, duplicate.metricsCreated.values.sum())
             assertEquals(projectionIds, fixture.projectionIds())
-            assertEquals(18, fixture.config.countRows("ingestion_records"))
+            assertEquals(21, fixture.config.countRows("ingestion_records"))
             assertEquals(0, fixture.replay(ReplayRequest()).metricsWritten)
 
             fixture.replay(ReplayRequest(wipe = true))
             fixture.assertCorrectedValues()
-            assertEquals(18, fixture.config.countRows("ingestion_records"))
+            assertEquals(21, fixture.config.countRows("ingestion_records"))
             projectionTables.forEach { assertEquals(1, fixture.config.countRows(it)) }
         }
 
@@ -314,6 +314,7 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
             ActivitySummary("activity", day, distanceMeters = if (corrected) 2000.0 else 1000.0),
             BloodPressure("pressure", "${day}T10:00:00Z", if (corrected) 120 else 140, 80),
             ScalarSample("weight", "${day}T10:00:00Z", "weight", if (corrected) 81.0 else 80.0),
+            DailyMetric("resting", day, "resting_heart_rate", if (corrected) 55.0 else 60.0),
         )
 
     private inner class Fixture(
@@ -431,6 +432,8 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
                 assertEquals("2026-04-17", queryString("SELECT start_at::date::text FROM sleep_sessions"))
                 assertEquals("2026-04-17", queryString("SELECT start_at::date::text FROM sleep_summaries"))
                 assertEquals("2026-04-17", queryString("SELECT measured_at::date::text FROM blood_pressure_measurements"))
+                assertEquals(55, queryInt("SELECT value::int FROM daily_metric_values"))
+                assertEquals("2026-04-17", queryString("SELECT date::text FROM daily_metric_values"))
             }
     }
 }
@@ -443,4 +446,5 @@ private val projectionTables =
         "activity_summaries",
         "blood_pressure_measurements",
         "scalar_samples",
+        "daily_metric_values",
     )

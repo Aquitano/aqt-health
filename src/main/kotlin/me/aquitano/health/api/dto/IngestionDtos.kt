@@ -75,6 +75,17 @@ data class ActivitySummary(
     fun hasAnyMetric(): Boolean = this != ActivitySummary(providerRecordId, date)
 }
 
+/** A value the provider computes once per calendar day; the metric type comes from DailyMetricRegistry. */
+@Serializable
+@SerialName("daily_metric")
+data class DailyMetric(
+    override val providerRecordId: String? = null,
+    @JsonSchema.Format("date")
+    val date: String,
+    val metricType: String,
+    val value: Double,
+) : IngestionRecord()
+
 @Serializable
 @SerialName("sleep_summary")
 data class SleepSummary(

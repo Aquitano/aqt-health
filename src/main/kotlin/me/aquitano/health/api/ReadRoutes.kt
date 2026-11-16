@@ -14,6 +14,7 @@ import me.aquitano.health.application.TrendQueryService
 import me.aquitano.health.application.metric.activity.ActivityQueryService
 import me.aquitano.health.application.metric.cardiovascular.CardiovascularQueryService
 import me.aquitano.health.application.metric.common.QueryParamSpecs
+import me.aquitano.health.application.metric.daily.DailyMetricQueryService
 import me.aquitano.health.application.metric.dashboard.DashboardQueryService
 import me.aquitano.health.application.metric.scalar.ScalarMetricQueryService
 import me.aquitano.health.application.metric.sleep.SleepQueryService
@@ -29,6 +30,7 @@ internal fun Route.readRoutes() {
     val healthDayQueryService by application.inject<HealthDayQueryService>()
     val stepQueryService by application.inject<StepQueryService>()
     val activityQueryService by application.inject<ActivityQueryService>()
+    val dailyMetricQueryService by application.inject<DailyMetricQueryService>()
     val sleepQueryService by application.inject<SleepQueryService>()
     val sleepSummaryReadService by application.inject<SleepSummaryReadService>()
     val cardiovascularQueryService by application.inject<CardiovascularQueryService>()
@@ -172,6 +174,21 @@ internal fun Route.readRoutes() {
         latestDescription =
             "Return the latest matching activity summary when true. Defaults to false. Cannot be combined with limit, order, or cursor.",
     )
+    get("/api/v2/daily-metrics") {
+        call.respondRead { params ->
+            dailyMetricQueryService.listDailyMetrics(params, clock.instant())
+        }
+    }.describe {
+        operationId = "listDailyMetrics"
+        tag("Read")
+        summary = "List daily metrics"
+        description =
+            "Returns values a provider computes once per calendar day, such as resting heart rate, nightly HRV, " +
+            "oxygen saturation, nightly respiratory rate and nightly temperature. Dates are the provider's calendar " +
+            "dates; overnight metrics are dated by the morning the night ended."
+        dailyMetricQueryParameters()
+        errorResponses()
+    }
     get("/api/v2/sleep/sessions") {
         call.respondRead { params ->
             sleepQueryService.listSleepSessions(

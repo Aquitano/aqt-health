@@ -218,6 +218,7 @@ private fun projectionFor(recordType: String): Projection =
         RecordTypes.SLEEP_SUMMARY -> Projection("sleep_summaries", "start_at", "end_at")
         RecordTypes.ACTIVITY_SUMMARY -> Projection("activity_summaries", "date::timestamp AT TIME ZONE 'UTC'")
         RecordTypes.BLOOD_PRESSURE -> Projection("blood_pressure_measurements", "measured_at")
+        RecordTypes.DAILY_METRIC -> Projection("daily_metric_values", "date::timestamp AT TIME ZONE 'UTC'")
         RecordTypes.SCALAR -> Projection("scalar_samples", "measured_at")
         else -> error("Unsupported correction record type: $recordType")
     }
