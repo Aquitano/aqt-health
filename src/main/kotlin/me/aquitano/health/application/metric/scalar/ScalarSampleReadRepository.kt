@@ -128,10 +128,7 @@ class ScalarSampleReadRepository : BaseMetricReadRepository() {
             }
     }
 
-    /**
-     * Per-day min/max/avg/count for the range, bucketed by the calendar day of [zone]. Callers pass
-     * UTC to reproduce the day boundaries the frontend derives from `dateOnlyToUtcInstant`.
-     */
+    /** Per-day min/max/avg/count for the range, bucketed by the calendar day of [zone]. */
     fun summarizeDaily(
         filters: ReadFilters,
         metricTypes: Set<String>,

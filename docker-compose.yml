@@ -18,7 +18,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    # Loopback-only: a reverse proxy terminates TLS and fronts these services.
+    # Loopback-only: put a reverse proxy or Tailscale in front of the API.
     ports:
       - "127.0.0.1:${AQT_HEALTH_API_PORT:-8080}:8080"
     environment:
@@ -50,27 +50,6 @@ services:
       start_period: 60s
       retries: 3
 
-  frontend:
-    build:
-      context: frontend
-      dockerfile: Dockerfile
-    ports:
-      - "127.0.0.1:${AQT_HEALTH_FRONTEND_PORT:-3000}:3000"
-    environment:
-      AQT_HEALTH_API_BASE_URL: ${AQT_HEALTH_API_BASE_URL:-http://app:8080}
-      AQT_HEALTH_API_KEY: ${AQT_HEALTH_API_KEY:-}
-      AQT_HEALTH_TIMEZONE: ${AQT_HEALTH_TIMEZONE:-UTC}
-      AQT_HEALTH_BACKEND_TIMEOUT_MS: ${AQT_HEALTH_BACKEND_TIMEOUT_MS:-8000}
-    depends_on:
-      app:
-        condition: service_healthy
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health || exit 1"]
-      interval: 30s
-      timeout: 5s
-      start_period: 15s
-      retries: 3
 
 volumes:
   aqt_health_pgdata:

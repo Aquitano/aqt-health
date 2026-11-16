@@ -136,18 +136,17 @@ Never commit `.env`, real API keys, database passwords, production URLs, or Open
 
 ### Infisical environments
 
-`.infisical.json` retains the Health project used by the former monorepo. Backend variables live at `/`; frontend variables live at `/frontend` in the same project.
+`.infisical.json` retains the Health project used by the former monorepo. Backend variables live at `/`.
 
 After authenticating with the Infisical CLI, run these commands from the repository root with a POSIX shell such as Git Bash:
 
 ```sh
 sh scripts/secrets.sh pull backend dev
-sh scripts/secrets.sh pull frontend dev
 sh scripts/secrets.sh diff backend dev
 sh scripts/secrets.sh push backend dev
 ```
 
-Replace `dev` with the required environment. Pulls replace the corresponding local `.env` atomically and refuse empty exports. Pushes require confirmation. The diff command prints secret values, so keep its output out of shared logs. Deployment uses this repository's Compose files; the script does not contact the VPS.
+Replace `dev` with the required environment. Pulls replace the local `.env` atomically and refuse empty exports. Pushes require confirmation. The diff command prints secret values, so keep its output out of shared logs. Deployment uses this repository's Compose files; the script does not contact the VPS.
 
 ## Telemetry
 
@@ -163,42 +162,9 @@ OTEL_RESOURCE_ATTRIBUTES=deployment.environment.name=production
 
 The SDK URL-decodes header values, so a `+` in the base64 credential must be written as `%2B`. Keep the `Authorization` value in deployment secrets, and rotate any OpenObserve credential that has been pasted into chat, issue trackers, shell history, or logs.
 
-## Frontend Proxy
-
-The Next.js frontend includes API routes under `frontend/app/api/**` that proxy privileged provider actions to the backend with `AQT_HEALTH_API_KEY`.
-
-The frontend uses TypeScript 7 for `tsc`. Its `typescript` dependency aliases Microsoft's TypeScript 6 compatibility package because ESLint and OpenAPI generation still require the compiler API. This follows the [supported side-by-side setup](https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/#running-side-by-side-with-typescript-6.0).
-
-Set these variables in the frontend runtime:
-
-- `AQT_HEALTH_API_BASE_URL`: backend API URL
-- `AQT_HEALTH_API_KEY`: backend API key used only by the frontend server
-- `AQT_HEALTH_TIMEZONE`: IANA zone, such as `Europe/Berlin`, that defines calendar days and rendered timestamps on every page; default `UTC`. An unknown zone fails server rendering with a configuration error.
-- `AQT_HEALTH_BACKEND_TIMEOUT_MS`: per-request timeout for backend reads made while rendering pages; default `8000`. Raise it when a slow host aborts long date ranges.
-
-In production the frontend refuses to start a request path without `AQT_HEALTH_API_BASE_URL` or `AQT_HEALTH_API_KEY`; there is no silent localhost fallback outside dev and build.
-
-### Frontend Container
-
-`frontend/Dockerfile` builds a standalone Next.js server image (Node build and runtime, Bun as the installer, non-root user). The compose file wires it up as the `frontend` service:
-
-```bash
-AQT_HEALTH_API_KEY=<backend-api-key> docker compose up -d frontend
-```
-
-Compose variables:
-
-- `AQT_HEALTH_FRONTEND_PORT`: loopback host port, default `3000`
-- `AQT_HEALTH_API_BASE_URL`: defaults to `http://app:8080` (container-to-container)
-- `AQT_HEALTH_API_KEY`: backend API key for the frontend proxy, typically the bootstrap key
-- `AQT_HEALTH_TIMEZONE`: app timezone, default `UTC`
-- `AQT_HEALTH_BACKEND_TIMEOUT_MS`: backend request timeout, default `8000`
-
-The container exposes `GET /api/health` as an unauthenticated liveness probe. The frontend has no authentication of its own; deploy it behind an authenticating reverse proxy. Compose binds both the frontend and the backend port to `127.0.0.1` so neither is reachable without that proxy. Host ports come from `AQT_HEALTH_API_PORT` and `AQT_HEALTH_FRONTEND_PORT`; the containers always listen on 8080 and 3000, so changing a host port cannot desync the mapping.
-
 ## Deployment
 
-`docker-compose.yml` builds both services from source and is the local setup. Servers use `docker-compose.deploy.yml`, which runs the images CI publishes to GHCR on every push to `main`: `ghcr.io/aquitano/aqt-health-api` and `ghcr.io/aquitano/aqt-health-frontend`. Both packages are public, so the host needs no registry login.
+`docker-compose.yml` builds the API from source and is the local setup. Servers use `docker-compose.deploy.yml`, which runs the image CI publishes to GHCR on every push to `main`: `ghcr.io/aquitano/aqt-health-api`. The package is public, so the host needs no registry login.
 
 Copy `docker-compose.deploy.yml` and a filled-in `.env` into a directory outside any checkout, then:
 
@@ -209,12 +175,12 @@ docker compose -f docker-compose.deploy.yml ps
 
 How it differs from the local compose file:
 
-- `image:` instead of `build:`, tagged by `AQT_HEALTH_API_TAG` and `AQT_HEALTH_FRONTEND_TAG` (both default to `latest`). Pin them to `sha-<short-commit>`, the other tag CI pushes, so an update is a tag edit plus `up -d` and a rollback is editing it back.
+- `image:` instead of `build:`, tagged by `AQT_HEALTH_API_TAG` (default `latest`). Pin it to `sha-<short-commit>`, the other tag CI pushes, so an update is a tag edit plus `up -d` and a rollback is editing it back.
 - `AQT_HEALTH_ENV` defaults to `production`, so [production validation](#production-validation) applies at startup, and `AQT_HEALTH_LOG_FORMAT` defaults to `json`.
-- Published ports bind to `127.0.0.1`, so nothing is reachable from off the host. Put a reverse proxy or Tailscale in front. PostgreSQL publishes no host port at all.
-- `AQT_HEALTH_DB_PASSWORD` and `AQT_HEALTH_API_KEY` have no default; compose refuses to start without them.
+- The API port binds to `127.0.0.1`, so nothing is reachable from off the host. Put a reverse proxy or Tailscale in front. PostgreSQL publishes no host port at all.
+- `AQT_HEALTH_DB_PASSWORD` has no default; compose refuses to start without it.
 
-Both images carry their own `HEALTHCHECK`, so the deploy file does not repeat them.
+The image carries its own `HEALTHCHECK`, so the deploy file does not repeat it.
 
 ## Health Check
 
@@ -400,7 +366,7 @@ curl -X POST http://localhost:8080/api/v2/providers/google-health/sync-jobs \
 
 If `dataTypes` is omitted, the sync reads `steps`, `sleep`, `heart-rate`, `weight`, `body-fat`, `heart-rate-variability`, and `respiratory-rate-sleep-summary`. Each `sleep` point also yields a sleep summary unless Google marks it as a nap. If both `from` and `to` are omitted, the sync defaults to the last seven days. Long explicit ranges are accepted for historical backfill and are split into UTC-day-aligned one-day windows before fetching. Completed days are skipped on repeated syncs over the same range; only the current, still-open day is re-fetched.
 
-Poll `/api/v2/providers/google-health/sync-jobs/{jobId}` for progress and the final summary. The backend owns the provider-safe sequential work after the job is accepted, so frontend reloads or browser closes do not stop the sync job.
+Poll `/api/v2/providers/google-health/sync-jobs/{jobId}` for progress and the final summary. The backend owns the provider-safe sequential work after the job is accepted, so a client that disconnects does not stop the sync job.
 
 Sync jobs also survive backend restarts: unfinished jobs are requeued and rerun on startup, which is safe because ingestion dedupes by provider record ID. The job status reports how often this happened in `restartCount`; after three restarts a job is failed instead of resumed to stop crash loops.
 
@@ -446,7 +412,7 @@ curl -X POST http://localhost:8080/api/v2/providers/withings/sync-jobs \
 
 If `dataTypes` is omitted, the sync reads `activity`, `measures`, `sleep-summary`, and `sleep`. Long explicit ranges are accepted for historical backfill and are fetched in sequential UTC-day-aligned one-day windows per data type, so completed days are skipped on repeated syncs. Withings fields from the listed Measure, Activity, Sleep, and Sleep Summary APIs are preserved in the ingestion source payload. The current normalized metric tables store steps, supported body measurements, heart-rate samples, and sleep sessions; unsupported Withings metrics such as blood pressure, SpO2, temperature, ECG intervals, BMR, metabolic age, bone mass, vascular age, segmental body composition, and conductance values remain available in source payloads until matching metric tables exist.
 
-Poll `/api/v2/providers/withings/sync-jobs/{jobId}` for progress; the backend continues processing provider-safe windows even if the frontend disconnects.
+Poll `/api/v2/providers/withings/sync-jobs/{jobId}` for progress; the backend continues processing provider-safe windows even if the client disconnects.
 
 ## Read Data
 
