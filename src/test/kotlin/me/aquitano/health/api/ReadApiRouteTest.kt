@@ -73,7 +73,7 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
     fun healthDayWeightComparesAgainstTheMostRecentEarlierMeasurement() =
         testApplication {
             configureTestApplication()
-            listOf("2026-04-18" to 80.0, "2026-04-19" to 81.0, "2026-04-20" to 81.5).forEach { (date, kg) ->
+            listOf("2026-04-18" to 80.0, "2026-04-19" to 81.1, "2026-04-20" to 81.4).forEach { (date, kg) ->
                 val response =
                     client.post("/api/v2/ingestion/batches") {
                         authorized()
@@ -84,8 +84,8 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
             }
             val weight =
                 authorizedGet("/api/v2/health/day?date=2026-04-20&timezone=UTC&modules=weight").jsonBody()["weight"]!!.jsonObject
-            assertEquals(81.0, weight["previous"]!!.jsonObject["value"]!!.jsonPrimitive.double)
-            assertEquals(0.5, weight["delta"]!!.jsonPrimitive.double)
+            assertEquals(81.1, weight["previous"]!!.jsonObject["value"]!!.jsonPrimitive.double)
+            assertEquals(0.3, weight["delta"]!!.jsonPrimitive.double)
         }
 
     @Test

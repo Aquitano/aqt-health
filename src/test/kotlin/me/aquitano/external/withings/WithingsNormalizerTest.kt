@@ -63,8 +63,8 @@ class WithingsNormalizerTest {
             samples.keys,
         )
         assertEquals("withings:measure:123:weight", samples.getValue("weight").providerRecordId)
-        assertEquals(80.136, samples.getValue("weight").value, 0.000001)
-        assertEquals(21.4, samples.getValue("body_fat").value, 0.000001)
+        assertEquals(80.136, samples.getValue("weight").value)
+        assertEquals(21.4, samples.getValue("body_fat").value)
         assertEquals(40.2, samples.getValue("muscle").value, 0.000001)
         assertEquals(50.0, samples.getValue("water").value, 0.000001)
         assertEquals(17.2, samples.getValue("extracellular_water").value, 0.000001)

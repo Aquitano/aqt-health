@@ -38,6 +38,11 @@ class IngestionScalarRecordMappersTest {
         )
 
     @Test
+    fun valuesDropBinaryFloatingPointNoise() {
+        assertEquals(62.861, map("weight", 62861 * 0.001)?.value?.value)
+    }
+
+    @Test
     fun registryRangesBoundEveryMetricFamily() {
         val inRange =
             listOf(

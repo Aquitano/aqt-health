@@ -1,5 +1,8 @@
 package me.aquitano.health.domain
 
+import java.math.BigDecimal
+import java.math.RoundingMode
+
 /** Rank family keys shared between provider_ranks, metric_catalog, and the canonical view. */
 object MetricFamilies {
     const val STEPS = "steps"
@@ -24,6 +27,11 @@ data class ScalarValueRange(
     val max: Double?,
     val minInclusive: Boolean = true,
 )
+
+private const val SCALAR_DECIMALS = 6
+
+/** Six decimal places hold every health metric's real precision and drop binary floating-point noise such as 62.861000000000004. */
+fun Double.roundToScalarPrecision(): Double = BigDecimal.valueOf(this).setScale(SCALAR_DECIMALS, RoundingMode.HALF_EVEN).toDouble()
 
 /**
  * One scalar metric the system can store in scalar_samples. Adding a new scalar metric is
