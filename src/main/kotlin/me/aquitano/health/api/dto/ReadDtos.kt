@@ -148,7 +148,7 @@ data class SleepSummaryResponse(
     val outOfBedCount: Int? = null,
     val awakeDurationSeconds: Long? = null,
     val overnightHrvRmssdMs: Double? = null,
-    val respiratoryRhythm: Double? = null,
+    val avgWellnessRespiratoryRateBreathsPerMinute: Double? = null,
     val breathingQuality: Int? = null,
     val snoringDurationSeconds: Long? = null,
     val apneaHypopneaIndex: Double? = null,

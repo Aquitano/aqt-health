@@ -271,6 +271,13 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
                     .jsonObject["avgRespiratoryRateBreathsPerMinute"]!!
                     .jsonPrimitive.double,
             )
+            assertEquals(
+                13.5,
+                sleepSummary
+                    .items()[0]
+                    .jsonObject["avgWellnessRespiratoryRateBreathsPerMinute"]!!
+                    .jsonPrimitive.double,
+            )
 
             val respiratoryRate = authorizedGet("/api/v2/metrics/respiratory_rate")
             assertEquals(1, respiratoryRate.items().size)
@@ -1386,7 +1393,8 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
               "wasoSeconds": 300,
               "sleepScore": 88,
               "hrAverageBpm": 52,
-              "rrAverage": 14.5
+              "rrAverage": 14.5,
+              "respiratoryRhythm": 13.5
             },
             {
               "type": "scalar",

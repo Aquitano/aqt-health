@@ -63,7 +63,7 @@ class CanonicalSleepSummaryDerivationRepository : BaseMetricReadRepository() {
             outOfBedCount = row[SleepSummariesTable.outOfBedCount],
             awakeDurationSeconds = row[SleepSummariesTable.awakeDurationSeconds],
             overnightHrvRmssdMs = row[SleepSummariesTable.overnightHrvRmssd],
-            respiratoryRhythm = row[SleepSummariesTable.respiratoryRhythm],
+            avgWellnessRespiratoryRateBreathsPerMinute = row[SleepSummariesTable.respiratoryRhythm],
             breathingQuality = row[SleepSummariesTable.breathingQuality],
             snoringDurationSeconds = row[SleepSummariesTable.snoringDurationSeconds],
             apneaHypopneaIndex = row[SleepSummariesTable.apneaHypopneaIndex],

@@ -504,7 +504,7 @@ Metric list responses include an `items` array plus a `meta` object:
 Response field names follow two rules, so a quantity has one name everywhere:
 
 - Aggregates of one metric (`/metrics/{metricType}/summary`, `/metrics/{metricType}/daily` and the `heartRate` block of `/health/day`) use `count`, `minValue`, `maxValue` and `avgValue`, with the unit in `unit`.
-- Fields of fixed-shape records (activity and sleep summaries, blood pressure, trends) name the statistic, the quantity and the unit: `avgHeartRateBpm`, `minRespiratoryRateBreathsPerMinute`, `totalSleepSeconds`, `systolicMmhg`. Statistics are always `min`, `max` and `avg`, and a step total is always `steps`. The one exception is a Withings sleep summary's `respiratoryRhythm` (its chest movement rate), whose unit Withings does not document.
+- Fields of fixed-shape records (activity and sleep summaries, blood pressure, trends) name the statistic, the quantity and the unit: `avgHeartRateBpm`, `minRespiratoryRateBreathsPerMinute`, `totalSleepSeconds`, `systolicMmhg`. Statistics are always `min`, `max` and `avg`, and a step total is always `steps`.
 
 Ingestion records keep their own field names (a sleep summary is ingested with `hrAverageBpm` and read back as `avgHeartRateBpm`), because the ingestion log stores records in that format.
 
