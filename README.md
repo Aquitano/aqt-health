@@ -257,6 +257,7 @@ Overlap handling:
 - Sleep sessions: per UTC start date, every session from the best-ranked provider is kept and other providers' sessions are hidden, so naps from the winning device survive.
 - Sleep summaries: one per UTC start date, from the best-ranked provider.
 - Scalar samples (heart rate, HRV, respiratory rate, body measurements, cardiovascular): within each 30-second bin per metric type, context and segment, only the best-ranked provider's samples are kept.
+- Body measurements: a lower-ranked provider's sample is also hidden when a better-ranked provider recorded the same metric and value (to 0.01) a whole number of quarter hours away, up to 14 hours. Apps that write a scale's local time as UTC into Google Health produce these shifted copies.
 
 Inspect raw provider-specific rows directly in the database when auditing ingestion output.
 

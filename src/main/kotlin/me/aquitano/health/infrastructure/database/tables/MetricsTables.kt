@@ -118,7 +118,7 @@ object ScalarSamplesTable : LongIdTable("scalar_samples") {
     val createdAt = timestampWithTimeZone("created_at")
 }
 
-/** Read-only mapping of the canonical_scalar_samples view (see V22). */
+/** Read-only mapping of the canonical_scalar_samples view (see V37). */
 object CanonicalScalarSamplesView : Table("canonical_scalar_samples") {
     val id = long("id")
     val sourceInstanceId = integer("source_instance_id")
