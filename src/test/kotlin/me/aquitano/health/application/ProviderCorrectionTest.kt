@@ -412,7 +412,7 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
             val trends =
                 TrendQueryService(database, canonical, CanonicalSleepSessionDerivationRepository(), ScalarSampleReadRepository())
                     .dashboardTrends(QueryParams(mapOf("toDate" to to, "periodDays" to days.toString())), now)
-            assertEquals(expected.values.sum(), trends.steps!!.currentTotal)
+            assertEquals(expected.values.sum(), trends.steps!!.currentSteps)
         }
 
         fun projectionIds(): List<Int> = projectionTables.map { config.queryInt("SELECT id FROM $it") }
