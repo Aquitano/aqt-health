@@ -20,7 +20,7 @@ class SleepRepository : BaseMetricReadRepository() {
         val sourceIds = filters.sourceInstanceIds()
         if (sourceIds.hasNoMatchingSources()) return emptyTripleReadResult()
 
-        val nightDate = LocalDayOf(CanonicalSleepSessionsTable.endAt, filters.timezone.id)
+        val nightDate = LocalDayOf(CanonicalSleepSessionsTable.endAt, filters.timezone)
         val conditions =
             listOfNotNull(
                 filters.fromDate?.let { nightDate greaterEq it },
