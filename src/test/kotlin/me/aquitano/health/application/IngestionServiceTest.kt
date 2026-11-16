@@ -6,12 +6,10 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.buildJsonObject
 import me.aquitano.health.api.dto.IngestionBatchRequest
-import me.aquitano.health.api.dto.ScalarSample
 import me.aquitano.health.api.dto.StepInterval
 import me.aquitano.health.domain.BatchStatus
 import me.aquitano.health.domain.IngestionSnapshot
 import me.aquitano.health.domain.RequestValidationException
-import me.aquitano.health.domain.ScalarMetricTypes
 import me.aquitano.health.infrastructure.repositories.PendingDerivedRebuildRepository
 import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.test.PostgresTestDatabase

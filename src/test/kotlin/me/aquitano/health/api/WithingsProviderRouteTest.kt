@@ -1,14 +1,10 @@
 package me.aquitano.health.api
 
 import io.ktor.client.request.get
-import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
-import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.testing.testApplication
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import me.aquitano.health.shared.AppJson
 import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.test.authorized
 import me.aquitano.health.test.configureTestApplication

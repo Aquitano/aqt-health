@@ -7,12 +7,10 @@ import me.aquitano.health.infrastructure.security.ApiKeyHasher
 import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.test.PostgresTestDatabase
 import me.aquitano.health.test.queryString
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
 import kotlin.test.Test
-import kotlin.test.assertContains
 import kotlin.test.assertEquals
 
 class DatabaseFactoryTest : PostgresIntegrationTest() {
