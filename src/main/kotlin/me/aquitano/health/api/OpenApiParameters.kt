@@ -167,9 +167,7 @@ internal fun Operation.Builder.sleepNightQueryParameters() {
     providerFilterParameters()
     limitParameter(
         spec = QueryParamSpecs.readLimit,
-        description =
-            "Maximum number of items. Defaults to ${QueryParamSpecs.readLimit.default}, cannot exceed " +
-                "${QueryParamSpecs.readLimit.max}, and is ignored as 1 when date is provided.",
+        description = defaultLimitDescription(QueryParamSpecs.readLimit),
         example = 7,
     )
     orderParameter(
