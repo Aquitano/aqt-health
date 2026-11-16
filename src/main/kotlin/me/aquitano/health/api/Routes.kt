@@ -30,8 +30,7 @@ fun Application.configureRoutes(appConfig: AppConfig) {
     val providerWorkflowService by inject<ProviderWorkflowService>()
 
     routing {
-        // Dev-only contract browsing. Production consumers read the spec exported at build time by
-        // the generateOpenApi Gradle task, so the runtime endpoints stay off the public surface.
+        // Dev-only contract browsing: production keeps the spec and Swagger UI off the public surface.
         if (!appConfig.environment.isProduction) {
             val openApiInfo = openApiInfo()
             val openApiBaseDoc = openApiBaseDoc()

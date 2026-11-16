@@ -16,7 +16,6 @@ COPY src/ src/
 RUN ./gradlew shadowJar \
     -x test \
     -x integrationTest \
-    -x generateOpenApi \
     --no-daemon
 
 # Runtime stage

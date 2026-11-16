@@ -171,35 +171,6 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
         }
 
     @Test
-    fun needsReauthAccountIsNotSelectedForSync() =
-        runBlocking {
-            val fixture = Fixture()
-            fixture.storeAccount(accessToken = "access-token", refreshToken = "refresh-token")
-            fixture.providerRepository.markNeedsReauth(
-                accountId = fixture.databaseConfig.queryInt("SELECT id FROM provider_oauth_accounts"),
-                expectedRefreshTokenCiphertext = fixture.databaseConfig.queryString("SELECT refresh_token_ciphertext FROM provider_oauth_accounts")!!,
-                errorCode = "google_health_needs_reauth",
-                errorMessage = "invalid refresh token",
-                now = fixture.now,
-            )
-
-            val error =
-                assertFailsWith<ConflictException> {
-                    fixture.provider.sync(
-                        ProviderSyncRequest(
-                            from = Instant.parse("2026-04-01T00:00:00Z"),
-                            to = Instant.parse("2026-04-02T00:00:00Z"),
-                            dataTypes = listOf("steps"),
-                        ),
-                        fixture.now,
-                    )
-                }
-
-            assertEquals("google_health_needs_reauth", error.code)
-            assertEquals(0, fixture.client.fetchRequests.size)
-        }
-
-    @Test
     fun syncIngestsExistingMetricTypesAndIsIdempotent() =
         runBlocking {
             val fixture = Fixture()

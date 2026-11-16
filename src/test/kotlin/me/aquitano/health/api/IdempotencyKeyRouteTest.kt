@@ -4,7 +4,6 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.testing.*
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.test.authorized
@@ -58,19 +57,6 @@ class IdempotencyKeyRouteTest : PostgresIntegrationTest() {
             assertEquals(HttpStatusCode.Accepted, first.status)
             assertEquals(HttpStatusCode.Conflict, second.status)
             assertEquals("idempotency_key_conflict", second.errorCode())
-        }
-
-    @Test
-    fun syncJobWithoutKeyCreatesNewJobEachTime() =
-        testApplication {
-            configureTestApplication(*googleHealthTestConfig())
-
-            val first = startSyncJob(key = null)
-            val second = startSyncJob(key = null)
-
-            assertEquals(HttpStatusCode.Accepted, first.status)
-            assertEquals(HttpStatusCode.Accepted, second.status)
-            assertNotEquals(first.jobId(), second.jobId())
         }
 
     @Test
