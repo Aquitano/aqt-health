@@ -15,16 +15,19 @@ import kotlin.test.assertEquals
 
 class ProductionRoutesTest {
     @Test
-    fun openApiAndSwaggerAreNotServedInProduction() =
+    fun productionServesTheSpecOnlyToApiClientsAndNoSwagger() =
         testApplication {
             environment { config = MapApplicationConfig() }
             application {
                 install(Koin)
-                install(Authentication) { basic(ApiKeyAuthProviderName) { validate { null } } }
+                install(Authentication) {
+                    basic(ApiKeyAuthProviderName) { validate { if (it.password == "test-key") UserIdPrincipal(it.name) else null } }
+                }
                 configureRoutes(productionConfig())
             }
 
-            assertEquals(HttpStatusCode.NotFound, client.get("/openapi").status)
+            assertEquals(HttpStatusCode.Unauthorized, client.get("/openapi").status)
+            assertEquals(HttpStatusCode.OK, client.get("/openapi") { basicAuth("agent", "test-key") }.status)
             assertEquals(HttpStatusCode.NotFound, client.get("/swagger").status)
         }
 
