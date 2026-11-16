@@ -334,7 +334,7 @@ Sync uses Google's generated Health client library (`com.google.cloud:google-clo
 - Wearable readings from periods the device was not worn are left out.
 - Narrower source families drop real data: `google-sources` and `google-wearables` return no weights for a Withings scale that writes into Google Health through Health Connect.
 
-Points Google names (sleep, weight, body fat, respiratory rate) keep that name as their record id; others are keyed by data type and time, so a re-read of the same window updates instead of duplicating.
+Points Google names (sleep, weight, body fat, respiratory rate) keep that name as their record id; others are keyed by data type and time, so a re-read of the same window updates instead of duplicating. Scalar records stored through `list` carried a hash of the whole point in their id; V42 removed it, except where two points of one batch fall on the same second (two devices). Re-reading such an instant adds one row.
 
 Google Cloud setup:
 
@@ -387,7 +387,7 @@ If `dataTypes` is omitted, the sync reads every type:
 | `daily-sleep-temperature-derivations` | daily metrics `nightly_skin_temperature`, `skin_temperature_baseline` |
 | `activity` | one activity summary per date from Google's daily roll-ups: distance, total calories, light/moderate/vigorous minutes (`activeMinutes` is moderate plus vigorous), and heart-rate average, minimum and maximum |
 
-Daily values are dated by Google's calendar date; overnight metrics carry the date of the morning the night ended. A day nothing was worn yields no activity summary rather than zeros. If both `from` and `to` are omitted, the sync defaults to the last seven days. Long explicit ranges are accepted for historical backfill and are split into UTC-day-aligned one-day windows before fetching. Completed days are skipped on repeated syncs over the same range; only the current, still-open day is re-fetched.
+Daily values are dated by Google's calendar date; overnight metrics carry the date of the morning the night ended. A day nothing was worn yields no activity summary rather than zeros. Activity summaries are ranked as whole rows with Google first, so on a date Google summarizes, Withings-only fields (`activeEnergyKcal`, `elevationMeters`) show only with `provider=withings`. If both `from` and `to` are omitted, the sync defaults to the last seven days. Long explicit ranges are accepted for historical backfill and are split into UTC-day-aligned one-day windows before fetching. Completed days are skipped on repeated syncs over the same range; only the current, still-open day is re-fetched.
 
 Poll `/api/v2/providers/google-health/sync-jobs/{jobId}` for progress and the final summary. The backend owns the provider-safe sequential work after the job is accepted, so a client that disconnects does not stop the sync job.
 
@@ -507,7 +507,7 @@ Common read filters:
 
 - `from`: ISO-8601 instant, inclusive, on reads of timestamped records
 - `to`: ISO-8601 instant, exclusive, on reads of timestamped records
-- `date`, `fromDate`, `toDate`: inclusive local dates on day-keyed reads (`/steps/daily`, `/metrics/{metricType}/daily`, `/sleep/nights`, `/activity/summaries`); where an endpoint accepts `timezone`, it sets the day boundaries
+- `date`, `fromDate`, `toDate`: inclusive local dates on day-keyed reads (`/steps/daily`, `/metrics/{metricType}/daily`, `/sleep/nights`, `/activity/summaries`, `/daily-metrics`); where an endpoint accepts `timezone`, it sets the day boundaries
 - `provider`: source code, for example `health_connect`
 - `providerInstanceId`: concrete provider/device/account instance
 - `includeSource`: `true` or `false`
@@ -532,7 +532,7 @@ A query parameter the endpoint does not support returns `400 validation_failed` 
 
 Cursor pagination is exposed through the `cursor` query parameter. When `meta.nextCursor` is present, pass it back with the same `order` value to fetch the next page. `meta.sort` names the field each endpoint orders by.
 
-`latest=true` is supported on timestamp-based list endpoints, scalar metric reads, activity summaries, sleep summaries, and blood pressure. It cannot be combined with `limit`, `order`, or `cursor`; unsupported combinations return `400 validation_failed` with field-level details. Daily step summaries, sleep nights and the scalar `/summary` and `/daily` aggregates reject `latest=true`; use `date` or descending `order` where appropriate.
+`latest=true` is supported on timestamp-based list endpoints, scalar metric reads, activity summaries, sleep summaries, and blood pressure. It cannot be combined with `limit`, `order`, or `cursor`; unsupported combinations return `400 validation_failed` with field-level details. Daily step summaries, sleep nights, daily metrics and the scalar `/summary` and `/daily` aggregates reject `latest=true`; use `date` or descending `order` where appropriate.
 
 Sleep reads have two modes:
 

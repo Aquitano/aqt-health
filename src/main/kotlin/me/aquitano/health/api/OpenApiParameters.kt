@@ -148,7 +148,7 @@ internal fun Operation.Builder.dailyQueryParameters(localDays: Boolean) {
         dateRangeQueryParameters("local date")
         timezoneParameter("IANA timezone that defines `today` and the local-day boundaries of each total. Defaults to UTC.")
     } else {
-        dateRangeQueryParameters("UTC date")
+        dateRangeQueryParameters("provider calendar date")
     }
 }
 
