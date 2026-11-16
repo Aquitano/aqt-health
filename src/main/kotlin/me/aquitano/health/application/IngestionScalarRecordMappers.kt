@@ -7,6 +7,7 @@ import me.aquitano.health.domain.ScalarSampleRecord
 import me.aquitano.health.domain.ScalarValue
 import me.aquitano.health.domain.ValidationIssue
 import me.aquitano.health.domain.ValidationIssueCodes
+import me.aquitano.health.domain.roundToScalarPrecision
 
 /**
  * Maps the single wire record for point-in-time scalar metrics. Ranges, units, contexts,
@@ -99,7 +100,7 @@ internal fun mapScalarSample(
             value =
                 ScalarValue(
                     metricType = descriptor.metricType,
-                    value = dto.value,
+                    value = dto.value.roundToScalarPrecision(),
                     context = context,
                     segment = dto.segment,
                 ),

@@ -11,11 +11,11 @@ import me.aquitano.health.shared.doubleOrNull
 import me.aquitano.health.shared.longOrNull
 import me.aquitano.health.shared.primitiveOrNull
 import me.aquitano.health.shared.stringOrNull
+import java.math.BigDecimal
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
-import kotlin.math.pow
 
 class WithingsNormalizer {
     private val sleepSessionGap = Duration.ofHours(2)
@@ -127,7 +127,7 @@ class WithingsNormalizer {
                     val type = measure.int("type") ?: return@forEach
                     val value = measure.doubleOrNull("value") ?: return@forEach
                     val unit = measure.int("unit") ?: 0
-                    val realValue = value * 10.0.pow(unit)
+                    val realValue = BigDecimal.valueOf(value).scaleByPowerOfTen(unit).toDouble()
                     when (type) {
                         1 -> {
                             if (realValue > 0.0) {

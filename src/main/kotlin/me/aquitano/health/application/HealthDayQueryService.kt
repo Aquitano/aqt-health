@@ -14,6 +14,7 @@ import me.aquitano.health.domain.RequestValidationException
 import me.aquitano.health.domain.ScalarMetricTypes
 import me.aquitano.health.domain.ValidationIssue
 import me.aquitano.health.domain.ValidationIssueCodes
+import me.aquitano.health.domain.roundToScalarPrecision
 import me.aquitano.health.infrastructure.database.suspendDbTransaction
 import me.aquitano.health.shared.SortDirection
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -189,7 +190,7 @@ class HealthDayQueryService(
         return HealthDayWeightResponse(
             latest = latest?.toScalarResponse(sourceMetadata),
             previous = previous?.toScalarResponse(sourceMetadata),
-            delta = if (latest != null && previous != null) latest.value - previous.value else null,
+            delta = if (latest != null && previous != null) (latest.value - previous.value).roundToScalarPrecision() else null,
             points = points.map { it.toScalarResponse(sourceMetadata) },
         )
     }
