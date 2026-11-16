@@ -310,7 +310,7 @@ class GoogleHealthNormalizer {
                     "dailyOxygenSaturation" to
                         listOf(
                             DailyMetricTypes.OXYGEN_SATURATION to "averagePercentage",
-                            DailyMetricTypes.OXYGEN_SATURATION_LOW to "lowerBoundPercentage",
+                            DailyMetricTypes.OXYGEN_SATURATION_LOWER_BOUND to "lowerBoundPercentage",
                         )
                 }
 
@@ -321,8 +321,8 @@ class GoogleHealthNormalizer {
                 GoogleHealthDataType.DailySleepTemperature -> {
                     "dailySleepTemperatureDerivations" to
                         listOf(
-                            DailyMetricTypes.NIGHTLY_TEMPERATURE to "nightlyTemperatureCelsius",
-                            DailyMetricTypes.TEMPERATURE_BASELINE to "baselineTemperatureCelsius",
+                            DailyMetricTypes.NIGHTLY_SKIN_TEMPERATURE to "nightlyTemperatureCelsius",
+                            DailyMetricTypes.SKIN_TEMPERATURE_BASELINE to "baselineTemperatureCelsius",
                         )
                 }
 

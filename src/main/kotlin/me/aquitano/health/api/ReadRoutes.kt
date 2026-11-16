@@ -184,7 +184,7 @@ internal fun Route.readRoutes() {
         summary = "List daily metrics"
         description =
             "Returns values a provider computes once per calendar day, such as resting heart rate, nightly HRV, " +
-            "oxygen saturation, nightly respiratory rate and nightly temperature. Dates are the provider's calendar " +
+            "oxygen saturation, nightly respiratory rate and nightly skin temperature. Dates are the provider's calendar " +
             "dates; overnight metrics are dated by the morning the night ended."
         dailyMetricQueryParameters()
         errorResponses()

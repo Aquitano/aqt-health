@@ -382,9 +382,9 @@ If `dataTypes` is omitted, the sync reads every type:
 | `heart-rate`, `heart-rate-variability`, `respiratory-rate-sleep-summary`, `weight`, `body-fat` | scalar samples |
 | `daily-resting-heart-rate` | daily metric `resting_heart_rate` |
 | `daily-heart-rate-variability` | daily metrics `nightly_hrv_rmssd`, `deep_sleep_hrv_rmssd`, `non_rem_heart_rate` |
-| `daily-oxygen-saturation` | daily metrics `oxygen_saturation`, `oxygen_saturation_low` |
+| `daily-oxygen-saturation` | daily metrics `oxygen_saturation`, `oxygen_saturation_lower_bound` (lower bound of the confidence interval) |
 | `daily-respiratory-rate` | daily metric `nightly_respiratory_rate` |
-| `daily-sleep-temperature-derivations` | daily metrics `nightly_temperature`, `temperature_baseline` |
+| `daily-sleep-temperature-derivations` | daily metrics `nightly_skin_temperature`, `skin_temperature_baseline` |
 | `activity` | one activity summary per date from Google's daily roll-ups: distance, total calories, light/moderate/vigorous minutes (`activeMinutes` is moderate plus vigorous), and heart-rate average, minimum and maximum |
 
 Daily values are dated by Google's calendar date; overnight metrics carry the date of the morning the night ended. A day nothing was worn yields no activity summary rather than zeros. If both `from` and `to` are omitted, the sync defaults to the last seven days. Long explicit ranges are accepted for historical backfill and are split into UTC-day-aligned one-day windows before fetching. Completed days are skipped on repeated syncs over the same range; only the current, still-open day is re-fetched.
@@ -491,7 +491,7 @@ curl "http://localhost:8080/api/v2/daily-metrics?metricTypes=resting_heart_rate,
   -H "Authorization: Bearer local-dev-key"
 ```
 
-`/api/v2/daily-metrics` returns values a provider computes once per calendar day (`resting_heart_rate`, `non_rem_heart_rate`, `nightly_hrv_rmssd`, `deep_sleep_hrv_rmssd`, `oxygen_saturation`, `oxygen_saturation_low`, `nightly_respiratory_rate`, `nightly_temperature`, `temperature_baseline`), each with its unit. `metricTypes` defaults to all of them. Ingest them as `daily_metric` records with `date`, `metricType` and `value`; per date and metric the best-ranked provider wins (Google first).
+`/api/v2/daily-metrics` returns values a provider computes once per calendar day (`resting_heart_rate`, `non_rem_heart_rate`, `nightly_hrv_rmssd`, `deep_sleep_hrv_rmssd`, `oxygen_saturation`, `oxygen_saturation_lower_bound`, `nightly_respiratory_rate`, `nightly_skin_temperature`, `skin_temperature_baseline`), each with its unit. `metricTypes` defaults to all of them. Ingest them as `daily_metric` records with `date`, `metricType` and `value`; per date and metric the best-ranked provider wins (Google first).
 
 Admin ingestion views:
 

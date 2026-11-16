@@ -6,10 +6,10 @@ object DailyMetricTypes {
     const val NIGHTLY_HRV_RMSSD = "nightly_hrv_rmssd"
     const val DEEP_SLEEP_HRV_RMSSD = "deep_sleep_hrv_rmssd"
     const val OXYGEN_SATURATION = "oxygen_saturation"
-    const val OXYGEN_SATURATION_LOW = "oxygen_saturation_low"
+    const val OXYGEN_SATURATION_LOWER_BOUND = "oxygen_saturation_lower_bound"
     const val NIGHTLY_RESPIRATORY_RATE = "nightly_respiratory_rate"
-    const val NIGHTLY_TEMPERATURE = "nightly_temperature"
-    const val TEMPERATURE_BASELINE = "temperature_baseline"
+    const val NIGHTLY_SKIN_TEMPERATURE = "nightly_skin_temperature"
+    const val SKIN_TEMPERATURE_BASELINE = "skin_temperature_baseline"
 }
 
 data class DailyMetricDescriptor(
@@ -30,10 +30,10 @@ object DailyMetricRegistry {
             DailyMetricDescriptor(DailyMetricTypes.NIGHTLY_HRV_RMSSD, "ms", ScalarValueRange(0.0, 500.0, minInclusive = false)),
             DailyMetricDescriptor(DailyMetricTypes.DEEP_SLEEP_HRV_RMSSD, "ms", ScalarValueRange(0.0, 500.0, minInclusive = false)),
             DailyMetricDescriptor(DailyMetricTypes.OXYGEN_SATURATION, "percent", ScalarValueRange(50.0, 100.0)),
-            DailyMetricDescriptor(DailyMetricTypes.OXYGEN_SATURATION_LOW, "percent", ScalarValueRange(50.0, 100.0)),
+            DailyMetricDescriptor(DailyMetricTypes.OXYGEN_SATURATION_LOWER_BOUND, "percent", ScalarValueRange(50.0, 100.0)),
             DailyMetricDescriptor(DailyMetricTypes.NIGHTLY_RESPIRATORY_RATE, "breaths_per_minute", ScalarValueRange(5.0, 80.0)),
-            DailyMetricDescriptor(DailyMetricTypes.NIGHTLY_TEMPERATURE, "celsius", ScalarValueRange(25.0, 45.0)),
-            DailyMetricDescriptor(DailyMetricTypes.TEMPERATURE_BASELINE, "celsius", ScalarValueRange(25.0, 45.0)),
+            DailyMetricDescriptor(DailyMetricTypes.NIGHTLY_SKIN_TEMPERATURE, "celsius", ScalarValueRange(25.0, 45.0)),
+            DailyMetricDescriptor(DailyMetricTypes.SKIN_TEMPERATURE_BASELINE, "celsius", ScalarValueRange(25.0, 45.0)),
         )
 
     private val byType = descriptors.associateBy { it.metricType }
