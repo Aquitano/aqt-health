@@ -528,11 +528,11 @@ export AQT_HEALTH_API_KEY=local-dev-key
 bun src/main.ts endpoints                            # every read endpoint and its parameters
 bun src/main.ts endpoints metrics/heart_rate/daily   # one endpoint: parameter types and descriptions
 bun src/main.ts get steps/daily fromDate=2026-11-01 toDate=2026-11-07 timezone=Europe/Berlin
-bun src/main.ts get metrics/heart_rate from=2026-11-10T00:00:00Z to=2026-11-11T00:00:00Z --all
+bun src/main.ts get metrics/heart_rate from=2026-11-10T00:00:00Z to=2026-11-11T00:00:00Z limit=5000 --all
 ```
 
 - Query parameters are `name=value` pairs, and the API rejects names it does not know.
-- `--all` follows `meta.nextCursor` and returns every page as one `items` array. It stops once `--max-items` items are read (default 50,000) and keeps `meta.nextCursor`, so the read can continue with `cursor=<nextCursor>`.
+- `--all` follows `meta.nextCursor` and returns every page as one `items` array; add `limit=5000` to read a big range in fewer requests. It stops once `--max-items` items are read (default 50,000) and keeps `meta.nextCursor`, so the read can continue with `cursor=<nextCursor>`.
 - Errors go to stderr as `{"error":{...}}`, with exit code 1 for a failed request and 2 for a usage error.
 - The CLI only sends GET requests and refuses OAuth endpoints, which change provider connections.
 - `bun run build` compiles a standalone binary to `cli/dist/aqt-health` for machines without Bun.
