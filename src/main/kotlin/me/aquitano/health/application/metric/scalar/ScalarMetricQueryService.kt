@@ -10,8 +10,10 @@ import me.aquitano.health.api.dto.ScalarSummaryResponse
 import me.aquitano.health.application.metric.common.QueryParamSpecs
 import me.aquitano.health.application.metric.common.QueryParams
 import me.aquitano.health.application.metric.common.SortFields
+import me.aquitano.health.application.metric.common.dailyDateRange
 import me.aquitano.health.application.metric.common.pagedRead
 import me.aquitano.health.application.metric.common.readFilters
+import me.aquitano.health.application.metric.common.repository.ReadFilters
 import me.aquitano.health.application.metric.common.summaryFilters
 import me.aquitano.health.domain.NotFoundException
 import me.aquitano.health.domain.RequestValidationException
@@ -21,6 +23,7 @@ import me.aquitano.health.domain.ValidationIssueCodes
 import me.aquitano.health.infrastructure.database.suspendDbTransaction
 import me.aquitano.health.shared.SortDirection
 import org.jetbrains.exposed.v1.jdbc.Database
+import java.time.Instant
 
 /**
  * The one read surface for all scalar metrics: catalog from the registry, canonical
@@ -113,14 +116,26 @@ class ScalarMetricQueryService(
     suspend fun summaryDaily(
         metricType: String,
         params: QueryParams,
+        now: Instant,
     ): ScalarDailySummariesResponse {
         requireKnown(metricType)
+        params.rejectLatest()
+        val zone = params.timezone()
+        val (fromDate, toDate) = params.dailyDateRange(now, zone)
+        if (fromDate == null && toDate == null) {
+            throw RequestValidationException(field = "fromDate", code = ValidationIssueCodes.Required, message = "at least one of date, fromDate or toDate is required")
+        }
+        val filters =
+            ReadFilters(
+                from = fromDate?.atStartOfDay(zone)?.toInstant(),
+                to = toDate?.plusDays(1)?.atStartOfDay(zone)?.toInstant(),
+                provider = params.optional("provider"),
+                providerInstanceId = params.optional("providerInstanceId"),
+                includeSource = params.boolean(QueryParamSpecs.includeSource),
+                limit = 1,
+                order = SortDirection.Asc,
+            )
         return suspendDbTransaction(db = database) {
-            val filters = params.summaryFilters()
-            if (filters.from == null && filters.to == null) {
-                throw RequestValidationException(field = "from", code = ValidationIssueCodes.Required, message = "at least one of from or to is required")
-            }
-            val zone = params.timezone()
             val items =
                 scalarRepository
                     .summarizeDaily(filters, setOf(metricType), canonical = true, zone)

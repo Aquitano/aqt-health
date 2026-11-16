@@ -82,7 +82,7 @@ internal fun QueryParams.dailyLatestReadFilters(now: Instant): ReadFilters {
     )
 }
 
-private fun QueryParams.dailyDateRange(
+internal fun QueryParams.dailyDateRange(
     now: Instant,
     timezone: ZoneId,
 ): Pair<LocalDate?, LocalDate?> {

@@ -13,6 +13,7 @@ object ValidationIssueCodes {
     const val OutOfRange = "out_of_range"
     const val InvalidRange = "invalid_range"
     const val InvalidState = "invalid_state"
+    const val UnknownParameter = "unknown_parameter"
 }
 
 class RequestValidationException(

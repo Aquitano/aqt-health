@@ -22,28 +22,27 @@ internal fun Route.adminRoutes() {
     val replayService by application.inject<ReplayService>()
 
     get("/api/v2/admin/ingestion/batches") {
-        call.respond<IngestionBatchesResponse>(
+        call.respondRead { params ->
             adminService.listBatches(
-                call.queryParams(),
-            ),
-        )
+                params,
+            )
+        }
     }.describe {
         operationId = "listIngestionBatches"
         tag("Admin")
         summary = "List ingestion batches"
         description =
             "Lists ingestion batches by received timestamp and optional status for administrative inspection."
-        adminQueryParameters()
+        adminQueryParameters(statusFilter = true)
         errorResponses()
     }
     get("/api/v2/admin/ingestion/batches/{id}") {
-        call.respond<IngestionBatchDetailResponse>(
-            HttpStatusCode.OK,
+        call.respondRead { params ->
             adminService.getBatchDetail(
                 call.parameters["id"],
-                call.queryParams(),
-            ),
-        )
+                params,
+            )
+        }
     }.describe {
         operationId = "getIngestionBatch"
         tag("Admin")
@@ -59,18 +58,18 @@ internal fun Route.adminRoutes() {
         errorResponses(notFound = true)
     }
     get("/api/v2/admin/ingestion/failures") {
-        call.respond<IngestionBatchesResponse>(
+        call.respondRead { params ->
             adminService.listFailures(
-                call.queryParams(),
-            ),
-        )
+                params,
+            )
+        }
     }.describe {
         operationId = "listIngestionFailures"
         tag("Admin")
         summary = "List failed ingestion batches"
         description =
             "Lists ingestion batches with failure status for administrative inspection."
-        adminQueryParameters()
+        adminQueryParameters(statusFilter = false)
         errorResponses()
     }
     post("/api/v2/admin/replay") {

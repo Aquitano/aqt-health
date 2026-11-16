@@ -241,7 +241,7 @@ Supported record types:
 
 The database preserves raw provider rows for auditability, but read endpoints return canonical cross-provider results. No provider rows are deleted or rewritten.
 
-Provider filters are applied before canonicalization, so `provider=withings` only reconciles matching Withings source instances.
+Provider filters apply to the canonical result: `provider=withings` returns the canonical rows that came from Withings, not everything Withings recorded. Where another provider won an overlap, the Withings rows stay hidden, so a filtered daily step total is only Withings' share of the canonical total.
 
 Default source priorities are code-based in `MetricCatalogBootstrap.providerRanks`:
 
@@ -461,6 +461,9 @@ curl "http://localhost:8080/api/v2/metrics/heart_rate?order=desc&limit=100" \
 
 curl "http://localhost:8080/api/v2/metrics/heart_rate/summary?from=2026-04-19T00:00:00Z&to=2026-04-20T00:00:00Z" \
   -H "Authorization: Bearer local-dev-key"
+
+curl "http://localhost:8080/api/v2/metrics/heart_rate/daily?fromDate=2026-04-13&toDate=2026-04-19&timezone=Europe/Berlin" \
+  -H "Authorization: Bearer local-dev-key"
 ```
 
 Admin ingestion views:
@@ -475,8 +478,9 @@ curl "http://localhost:8080/api/v2/admin/ingestion/failures" \
 
 Common read filters:
 
-- `from`: ISO-8601 instant, inclusive
-- `to`: ISO-8601 instant, exclusive
+- `from`: ISO-8601 instant, inclusive, on reads of timestamped records
+- `to`: ISO-8601 instant, exclusive, on reads of timestamped records
+- `date`, `fromDate`, `toDate`: inclusive local dates on day-keyed reads (`/steps/daily`, `/metrics/{metricType}/daily`, `/sleep/nights`, `/activity/summaries`); where an endpoint accepts `timezone`, it sets the day boundaries
 - `provider`: source code, for example `health_connect`
 - `providerInstanceId`: concrete provider/device/account instance
 - `includeSource`: `true` or `false`
@@ -496,6 +500,8 @@ Metric list responses include an `items` array plus a `meta` object:
   }
 }
 ```
+
+A query parameter the endpoint does not support returns `400 validation_failed` with code `unknown_parameter`, so a misspelled filter cannot silently widen the result.
 
 Cursor pagination is exposed through the `cursor` query parameter. When `meta.nextCursor` is present, pass it back with the same `order` value to fetch the next page. `meta.sort` names the field each endpoint orders by.
 
