@@ -49,7 +49,7 @@ class HealthDayQueryService(
         val date =
             params.dateOrToday("date", now, timezone)
                 ?: throw RequestValidationException(field = "date", code = ValidationIssueCodes.Required, message = "is required")
-        val modules = parseModules(params.required("modules"))
+        val modules = params.optional("modules")?.let(::parseModules) ?: HealthDayModuleName.entries
         val from = date.atStartOfDay(timezone).toInstant()
         val to = date.plusDays(1).atStartOfDay(timezone).toInstant()
         val context =

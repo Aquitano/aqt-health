@@ -185,6 +185,17 @@ internal fun ApplicationCall.queryParams(): QueryParams =
             .associate { it.key to it.value.firstOrNull() },
     )
 
+/**
+ * Responds with what [read] returns, then rejects any query parameter [read] never looked at,
+ * so a misspelled or unsupported filter fails loudly instead of silently widening the result.
+ */
+internal suspend inline fun <reified T : Any> ApplicationCall.respondRead(read: (QueryParams) -> T) {
+    val params = queryParams()
+    val body = read(params)
+    params.rejectUnread()
+    respond(body)
+}
+
 internal fun ApplicationCall.metricTypePath(): String =
     requiredPathParam(
         "metricType",

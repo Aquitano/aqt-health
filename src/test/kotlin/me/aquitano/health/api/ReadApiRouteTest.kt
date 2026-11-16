@@ -357,6 +357,9 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
                     .jsonPrimitive.content,
             )
 
+            val allModules = authorizedGet("/api/v2/health/day?date=2026-04-19&timezone=UTC").jsonBody()
+            assertEquals(setOf("steps", "heartRate", "weight", "sleep"), allModules["modules"]!!.jsonArray.map { it.jsonPrimitive.content }.toSet())
+
             val stepsOnly =
                 authorizedGet("/api/v2/health/day?date=2026-04-19&timezone=UTC&modules=steps")
             assertEquals(HttpStatusCode.OK, stepsOnly.status)
@@ -711,7 +714,7 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
             ingestBoundaryHeartRateBatch()
 
             val utc =
-                authorizedGet("/api/v2/metrics/heart_rate/daily?from=2026-04-19T00:00:00Z&to=2026-04-21T00:00:00Z")
+                authorizedGet("/api/v2/metrics/heart_rate/daily?fromDate=2026-04-19&toDate=2026-04-20")
             assertEquals(HttpStatusCode.OK, utc.status)
             val utcItems = utc.items()
             assertEquals(2, utcItems.size)
@@ -732,7 +735,7 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
             // A non-UTC zone shifts the boundary: all three samples fall on the same local day.
             val newYork =
                 authorizedGet(
-                    "/api/v2/metrics/heart_rate/daily?from=2026-04-19T00:00:00Z&to=2026-04-21T00:00:00Z&timezone=America/New_York",
+                    "/api/v2/metrics/heart_rate/daily?date=2026-04-19&timezone=America/New_York",
                 )
             assertEquals(HttpStatusCode.OK, newYork.status)
             val nyItems = newYork.items()
@@ -741,6 +744,24 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
             assertEquals(3, nyItems[0].jsonObject["count"]!!.jsonPrimitive.int)
             assertEquals(60.0, nyItems[0].jsonObject["minValue"]!!.jsonPrimitive.double)
             assertEquals(80.0, nyItems[0].jsonObject["maxValue"]!!.jsonPrimitive.double)
+
+            // Whole local days: 2026-04-20 in UTC holds the 00:00Z and 00:30Z samples, nothing partial.
+            val singleDay = authorizedGet("/api/v2/metrics/heart_rate/daily?date=2026-04-20")
+            assertEquals(listOf(2), singleDay.items().map { it.jsonObject["count"]!!.jsonPrimitive.int })
+        }
+
+    @Test
+    fun readsRejectQueryParametersTheEndpointDoesNotSupport() =
+        testApplication {
+            configureTestApplication()
+
+            val response = authorizedGet("/api/v2/activity/summaries?from=2026-04-19T00:00:00Z&limit=5")
+            assertEquals(HttpStatusCode.BadRequest, response.status)
+            val issues = response.jsonBody()["error"]!!.jsonObject["details"]!!.jsonArray
+            assertEquals(
+                listOf("from" to "unknown_parameter"),
+                issues.map { it.jsonObject["field"]!!.jsonPrimitive.content to it.jsonObject["code"]!!.jsonPrimitive.content },
+            )
         }
 
     @Test

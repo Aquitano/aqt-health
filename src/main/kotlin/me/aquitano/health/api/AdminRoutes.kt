@@ -22,11 +22,11 @@ internal fun Route.adminRoutes() {
     val replayService by application.inject<ReplayService>()
 
     get("/api/v2/admin/ingestion/batches") {
-        call.respond<IngestionBatchesResponse>(
+        call.respondRead { params ->
             adminService.listBatches(
-                call.queryParams(),
-            ),
-        )
+                params,
+            )
+        }
     }.describe {
         operationId = "listIngestionBatches"
         tag("Admin")
@@ -37,13 +37,12 @@ internal fun Route.adminRoutes() {
         errorResponses()
     }
     get("/api/v2/admin/ingestion/batches/{id}") {
-        call.respond<IngestionBatchDetailResponse>(
-            HttpStatusCode.OK,
+        call.respondRead { params ->
             adminService.getBatchDetail(
                 call.parameters["id"],
-                call.queryParams(),
-            ),
-        )
+                params,
+            )
+        }
     }.describe {
         operationId = "getIngestionBatch"
         tag("Admin")
@@ -59,11 +58,11 @@ internal fun Route.adminRoutes() {
         errorResponses(notFound = true)
     }
     get("/api/v2/admin/ingestion/failures") {
-        call.respond<IngestionBatchesResponse>(
+        call.respondRead { params ->
             adminService.listFailures(
-                call.queryParams(),
-            ),
-        )
+                params,
+            )
+        }
     }.describe {
         operationId = "listIngestionFailures"
         tag("Admin")

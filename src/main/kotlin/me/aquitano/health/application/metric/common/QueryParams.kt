@@ -13,7 +13,21 @@ import java.time.ZoneOffset
 class QueryParams(
     private val values: Map<String, String?>,
 ) {
-    fun optional(name: String): String? = values[name]?.takeIf { it.isNotBlank() }
+    private val read = mutableSetOf<String>()
+
+    fun optional(name: String): String? {
+        read += name
+        return values[name]?.takeIf { it.isNotBlank() }
+    }
+
+    fun rejectUnread() {
+        val unknown = (values.keys - read).sorted()
+        if (unknown.isNotEmpty()) {
+            throw RequestValidationException(
+                unknown.map { ValidationIssue(field = it, code = ValidationIssueCodes.UnknownParameter, message = "is not a parameter of this endpoint") },
+            )
+        }
+    }
 
     fun required(name: String): String = optional(name) ?: throw RequestValidationException(field = name, code = ValidationIssueCodes.Required, message = "is required")
 

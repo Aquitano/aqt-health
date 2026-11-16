@@ -111,12 +111,9 @@ internal fun Operation.Builder.scalarSummaryQueryParameters() {
 
 internal fun Operation.Builder.scalarDailySummaryQueryParameters() {
     metricTypePathParameter()
-    instantRangeParameters(
-        fromDescription = "Inclusive start timestamp.",
-        toDescription = "Exclusive end timestamp.",
-    )
+    dateRangeQueryParameters("local date")
     timezoneParameter(
-        description = "IANA timezone that defines the calendar-day buckets. Defaults to UTC.",
+        description = "IANA timezone that defines `today` and the calendar-day buckets. Defaults to UTC.",
         default = "UTC",
     )
     providerFilterParameters(
@@ -223,8 +220,7 @@ internal fun Operation.Builder.healthDayQueryParameters() {
         query("modules") {
             val moduleNames = HealthDayModuleName.entries.map { it.wireName }
             description =
-                "Required comma-separated module list. Supported values: ${moduleNames.joinToString(", ")}."
-            required = true
+                "Comma-separated module list. Defaults to every module. Supported values: ${moduleNames.joinToString(", ")}."
             schema = stringSchema(example = moduleNames.joinToString(","))
         }
     }

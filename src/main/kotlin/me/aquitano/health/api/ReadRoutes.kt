@@ -46,7 +46,9 @@ internal fun Route.readRoutes() {
         errorResponses()
     }
     get("/api/v2/metrics/samples") {
-        call.respond<ScalarSamplesResponse>(scalarMetricQueryService.listAcrossTypes(call.queryParams()))
+        call.respondRead { params ->
+            scalarMetricQueryService.listAcrossTypes(params)
+        }
     }.describe {
         operationId = "listScalarSamplesAcrossTypes"
         tag("Read")
@@ -57,12 +59,12 @@ internal fun Route.readRoutes() {
         errorResponses()
     }
     get("/api/v2/metrics/{metricType}") {
-        call.respond<ScalarSamplesResponse>(
+        call.respondRead { params ->
             scalarMetricQueryService.list(
                 call.metricTypePath(),
-                call.queryParams(),
-            ),
-        )
+                params,
+            )
+        }
     }.describe {
         operationId = "listScalarSamples"
         tag("Read")
@@ -73,12 +75,12 @@ internal fun Route.readRoutes() {
         errorResponses(notFound = true)
     }
     get("/api/v2/metrics/{metricType}/summary") {
-        call.respond<ScalarSummaryResponse>(
+        call.respondRead { params ->
             scalarMetricQueryService.summary(
                 call.metricTypePath(),
-                call.queryParams(),
-            ),
-        )
+                params,
+            )
+        }
     }.describe {
         operationId = "summarizeScalarSamples"
         tag("Read")
@@ -89,29 +91,29 @@ internal fun Route.readRoutes() {
         errorResponses(notFound = true)
     }
     get("/api/v2/metrics/{metricType}/daily") {
-        call.respond<ScalarDailySummariesResponse>(
+        call.respondRead { params ->
             scalarMetricQueryService.summaryDaily(
                 call.metricTypePath(),
-                call.queryParams(),
-            ),
-        )
+                params,
+                clock.instant(),
+            )
+        }
     }.describe {
         operationId = "summarizeScalarSamplesDaily"
         tag("Read")
         summary = "Summarize scalar samples per calendar day"
         description =
-            "Returns one count/min/max/avg bucket per calendar day for the metric type within the requested timestamp range, grouped by the `timezone` day boundaries (UTC by default). At least one of `from`/`to` is required to bound the scan. Replaces per-day summary fan-out with a single ranged read. Unknown metric types return 404."
+            "Returns one count/min/max/avg bucket per local calendar day of `timezone` (UTC by default) for the metric type, covering whole days from `fromDate` through `toDate`, or the single `date`. At least one of them is required to bound the scan. Unknown metric types return 404."
         scalarDailySummaryQueryParameters()
         errorResponses(notFound = true)
     }
     get("/api/v2/health/day") {
-        call.respond<HealthDayResponse>(
-            HttpStatusCode.OK,
+        call.respondRead { params ->
             healthDayQueryService.getHealthDay(
-                call.queryParams(),
+                params,
                 clock.instant(),
-            ),
-        )
+            )
+        }
     }.describe {
         operationId = "getHealthDay"
         tag("Read")
@@ -131,24 +133,23 @@ internal fun Route.readRoutes() {
         }
     }
     get("/api/v2/steps") {
-        call.respond<StepSamplesResponse>(
+        call.respondRead { params ->
             stepQueryService.listStepSamples(
-                call.queryParams(),
-            ),
-        )
+                params,
+            )
+        }
     }.describeReadOperation(
         operationId = "listStepSamples",
         summary = "List step samples",
         descriptionText = "Returns canonical step samples filtered by timestamp range, source provider, provider instance, source metadata inclusion, item limit, and sort order. Use `latest=true` to return the latest matching sample only.",
     )
     get("/api/v2/steps/daily") {
-        call.respond<StepDailySummariesResponse>(
-            HttpStatusCode.OK,
+        call.respondRead { params ->
             stepQueryService.listStepDailySummaries(
-                call.queryParams(),
+                params,
                 clock.instant(),
-            ),
-        )
+            )
+        }
     }.describeDailyReadOperation(
         id = "listDailyStepSummaries",
         operationSummary = "List daily step summaries",
@@ -157,13 +158,12 @@ internal fun Route.readRoutes() {
         localDays = true,
     )
     get("/api/v2/activity/summaries") {
-        call.respond<ActivitySummariesResponse>(
-            HttpStatusCode.OK,
+        call.respondRead { params ->
             activityQueryService.listActivitySummaries(
-                call.queryParams(),
+                params,
                 clock.instant(),
-            ),
-        )
+            )
+        }
     }.describeDailyReadOperation(
         id = "listActivitySummaries",
         operationSummary = "List activity summaries",
@@ -173,24 +173,23 @@ internal fun Route.readRoutes() {
             "Return the latest matching activity summary when true. Defaults to false. Cannot be combined with limit, order, or cursor.",
     )
     get("/api/v2/sleep/sessions") {
-        call.respond<SleepSessionsResponse>(
+        call.respondRead { params ->
             sleepQueryService.listSleepSessions(
-                call.queryParams(),
-            ),
-        )
+                params,
+            )
+        }
     }.describeReadOperation(
         operationId = "listSleepSessions",
         summary = "List sleep sessions",
         descriptionText = "Returns sleep sessions with nested stages. Use `latest=true` to return the latest matching session only.",
     )
     get("/api/v2/sleep/nights") {
-        call.respond<SleepNightsResponse>(
-            HttpStatusCode.OK,
+        call.respondRead { params ->
             sleepQueryService.listSleepNights(
-                call.queryParams(),
+                params,
                 clock.instant(),
-            ),
-        )
+            )
+        }
     }.describe {
         operationId = "listSleepNights"
         tag("Read")
@@ -201,20 +200,20 @@ internal fun Route.readRoutes() {
         errorResponses()
     }
     get("/api/v2/sleep/summaries") {
-        call.respond<SleepSummariesResponse>(
+        call.respondRead { params ->
             sleepSummaryReadService.list(
-                call.queryParams(),
-            ),
-        )
+                params,
+            )
+        }
     }.describeReadOperation(
         operationId = "listSleepSummaries",
         summary = "List sleep summaries",
         descriptionText = "Returns aggregate sleep summary records such as sleep score, efficiency, latency, wakeups, WASO, and stage-duration totals. Use `latest=true` to return the latest matching summary only.",
     )
     get("/api/v2/blood-pressure") {
-        call.respond<BloodPressureMeasurementsResponse>(
-            cardiovascularQueryService.listBloodPressure(call.queryParams()),
-        )
+        call.respondRead { params ->
+            cardiovascularQueryService.listBloodPressure(params)
+        }
     }.describeReadOperation(
         operationId = "listBloodPressureMeasurements",
         summary = "List blood pressure measurements",
@@ -222,13 +221,12 @@ internal fun Route.readRoutes() {
     )
 
     get("/api/v2/dashboard/summary") {
-        call.respond<DashboardSummaryResponse>(
-            HttpStatusCode.OK,
+        call.respondRead { params ->
             dashboardQueryService.dashboardSummary(
-                call.queryParams(),
+                params,
                 clock.instant(),
-            ),
-        )
+            )
+        }
     }.describe {
         operationId = "getDashboardSummary"
         tag("Read")
@@ -239,13 +237,12 @@ internal fun Route.readRoutes() {
         errorResponses()
     }
     get("/api/v2/dashboard/trends") {
-        call.respond<DashboardTrendsResponse>(
-            HttpStatusCode.OK,
+        call.respondRead { params ->
             trendQueryService.dashboardTrends(
-                call.queryParams(),
+                params,
                 clock.instant(),
-            ),
-        )
+            )
+        }
     }.describe {
         operationId = "getDashboardTrends"
         tag("Read")
