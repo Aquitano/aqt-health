@@ -2,8 +2,7 @@
 set -eu
 
 usage() {
-  echo "usage: scripts/secrets.sh <pull|push|diff> <backend|frontend> [env]" >&2
-  echo "targets: backend frontend" >&2
+  echo "usage: scripts/secrets.sh <pull|push|diff> backend [env]" >&2
   exit 2
 }
 
@@ -14,7 +13,6 @@ slug=${3:-dev}
 
 case $target in
 backend) rel=.env folder=/ ;;
-frontend) rel=frontend/.env folder=/frontend ;;
 *) usage ;;
 esac
 

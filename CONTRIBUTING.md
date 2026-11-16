@@ -41,7 +41,6 @@ Use the following scopes to keep commits organized. If a change spans multiple c
 - **`sleep`**: Sleep sessions, stages, and nights.
 - **`db`**: Flyway migrations, schema, and connection setup.
 - **`config`**: Application configuration and its validation.
-- **`frontend`**: The Next.js app.
 - **`deploy`**: Dockerfiles and Compose files.
 - **`deps`**: Dependency updates.
 - **`docs`**: Documentation.

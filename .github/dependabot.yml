@@ -11,22 +11,6 @@ updates:
           - "jvm"
           - "org.jetbrains.kotlin*"
 
-  - package-ecosystem: bun
-    directory: "/frontend"
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
-    groups:
-      next:
-        patterns:
-          - "next"
-          - "eslint-config-next"
-      react:
-        patterns:
-          - "react"
-          - "react-dom"
-          - "@types/react*"
-
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
