@@ -155,7 +155,9 @@ async function requestJson(config: Config, url: URL): Promise<Result<unknown>> {
 const Page = type({ items: "unknown[]", meta: { "nextCursor?": "string" } });
 
 async function readAllPages(config: Config, url: URL, maxItems: number): Promise<Result<unknown>> {
-  if (!url.searchParams.has("limit")) url.searchParams.set("limit", MAX_PAGE_SIZE);
+  // The first request goes out as asked, so an endpoint without pages answers instead of
+  // rejecting a limit the caller never passed. Later pages use the largest page size.
+  const largestPages = !url.searchParams.has("limit");
   const items: unknown[] = [];
   const cursors = new Set<string>();
   for (;;) {
@@ -173,6 +175,7 @@ async function readAllPages(config: Config, url: URL, maxItems: number): Promise
     if (cursors.has(next)) return requestError("repeated_cursor", `${url.pathname} returned the cursor ${next} twice`);
     cursors.add(next);
     url.searchParams.set("cursor", next);
+    if (largestPages) url.searchParams.set("limit", MAX_PAGE_SIZE);
   }
 }
 

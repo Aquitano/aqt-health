@@ -20,6 +20,10 @@ const server = Bun.serve({
           : Response.json({ items: [{ steps: 3 }], meta: { count: 1 } });
       case "/api/v2/metrics/heart_rate":
         return Response.json({ items: [{ value: 60 }], meta: { count: 1, nextCursor: "same" } });
+      case "/api/v2/health/day":
+        return url.searchParams.has("limit")
+          ? Response.json({ error: { code: "validation_failed", message: "unknown_parameter: limit" } }, { status: 400 })
+          : Response.json({ date: "2026-11-10", steps: { steps: 1 } });
       case "/api/v2/sleep/nights":
         return Response.json(
           { error: { code: "validation_failed", message: "unknown_parameter: fromdate" } },
@@ -70,7 +74,14 @@ describe("get", () => {
     const { json } = await cli("get", "/api/v2/steps/daily", "fromDate=2026-11-01", "--all");
 
     expect(json).toEqual({ items: [{ steps: 1 }, { steps: 2 }, { steps: 3 }], meta: { count: 3 } });
-    expect(seen.at(-1)?.search).toBe("?fromDate=2026-11-01&limit=5000&cursor=page-2");
+    expect(seen.at(-1)?.search).toBe("?fromDate=2026-11-01&cursor=page-2&limit=5000");
+  });
+
+  test("--all on an endpoint without pages says so instead of failing on a limit nobody passed", async () => {
+    const { exitCode, error } = await cli("get", "health/day", "date=2026-11-10", "--all");
+
+    expect(exitCode).toBe(1);
+    expect(error).toMatchObject({ error: { code: "not_paged" } });
   });
 
   test("--all stops at --max-items and keeps the cursor that continues the read", async () => {
