@@ -61,7 +61,7 @@ internal fun QueryParams.dailyReadFilters(
         provider = optional("provider"),
         providerInstanceId = optional("providerInstanceId"),
         includeSource = boolean(QueryParamSpecs.includeSource),
-        limit = if (optional("date") != null) 1 else int(QueryParamSpecs.readLimit),
+        limit = int(QueryParamSpecs.readLimit),
         order = order,
         cursor = cursor(order),
     )

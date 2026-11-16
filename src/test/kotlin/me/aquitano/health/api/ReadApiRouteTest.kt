@@ -340,7 +340,7 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
         }
 
     @Test
-    fun healthDayReturnsRequestedMergedModulesWithBucketsAndClippedSleep() =
+    fun healthDayReturnsRequestedMergedModulesWithBucketsAndWholeSleepNights() =
         testApplication {
             configureTestApplication()
             ingestMixedBatch()
@@ -400,9 +400,9 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
             )
             assertFalse(body["weight"]!!.jsonObject.containsKey("previous"))
             assertEquals(2, body["weight"]!!.jsonObject["points"]!!.jsonArray.size)
-            assertEquals(14400, body["sleep"]!!.jsonObject["totalDurationSeconds"]!!.jsonPrimitive.long)
+            assertEquals(12600, body["sleep"]!!.jsonObject["totalDurationSeconds"]!!.jsonPrimitive.long)
             assertEquals(
-                "2026-04-19T00:00:00Z",
+                "2026-04-18T22:30:00Z",
                 body["sleep"]!!
                     .jsonObject["timeline"]!!
                     .jsonArray
@@ -418,7 +418,7 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
         }
 
     @Test
-    fun healthDaySleepFallsBackToClippedSessionDurationWithoutStages() =
+    fun healthDaySleepFallsBackToSessionDurationWithoutStages() =
         testApplication {
             configureTestApplication()
             val ingestion =
@@ -429,7 +429,30 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
                 }
             assertEquals(HttpStatusCode.Created, ingestion.status)
             val sleep = authorizedGet("/api/v2/health/day?date=2026-04-20&timezone=UTC&modules=sleep").jsonBody()["sleep"]!!.jsonObject
-            assertEquals(21600, sleep["totalDurationSeconds"]!!.jsonPrimitive.long)
+            assertEquals(28800, sleep["totalDurationSeconds"]!!.jsonPrimitive.long)
+        }
+
+    @Test
+    fun sleepForADateIncludesEverySessionThatEndedOnIt() =
+        testApplication {
+            configureTestApplication()
+            // Google ingests first, so its source instance gets the lower id.
+            for ((provider, startAt, endAt) in listOf(
+                Triple("google_health", "2026-04-20T12:00:00Z", "2026-04-20T12:40:00Z"),
+                Triple("withings", "2026-04-19T21:00:00Z", "2026-04-20T05:00:00Z"),
+            )) {
+                val ingestion =
+                    client.post("/api/v2/ingestion/batches") {
+                        authorized()
+                        contentType(ContentType.Application.Json)
+                        setBody("""{"provider":"$provider","providerInstanceId":"$provider","ingestedAt":"2026-04-20T13:00:00Z","sourcePayload":{},"records":[{"type":"sleep_session","startAt":"$startAt","endAt":"$endAt"}]}""")
+                    }
+                assertEquals(HttpStatusCode.Created, ingestion.status)
+            }
+
+            assertEquals(2, authorizedGet("/api/v2/sleep/nights?date=2026-04-20&timezone=UTC").items().size)
+            val sleep = authorizedGet("/api/v2/health/day?date=2026-04-20&timezone=UTC&modules=sleep").jsonBody()["sleep"]!!.jsonObject
+            assertEquals(28800L + 2400L, sleep["totalDurationSeconds"]!!.jsonPrimitive.long)
         }
 
     @Test

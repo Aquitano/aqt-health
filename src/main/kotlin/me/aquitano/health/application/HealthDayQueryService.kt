@@ -194,11 +194,12 @@ class HealthDayQueryService(
         )
     }
 
+    /** Whole sleep sessions that ended on the requested local date, the same set /sleep/nights returns. */
     private fun sleep(context: HealthDayQueryContext): HealthDaySleepResponse {
         val filters =
             ReadFilters(
                 fromDate = context.date,
-                toDate = context.date.plusDays(1),
+                toDate = context.date,
                 timezone = context.timezone,
                 provider = context.provider,
                 providerInstanceId = context.providerInstanceId,
@@ -208,48 +209,27 @@ class HealthDayQueryService(
             )
         val (nights, stagesBySession, sourceMetadata) =
             sleepRepository.listCanonicalSleepNights(filters)
-        val sessions =
-            nights
-                .filter { night ->
-                    night.session.startAt.isBefore(context.to) &&
-                        night.session.endAt.isAfter(context.from)
-                }.groupBy { it.date }
-                .flatMap { (_, nightsForDate) ->
-                    // The canonical sleep sessions can yield >1 row for a night when providers
-                    // tie on rank (e.g. two unranked providers both at rank 10000). Keep a single
-                    // source per night so two providers' overlapping stage segments aren't summed
-                    // twice; multiple sessions from that one source (a fragmented night) still count.
-                    val winningSource = nightsForDate.minOf { it.session.sourceInstanceId }
-                    nightsForDate.filter { it.session.sourceInstanceId == winningSource }
-                }.map { it.session }
-        val segments =
+        val sessions = nights.map { it.session }
+        val stages =
             sessions
-                .flatMap { session ->
-                    stagesBySession[session.id].orEmpty().mapNotNull { stage ->
-                        val start = maxOf(stage.startAt, context.from)
-                        val end = minOf(stage.endAt, context.to)
-                        if (start.isBefore(end)) SleepStageSegment(stage.stage, start, end) else null
-                    }
-                }.sortedBy { it.startAt }
+                .flatMap { stagesBySession[it.id].orEmpty() }
+                .sortedBy { it.startAt }
         val stageTotals =
-            segments
-                .groupingBy { it.stage }
-                .fold(0L) { total, segment ->
-                    total + Duration.between(segment.startAt, segment.endAt).seconds
-                }.map { (stage, duration) ->
-                    HealthDaySleepStageTotalResponse(stage, duration)
-                }.sortedBy { it.stage }
+            stages
+                .groupBy { it.stage }
+                .map { (stage, rows) -> HealthDaySleepStageTotalResponse(stage, rows.sumOf { it.durationSeconds }) }
+                .sortedBy { it.stage }
         val unstagedSeconds =
             sessions
                 .filter { stagesBySession[it.id].isNullOrEmpty() }
-                .sumOf { Duration.between(maxOf(it.startAt, context.from), minOf(it.endAt, context.to)).seconds }
+                .sumOf { Duration.between(it.startAt, it.endAt).seconds }
 
         return HealthDaySleepResponse(
             totalDurationSeconds = stageTotals.sumOf { it.durationSeconds } + unstagedSeconds,
             sessions = sessions.map { it.toResponse(stagesBySession, sourceMetadata) },
             stageTotals = stageTotals,
             timeline =
-                segments.map {
+                stages.map {
                     HealthDaySleepStageSegmentResponse(
                         stage = it.stage,
                         startAt = it.startAt.toString(),
@@ -259,13 +239,6 @@ class HealthDayQueryService(
         )
     }
 }
-
-/** A sleep stage clipped to the requested day, before it is formatted for the response. */
-private data class SleepStageSegment(
-    val stage: String,
-    val startAt: Instant,
-    val endAt: Instant,
-)
 
 private fun HealthDayQueryContext.filters(): ReadFilters =
     ReadFilters(
