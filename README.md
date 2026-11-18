@@ -67,6 +67,19 @@ The check rejects values that contain placeholder markers such as `replace-with`
 
 Copy `.env.example` to `.env` for real values; git ignores `.env`. The example's top block is a production template, and the commented block at the end holds local values.
 
+Docker Compose reads `.env` on its own, but `./gradlew run` does not. Load it into the shell first:
+
+```bash
+set -a; . ./.env; set +a
+```
+
+```powershell
+Get-Content .env | Where-Object { $_ -and $_ -notmatch '^\s*#' } | ForEach-Object {
+  $name, $value = $_ -split '=', 2
+  [Environment]::SetEnvironmentVariable($name.Trim(), $value.Trim(), 'Process')
+}
+```
+
 `.infisical.json` points at the Infisical project that holds the backend variables. After logging in with the Infisical CLI, run from a POSIX shell such as Git Bash:
 
 ```sh
