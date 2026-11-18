@@ -33,14 +33,19 @@ class GoogleScheduleDataTypesMigrationTest : PostgresIntegrationTest() {
         }
 
     @Test
-    fun schedulesOnThePreviousGoogleDefaultsGainDailyMetricsAndActivityOnce() =
+    fun schedulesOnThePreviousGoogleDefaultsGainEachMissingDailyMetricAndActivityTypeOnce() =
         runBlocking {
             val database = openDatabase()
             val repository = ScheduledSyncRepository(database)
             val now = Instant.parse("2026-11-01T00:00:00Z")
             val previousDefaults =
                 listOf("steps", "sleep", "heart-rate", "weight", "body-fat", "heart-rate-variability", "respiratory-rate-sleep-summary")
-            listOf("full" to previousDefaults, "subset" to listOf("steps", "sleep")).forEach { (instance, dataTypes) ->
+            listOf(
+                "full" to previousDefaults,
+                "with-activity" to previousDefaults + "activity",
+                "with-oxygen" to previousDefaults + "daily-oxygen-saturation",
+                "subset" to listOf("steps", "sleep"),
+            ).forEach { (instance, dataTypes) ->
                 repository.upsertConfig("google-health", instance, true, dataTypes, 1_440, 7, now, now)
             }
             val migration =
@@ -49,6 +54,9 @@ class GoogleScheduleDataTypesMigrationTest : PostgresIntegrationTest() {
             repeat(2) { transaction(database) { exec(migration) } }
 
             assertEquals(GoogleHealthDataType.codes, repository.getConfig("google-health", "full")?.dataTypes)
+            listOf("with-activity", "with-oxygen").forEach { instance ->
+                assertEquals(GoogleHealthDataType.codes.sorted(), repository.getConfig("google-health", instance)?.dataTypes?.sorted())
+            }
             assertEquals(listOf("steps", "sleep"), repository.getConfig("google-health", "subset")?.dataTypes)
         }
 }
