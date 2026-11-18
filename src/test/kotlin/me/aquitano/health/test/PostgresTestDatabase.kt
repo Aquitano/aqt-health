@@ -9,6 +9,7 @@ import java.sql.SQLException
 import java.sql.Statement
 import java.util.Collections
 import java.util.UUID
+import kotlin.time.Duration.Companion.minutes
 
 object PostgresTestDatabase {
     private data class ExternalSchema(
@@ -86,6 +87,7 @@ object PostgresTestDatabase {
             user = container.username,
             password = container.password,
             maxPoolSize = 1,
+            idleInTransactionTimeout = 1.minutes,
         )
 
     fun connection(config: DatabaseConfig): Connection = DriverManager.getConnection(config.jdbcUrl, config.user, config.password)
@@ -144,6 +146,7 @@ object PostgresTestDatabase {
             user = user,
             password = password,
             maxPoolSize = 1,
+            idleInTransactionTimeout = 1.minutes,
         )
     }
 
