@@ -67,6 +67,8 @@ After starting the app, open:
 - `http://localhost:8080/openapi` (raw OpenAPI document)
 - `http://localhost:8080/swagger` (Swagger UI)
 
+In production, `/openapi` requires an API key and Swagger UI is off.
+
 ## Configuration
 
 Runtime config is read from `src/main/resources/application.yaml`.
@@ -521,6 +523,29 @@ Sleep reads have two modes:
 - `/api/v2/sleep/sessions` is the instant-based read. Its `from` and `to` filters apply to session `startAt`.
 - `/api/v2/sleep/nights` is the calendar sleep-night read. It returns complete sessions, including all stages, and classifies each session by the localized date of `endAt`. `timezone` is an IANA timezone and defaults to `UTC`; pass it when clients need local calendar behavior. For example, `date=2026-04-20&timezone=Europe/Berlin` returns a session that starts at `2026-04-19T22:00:00Z` and ends at `2026-04-20T06:00:00Z` as the `2026-04-20` sleep night in `Europe/Berlin`. A session from the evening of April 20 to the morning of April 21 is returned for `date=2026-04-21`, not April 20, under those semantics.
 - `/api/v2/health/day` reports the same sessions as `/sleep/nights` for its date, whole: a night that started the previous evening counts in full toward the day it ended.
+
+## Agent CLI
+
+`cli/` holds `aqt-health`, a read-only command-line client for agents and scripts. It prints API responses as JSON and lists the read endpoints from the server's OpenAPI document, so a new endpoint needs no CLI change. It runs on [Bun](https://bun.sh).
+
+```bash
+cd cli
+bun install
+export AQT_HEALTH_URL=http://localhost:8080
+export AQT_HEALTH_API_KEY=local-dev-key
+
+bun src/main.ts endpoints                            # every read endpoint and its parameters
+bun src/main.ts endpoints metrics/heart_rate/daily   # one endpoint: parameter types and descriptions
+bun src/main.ts get steps/daily fromDate=2026-11-01 toDate=2026-11-07 timezone=Europe/Berlin
+bun src/main.ts get metrics/heart_rate from=2026-11-10T00:00:00Z to=2026-11-11T00:00:00Z limit=5000 --all
+```
+
+- Query parameters are `name=value` pairs, and the API rejects names it does not know.
+- `--all` follows `meta.nextCursor` and returns every page as one `items` array; add `limit=5000` to read a big range in fewer requests. It stops once `--max-items` items are read (default 50,000) and keeps `meta.nextCursor`, so the read can continue with `cursor=<nextCursor>`.
+- Errors go to stderr as `{"error":{...}}`, with exit code 1 for a failed request and 2 for a usage error.
+- `AQT_HEALTH_URL` is an http or https base URL and may carry a path prefix, such as `https://example.org/health`. Credentials, a query, a fragment or an empty path segment in it are a usage error.
+- The CLI only sends GET requests. It refuses OAuth endpoints, which change provider connections, and any path that `..` takes outside `/api/` under the base URL. It does not follow redirects; a 3xx response is a failed request that names its `Location`.
+- `bun run build` compiles a standalone binary to `cli/dist/aqt-health` for machines without Bun.
 
 ## Storage Model
 

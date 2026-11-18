@@ -1,6 +1,7 @@
 package me.aquitano.health.api
 
 import io.ktor.client.request.*
+import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
@@ -12,19 +13,25 @@ import me.aquitano.health.infrastructure.config.toAppConfig
 import org.koin.ktor.plugin.Koin
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class ProductionRoutesTest {
     @Test
-    fun openApiAndSwaggerAreNotServedInProduction() =
+    fun productionServesTheSpecOnlyToApiClientsAndNoSwagger() =
         testApplication {
             environment { config = MapApplicationConfig() }
             application {
                 install(Koin)
-                install(Authentication) { basic(ApiKeyAuthProviderName) { validate { null } } }
+                install(Authentication) {
+                    basic(ApiKeyAuthProviderName) { validate { if (it.password == "test-key") UserIdPrincipal(it.name) else null } }
+                }
                 configureRoutes(productionConfig())
             }
 
-            assertEquals(HttpStatusCode.NotFound, client.get("/openapi").status)
+            assertEquals(HttpStatusCode.Unauthorized, client.get("/openapi").status)
+            val spec = client.get("/openapi") { basicAuth("agent", "test-key") }
+            assertEquals(HttpStatusCode.OK, spec.status)
+            assertTrue("/api/v2/admin/health" in spec.bodyAsText())
             assertEquals(HttpStatusCode.NotFound, client.get("/swagger").status)
         }
 

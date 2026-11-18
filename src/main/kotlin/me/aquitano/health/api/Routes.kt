@@ -30,18 +30,21 @@ fun Application.configureRoutes(appConfig: AppConfig) {
     val providerWorkflowService by inject<ProviderWorkflowService>()
 
     routing {
-        // Dev-only contract browsing: production keeps the spec and Swagger UI off the public surface.
-        if (!appConfig.environment.isProduction) {
-            val openApiInfo = openApiInfo()
-            val openApiBaseDoc = openApiBaseDoc()
-            val openApiSource = OpenApiDocSource.Routing(schemaInference = openApiSchemaInference())
+        val openApiBaseDoc = openApiBaseDoc()
+        val openApiSource = OpenApiDocSource.Routing(schemaInference = openApiSchemaInference())
 
+        fun Route.openApiDocument() =
             get("/openapi") {
                 val doc = openApiSource.read(application, openApiBaseDoc)
                 call.respondText(doc.content, doc.contentType)
             }.hide()
+
+        // Production keeps the spec off the public surface: only API clients (the CLI lists
+        // endpoints from it) can read it there, and Swagger UI is dev-only.
+        if (!appConfig.environment.isProduction) {
+            openApiDocument()
             swaggerUI(path = "swagger") {
-                info = openApiInfo
+                info = openApiInfo()
                 components = openApiBaseDoc.components
                 source = openApiSource
                 remotePath = "../openapi"
@@ -116,6 +119,7 @@ fun Application.configureRoutes(appConfig: AppConfig) {
             )
         }
         authenticate(ApiKeyAuthProviderName) {
+            if (appConfig.environment.isProduction) openApiDocument()
             route("/api/v2/ingestion/batches") {
                 install(RequestBodyLimit) {
                     bodyLimit { appConfig.ingestion.maxBodyBytes }
