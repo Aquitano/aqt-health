@@ -2,7 +2,6 @@ package me.aquitano.health.infrastructure.repositories
 
 import me.aquitano.health.domain.ScalarMetricRegistry
 
-/** Records sharing a provider record id are one record only when their metric (and for scalars, context and segment) match. */
 internal fun sameRecordIdentity(
     left: String,
     right: String,

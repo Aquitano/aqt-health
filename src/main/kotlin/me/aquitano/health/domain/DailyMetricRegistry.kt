@@ -18,10 +18,7 @@ data class DailyMetricDescriptor(
     val valueRange: ScalarValueRange,
 )
 
-/**
- * Metrics a provider computes once per calendar day. The provider picks the date; overnight
- * metrics carry the date of the morning the night ended, matching /sleep/nights.
- */
+/** The provider picks the date; overnight metrics carry the date of the morning the night ended, matching /sleep/nights. */
 object DailyMetricRegistry {
     val descriptors: List<DailyMetricDescriptor> =
         listOf(

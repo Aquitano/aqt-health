@@ -10,7 +10,6 @@ import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.jdbc.selectAll
 
-/** Reads through the canonical_daily_metric_values view (best-ranked provider per date and metric, see V40). */
 class DailyMetricReadRepository : BaseMetricReadRepository() {
     fun listCanonical(
         filters: ReadFilters,

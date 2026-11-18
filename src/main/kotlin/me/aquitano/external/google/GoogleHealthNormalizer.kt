@@ -33,11 +33,9 @@ class GoogleHealthNormalizer {
     }
 
     /**
-     * Different records that share a time key (two devices at one instant) all stay: the first in
-     * content order keeps the key, so a reading stored before the second one arrived is updated
-     * rather than duplicated, and each other one gains a hash of its content. Identical copies keep
-     * one id, and a re-read of the same window yields the same ids. Ids Google assigned are left
-     * alone.
+     * The first record in content order keeps the plain time key, so a reading stored before a
+     * second one arrived at its instant is updated rather than duplicated. Ordering by content, not
+     * by arrival, gives a re-read of the window the same ids.
      */
     private fun List<IngestionRecord>.withDistinctTimeKeys(timeKeyPrefix: String): List<IngestionRecord> {
         val shared =
@@ -321,11 +319,7 @@ class GoogleHealthNormalizer {
         )
     }
 
-    /**
-     * Reconciled points are one stream per data type, so the time key is nearly always unique
-     * within it; [withDistinctTimeKeys] separates the rare readings that share one. It leaves out the
-     * payload, so a field Google adds later cannot turn the same reading into a new record.
-     */
+    /** Leaves out the payload, so a field Google adds later cannot turn the same reading into a new record. */
     private fun providerRecordId(
         dataType: String,
         point: JsonObject,
@@ -392,10 +386,7 @@ class GoogleHealthNormalizer {
         }
     }
 
-    /**
-     * One activity summary per date from the merged daily roll-ups. Google leaves a roll-up value
-     * unset for a day nothing was worn, so absent fields stay null instead of becoming zeros.
-     */
+    /** Google leaves a roll-up value unset for a day nothing was worn, so absent fields stay null instead of becoming zeros. */
     private fun normalizeActivity(
         dataType: String,
         point: JsonObject,

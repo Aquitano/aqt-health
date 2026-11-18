@@ -18,7 +18,6 @@ val GOOGLE_HEALTH_SCOPES =
         "https://www.googleapis.com/auth/googlehealth.sleep.readonly",
     )
 
-/** How a data type is read: reconciled points filtered by time or by date, or merged daily roll-ups. */
 sealed interface GoogleHealthFetch {
     /** `reconcile` merges every source into one stream, so overlapping devices are not double counted. */
     data class Reconcile(

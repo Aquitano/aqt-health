@@ -75,7 +75,6 @@ data class ActivitySummary(
     fun hasAnyMetric(): Boolean = this != ActivitySummary(providerRecordId, date)
 }
 
-/** A value the provider computes once per calendar day; the metric type comes from DailyMetricRegistry. */
 @Serializable
 @SerialName("daily_metric")
 data class DailyMetric(

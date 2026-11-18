@@ -329,13 +329,7 @@ If a refresh token is expired, invalid, or revoked, sync marks the account `need
 
 The Google Health provider is a server-owned OAuth integration. It reads Google Health data, normalizes it into the same ingestion batch contract shown above, stores the original Google response pages in `sourcePayload`, and writes the existing metric tables through the normal ingestion service.
 
-Sync uses Google's generated Health client library (`com.google.cloud:google-cloud-health`, API v4); the remaining Ktor Google client code is OAuth-only. Every data type except `activity` is read with `reconcile` over all of the account's sources (`dataSourceFamily=all-sources`), not `list`; `activity` is read from Google's daily roll-ups over the same sources:
-
-- Google merges overlapping sources into one stream per data type. A watch and a phone counting the same walk count once, and daily step totals match Google's own daily roll-up. `list` returned every source's copy, which over-counted steps on days with phone or Health Connect data.
-- Wearable readings from periods the device was not worn are left out.
-- Narrower source families drop real data: `google-sources` and `google-wearables` return no weights for a Withings scale that writes into Google Health through Health Connect.
-
-Points Google names (sleep, weight, body fat, respiratory rate) keep that name as their record id; others are keyed by data type and time, so a re-read of the same window updates instead of duplicating. When a window holds two different readings for one time key (two devices at one instant), both are stored: one keeps the key and the other gains a hash of its content. Identical copies are stored once. Scalar records stored through `list` carried a hash of the whole point in their id; V42 removed it, except for instants where some batch held two points at the same second. Those keep their old ids in every batch, so re-reading such an instant stores it again under the new ids.
+Sync uses Google's official generated Health client library for datapoint reads; the remaining Ktor Google client code is OAuth-only. Every data type is read over all of the account's sources (`all-sources`), with `reconcile` so Google merges overlapping devices into one stream, or from Google's daily roll-ups for `activity`. Narrower source families drop real data, such as weights a Withings scale writes into Google Health through Health Connect.
 
 Google Cloud setup:
 
@@ -374,27 +368,13 @@ curl -X POST http://localhost:8080/api/v2/providers/google-health/sync-jobs \
   }'
 ```
 
-If `dataTypes` is omitted, the sync reads every type:
-
-| Data type | Stored as |
-|---|---|
-| `steps` | step intervals |
-| `sleep` | sleep sessions with stages, plus a sleep summary for the main sleep (Google's `mainSleep`; when a window has none, every session that is not a nap) |
-| `heart-rate`, `heart-rate-variability`, `respiratory-rate-sleep-summary`, `weight`, `body-fat` | scalar samples |
-| `daily-resting-heart-rate` | daily metric `resting_heart_rate` |
-| `daily-heart-rate-variability` | daily metrics `nightly_hrv_rmssd`, `deep_sleep_hrv_rmssd`, `non_rem_heart_rate` |
-| `daily-oxygen-saturation` | daily metrics `oxygen_saturation`, `oxygen_saturation_lower_bound` (lower bound of the confidence interval) |
-| `daily-respiratory-rate` | daily metric `nightly_respiratory_rate` |
-| `daily-sleep-temperature-derivations` | daily metrics `nightly_skin_temperature`, `skin_temperature_baseline` |
-| `activity` | one activity summary per date from Google's daily roll-ups: distance, total calories, light/moderate/vigorous minutes (`activeMinutes` is moderate plus vigorous), and heart-rate average, minimum and maximum |
-
-Daily values are dated by Google's calendar date; overnight metrics carry the date of the morning the night ended. A day nothing was worn yields no activity summary rather than zeros. Activity summaries are ranked as whole rows with Google first, so on a date Google summarizes, the Withings summary and its Withings-only fields (`activeEnergyKcal`, `elevationMeters`) are not returned. As with every read, `provider=withings` filters the canonical result, so it returns no summary for that date. If both `from` and `to` are omitted, the sync defaults to the last seven days. Long explicit ranges are accepted for historical backfill and are split into UTC-day-aligned one-day windows before fetching. Completed days are skipped on repeated syncs over the same range; only the current, still-open day is re-fetched.
+If `dataTypes` is omitted, the sync reads every type listed in `supportedDataTypes` of `GET /api/v2/providers/google-health`. A `sleep` point also yields a sleep summary when Google marks it as the main sleep, or, in a window without a main sleep, when it is not a nap. Overnight daily metrics carry the date of the morning the night ended. Activity summaries are ranked as whole rows with Google first, so on a date Google summarizes, the Withings summary and its Withings-only fields (`activeEnergyKcal`, `elevationMeters`) are not returned. If both `from` and `to` are omitted, the sync defaults to the last seven days. Long explicit ranges are accepted for historical backfill and are split into UTC-day-aligned one-day windows before fetching. Completed days are skipped on repeated syncs over the same range; only the current, still-open day is re-fetched.
 
 Poll `/api/v2/providers/google-health/sync-jobs/{jobId}` for progress and the final summary. The backend owns the provider-safe sequential work after the job is accepted, so a client that disconnects does not stop the sync job.
 
 Sync jobs also survive backend restarts: unfinished jobs are requeued and rerun on startup, which is safe because ingestion dedupes by provider record ID. The job status reports how often this happened in `restartCount`; after three restarts a job is failed instead of resumed to stop crash loops.
 
-Overlapping Google Health step intervals for the same account are still skipped as duplicates during ingestion. Steps stored before the switch to `reconcile` keep their old, inflated totals: raw rows are never deleted, so only a backfill into a fresh database repairs them. Google serves the full history to `reconcile`.
+Overlapping Google Health step intervals for the same account are skipped as duplicates during ingestion. Steps stored by versions that read with `list` stay inflated where devices overlapped; raw rows are never deleted, so only a backfill into a fresh database repairs them.
 
 ## Withings Provider
 
@@ -491,8 +471,6 @@ curl "http://localhost:8080/api/v2/metrics/heart_rate/daily?fromDate=2026-04-13&
 curl "http://localhost:8080/api/v2/daily-metrics?metricTypes=resting_heart_rate,nightly_hrv_rmssd&fromDate=2026-04-13&toDate=2026-04-19" \
   -H "Authorization: Bearer local-dev-key"
 ```
-
-`/api/v2/daily-metrics` returns values a provider computes once per calendar day (`resting_heart_rate`, `non_rem_heart_rate`, `nightly_hrv_rmssd`, `deep_sleep_hrv_rmssd`, `oxygen_saturation`, `oxygen_saturation_lower_bound`, `nightly_respiratory_rate`, `nightly_skin_temperature`, `skin_temperature_baseline`), each with its unit. `metricTypes` defaults to all of them. Ingest them as `daily_metric` records with `date`, `metricType` and `value`; per date and metric the best-ranked provider wins (Google first).
 
 Admin ingestion views:
 

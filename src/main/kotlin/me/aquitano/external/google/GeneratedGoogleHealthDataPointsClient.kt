@@ -132,11 +132,6 @@ class GeneratedGoogleHealthClient(
         return GoogleHealthFetchResult(dataType, pages, dataPoints)
     }
 
-    /**
-     * One daily roll-up call per roll-up type, merged into one point per date keyed by each
-     * roll-up value field (distance, totalCalories, ...). A type without a value for a date
-     * (nothing worn) contributes nothing.
-     */
     private fun activityRollUp(
         service: GoogleHealthDataPointsService,
         dataType: GoogleHealthDataType,
@@ -227,7 +222,7 @@ class GeneratedGoogleHealthClient(
                 .printer()
                 .omittingInsignificantWhitespace()
 
-        /** Every source Google holds. Narrower families drop real data, such as scale weights written through Health Connect. */
+        /** Narrower source families drop real data, such as scale weights written through Health Connect. */
         private const val ALL_SOURCES = "users/me/dataSourceFamilies/all-sources"
 
         private fun dataTypeParent(code: String) = DataTypeName.of("me", code).toString()

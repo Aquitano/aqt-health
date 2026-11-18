@@ -79,7 +79,6 @@ data class ActivitySummaryRecord(
     override val recordEndAt: Instant = date.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant()
 }
 
-/** One provider-computed value for a whole calendar day, such as resting heart rate. */
 data class DailyMetricRecord(
     override val providerRecordId: String?,
     val date: LocalDate,
