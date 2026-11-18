@@ -6,7 +6,7 @@ import me.aquitano.health.application.metric.common.QueryParams
 import me.aquitano.health.application.metric.common.repository.ReadFilters
 import me.aquitano.health.application.metric.scalar.ScalarSampleReadRepository
 import me.aquitano.health.application.metric.scalar.toScalarResponse
-import me.aquitano.health.application.metric.sleep.repository.CanonicalSleepSessionDerivationRepository
+import me.aquitano.health.application.metric.sleep.repository.SleepRepository
 import me.aquitano.health.application.metric.steps.repository.CanonicalStepDerivationRepository
 import me.aquitano.health.domain.BodyMetricTypes
 import me.aquitano.health.domain.ScalarMetricTypes
@@ -23,7 +23,7 @@ import kotlin.math.roundToInt
 class TrendQueryService(
     private val database: Database,
     private val stepRepository: CanonicalStepDerivationRepository,
-    private val sleepRepository: CanonicalSleepSessionDerivationRepository,
+    private val sleepRepository: SleepRepository,
     private val scalarRepository: ScalarSampleReadRepository,
 ) {
     suspend fun dashboardTrends(
@@ -113,14 +113,8 @@ class TrendQueryService(
         previousTo: LocalDate,
         timezone: ZoneId,
     ): SleepTrend? {
-        val currentAvg =
-            sleepRepository.avgCanonicalSleepDuration(
-                readFilters(currentFrom, currentTo, timezone),
-            )
-        val previousAvg =
-            sleepRepository.avgCanonicalSleepDuration(
-                readFilters(previousFrom, previousTo, timezone),
-            )
+        val currentAvg = sleepRepository.avgNightlySleepSeconds(currentFrom, currentTo, timezone)
+        val previousAvg = sleepRepository.avgNightlySleepSeconds(previousFrom, previousTo, timezone)
         if (currentAvg == null && previousAvg == null) return null
         val current = currentAvg ?: 0L
         val previous = previousAvg ?: 0L

@@ -9,6 +9,9 @@ import me.aquitano.health.infrastructure.database.tables.*
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.jdbc.*
+import java.time.LocalDate
+import java.time.ZoneId
+import kotlin.math.roundToLong
 
 class SleepRepository : BaseMetricReadRepository() {
     /**
@@ -20,7 +23,7 @@ class SleepRepository : BaseMetricReadRepository() {
         val sourceIds = filters.sourceInstanceIds()
         if (sourceIds.hasNoMatchingSources()) return emptyTripleReadResult()
 
-        val nightDate = LocalDayOf(CanonicalSleepSessionsTable.endAt, filters.timezone.id)
+        val nightDate = LocalDayOf(CanonicalSleepSessionsTable.endAt, filters.timezone)
         val conditions =
             listOfNotNull(
                 filters.fromDate?.let { nightDate greaterEq it },
@@ -54,6 +57,25 @@ class SleepRepository : BaseMetricReadRepository() {
                 filters.includeSource,
             )
         return Triple(nights, stagesBySession, metadata)
+    }
+
+    /** Average, over the nights in the range, of the summed duration of the sessions /sleep/nights returns for each night. */
+    fun avgNightlySleepSeconds(
+        fromDate: LocalDate,
+        toDate: LocalDate,
+        timezone: ZoneId,
+    ): Long? {
+        val nightDate = LocalDayOf(CanonicalSleepSessionsTable.endAt, timezone)
+        val nightTotal = SleepSessionsTable.durationSeconds.sum()
+        return CanonicalSleepSessionsTable
+            .innerJoin(SleepSessionsTable)
+            .select(nightDate, nightTotal)
+            .where { (nightDate greaterEq fromDate) and (nightDate lessEq toDate) }
+            .groupBy(nightDate)
+            .mapNotNull { it[nightTotal] }
+            .takeIf { it.isNotEmpty() }
+            ?.average()
+            ?.roundToLong()
     }
 
     private fun toSleepStageRow(row: ResultRow): SleepStageRow =

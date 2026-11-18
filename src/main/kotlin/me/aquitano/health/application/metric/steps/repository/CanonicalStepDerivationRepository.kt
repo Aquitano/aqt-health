@@ -200,7 +200,7 @@ class CanonicalStepDerivationRepository : BaseMetricReadRepository() {
         )
     }
 
-    private fun localDayOf(filters: ReadFilters) = LocalDayOf(CanonicalStepDayBucketContributionsTable.bucketStartAt, filters.timezone.id)
+    private fun localDayOf(filters: ReadFilters) = LocalDayOf(CanonicalStepDayBucketContributionsTable.bucketStartAt, filters.timezone)
 
     fun sumCanonicalStepDailySummaries(filters: ReadFilters): DashboardStepsSummaryRow {
         val table = CanonicalStepDayBucketContributionsTable

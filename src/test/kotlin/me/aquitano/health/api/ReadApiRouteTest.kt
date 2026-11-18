@@ -456,6 +456,8 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
             assertEquals(2, authorizedGet("/api/v2/sleep/nights?date=2026-04-20&timezone=UTC").items().size)
             val sleep = authorizedGet("/api/v2/health/day?date=2026-04-20&timezone=UTC&modules=sleep").jsonBody()["sleep"]!!.jsonObject
             assertEquals(28800L + 2400L, sleep["totalDurationSeconds"]!!.jsonPrimitive.long)
+            val trend = authorizedGet("/api/v2/dashboard/trends?toDate=2026-04-20&periodDays=1&timezone=UTC").jsonBody()["sleep"]!!.jsonObject
+            assertEquals(28800L + 2400L, trend["currentAvgSeconds"]!!.jsonPrimitive.long)
         }
 
     @Test
