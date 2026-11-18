@@ -57,7 +57,6 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
             fixture.replay(ReplayRequest(wipe = true))
             fixture.assertCorrectedValues()
             assertEquals(21, fixture.config.countRows("ingestion_records"))
-            projectionTables.forEach { assertEquals(1, fixture.config.countRows(it)) }
         }
 
     @Test
@@ -419,6 +418,7 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
 
         fun assertCorrectedValues() =
             with(config) {
+                projectionTables.forEach { assertEquals(1, countRows(it)) }
                 assertEquals(200, queryInt("SELECT steps FROM step_samples"))
                 assertEquals("deep", queryString("SELECT stage FROM sleep_stages"))
                 assertEquals(1, countRows("sleep_stages"))

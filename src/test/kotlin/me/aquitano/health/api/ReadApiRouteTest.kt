@@ -828,7 +828,7 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
     fun dailyMetricsReturnTheBestRankedProvidersValuePerDateWithItsUnit() =
         testApplication {
             configureTestApplication()
-            for ((provider, value) in listOf("withings" to 58.0, "google_health" to 61.0)) {
+            for ((provider, value) in listOf("google_health" to 61.0, "withings" to 58.0)) {
                 val response =
                     client.post("/api/v2/ingestion/batches") {
                         authorized()
