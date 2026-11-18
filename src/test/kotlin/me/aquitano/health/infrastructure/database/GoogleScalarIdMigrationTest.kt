@@ -47,6 +47,6 @@ class GoogleScalarIdMigrationTest : PostgresIntegrationTest() {
         assertEquals(listOf(resent, "$sameSecond:$hashB", "$sameSecond:$hashC", "$sameSecond:$hashB", resent), ids("ingestion_records"))
         // Only the newest row of a resent reading takes the new id; the older row's log record is superseded by it.
         assertEquals(listOf("$resent:$hashA", "$sameSecond:$hashB", "$sameSecond:$hashC", "withings:2026-04-01T08:00:00Z:$hashA", resent), ids("scalar_samples"))
-        assertEquals(0, config.queryInt("SELECT COUNT(*) FROM ingestion_records WHERE normalized_record_json->>'providerRecordId' <> provider_record_id"))
+        assertEquals(0, config.queryInt("SELECT COUNT(*) FROM ingestion_records WHERE normalized_record_json->>'providerRecordId' IS DISTINCT FROM provider_record_id"))
     }
 }
