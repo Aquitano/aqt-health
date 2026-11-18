@@ -103,7 +103,7 @@ abstract class BaseMetricReadRepository {
 
                 is TimeFilterMode.OverlapsWindow -> {
                     listOf(
-                        from?.let { if (mode.inclusiveFrom) mode.toColumn greaterEq it else mode.toColumn greater it },
+                        from?.let { mode.toColumn greater it },
                         to?.let { fromColumn less it },
                     )
                 }
@@ -212,9 +212,8 @@ sealed interface TimeFilterMode {
 
     data object BeforeFrom : TimeFilterMode
 
-    /** The row's span up to [toColumn] overlaps the window; [inclusiveFrom] also keeps spans ending exactly at `from`. */
+    /** The row's span up to [toColumn] overlaps the window. */
     data class OverlapsWindow(
         val toColumn: Column<OffsetDateTime>,
-        val inclusiveFrom: Boolean = false,
     ) : TimeFilterMode
 }

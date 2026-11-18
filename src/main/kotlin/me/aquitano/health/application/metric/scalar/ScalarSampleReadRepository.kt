@@ -143,7 +143,7 @@ class ScalarSampleReadRepository : BaseMetricReadRepository() {
                 fromColumn = table.measuredAt,
             ) ?: return emptyList()
 
-        val dayExpression = LocalDayOf(table.measuredAt, zone.id)
+        val dayExpression = LocalDayOf(table.measuredAt, zone)
         val countExpression = table.valueColumn.count()
         val minExpression = table.valueColumn.min()
         val maxExpression = table.valueColumn.max()

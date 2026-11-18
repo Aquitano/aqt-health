@@ -11,7 +11,6 @@ import me.aquitano.health.application.metric.common.MetricWrite
 import me.aquitano.health.application.metric.common.QueryParams
 import me.aquitano.health.application.metric.dashboard.DashboardQueryService
 import me.aquitano.health.application.metric.scalar.ScalarSampleReadRepository
-import me.aquitano.health.application.metric.sleep.repository.CanonicalSleepSessionDerivationRepository
 import me.aquitano.health.application.metric.sleep.repository.SleepRepository
 import me.aquitano.health.application.metric.steps.StepQueryService
 import me.aquitano.health.application.metric.steps.derived.CanonicalStepDerivationService
@@ -410,7 +409,7 @@ class ProviderCorrectionTest : PostgresIntegrationTest() {
                 java.time.temporal.ChronoUnit.DAYS
                     .between(LocalDate.parse(from), LocalDate.parse(to)) + 1
             val trends =
-                TrendQueryService(database, canonical, CanonicalSleepSessionDerivationRepository(), ScalarSampleReadRepository())
+                TrendQueryService(database, canonical, SleepRepository(), ScalarSampleReadRepository())
                     .dashboardTrends(QueryParams(mapOf("toDate" to to, "periodDays" to days.toString())), now)
             assertEquals(expected.values.sum(), trends.steps!!.currentSteps)
         }

@@ -10,7 +10,7 @@ import me.aquitano.health.infrastructure.database.tables.SleepSummariesTable
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.selectAll
 
-/** Reads through the canonical_sleep_summaries view (rank winner per UTC start date, see V15). */
+/** Reads through the canonical_sleep_summaries view (a summary is hidden where a better-ranked or newer summary overlaps it, see V38). */
 class CanonicalSleepSummaryDerivationRepository : BaseMetricReadRepository() {
     fun listCanonicalSleepSummaries(filters: ReadFilters): List<SleepSummaryResponse> {
         val where =

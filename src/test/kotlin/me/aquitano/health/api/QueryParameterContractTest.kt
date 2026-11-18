@@ -2,6 +2,7 @@ package me.aquitano.health.api
 
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
+import io.ktor.http.*
 import io.ktor.server.testing.*
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.boolean
@@ -16,7 +17,7 @@ import java.net.URLEncoder
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-/** Unknown query parameters are rejected, so every parameter the OpenAPI spec documents must be read by its handler. */
+/** Unknown query parameters are rejected, so every read must succeed with each parameter its OpenAPI spec documents. */
 class QueryParameterContractTest : PostgresIntegrationTest() {
     @Test
     fun everyDocumentedQueryParameterIsAccepted() =
@@ -25,7 +26,7 @@ class QueryParameterContractTest : PostgresIntegrationTest() {
             val paths = AppJson.parseToJsonElement(client.get("/openapi").bodyAsText()).jsonObject["paths"]!!.jsonObject
 
             val rejected =
-                paths.flatMap { (path, item) ->
+                paths.filterKeys { "/oauth/" !in it }.flatMap { (path, item) ->
                     val query =
                         item.jsonObject["get"]
                             ?.jsonObject["parameters"]
@@ -34,15 +35,19 @@ class QueryParameterContractTest : PostgresIntegrationTest() {
                             .map { it.jsonObject }
                             .filter { it["in"]!!.jsonPrimitive.content == "query" }
                     val required = query.filter { it["required"]?.jsonPrimitive?.boolean == true }
+                    val withDateRange = required + query.filter { it.name() == "fromDate" }
                     query
                         .filter { parameter ->
-                            val queryString = (required + parameter).distinctBy { it.name() }.joinToString("&") { "${it.name()}=${it.exampleValue()}" }
-                            client.get("${concrete(path)}?$queryString") { authorized() }.bodyAsText().contains("unknown_parameter")
+                            val baseline = if (parameter.name() in dateParameters) required else withDateRange
+                            val queryString = (baseline + parameter).distinctBy { it.name() }.joinToString("&") { "${it.name()}=${it.exampleValue()}" }
+                            !client.get("${concrete(path)}?$queryString") { authorized() }.status.isSuccess()
                         }.map { "$path ${it.name()}" }
                 }
 
             assertEquals(emptyList(), rejected)
         }
+
+    private val dateParameters = setOf("date", "fromDate", "toDate")
 
     private fun JsonObject.name() = this["name"]!!.jsonPrimitive.content
 

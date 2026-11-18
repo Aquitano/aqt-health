@@ -2,6 +2,7 @@ package me.aquitano.health.infrastructure.config
 
 import io.ktor.server.config.*
 import java.net.URI
+import kotlin.time.Duration
 
 data class AppConfig(
     val environment: RuntimeEnvironment,
@@ -39,6 +40,7 @@ data class DatabaseConfig(
     val user: String,
     val password: String,
     val maxPoolSize: Int,
+    val idleInTransactionTimeout: Duration,
 )
 
 data class AuthConfig(
@@ -85,6 +87,12 @@ fun ApplicationConfig.toAppConfig(): AppConfig =
                     property("aqtHealth.database.maxPoolSize")
                         .getString()
                         .toInt(),
+                idleInTransactionTimeout =
+                    optional("aqtHealth.database.idleInTransactionTimeout", "1m").let { value ->
+                        Duration.parseOrNull(value) ?: throw AppConfigValidationException(
+                            listOf(ConfigValidationIssue("aqtHealth.database.idleInTransactionTimeout", "must be a duration such as 30s or 2m, got '$value'")),
+                        )
+                    },
             ),
         auth =
             AuthConfig(
@@ -104,6 +112,9 @@ fun AppConfig.validateForStartup() {
         buildList {
             if (ingestion.maxBodyBytes <= 0) {
                 add(ConfigValidationIssue("aqtHealth.ingestion.maxBodyBytes", "must be positive"))
+            }
+            if (database.idleInTransactionTimeout.inWholeMilliseconds !in 1..Int.MAX_VALUE.toLong()) {
+                add(ConfigValidationIssue("aqtHealth.database.idleInTransactionTimeout", "must be between 1ms and ${Int.MAX_VALUE}ms"))
             }
             if (auth.bootstrapApiKey.isNotBlank() && !auth.bootstrapApiKey.matches(bearerTokenPattern)) {
                 add(
