@@ -11,6 +11,7 @@ import me.aquitano.health.application.metric.sleep.repository.SleepRepository
 import me.aquitano.health.application.metric.steps.repository.CanonicalStepDerivationRepository
 import me.aquitano.health.domain.BodyMetricTypes
 import me.aquitano.health.domain.RequestValidationException
+import me.aquitano.health.domain.ScalarMetricRegistry
 import me.aquitano.health.domain.ScalarMetricTypes
 import me.aquitano.health.domain.ValidationIssue
 import me.aquitano.health.domain.ValidationIssueCodes
@@ -130,7 +131,7 @@ class HealthDayQueryService(
             }
 
         return HealthDayStepsResponse(
-            total = values.sum().roundToInt(),
+            steps = values.sum().roundToInt(),
             sampleCount = samplesBySource.values.sum(),
             buckets =
                 buckets.mapIndexed { index, (start, end) ->
@@ -162,10 +163,11 @@ class HealthDayQueryService(
         }
 
         return HealthDayHeartRateResponse(
+            unit = checkNotNull(ScalarMetricRegistry.find(ScalarMetricTypes.HEART_RATE)).unit,
             count = values.size,
-            minBpm = values.minOrNull()?.roundToInt(),
-            maxBpm = values.maxOrNull()?.roundToInt(),
-            avgBpm = values.takeIf { it.isNotEmpty() }?.average()?.toTwoDecimals(),
+            minValue = values.minOrNull(),
+            maxValue = values.maxOrNull(),
+            avgValue = values.takeIf { it.isNotEmpty() }?.average()?.toTwoDecimals(),
             latest = samples.lastOrNull()?.toScalarResponse(sourceMetadata),
             buckets =
                 buckets.mapIndexed { index, (start, end) ->

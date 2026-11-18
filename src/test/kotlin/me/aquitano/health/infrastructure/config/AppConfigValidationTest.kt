@@ -5,6 +5,10 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.test.fail
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 class AppConfigValidationTest {
     @Test
@@ -58,6 +62,20 @@ class AppConfigValidationTest {
     }
 
     @Test
+    fun rejectsAnIdleInTransactionTimeoutPostgresWouldIgnoreOrRefuse() {
+        for (timeout in listOf(0.seconds, (-1).minutes, 25.days)) {
+            val issues =
+                runCatching { productionConfig(idleInTransactionTimeout = timeout).validateForStartup() }
+                    .exceptionOrNull()
+                    .let { it as? AppConfigValidationException }
+                    ?.issues
+                    ?: fail("expected $timeout to fail validation")
+
+            assertEquals("aqtHealth.database.idleInTransactionTimeout", issues.single().path)
+        }
+    }
+
+    @Test
     fun rejectsAnUnknownRuntimeEnvironmentInsteadOfFallingBackToLocal() {
         val issues =
             runCatching { MapApplicationConfig("aqtHealth.environment" to "prd").toAppConfig() }
@@ -72,6 +90,7 @@ class AppConfigValidationTest {
     private fun productionConfig(
         bootstrapApiKey: String = "0123456789abcdef0123456789abcdef",
         maxBodyBytes: Long = 33_554_432,
+        idleInTransactionTimeout: Duration = 1.minutes,
     ): AppConfig =
         AppConfig(
             environment = RuntimeEnvironment.PRODUCTION,
@@ -81,6 +100,7 @@ class AppConfigValidationTest {
                     user = "aqt_health_app",
                     password = "a-real-database-password",
                     maxPoolSize = 10,
+                    idleInTransactionTimeout = idleInTransactionTimeout,
                 ),
             auth =
                 AuthConfig(

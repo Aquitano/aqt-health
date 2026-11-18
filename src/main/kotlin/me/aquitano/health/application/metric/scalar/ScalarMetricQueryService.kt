@@ -17,6 +17,7 @@ import me.aquitano.health.application.metric.common.repository.ReadFilters
 import me.aquitano.health.application.metric.common.summaryFilters
 import me.aquitano.health.domain.NotFoundException
 import me.aquitano.health.domain.RequestValidationException
+import me.aquitano.health.domain.ScalarMetricDescriptor
 import me.aquitano.health.domain.ScalarMetricRegistry
 import me.aquitano.health.domain.ValidationIssue
 import me.aquitano.health.domain.ValidationIssueCodes
@@ -96,7 +97,7 @@ class ScalarMetricQueryService(
         metricType: String,
         params: QueryParams,
     ): ScalarSummaryResponse {
-        requireKnown(metricType)
+        val unit = requireKnown(metricType).unit
         return suspendDbTransaction(db = database) {
             val filters = params.summaryFilters()
             val summary = scalarRepository.summarize(filters, setOf(metricType), canonical = true)
@@ -104,6 +105,7 @@ class ScalarMetricQueryService(
                 scalarRepository.latest(filters, setOf(metricType), canonical = true)
             ScalarSummaryResponse(
                 metricType = metricType,
+                unit = unit,
                 count = summary.count,
                 minValue = summary.minValue,
                 maxValue = summary.maxValue,
@@ -118,7 +120,7 @@ class ScalarMetricQueryService(
         params: QueryParams,
         now: Instant,
     ): ScalarDailySummariesResponse {
-        requireKnown(metricType)
+        val unit = requireKnown(metricType).unit
         params.rejectLatest()
         val zone = params.timezone()
         val (fromDate, toDate) = params.dailyDateRange(now, zone)
@@ -142,6 +144,7 @@ class ScalarMetricQueryService(
                     .map {
                         ScalarDailySummaryResponse(
                             date = it.date.toString(),
+                            unit = unit,
                             count = it.count,
                             minValue = it.minValue,
                             maxValue = it.maxValue,
@@ -161,9 +164,5 @@ class ScalarMetricQueryService(
         }
     }
 
-    private fun requireKnown(metricType: String) {
-        if (ScalarMetricRegistry.find(metricType) == null) {
-            throw NotFoundException("Unknown metric type '$metricType'")
-        }
-    }
+    private fun requireKnown(metricType: String): ScalarMetricDescriptor = ScalarMetricRegistry.find(metricType) ?: throw NotFoundException("Unknown metric type '$metricType'")
 }

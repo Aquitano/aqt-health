@@ -13,16 +13,16 @@ data class DashboardTrendsResponse(
 
 @Serializable
 data class StepsTrend(
-    val currentTotal: Int,
-    val previousTotal: Int,
+    val currentSteps: Int,
+    val previousSteps: Int,
     val percentChange: Double,
-    val dailyAverage: Int,
+    val avgDailySteps: Int,
 )
 
 @Serializable
 data class HeartRateTrend(
-    val currentAvg: Double,
-    val previousAvg: Double,
+    val currentAvgBpm: Double,
+    val previousAvgBpm: Double,
     val percentChange: Double,
 )
 

@@ -54,7 +54,7 @@ class CanonicalActivitySummaryDerivationRepository : BaseMetricReadRepository() 
             moderateMinutes = row[ActivitySummariesTable.moderateMinutes],
             intenseMinutes = row[ActivitySummariesTable.intenseMinutes],
             activeMinutes = row[ActivitySummariesTable.activeMinutes],
-            averageHeartRateBpm = row[ActivitySummariesTable.avgHeartRateBpm],
+            avgHeartRateBpm = row[ActivitySummariesTable.avgHeartRateBpm],
             minHeartRateBpm = row[ActivitySummariesTable.minHeartRateBpm],
             maxHeartRateBpm = row[ActivitySummariesTable.maxHeartRateBpm],
             source = source,
