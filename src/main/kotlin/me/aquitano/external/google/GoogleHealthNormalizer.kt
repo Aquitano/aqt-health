@@ -33,20 +33,19 @@ class GoogleHealthNormalizer {
     }
 
     /**
-     * Identical copies of a record collapse into one. Different records that share a time key (two
-     * devices at one instant) all stay: the first in content order keeps the key, so a reading
-     * stored before the second one arrived is updated rather than duplicated, and each other one
-     * gains a hash of its content. A re-read of the same window yields the same ids. Ids Google
-     * assigned are left alone.
+     * Different records that share a time key (two devices at one instant) all stay: the first in
+     * content order keeps the key, so a reading stored before the second one arrived is updated
+     * rather than duplicated, and each other one gains a hash of its content. Identical copies keep
+     * one id, and a re-read of the same window yields the same ids. Ids Google assigned are left
+     * alone.
      */
     private fun List<IngestionRecord>.withDistinctTimeKeys(timeKeyPrefix: String): List<IngestionRecord> {
-        val records = distinct()
         val shared =
-            records
-                .filter { it.providerRecordId?.startsWith(timeKeyPrefix) == true }
+            filter { it.providerRecordId?.startsWith(timeKeyPrefix) == true }
                 .groupBy { it.providerRecordId }
+                .mapValues { (_, sharing) -> sharing.distinct() }
                 .filterValues { it.size > 1 }
-        if (shared.isEmpty()) return records
+        if (shared.isEmpty()) return this
         val renamed =
             shared.values
                 .flatMap { sharing ->
@@ -56,7 +55,7 @@ class GoogleHealthNormalizer {
                         .drop(1)
                         .map { (record, content) -> record to record.withProviderRecordId("${record.providerRecordId}:${contentKey(content)}") }
                 }.toMap()
-        return records.map { renamed[it] ?: it }
+        return map { renamed[it] ?: it }
     }
 
     private fun contentKey(content: String): String = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content.toByteArray(Charsets.UTF_8))).take(16)
@@ -220,7 +219,7 @@ class GoogleHealthNormalizer {
     ): ScalarSample? {
         val hrv = point.objOrNull("heartRateVariability") ?: return null
         val measuredAt = hrv.objOrNull("sampleTime")?.stringOrNull("physicalTime") ?: return null
-        val rmssd = hrv.doubleOrNull("rootMeanSquareOfSuccessiveDifferencesMilliseconds") ?: return null
+        val rmssd = hrv.finiteDoubleOrNull("rootMeanSquareOfSuccessiveDifferencesMilliseconds") ?: return null
         if (rmssd <= 0.0 || rmssd > 500.0) return null
         return ScalarSample(
             providerRecordId = providerRecordId(dataType, point, measuredAt, null),
@@ -238,7 +237,7 @@ class GoogleHealthNormalizer {
         val summary = point.objOrNull("respiratoryRateSleepSummary") ?: return null
         val measuredAt = summary.objOrNull("sampleTime")?.stringOrNull("physicalTime") ?: return null
         val breathsPerMinute =
-            summary.objOrNull("fullSleepStats")?.doubleOrNull("breathsPerMinute") ?: return null
+            summary.objOrNull("fullSleepStats")?.finiteDoubleOrNull("breathsPerMinute") ?: return null
         if (breathsPerMinute !in 5.0..80.0) return null
         return ScalarSample(
             providerRecordId = providerRecordId(dataType, point, measuredAt, null),
@@ -283,7 +282,7 @@ class GoogleHealthNormalizer {
         val weight = point.objOrNull("weight") ?: return null
         val sampleTime = weight.objOrNull("sampleTime") ?: return null
         val measuredAt = sampleTime.stringOrNull("physicalTime") ?: return null
-        val grams = weight.doubleOrNull("weightGrams") ?: return null
+        val grams = weight.finiteDoubleOrNull("weightGrams") ?: return null
         if (grams <= 0.0) return null
         return ScalarSample(
             providerRecordId =
@@ -306,7 +305,7 @@ class GoogleHealthNormalizer {
         val bodyFat = point.objOrNull("bodyFat") ?: return null
         val sampleTime = bodyFat.objOrNull("sampleTime") ?: return null
         val measuredAt = sampleTime.stringOrNull("physicalTime") ?: return null
-        val percentage = bodyFat.doubleOrNull("percentage") ?: return null
+        val percentage = bodyFat.finiteDoubleOrNull("percentage") ?: return null
         if (percentage <= 0.0 || percentage > 100.0) return null
         return ScalarSample(
             providerRecordId =
@@ -382,13 +381,13 @@ class GoogleHealthNormalizer {
         val body = point.objOrNull(field) ?: return emptyList()
         val date = body.objOrNull("date")?.civilDate() ?: return emptyList()
         return values.mapNotNull { (metricType, key) ->
-            val value = body.doubleOrNull(key) ?: return@mapNotNull null
+            val value = body.finiteDoubleOrNull(key)?.roundToScalarPrecision() ?: return@mapNotNull null
             if (value !in DailyMetricRegistry.find(metricType)!!.valueRange) return@mapNotNull null
             DailyMetric(
                 providerRecordId = "${dataType.code}:$date:$metricType",
                 date = date.toString(),
                 metricType = metricType,
-                value = value.roundToScalarPrecision(),
+                value = value,
             )
         }
     }
@@ -427,7 +426,7 @@ class GoogleHealthNormalizer {
                 totalEnergyKcal =
                     point
                         .objOrNull("totalCalories")
-                        ?.doubleOrNull("kcalSum")
+                        ?.finiteDoubleOrNull("kcalSum")
                         ?.takeIf { it >= 0.0 }
                         ?.roundToScalarPrecision(),
                 softMinutes = minutesByLevel["LIGHT"],
@@ -441,7 +440,10 @@ class GoogleHealthNormalizer {
         return summary.takeIf { it.hasAnyMetric() }
     }
 
-    private fun JsonObject.heartRateBpm(key: String): Int? = doubleOrNull(key)?.roundToInt()?.takeIf { it in 25..250 }
+    private fun JsonObject.heartRateBpm(key: String): Int? = finiteDoubleOrNull(key)?.roundToInt()?.takeIf { it in 25..250 }
+
+    // ProtoJSON writes non-finite doubles as "NaN" and "Infinity", which parse as numbers.
+    private fun JsonObject.finiteDoubleOrNull(key: String): Double? = doubleOrNull(key)?.takeIf { it.isFinite() }
 
     private fun JsonObject.civilDate(): LocalDate? {
         val year = longOrNull("year")?.toInt() ?: return null

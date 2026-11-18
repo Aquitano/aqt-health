@@ -329,7 +329,7 @@ If a refresh token is expired, invalid, or revoked, sync marks the account `need
 
 The Google Health provider is a server-owned OAuth integration. It reads Google Health data, normalizes it into the same ingestion batch contract shown above, stores the original Google response pages in `sourcePayload`, and writes the existing metric tables through the normal ingestion service.
 
-Sync uses Google's generated Health client library (`com.google.cloud:google-cloud-health`, API v4); the remaining Ktor Google client code is OAuth-only. Every data type is read with `reconcile` over all of the account's sources (`dataSourceFamily=all-sources`), not `list`:
+Sync uses Google's generated Health client library (`com.google.cloud:google-cloud-health`, API v4); the remaining Ktor Google client code is OAuth-only. Every data type except `activity` is read with `reconcile` over all of the account's sources (`dataSourceFamily=all-sources`), not `list`; `activity` is read from Google's daily roll-ups over the same sources:
 
 - Google merges overlapping sources into one stream per data type. A watch and a phone counting the same walk count once, and daily step totals match Google's own daily roll-up. `list` returned every source's copy, which over-counted steps on days with phone or Health Connect data.
 - Wearable readings from periods the device was not worn are left out.

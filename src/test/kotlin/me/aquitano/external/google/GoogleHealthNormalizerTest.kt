@@ -130,23 +130,23 @@ class GoogleHealthNormalizerTest {
 
     @Test
     fun differentReadingsAtOneInstantKeepSeparateIdsAndIdenticalCopiesCollapse() {
-        val points =
-            listOf("61", "62", "61").map {
-                dataPointJson("""{ "heartRate": { "sampleTime": { "physicalTime": "2026-04-01T08:30:00Z" }, "beatsPerMinute": "$it" } }""")
-            }
-
-        fun idsByValue(points: List<JsonObject>) =
+        fun idsByValue(vararg bpm: String) =
             normalizer
-                .normalize(GoogleHealthFetchResult(GoogleHealthDataType.HeartRate, emptyList(), points))
-                .map { assertIs<ScalarSample>(it) }
-                .also { assertEquals(2, it.size) }
+                .normalize(
+                    GoogleHealthFetchResult(
+                        GoogleHealthDataType.HeartRate,
+                        emptyList(),
+                        bpm.map { dataPointJson("""{ "heartRate": { "sampleTime": { "physicalTime": "2026-04-01T08:30:00Z" }, "beatsPerMinute": "$it" } }""") },
+                    ),
+                ).map { assertIs<ScalarSample>(it) }
                 .associate { it.value to it.providerRecordId }
 
-        val ids = idsByValue(points)
+        val ids = idsByValue("61", "62", "61")
 
         assertEquals(setOf(61.0, 62.0), ids.keys)
+        assertEquals(2, ids.values.toSet().size)
         assertEquals("heart-rate:2026-04-01T08:30:00Z:none", ids[61.0])
-        assertEquals(ids, idsByValue(points.reversed()))
+        assertEquals(ids, idsByValue("62", "61", "61"))
     }
 
     @Test
