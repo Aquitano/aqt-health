@@ -10,7 +10,7 @@ import me.aquitano.health.infrastructure.database.tables.SleepSummariesTable
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.selectAll
 
-/** Reads through the canonical_sleep_summaries view (rank winner per UTC start date, see V15). */
+/** Reads through the canonical_sleep_summaries view (a summary is hidden where a better-ranked or newer summary overlaps it, see V38). */
 class CanonicalSleepSummaryDerivationRepository : BaseMetricReadRepository() {
     fun listCanonicalSleepSummaries(filters: ReadFilters): List<SleepSummaryResponse> {
         val where =
@@ -59,22 +59,22 @@ class CanonicalSleepSummaryDerivationRepository : BaseMetricReadRepository() {
             wakeupCount = row[SleepSummariesTable.wakeupCount],
             wasoSeconds = row[SleepSummariesTable.wasoSeconds],
             sleepScore = row[SleepSummariesTable.sleepScore],
-            remEpisodesCount = row[SleepSummariesTable.remEpisodesCount],
+            remEpisodeCount = row[SleepSummariesTable.remEpisodesCount],
             outOfBedCount = row[SleepSummariesTable.outOfBedCount],
             awakeDurationSeconds = row[SleepSummariesTable.awakeDurationSeconds],
-            overnightHrvRmssd = row[SleepSummariesTable.overnightHrvRmssd],
-            respiratoryRhythm = row[SleepSummariesTable.respiratoryRhythm],
+            overnightHrvRmssdMs = row[SleepSummariesTable.overnightHrvRmssd],
+            avgWellnessRespiratoryRateBreathsPerMinute = row[SleepSummariesTable.respiratoryRhythm],
             breathingQuality = row[SleepSummariesTable.breathingQuality],
             snoringDurationSeconds = row[SleepSummariesTable.snoringDurationSeconds],
             apneaHypopneaIndex = row[SleepSummariesTable.apneaHypopneaIndex],
             movementScore = row[SleepSummariesTable.movementScore],
             snoringEpisodeCount = row[SleepSummariesTable.snoringEpisodeCount],
-            hrAverageBpm = row[SleepSummariesTable.hrAverageBpm],
-            hrMinBpm = row[SleepSummariesTable.hrMinBpm],
-            hrMaxBpm = row[SleepSummariesTable.hrMaxBpm],
-            rrAverage = row[SleepSummariesTable.rrAverage],
-            rrMin = row[SleepSummariesTable.rrMin],
-            rrMax = row[SleepSummariesTable.rrMax],
+            avgHeartRateBpm = row[SleepSummariesTable.hrAverageBpm],
+            minHeartRateBpm = row[SleepSummariesTable.hrMinBpm],
+            maxHeartRateBpm = row[SleepSummariesTable.hrMaxBpm],
+            avgRespiratoryRateBreathsPerMinute = row[SleepSummariesTable.rrAverage],
+            minRespiratoryRateBreathsPerMinute = row[SleepSummariesTable.rrMin],
+            maxRespiratoryRateBreathsPerMinute = row[SleepSummariesTable.rrMax],
             source = source,
         )
 }

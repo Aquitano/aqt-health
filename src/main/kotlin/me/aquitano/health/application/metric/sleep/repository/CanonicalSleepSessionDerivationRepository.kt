@@ -4,14 +4,12 @@ import me.aquitano.health.api.dto.SourceMetadataResponse
 import me.aquitano.health.application.metric.common.keysetFetchLimit
 import me.aquitano.health.application.metric.common.repository.BaseMetricReadRepository
 import me.aquitano.health.application.metric.common.repository.ReadFilters
-import me.aquitano.health.application.metric.common.repository.TimeFilterMode
 import me.aquitano.health.infrastructure.database.tables.CanonicalSleepSessionsTable
 import me.aquitano.health.infrastructure.database.tables.SleepSessionsTable
 import org.jetbrains.exposed.v1.core.*
-import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 
-/** Reads through the canonical_sleep_sessions view (winning provider per UTC date keeps all sessions, see V15). */
+/** Reads through the canonical_sleep_sessions view (a session is hidden only where a better-ranked source overlaps it, see V38). */
 class CanonicalSleepSessionDerivationRepository : BaseMetricReadRepository() {
     fun listCanonicalSleepSessions(
         filters: ReadFilters,
@@ -41,23 +39,5 @@ class CanonicalSleepSessionDerivationRepository : BaseMetricReadRepository() {
                 ).limit(keysetFetchLimit(filters.limit))
                 .map(::toSleepSessionRow)
         return rows to sourceMetadata(rows.map { it.sourceInstanceId }.toSet(), filters.includeSource)
-    }
-
-    fun avgCanonicalSleepDuration(filters: ReadFilters): Long? {
-        val where =
-            timestampConditions(
-                filters = filters,
-                sourceInstanceIdColumn = CanonicalSleepSessionsTable.sourceInstanceId,
-                fromColumn = CanonicalSleepSessionsTable.startAt,
-                mode = TimeFilterMode.OverlapsWindow(toColumn = CanonicalSleepSessionsTable.endAt, inclusiveFrom = true),
-            ) ?: return null
-
-        val avgExpression = SleepSessionsTable.durationSeconds.avg()
-        return CanonicalSleepSessionsTable
-            .innerJoin(SleepSessionsTable, { sleepSessionId }, { SleepSessionsTable.id })
-            .select(avgExpression)
-            .where(where)
-            .singleOrNull()
-            ?.let { it[avgExpression]?.toLong() }
     }
 }

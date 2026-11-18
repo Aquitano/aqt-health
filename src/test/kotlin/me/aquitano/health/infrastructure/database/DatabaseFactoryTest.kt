@@ -7,11 +7,13 @@ import me.aquitano.health.infrastructure.security.ApiKeyHasher
 import me.aquitano.health.test.PostgresIntegrationTest
 import me.aquitano.health.test.PostgresTestDatabase
 import me.aquitano.health.test.queryString
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.time.Duration.Companion.seconds
 
 class DatabaseFactoryTest : PostgresIntegrationTest() {
     @Test
@@ -30,5 +32,20 @@ class DatabaseFactoryTest : PostgresIntegrationTest() {
         ).bootstrap()
 
         assertEquals(hasher.hash("plain-test-key"), config.queryString("SELECT api_key_hash FROM api_clients WHERE name = 'test-client'"))
+    }
+
+    @Test
+    fun poolSessionsCarryTheIdleInTransactionTimeout() {
+        val database = openDatabase(PostgresTestDatabase.config().copy(idleInTransactionTimeout = 2.seconds))
+
+        val timeout =
+            transaction(database) {
+                exec("SHOW idle_in_transaction_session_timeout") {
+                    it.next()
+                    it.getString(1)
+                }
+            }
+
+        assertEquals("2s", timeout)
     }
 }

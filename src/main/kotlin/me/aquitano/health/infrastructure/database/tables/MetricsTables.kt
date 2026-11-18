@@ -34,7 +34,7 @@ object SleepSessionsTable : IntIdTable("sleep_sessions") {
     val createdAt = timestampWithTimeZone("created_at")
 }
 
-/** Read-only mapping of the canonical_sleep_sessions view (see V15). */
+/** Read-only mapping of the canonical_sleep_sessions view (see V38). */
 object CanonicalSleepSessionsTable : Table("canonical_sleep_sessions") {
     val id = integer("id")
     val sourceInstanceId = integer("source_instance_id")
@@ -221,7 +221,7 @@ object SleepSummariesTable : IntIdTable("sleep_summaries") {
     val createdAt = timestampWithTimeZone("created_at")
 }
 
-/** Read-only mapping of the canonical_sleep_summaries view (see V15). */
+/** Read-only mapping of the canonical_sleep_summaries view (see V38). */
 object CanonicalSleepSummariesTable : Table("canonical_sleep_summaries") {
     val sourceInstanceId = integer("source_instance_id")
     val sleepSummaryId = integer("sleep_summary_id").references(SleepSummariesTable.id)

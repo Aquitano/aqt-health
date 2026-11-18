@@ -46,7 +46,7 @@ class ReadBoundaryRouteTest : PostgresIntegrationTest() {
                 )
 
                 val day = authorizedGet("/api/v2/health/day?date=$date&timezone=Europe/Berlin&modules=steps").jsonBody()["steps"]!!.jsonObject
-                assertEquals(steps, day["total"]!!.jsonPrimitive.int, date)
+                assertEquals(steps, day["steps"]!!.jsonPrimitive.int, date)
                 assertEquals(buckets, day["buckets"]!!.jsonArray.size, date)
             }
         }
@@ -60,10 +60,13 @@ class ReadBoundaryRouteTest : PostgresIntegrationTest() {
 
             fun totals(json: JsonArray) = json.associate { it.jsonObject["date"]!!.jsonPrimitive.content to it.jsonObject["steps"]!!.jsonPrimitive.int }
 
-            assertEquals(
-                mapOf("2026-05-10" to 60, "2026-05-11" to 60),
-                totals(authorizedGet("/api/v2/steps/daily?fromDate=2026-05-10&toDate=2026-05-11&timezone=Europe/Berlin").items()),
-            )
+            for (zone in listOf("Europe/Berlin", "%2B02:00")) {
+                assertEquals(
+                    mapOf("2026-05-10" to 60, "2026-05-11" to 60),
+                    totals(authorizedGet("/api/v2/steps/daily?fromDate=2026-05-10&toDate=2026-05-11&timezone=$zone").items()),
+                    zone,
+                )
+            }
             assertEquals(
                 mapOf("2026-05-10" to 120),
                 totals(authorizedGet("/api/v2/steps/daily?fromDate=2026-05-10&toDate=2026-05-11&timezone=UTC").items()).filterValues { it > 0 },

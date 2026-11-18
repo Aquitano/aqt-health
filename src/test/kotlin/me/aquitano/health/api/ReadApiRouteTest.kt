@@ -35,7 +35,7 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
             database.execute("UPDATE canonical_step_day_bucket_contributions SET value = 0.5")
             val trends = authorizedGet("/api/v2/dashboard/trends?toDate=2026-04-20&periodDays=2").jsonBody()
             val dashboard = authorizedGet("/api/v2/dashboard/summary?fromDate=2026-04-19&toDate=2026-04-20").jsonBody()
-            assertEquals(1, trends["steps"]!!.jsonObject["currentTotal"]!!.jsonPrimitive.int)
+            assertEquals(1, trends["steps"]!!.jsonObject["currentSteps"]!!.jsonPrimitive.int)
             assertEquals(1, dashboard["steps"]!!.jsonObject["steps"]!!.jsonPrimitive.int)
         }
 
@@ -113,8 +113,8 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
                 val trends = authorizedGet("/api/v2/dashboard/trends?toDate=$date&periodDays=1").jsonBody()
                 assertEquals(expected, daily["steps"]!!.jsonPrimitive.int)
                 assertEquals(expected, dashboard["steps"]!!.jsonObject["steps"]!!.jsonPrimitive.int)
-                assertEquals(expected, day["steps"]!!.jsonObject["total"]!!.jsonPrimitive.int)
-                assertEquals(expected, trends["steps"]!!.jsonObject["currentTotal"]!!.jsonPrimitive.int)
+                assertEquals(expected, day["steps"]!!.jsonObject["steps"]!!.jsonPrimitive.int)
+                assertEquals(expected, trends["steps"]!!.jsonObject["currentSteps"]!!.jsonPrimitive.int)
             }
             val filtered = authorizedGet("/api/v2/steps/daily?date=2026-04-19&provider=withings&includeSource=true").items().single().jsonObject
             assertEquals(2, filtered["steps"]!!.jsonPrimitive.int)
@@ -153,9 +153,9 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
             assertEquals("2026-04-20", daily["date"]!!.jsonPrimitive.content)
             assertEquals(100, daily["steps"]!!.jsonPrimitive.int)
             assertEquals(100, dashboard["steps"]!!.jsonObject["steps"]!!.jsonPrimitive.int)
-            assertEquals(100, day["steps"]!!.jsonObject["total"]!!.jsonPrimitive.int)
-            assertEquals(100, trends["steps"]!!.jsonObject["currentTotal"]!!.jsonPrimitive.int)
-            assertEquals(0, trends["steps"]!!.jsonObject["previousTotal"]!!.jsonPrimitive.int)
+            assertEquals(100, day["steps"]!!.jsonObject["steps"]!!.jsonPrimitive.int)
+            assertEquals(100, trends["steps"]!!.jsonObject["currentSteps"]!!.jsonPrimitive.int)
+            assertEquals(0, trends["steps"]!!.jsonObject["previousSteps"]!!.jsonPrimitive.int)
         }
 
     @Test
@@ -240,6 +240,13 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
                     .jsonObject["distanceMeters"]!!
                     .jsonPrimitive.double,
             )
+            assertEquals(
+                74,
+                activity
+                    .items()[0]
+                    .jsonObject["avgHeartRateBpm"]!!
+                    .jsonPrimitive.int,
+            )
 
             val sleepSummary = authorizedGet("/api/v2/sleep/summaries")
             assertEquals(1, sleepSummary.items().size)
@@ -249,6 +256,27 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
                     .items()[0]
                     .jsonObject["sleepScore"]!!
                     .jsonPrimitive.int,
+            )
+            assertEquals(
+                52,
+                sleepSummary
+                    .items()[0]
+                    .jsonObject["avgHeartRateBpm"]!!
+                    .jsonPrimitive.int,
+            )
+            assertEquals(
+                14.5,
+                sleepSummary
+                    .items()[0]
+                    .jsonObject["avgRespiratoryRateBreathsPerMinute"]!!
+                    .jsonPrimitive.double,
+            )
+            assertEquals(
+                13.5,
+                sleepSummary
+                    .items()[0]
+                    .jsonObject["avgWellnessRespiratoryRateBreathsPerMinute"]!!
+                    .jsonPrimitive.double,
             )
 
             val respiratoryRate = authorizedGet("/api/v2/metrics/respiratory_rate")
@@ -375,10 +403,11 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
             assertEquals("2026-04-19", body["date"]!!.jsonPrimitive.content)
             assertEquals("2026-04-19T00:00:00Z", body["from"]!!.jsonPrimitive.content)
             assertEquals("2026-04-20T00:00:00Z", body["to"]!!.jsonPrimitive.content)
-            assertEquals(1600, body["steps"]!!.jsonObject["total"]!!.jsonPrimitive.int)
+            assertEquals(1600, body["steps"]!!.jsonObject["steps"]!!.jsonPrimitive.int)
             assertEquals(96, body["steps"]!!.jsonObject["buckets"]!!.jsonArray.size)
             assertEquals(2, body["heartRate"]!!.jsonObject["count"]!!.jsonPrimitive.int)
-            assertEquals(62, body["heartRate"]!!.jsonObject["minBpm"]!!.jsonPrimitive.int)
+            assertEquals(62.0, body["heartRate"]!!.jsonObject["minValue"]!!.jsonPrimitive.double)
+            assertEquals("bpm", body["heartRate"]!!.jsonObject["unit"]!!.jsonPrimitive.content)
             assertEquals(
                 67.0,
                 body["heartRate"]!!
@@ -421,6 +450,26 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
         }
 
     @Test
+    fun healthDayHeartRateKeepsDecimalExtremes() =
+        testApplication {
+            configureTestApplication()
+            client.post("/api/v2/ingestion/batches") {
+                authorized()
+                contentType(ContentType.Application.Json)
+                setBody(
+                    """{"provider":"health_connect","providerInstanceId":"hc-1","ingestedAt":"2026-05-02T12:00:00Z","sourcePayload":{},"records":[""" +
+                        """{"type":"scalar","providerRecordId":"hr-a","measuredAt":"2026-05-02T08:00:00Z","metricType":"heart_rate","value":61.5,"context":"resting"},""" +
+                        """{"type":"scalar","providerRecordId":"hr-b","measuredAt":"2026-05-02T09:00:00Z","metricType":"heart_rate","value":72.25,"context":"resting"}]}""",
+                )
+            }
+
+            val heartRate = authorizedGet("/api/v2/health/day?date=2026-05-02&timezone=UTC&modules=heartRate").jsonBody()["heartRate"]!!.jsonObject
+
+            assertEquals(61.5, heartRate["minValue"]!!.jsonPrimitive.double)
+            assertEquals(72.25, heartRate["maxValue"]!!.jsonPrimitive.double)
+        }
+
+    @Test
     fun healthDaySleepFallsBackToSessionDurationWithoutStages() =
         testApplication {
             configureTestApplication()
@@ -456,6 +505,8 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
             assertEquals(2, authorizedGet("/api/v2/sleep/nights?date=2026-04-20&timezone=UTC").items().size)
             val sleep = authorizedGet("/api/v2/health/day?date=2026-04-20&timezone=UTC&modules=sleep").jsonBody()["sleep"]!!.jsonObject
             assertEquals(28800L + 2400L, sleep["totalDurationSeconds"]!!.jsonPrimitive.long)
+            val trend = authorizedGet("/api/v2/dashboard/trends?toDate=2026-04-20&periodDays=1&timezone=UTC").jsonBody()["sleep"]!!.jsonObject
+            assertEquals(28800L + 2400L, trend["currentAvgSeconds"]!!.jsonPrimitive.long)
         }
 
     @Test
@@ -1006,8 +1057,8 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
 
             val berlin = authorizedGet("/api/v2/dashboard/trends?toDate=2026-04-20&periodDays=1&timezone=Europe/Berlin").jsonBody()
             val utc = authorizedGet("/api/v2/dashboard/trends?toDate=2026-04-20&periodDays=1").jsonBody()
-            assertEquals(60.0, berlin["heartRate"]!!.jsonObject["currentAvg"]!!.jsonPrimitive.double)
-            assertEquals(60.0, utc["heartRate"]!!.jsonObject["previousAvg"]!!.jsonPrimitive.double)
+            assertEquals(60.0, berlin["heartRate"]!!.jsonObject["currentAvgBpm"]!!.jsonPrimitive.double)
+            assertEquals(60.0, utc["heartRate"]!!.jsonObject["previousAvgBpm"]!!.jsonPrimitive.double)
         }
 
     @Test
@@ -1071,9 +1122,9 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
             // Trends read the same canonical layer: across both providers the raw numbers would be
             // 3000 steps, a 59.0 bpm average and a 28950s sleep average.
             val trends = authorizedGet("/api/v2/dashboard/trends?toDate=2026-04-19&periodDays=1").jsonBody()
-            assertEquals(1000, trends["steps"]!!.jsonObject["currentTotal"]!!.jsonPrimitive.int)
-            assertEquals(1000, trends["steps"]!!.jsonObject["dailyAverage"]!!.jsonPrimitive.int)
-            assertEquals(58.0, trends["heartRate"]!!.jsonObject["currentAvg"]!!.jsonPrimitive.double)
+            assertEquals(1000, trends["steps"]!!.jsonObject["currentSteps"]!!.jsonPrimitive.int)
+            assertEquals(1000, trends["steps"]!!.jsonObject["avgDailySteps"]!!.jsonPrimitive.int)
+            assertEquals(58.0, trends["heartRate"]!!.jsonObject["currentAvgBpm"]!!.jsonPrimitive.double)
             assertEquals(28800, trends["sleep"]!!.jsonObject["currentAvgSeconds"]!!.jsonPrimitive.int)
             assertEquals(
                 81.8,
@@ -1089,7 +1140,7 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
                 1000,
                 day
                     .jsonBody()["steps"]!!
-                    .jsonObject["total"]!!
+                    .jsonObject["steps"]!!
                     .jsonPrimitive.int,
             )
             assertEquals(
@@ -1398,7 +1449,10 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
               "wakeupDurationSeconds": 900,
               "wakeupCount": 2,
               "wasoSeconds": 300,
-              "sleepScore": 88
+              "sleepScore": 88,
+              "hrAverageBpm": 52,
+              "rrAverage": 14.5,
+              "respiratoryRhythm": 13.5
             },
             {
               "type": "scalar",

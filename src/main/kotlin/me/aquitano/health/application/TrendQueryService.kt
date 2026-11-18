@@ -6,7 +6,7 @@ import me.aquitano.health.application.metric.common.QueryParams
 import me.aquitano.health.application.metric.common.repository.ReadFilters
 import me.aquitano.health.application.metric.scalar.ScalarSampleReadRepository
 import me.aquitano.health.application.metric.scalar.toScalarResponse
-import me.aquitano.health.application.metric.sleep.repository.CanonicalSleepSessionDerivationRepository
+import me.aquitano.health.application.metric.sleep.repository.SleepRepository
 import me.aquitano.health.application.metric.steps.repository.CanonicalStepDerivationRepository
 import me.aquitano.health.domain.BodyMetricTypes
 import me.aquitano.health.domain.ScalarMetricTypes
@@ -23,7 +23,7 @@ import kotlin.math.roundToInt
 class TrendQueryService(
     private val database: Database,
     private val stepRepository: CanonicalStepDerivationRepository,
-    private val sleepRepository: CanonicalSleepSessionDerivationRepository,
+    private val sleepRepository: SleepRepository,
     private val scalarRepository: ScalarSampleReadRepository,
 ) {
     suspend fun dashboardTrends(
@@ -68,12 +68,11 @@ class TrendQueryService(
                 dailyReadFilters(previousFrom, previousTo, timezone),
             )
         if (current.dayCount == 0 && previous.dayCount == 0) return null
-        val dailyAverage = if (current.dayCount > 0) current.steps / current.dayCount else 0
         return StepsTrend(
-            currentTotal = current.steps,
-            previousTotal = previous.steps,
+            currentSteps = current.steps,
+            previousSteps = previous.steps,
             percentChange = percentChange(current.steps.toDouble(), previous.steps.toDouble()),
-            dailyAverage = dailyAverage,
+            avgDailySteps = if (current.dayCount > 0) current.steps / current.dayCount else 0,
         )
     }
 
@@ -100,8 +99,8 @@ class TrendQueryService(
         val currentAvg = currentSummary.avgValue ?: 0.0
         val previousAvg = previousSummary.avgValue ?: 0.0
         return HeartRateTrend(
-            currentAvg = roundToOneDecimal(currentAvg),
-            previousAvg = roundToOneDecimal(previousAvg),
+            currentAvgBpm = roundToOneDecimal(currentAvg),
+            previousAvgBpm = roundToOneDecimal(previousAvg),
             percentChange = percentChange(currentAvg, previousAvg),
         )
     }
@@ -113,14 +112,8 @@ class TrendQueryService(
         previousTo: LocalDate,
         timezone: ZoneId,
     ): SleepTrend? {
-        val currentAvg =
-            sleepRepository.avgCanonicalSleepDuration(
-                readFilters(currentFrom, currentTo, timezone),
-            )
-        val previousAvg =
-            sleepRepository.avgCanonicalSleepDuration(
-                readFilters(previousFrom, previousTo, timezone),
-            )
+        val currentAvg = sleepRepository.avgNightlySleepSeconds(currentFrom, currentTo, timezone)
+        val previousAvg = sleepRepository.avgNightlySleepSeconds(previousFrom, previousTo, timezone)
         if (currentAvg == null && previousAvg == null) return null
         val current = currentAvg ?: 0L
         val previous = previousAvg ?: 0L

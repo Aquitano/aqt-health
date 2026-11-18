@@ -79,6 +79,7 @@ Environment variables:
 - `AQT_HEALTH_DB_USER`: PostgreSQL username, default `aqt_health`
 - `AQT_HEALTH_DB_PASSWORD`: PostgreSQL password, default `aqt_health`
 - `AQT_HEALTH_DB_MAX_POOL_SIZE`: maximum Hikari connection pool size, default `10`
+- `AQT_HEALTH_DB_IDLE_IN_TRANSACTION_TIMEOUT`: how long PostgreSQL keeps an app session that sits idle inside a transaction before ending it and releasing its locks, as a duration such as `30s` or `2m`, default `1m`
 - `AQT_HEALTH_INGESTION_MAX_BODY_BYTES`: maximum request body size for `POST /api/v2/ingestion/batches`, default `33554432` (32 MB); larger requests get `413`
 - `AQT_HEALTH_BOOTSTRAP_CLIENT_NAME`: initial API client name, default `local-admin`
 - `AQT_HEALTH_BOOTSTRAP_API_KEY`: optional plaintext bootstrap key
@@ -527,6 +528,14 @@ Metric list responses include an `items` array plus a `meta` object:
   }
 }
 ```
+
+Response field names follow these rules, so a quantity has one name everywhere:
+
+- Aggregates of one metric (`/metrics/{metricType}/summary`, `/metrics/{metricType}/daily` and the `heartRate` block of `/health/day`) use `count`, `minValue`, `maxValue` and `avgValue`, with the unit in `unit`.
+- Fields of fixed-shape records (activity and sleep summaries, blood pressure) name the statistic, the quantity and the unit: `avgHeartRateBpm`, `minRespiratoryRateBreathsPerMinute`, `totalSleepSeconds`, `systolicMmhg`. Statistics are always `min`, `max` and `avg`, and a step total is always `steps`.
+- Trend blocks of `/dashboard/trends` sit under the quantity's key (`heartRate`, `sleep`), so their fields name the period, the statistic and the unit: `currentAvgBpm`, `previousAvgSeconds`.
+
+Ingestion records keep their own field names (a sleep summary is ingested with `hrAverageBpm` and read back as `avgHeartRateBpm`), because the ingestion log stores records in that format.
 
 A query parameter the endpoint does not support returns `400 validation_failed` with code `unknown_parameter`, so a misspelled filter cannot silently widen the result.
 
