@@ -20,6 +20,8 @@ const server = Bun.serve({
           : Response.json({ items: [{ steps: 3 }], meta: { count: 1 } });
       case "/api/v2/metrics/heart_rate":
         return Response.json({ items: [{ value: 60 }], meta: { count: 1, nextCursor: "same" } });
+      case "/api/v2/moved":
+        return Response.redirect("/api/v2/redirect-target", 302);
       case "/api/v2/health/day":
         return Response.json({ date: "2026-11-10", steps: { steps: 1 } });
       case "/api/v2/dropped":
@@ -59,14 +61,15 @@ const server = Bun.serve({
 });
 afterAll(() => server.stop());
 
-async function cli(...argv: string[]) {
+async function cliAt(baseUrl: string, ...argv: string[]) {
   let stdout = "";
   let stderr = "";
-  const env = { AQT_HEALTH_URL: server.url.href, AQT_HEALTH_API_KEY: API_KEY };
+  const env = { AQT_HEALTH_URL: baseUrl, AQT_HEALTH_API_KEY: API_KEY };
   const exitCode = await run(argv, env, { out: (text) => (stdout += text), err: (text) => (stderr += text) });
   const parse = (text: string): unknown => (text ? JSON.parse(text) : undefined);
   return { exitCode, json: parse(stdout), error: parse(stderr) };
 }
+const cli = (...argv: string[]) => cliAt(server.url.href, ...argv);
 
 describe("get", () => {
   test("sends name=value pairs as query parameters", async () => {
@@ -104,6 +107,14 @@ describe("get", () => {
     expect(error).toMatchObject({ error: { code: "repeated_cursor" } });
   });
 
+  test("a redirect is reported, not followed with the API key", async () => {
+    const { exitCode, error } = await cli("get", "moved");
+
+    expect(exitCode).toBe(1);
+    expect(error).toMatchObject({ error: { code: "redirect", message: expect.stringContaining("/api/v2/redirect-target") } });
+    expect(seen.at(-1)?.pathname).toBe("/api/v2/moved");
+  });
+
   test("an API error is printed as the API's JSON with exit code 1", async () => {
     const { exitCode, json, error } = await cli("get", "sleep/nights", "fromdate=2026-11-01");
 
@@ -126,6 +137,15 @@ describe("get", () => {
     expect((await cli("get", "providers/google-health/oauth/callback", "code=x")).exitCode).toBe(2);
     expect((await cli("get", "providers\\google-health\\oauth\\start")).exitCode).toBe(2);
     expect((await cli("get", "providers/google-health/%6Fauth/start")).exitCode).toBe(2);
+    expect(seen.length).toBe(requestsBefore);
+  });
+
+  test("refuses a path that climbs out of the base path, so it cannot reach OAuth past the check", async () => {
+    const requestsBefore = seen.length;
+    const longBase = new URL(`${"b".repeat(40)}/`, server.url).href;
+    const { exitCode } = await cliAt(longBase, "get", "../../../api/v2/providers/google-health/oauth/start");
+
+    expect(exitCode).toBe(2);
     expect(seen.length).toBe(requestsBefore);
   });
 
@@ -166,6 +186,15 @@ test("a base URL that is not http or https is a usage error", async () => {
 
   expect(exitCode).toBe(2);
   expect(stderr).toContain("AQT_HEALTH_URL");
+});
+
+test("a base URL with an empty path segment is a usage error, so the API key never goes to another host", async () => {
+  const requestsBefore = seen.length;
+  const { exitCode, error } = await cliAt(`${server.url.href}/`, "get", "steps/daily");
+
+  expect(exitCode).toBe(2);
+  expect(error).toMatchObject({ error: { message: expect.stringContaining("AQT_HEALTH_URL") } });
+  expect(seen.length).toBe(requestsBefore);
 });
 
 test("a missing API key is a usage error", async () => {

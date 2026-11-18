@@ -543,7 +543,8 @@ bun src/main.ts get metrics/heart_rate from=2026-11-10T00:00:00Z to=2026-11-11T0
 - Query parameters are `name=value` pairs, and the API rejects names it does not know.
 - `--all` follows `meta.nextCursor` and returns every page as one `items` array; add `limit=5000` to read a big range in fewer requests. It stops once `--max-items` items are read (default 50,000) and keeps `meta.nextCursor`, so the read can continue with `cursor=<nextCursor>`.
 - Errors go to stderr as `{"error":{...}}`, with exit code 1 for a failed request and 2 for a usage error.
-- The CLI only sends GET requests and refuses OAuth endpoints, which change provider connections.
+- `AQT_HEALTH_URL` is an http or https base URL and may carry a path prefix, such as `https://example.org/health`. Credentials, a query, a fragment or an empty path segment in it are a usage error.
+- The CLI only sends GET requests. It refuses OAuth endpoints, which change provider connections, and any path that `..` takes outside `/api/` under the base URL. It does not follow redirects; a 3xx response is a failed request that names its `Location`.
 - `bun run build` compiles a standalone binary to `cli/dist/aqt-health` for machines without Bun.
 
 ## Storage Model

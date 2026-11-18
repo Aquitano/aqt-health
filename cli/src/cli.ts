@@ -43,7 +43,7 @@ const requestError = (code: string, message: string): Result<never> => ({
   failure: { exitCode: 1, body: { error: { code, message } } },
 });
 
-type Config = { baseUrl: URL; apiKey: string };
+type Config = { baseUrl: URL; basePath: string; apiKey: string };
 
 type GetCommand = {
   kind: "get";
@@ -111,7 +111,12 @@ function readConfig(env: Env): Result<Config> {
   if (baseUrl === undefined || !["http:", "https:"].includes(baseUrl.protocol)) {
     return usageError(`AQT_HEALTH_URL must be an http or https URL, got ${url}`);
   }
-  return ok({ baseUrl, apiKey });
+  const plain =
+    !baseUrl.pathname.includes("//") && !baseUrl.username && !baseUrl.password && !baseUrl.search && !baseUrl.hash;
+  if (!plain) {
+    return usageError("AQT_HEALTH_URL must not hold credentials, a query, a fragment or an empty path segment");
+  }
+  return ok({ baseUrl, basePath: baseUrl.pathname.replace(/\/$/, ""), apiKey });
 }
 
 /** Ktor decodes each path segment before it matches a route, so %6Fauth reaches the OAuth routes too. */
@@ -124,14 +129,24 @@ function isOAuthPath(path: string) {
     }
   });
 }
-const basePath = (config: Config) => config.baseUrl.pathname.replace(/\/$/, "");
+function apiUrl(config: Config, pathname: string): Result<URL> {
+  const url = new URL(config.baseUrl.origin);
+  url.pathname = config.basePath + pathname;
+  if (url.origin !== config.baseUrl.origin) return usageError(`Refusing to send the API key to ${url.origin}`);
+  return ok(url);
+}
 
-/** Checks the path the request will really use: the URL parser also turns backslashes into slashes. */
+/** Checks the path the request will really use: the URL parser resolves .. and turns backslashes into slashes. */
 function resolve(config: Config, path: string): Result<{ url: URL; apiPath: string }> {
+  if (/[?#]/.test(path)) return usageError(`Pass query parameters as name=value after the path, not inside "${path}"`);
   const relative = path.replace(/^[\\/]+/, "");
-  const absolute = relative.startsWith("api/") ? `/${relative}` : `/api/v2/${relative}`;
-  const url = new URL(basePath(config) + absolute, config.baseUrl);
-  const apiPath = url.pathname.slice(basePath(config).length);
+  const target = apiUrl(config, relative.startsWith("api/") ? `/${relative}` : `/api/v2/${relative}`);
+  if (!target.ok) return target;
+  const url = target.value;
+  if (!url.pathname.startsWith(`${config.basePath}/api/`)) {
+    return usageError(`${path} resolves to ${url.pathname}, which is outside ${config.basePath}/api/`);
+  }
+  const apiPath = url.pathname.slice(config.basePath.length);
   if (isOAuthPath(apiPath)) return usageError("OAuth endpoints change provider connections, and this CLI only reads");
   return ok({ url, apiPath });
 }
@@ -150,10 +165,16 @@ async function requestJson(config: Config, url: URL): Promise<Result<unknown>> {
   try {
     response = await fetch(url, {
       headers: { authorization: `Bearer ${config.apiKey}`, accept: "application/json" },
+      // A followed redirect would resend the API key to a path the OAuth check never saw.
+      redirect: "manual",
     });
     text = await response.text();
   } catch (error) {
     return requestError("network_error", `Could not read ${url.pathname} from ${url.origin}: ${String(error)}`);
+  }
+  if (response.status >= 300 && response.status < 400) {
+    const location = response.headers.get("location") ?? "no Location";
+    return requestError("redirect", `${url.pathname} redirected to ${location}, and the CLI does not follow redirects`);
   }
   const body = parseJson(text);
   if (!response.ok) {
@@ -210,7 +231,9 @@ const OpenApi = type({ paths: { "[string]": { "get?": Operation } } });
 const templatePattern = (template: string) => new RegExp(`^${template.replace(/\{[^}]+\}/g, "[^/]+")}$`);
 
 async function describeEndpoints(config: Config, path: string | undefined): Promise<Result<unknown>> {
-  const spec = await requestJson(config, new URL(`${basePath(config)}/openapi`, config.baseUrl));
+  const specUrl = apiUrl(config, "/openapi");
+  if (!specUrl.ok) return specUrl;
+  const spec = await requestJson(config, specUrl.value);
   if (!spec.ok) return spec;
   const doc = OpenApi(spec.value);
   if (doc instanceof type.errors) return requestError("invalid_openapi", `The API's OpenAPI document is not readable: ${doc.summary}`);
