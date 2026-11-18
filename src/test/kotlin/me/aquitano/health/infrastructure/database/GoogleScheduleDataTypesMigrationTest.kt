@@ -42,7 +42,6 @@ class GoogleScheduleDataTypesMigrationTest : PostgresIntegrationTest() {
                 listOf("steps", "sleep", "heart-rate", "weight", "body-fat", "heart-rate-variability", "respiratory-rate-sleep-summary")
             listOf(
                 "full" to previousDefaults,
-                "with-activity" to previousDefaults + "activity",
                 "with-oxygen" to previousDefaults + "daily-oxygen-saturation",
                 "subset" to listOf("steps", "sleep"),
             ).forEach { (instance, dataTypes) ->
@@ -54,9 +53,7 @@ class GoogleScheduleDataTypesMigrationTest : PostgresIntegrationTest() {
             repeat(2) { transaction(database) { exec(migration) } }
 
             assertEquals(GoogleHealthDataType.codes, repository.getConfig("google-health", "full")?.dataTypes)
-            listOf("with-activity", "with-oxygen").forEach { instance ->
-                assertEquals(GoogleHealthDataType.codes.sorted(), repository.getConfig("google-health", instance)?.dataTypes?.sorted())
-            }
+            assertEquals(GoogleHealthDataType.codes.sorted(), repository.getConfig("google-health", "with-oxygen")?.dataTypes?.sorted())
             assertEquals(listOf("steps", "sleep"), repository.getConfig("google-health", "subset")?.dataTypes)
         }
 }

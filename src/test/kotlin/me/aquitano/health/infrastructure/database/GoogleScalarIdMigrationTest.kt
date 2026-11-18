@@ -13,10 +13,9 @@ class GoogleScalarIdMigrationTest : PostgresIntegrationTest() {
     fun googleScalarIdsLoseTheirContentHashUnlessTwoRecordsOfOneBatchWouldShareOneId() {
         val config = PostgresTestDatabase.config()
         openDatabase(config)
-        val hashA = "a".repeat(64)
-        val hashB = "b".repeat(64)
-        val hashC = "c".repeat(64)
-        val hashD = "d".repeat(64)
+        val (hashA, hashB, hashC, hashD) = listOf("a", "b", "c", "d").map { it.repeat(64) }
+        val resent = "heart-rate:2026-04-01T08:00:00Z:none"
+        val sameSecond = "heart-rate:2026-04-01T08:00:05Z:none"
         config.execute(
             """
             INSERT INTO sources (id, code, created_at) VALUES (1, 'google_health', now()), (2, 'withings', now());
@@ -26,18 +25,17 @@ class GoogleScalarIdMigrationTest : PostgresIntegrationTest() {
             VALUES (1, 1, '{}', 'processed', now(), now(), now(), now()),
                    (2, 1, '{}', 'processed', now(), now(), now(), now());
             INSERT INTO ingestion_records (id, batch_id, record_type, provider_record_id, normalized_record_json, created_at)
-            VALUES (1, 1, 'scalar', 'heart-rate:2026-04-01T08:00:00Z:none:$hashA',
-                    '{"type":"scalar","providerRecordId":"heart-rate:2026-04-01T08:00:00Z:none:$hashA","metricType":"heart_rate","value":60}', now()),
-                   (2, 1, 'scalar', 'heart-rate:2026-04-01T08:00:05Z:none:$hashB', '{"type":"scalar","providerRecordId":"heart-rate:2026-04-01T08:00:05Z:none:$hashB"}', now()),
-                   (3, 1, 'scalar', 'heart-rate:2026-04-01T08:00:05Z:none:$hashC', '{"type":"scalar","providerRecordId":"heart-rate:2026-04-01T08:00:05Z:none:$hashC"}', now()),
-                   (4, 2, 'scalar', 'heart-rate:2026-04-01T08:00:05Z:none:$hashB', '{"type":"scalar","providerRecordId":"heart-rate:2026-04-01T08:00:05Z:none:$hashB"}', now()),
-                   (5, 2, 'scalar', 'heart-rate:2026-04-01T08:00:00Z:none:$hashD', '{"type":"scalar","providerRecordId":"heart-rate:2026-04-01T08:00:00Z:none:$hashD"}', now());
+            VALUES (1, 1, 'scalar', '$resent:$hashA', '{"type":"scalar","providerRecordId":"$resent:$hashA","metricType":"heart_rate","value":60}', now()),
+                   (2, 1, 'scalar', '$sameSecond:$hashB', '{"type":"scalar","providerRecordId":"$sameSecond:$hashB"}', now()),
+                   (3, 1, 'scalar', '$sameSecond:$hashC', '{"type":"scalar","providerRecordId":"$sameSecond:$hashC"}', now()),
+                   (4, 2, 'scalar', '$sameSecond:$hashB', '{"type":"scalar","providerRecordId":"$sameSecond:$hashB"}', now()),
+                   (5, 2, 'scalar', '$resent:$hashD', '{"type":"scalar","providerRecordId":"$resent:$hashD"}', now());
             INSERT INTO scalar_samples (id, source_instance_id, ingestion_record_id, provider_record_id, measured_at, metric_type, value, context, created_at)
-            VALUES (1, 1, 1, 'heart-rate:2026-04-01T08:00:00Z:none:$hashA', '2026-04-01T08:00:00Z', 'heart_rate', 60, 'unknown', now()),
-                   (2, 1, 4, 'heart-rate:2026-04-01T08:00:05Z:none:$hashB', '2026-04-01T08:00:05Z', 'heart_rate', 61, 'unknown', now()),
-                   (3, 1, 3, 'heart-rate:2026-04-01T08:00:05Z:none:$hashC', '2026-04-01T08:00:05Z', 'heart_rate', 62, 'unknown', now()),
+            VALUES (1, 1, 1, '$resent:$hashA', '2026-04-01T08:00:00Z', 'heart_rate', 60, 'unknown', now()),
+                   (2, 1, 4, '$sameSecond:$hashB', '2026-04-01T08:00:05Z', 'heart_rate', 61, 'unknown', now()),
+                   (3, 1, 3, '$sameSecond:$hashC', '2026-04-01T08:00:05Z', 'heart_rate', 62, 'unknown', now()),
                    (4, 2, NULL, 'withings:2026-04-01T08:00:00Z:$hashA', '2026-04-01T08:00:00Z', 'heart_rate', 59, 'unknown', now()),
-                   (5, 1, 5, 'heart-rate:2026-04-01T08:00:00Z:none:$hashD', '2026-04-01T08:00:00Z', 'heart_rate', 60, 'unknown', now());
+                   (5, 1, 5, '$resent:$hashD', '2026-04-01T08:00:00Z', 'heart_rate', 60, 'unknown', now());
             """.trimIndent(),
         )
         val migration =
@@ -45,28 +43,10 @@ class GoogleScalarIdMigrationTest : PostgresIntegrationTest() {
 
         repeat(2) { config.execute(migration) }
 
-        // A reading resent with a changed payload is one reading: its newest row takes the id.
-        assertEquals("heart-rate:2026-04-01T08:00:00Z:none:$hashA", config.queryString("SELECT provider_record_id FROM scalar_samples WHERE id = 1"))
-        assertEquals("heart-rate:2026-04-01T08:00:00Z:none", config.queryString("SELECT provider_record_id FROM scalar_samples WHERE id = 5"))
-        // Two records for one instant in one batch keep their ids in every batch, and so do their rows, so replay still pairs them.
-        assertEquals("heart-rate:2026-04-01T08:00:05Z:none:$hashB", config.queryString("SELECT provider_record_id FROM scalar_samples WHERE id = 2"))
-        assertEquals("heart-rate:2026-04-01T08:00:05Z:none:$hashC", config.queryString("SELECT provider_record_id FROM scalar_samples WHERE id = 3"))
-        assertEquals("withings:2026-04-01T08:00:00Z:$hashA", config.queryString("SELECT provider_record_id FROM scalar_samples WHERE id = 4"))
-        assertEquals(
-            2,
-            config.queryInt(
-                """SELECT COUNT(*) FROM ingestion_records
-                   WHERE provider_record_id = 'heart-rate:2026-04-01T08:00:00Z:none'
-                     AND normalized_record_json->>'providerRecordId' = provider_record_id""",
-            ),
-        )
-        assertEquals(3, config.queryInt("SELECT COUNT(*) FROM ingestion_records WHERE provider_record_id LIKE 'heart-rate:2026-04-01T08:00:05Z:none:%'"))
-        // Every row still carries the id of the log record it came from, except the superseded older copy.
-        assertEquals(
-            "1",
-            config.queryString(
-                "SELECT string_agg(s.id::text, ',') FROM scalar_samples s JOIN ingestion_records r ON r.id = s.ingestion_record_id WHERE s.provider_record_id <> r.provider_record_id",
-            ),
-        )
+        fun ids(table: String) = config.queryString("SELECT string_agg(provider_record_id, ' ' ORDER BY id) FROM $table")?.split(' ')
+        assertEquals(listOf(resent, "$sameSecond:$hashB", "$sameSecond:$hashC", "$sameSecond:$hashB", resent), ids("ingestion_records"))
+        // Only the newest row of a resent reading takes the new id; the older row's log record is superseded by it.
+        assertEquals(listOf("$resent:$hashA", "$sameSecond:$hashB", "$sameSecond:$hashC", "withings:2026-04-01T08:00:00Z:$hashA", resent), ids("scalar_samples"))
+        assertEquals(0, config.queryInt("SELECT COUNT(*) FROM ingestion_records WHERE normalized_record_json->>'providerRecordId' <> provider_record_id"))
     }
 }
