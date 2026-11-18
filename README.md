@@ -502,6 +502,14 @@ Metric list responses include an `items` array plus a `meta` object:
 }
 ```
 
+Response field names follow these rules, so a quantity has one name everywhere:
+
+- Aggregates of one metric (`/metrics/{metricType}/summary`, `/metrics/{metricType}/daily` and the `heartRate` block of `/health/day`) use `count`, `minValue`, `maxValue` and `avgValue`, with the unit in `unit`.
+- Fields of fixed-shape records (activity and sleep summaries, blood pressure) name the statistic, the quantity and the unit: `avgHeartRateBpm`, `minRespiratoryRateBreathsPerMinute`, `totalSleepSeconds`, `systolicMmhg`. Statistics are always `min`, `max` and `avg`, and a step total is always `steps`.
+- Trend blocks of `/dashboard/trends` sit under the quantity's key (`heartRate`, `sleep`), so their fields name the period, the statistic and the unit: `currentAvgBpm`, `previousAvgSeconds`.
+
+Ingestion records keep their own field names (a sleep summary is ingested with `hrAverageBpm` and read back as `avgHeartRateBpm`), because the ingestion log stores records in that format.
+
 A query parameter the endpoint does not support returns `400 validation_failed` with code `unknown_parameter`, so a misspelled filter cannot silently widen the result.
 
 Cursor pagination is exposed through the `cursor` query parameter. When `meta.nextCursor` is present, pass it back with the same `order` value to fetch the next page. `meta.sort` names the field each endpoint orders by.

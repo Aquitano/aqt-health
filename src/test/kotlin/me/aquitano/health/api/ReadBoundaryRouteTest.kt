@@ -46,7 +46,7 @@ class ReadBoundaryRouteTest : PostgresIntegrationTest() {
                 )
 
                 val day = authorizedGet("/api/v2/health/day?date=$date&timezone=Europe/Berlin&modules=steps").jsonBody()["steps"]!!.jsonObject
-                assertEquals(steps, day["total"]!!.jsonPrimitive.int, date)
+                assertEquals(steps, day["steps"]!!.jsonPrimitive.int, date)
                 assertEquals(buckets, day["buckets"]!!.jsonArray.size, date)
             }
         }

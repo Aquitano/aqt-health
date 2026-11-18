@@ -113,7 +113,7 @@ data class ActivitySummaryResponse(
     val moderateMinutes: Int? = null,
     val intenseMinutes: Int? = null,
     val activeMinutes: Int? = null,
-    val averageHeartRateBpm: Int? = null,
+    val avgHeartRateBpm: Int? = null,
     val minHeartRateBpm: Int? = null,
     val maxHeartRateBpm: Int? = null,
     val source: SourceMetadataResponse? = null,
@@ -144,22 +144,22 @@ data class SleepSummaryResponse(
     val wakeupCount: Int? = null,
     val wasoSeconds: Long? = null,
     val sleepScore: Int? = null,
-    val remEpisodesCount: Int? = null,
+    val remEpisodeCount: Int? = null,
     val outOfBedCount: Int? = null,
     val awakeDurationSeconds: Long? = null,
-    val overnightHrvRmssd: Double? = null,
-    val respiratoryRhythm: Double? = null,
+    val overnightHrvRmssdMs: Double? = null,
+    val avgWellnessRespiratoryRateBreathsPerMinute: Double? = null,
     val breathingQuality: Int? = null,
     val snoringDurationSeconds: Long? = null,
     val apneaHypopneaIndex: Double? = null,
     val movementScore: Double? = null,
     val snoringEpisodeCount: Int? = null,
-    val hrAverageBpm: Int? = null,
-    val hrMinBpm: Int? = null,
-    val hrMaxBpm: Int? = null,
-    val rrAverage: Double? = null,
-    val rrMin: Double? = null,
-    val rrMax: Double? = null,
+    val avgHeartRateBpm: Int? = null,
+    val minHeartRateBpm: Int? = null,
+    val maxHeartRateBpm: Int? = null,
+    val avgRespiratoryRateBreathsPerMinute: Double? = null,
+    val minRespiratoryRateBreathsPerMinute: Double? = null,
+    val maxRespiratoryRateBreathsPerMinute: Double? = null,
     val source: SourceMetadataResponse? = null,
 )
 
@@ -185,6 +185,7 @@ data class ScalarSampleResponse(
 @Serializable
 data class ScalarSummaryResponse(
     val metricType: String,
+    val unit: String,
     val count: Int,
     val minValue: Double? = null,
     val maxValue: Double? = null,
@@ -202,6 +203,7 @@ data class ScalarDailySummariesResponse(
 data class ScalarDailySummaryResponse(
     @JsonSchema.Format("date")
     val date: String,
+    val unit: String,
     val count: Int,
     val minValue: Double? = null,
     val maxValue: Double? = null,
@@ -311,7 +313,7 @@ data class HealthDayBucketResponse(
 
 @Serializable
 data class HealthDayStepsResponse(
-    val total: Int,
+    val steps: Int,
     val sampleCount: Int,
     val buckets: List<HealthDayBucketResponse>,
     val source: SourceMetadataResponse? = null,
@@ -319,10 +321,11 @@ data class HealthDayStepsResponse(
 
 @Serializable
 data class HealthDayHeartRateResponse(
+    val unit: String,
     val count: Int,
-    val minBpm: Int? = null,
-    val maxBpm: Int? = null,
-    val avgBpm: Double? = null,
+    val minValue: Double? = null,
+    val maxValue: Double? = null,
+    val avgValue: Double? = null,
     val latest: ScalarSampleResponse? = null,
     val buckets: List<HealthDayBucketResponse>,
 )

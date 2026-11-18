@@ -68,12 +68,11 @@ class TrendQueryService(
                 dailyReadFilters(previousFrom, previousTo, timezone),
             )
         if (current.dayCount == 0 && previous.dayCount == 0) return null
-        val dailyAverage = if (current.dayCount > 0) current.steps / current.dayCount else 0
         return StepsTrend(
-            currentTotal = current.steps,
-            previousTotal = previous.steps,
+            currentSteps = current.steps,
+            previousSteps = previous.steps,
             percentChange = percentChange(current.steps.toDouble(), previous.steps.toDouble()),
-            dailyAverage = dailyAverage,
+            avgDailySteps = if (current.dayCount > 0) current.steps / current.dayCount else 0,
         )
     }
 
@@ -100,8 +99,8 @@ class TrendQueryService(
         val currentAvg = currentSummary.avgValue ?: 0.0
         val previousAvg = previousSummary.avgValue ?: 0.0
         return HeartRateTrend(
-            currentAvg = roundToOneDecimal(currentAvg),
-            previousAvg = roundToOneDecimal(previousAvg),
+            currentAvgBpm = roundToOneDecimal(currentAvg),
+            previousAvgBpm = roundToOneDecimal(previousAvg),
             percentChange = percentChange(currentAvg, previousAvg),
         )
     }
