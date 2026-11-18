@@ -335,7 +335,7 @@ Sync uses Google's generated Health client library (`com.google.cloud:google-clo
 - Wearable readings from periods the device was not worn are left out.
 - Narrower source families drop real data: `google-sources` and `google-wearables` return no weights for a Withings scale that writes into Google Health through Health Connect.
 
-Points Google names (sleep, weight, body fat, respiratory rate) keep that name as their record id; others are keyed by data type and time, so a re-read of the same window updates instead of duplicating. When a window holds two different readings for one key (two devices at one instant), both are stored: one keeps the key and the other gains a hash of its content. Identical copies are stored once. Scalar records stored through `list` carried a hash of the whole point in their id; V42 removed it, except for instants where some batch held two points at the same second. Those keep their old ids in every batch, so re-reading such an instant stores it again under the new ids.
+Points Google names (sleep, weight, body fat, respiratory rate) keep that name as their record id; others are keyed by data type and time, so a re-read of the same window updates instead of duplicating. When a window holds two different readings for one time key (two devices at one instant), both are stored: one keeps the key and the other gains a hash of its content. Identical copies are stored once. Scalar records stored through `list` carried a hash of the whole point in their id; V42 removed it, except for instants where some batch held two points at the same second. Those keep their old ids in every batch, so re-reading such an instant stores it again under the new ids.
 
 Google Cloud setup:
 

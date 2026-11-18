@@ -23,22 +23,27 @@ class GoogleHealthNormalizer {
         // mainSleep is a plain proto boolean, so false and absent print the same. It only picks
         // the summary when the window has a main sleep at all; otherwise naps are excluded.
         val hasMainSleep = fetchResult.dataPoints.any { it.objOrNull("sleep")?.sleepMetadataFlag("mainSleep") == true }
-        return fetchResult.dataPoints
-            .flatMap { normalizeDataPoint(fetchResult.dataType, it, hasMainSleep) }
-            .withDistinctIds()
+        val records = fetchResult.dataPoints.flatMap { normalizeDataPoint(fetchResult.dataType, it, hasMainSleep) }
+        val dateKeyed =
+            when (val fetch = fetchResult.dataType.fetch) {
+                is GoogleHealthFetch.Reconcile -> fetch.byDate
+                GoogleHealthFetch.ActivityRollUp -> true
+            }
+        return if (dateKeyed) records else records.withDistinctTimeKeys("${fetchResult.dataType.code}:")
     }
 
     /**
-     * Identical copies of a record collapse into one. Different records that share an id (two
-     * devices at one instant) all stay: the first in content order keeps the id, so a reading
+     * Identical copies of a record collapse into one. Different records that share a time key (two
+     * devices at one instant) all stay: the first in content order keeps the key, so a reading
      * stored before the second one arrived is updated rather than duplicated, and each other one
-     * gains a hash of its content. A re-read of the same window yields the same ids.
+     * gains a hash of its content. A re-read of the same window yields the same ids. Ids Google
+     * assigned are left alone.
      */
-    private fun List<IngestionRecord>.withDistinctIds(): List<IngestionRecord> {
+    private fun List<IngestionRecord>.withDistinctTimeKeys(timeKeyPrefix: String): List<IngestionRecord> {
         val records = distinct()
         val shared =
             records
-                .filter { it.providerRecordId != null }
+                .filter { it.providerRecordId?.startsWith(timeKeyPrefix) == true }
                 .groupBy { it.providerRecordId }
                 .filterValues { it.size > 1 }
         if (shared.isEmpty()) return records
@@ -319,7 +324,7 @@ class GoogleHealthNormalizer {
 
     /**
      * Reconciled points are one stream per data type, so the time key is nearly always unique
-     * within it; [withDistinctIds] separates the rare readings that share one. It leaves out the
+     * within it; [withDistinctTimeKeys] separates the rare readings that share one. It leaves out the
      * payload, so a field Google adds later cannot turn the same reading into a new record.
      */
     private fun providerRecordId(
