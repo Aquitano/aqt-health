@@ -109,7 +109,7 @@ function readConfig(env: Env): Result<Config> {
   const url = env.AQT_HEALTH_URL ?? DEFAULT_URL;
   const baseUrl = URL.canParse(url) ? new URL(url) : undefined;
   if (baseUrl === undefined || !["http:", "https:"].includes(baseUrl.protocol)) {
-    return usageError(`AQT_HEALTH_URL must be an http or https URL, got ${url}`);
+    return usageError("AQT_HEALTH_URL must be an http or https URL");
   }
   const plain =
     !baseUrl.pathname.includes("//") && !baseUrl.username && !baseUrl.password && !baseUrl.search && !baseUrl.hash;
@@ -160,33 +160,45 @@ function parseJson(text: string): unknown {
 }
 
 async function requestJson(config: Config, url: URL): Promise<Result<unknown>> {
+  const networkError = (error: unknown) =>
+    requestError("network_error", `Could not read ${url.pathname} from ${url.origin}: ${String(error)}`);
   let response: Response;
-  let text: string;
   try {
     response = await fetch(url, {
       headers: { authorization: `Bearer ${config.apiKey}`, accept: "application/json" },
       // A followed redirect would resend the API key to a path the OAuth check never saw.
       redirect: "manual",
     });
-    text = await response.text();
   } catch (error) {
-    return requestError("network_error", `Could not read ${url.pathname} from ${url.origin}: ${String(error)}`);
+    return networkError(error);
   }
   if (response.status >= 300 && response.status < 400) {
+    response.body?.cancel().catch(() => {});
     const location = response.headers.get("location") ?? "no Location";
     return requestError("redirect", `${url.pathname} redirected to ${location}, and the CLI does not follow redirects`);
   }
+  let text: string;
+  try {
+    text = await response.text();
+  } catch (error) {
+    return networkError(error);
+  }
   const body = parseJson(text);
   if (!response.ok) {
+    const apiError = ApiError(body);
     return {
       ok: false,
-      failure: { exitCode: 1, body: body ?? { error: { code: `http_${response.status}`, message: text || response.statusText } } },
+      failure: {
+        exitCode: 1,
+        body: apiError instanceof type.errors ? { error: { code: `http_${response.status}`, message: text || response.statusText } } : apiError,
+      },
     };
   }
   if (body === undefined) return requestError("invalid_response", `${url.pathname} did not return JSON`);
   return ok(body);
 }
 
+const ApiError = type({ error: { code: "string", message: "string" } });
 const Page = type({ items: "unknown[]", meta: { "nextCursor?": "string" } });
 
 async function readAllPages(config: Config, url: URL, maxItems: number): Promise<Result<unknown>> {
@@ -230,7 +242,8 @@ const Parameter = type({
 const Operation = type({ "summary?": "string", "description?": "string", "parameters?": Parameter.array() });
 const OpenApi = type({ paths: { "[string]": { "get?": Operation } } });
 
-const templatePattern = (template: string) => new RegExp(`^${template.replace(/\{[^}]+\}/g, "[^/]+")}$`);
+const templatePattern = (template: string) =>
+  new RegExp(`^${template.split(/\{[^}]+\}/).map((literal) => literal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("[^/]+")}$`);
 
 async function describeEndpoints(config: Config, path: string | undefined): Promise<Result<unknown>> {
   const specUrl = apiUrl(config, "/openapi");

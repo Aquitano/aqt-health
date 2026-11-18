@@ -24,15 +24,8 @@ const server = Bun.serve({
         return Response.redirect("/api/v2/redirect-target", 302);
       case "/api/v2/health/day":
         return Response.json({ date: "2026-11-10", steps: { steps: 1 } });
-      case "/api/v2/dropped":
-        return new Response(
-          new ReadableStream({
-            start(controller) {
-              controller.enqueue(new TextEncoder().encode('{"items":['));
-              controller.error(new Error("connection dropped"));
-            },
-          }),
-        );
+      case "/api/v2/gateway":
+        return Response.json({ message: "Service unavailable" }, { status: 503 });
       case "/api/v2/sleep/nights":
         return Response.json(
           { error: { code: "validation_failed", message: "unknown_parameter: fromdate" } },
@@ -50,6 +43,7 @@ const server = Bun.serve({
                 parameters: [{ name: "metricType", in: "path", required: true, schema: { type: "string" } }],
               },
             },
+            "/api/v2/reports/{id}.json": { get: { summary: "One report" } },
             "/api/v2/providers/{providerCode}/oauth/callback": { get: { summary: "OAuth callback" } },
             "/api/v2/ingestion/batches": { post: { summary: "Ingest a batch" } },
           },
@@ -60,6 +54,24 @@ const server = Bun.serve({
   },
 });
 afterAll(() => server.stop());
+
+const truncatedResponses: Record<string, string> = {
+  "/api/v2/dropped": "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: 100\r\n\r\n",
+  "/api/v2/moved-dropped": "HTTP/1.1 302 Found\r\nlocation: /api/v2/redirect-target\r\ncontent-length: 100\r\n\r\n",
+};
+const truncatingServer = Bun.listen({
+  hostname: "127.0.0.1",
+  port: 0,
+  socket: {
+    data(socket, data) {
+      const path = data.toString().split(" ")[1] ?? "";
+      socket.write(`${truncatedResponses[path] ?? "HTTP/1.1 404 Not Found\r\ncontent-length: 100\r\n\r\n"}{"items":[`);
+      socket.end();
+    },
+  },
+});
+afterAll(() => truncatingServer.stop(true));
+const truncatingUrl = `http://127.0.0.1:${truncatingServer.port}`;
 
 async function cliAt(baseUrl: string, ...argv: string[]) {
   let stdout = "";
@@ -159,10 +171,24 @@ describe("get", () => {
   });
 
   test("a connection dropped while reading the body is a JSON error", async () => {
-    const { exitCode, error } = await cli("get", "dropped");
+    const { exitCode, error } = await cliAt(truncatingUrl, "get", "dropped");
 
     expect(exitCode).toBe(1);
     expect(error).toMatchObject({ error: { code: "network_error" } });
+  });
+
+  test("a redirect whose body is cut off is still reported as a redirect", async () => {
+    const { exitCode, error } = await cliAt(truncatingUrl, "get", "moved-dropped");
+
+    expect(exitCode).toBe(1);
+    expect(error).toMatchObject({ error: { code: "redirect" } });
+  });
+
+  test("an error body without the API's envelope is wrapped in one", async () => {
+    const { exitCode, error } = await cli("get", "gateway");
+
+    expect(exitCode).toBe(1);
+    expect(error).toEqual({ error: { code: "http_503", message: '{"message":"Service unavailable"}' } });
   });
 });
 
@@ -174,6 +200,7 @@ describe("endpoints", () => {
       endpoints: [
         { path: "/api/v2/steps/daily", summary: "List daily step summaries", parameters: ["date"] },
         { path: "/api/v2/metrics/{metricType}/daily", summary: "Daily aggregates of one metric", parameters: ["metricType"] },
+        { path: "/api/v2/reports/{id}.json", summary: "One report", parameters: [] },
       ],
     });
   });
@@ -185,6 +212,11 @@ describe("endpoints", () => {
       path: "/api/v2/metrics/{metricType}/daily",
       parameters: [{ name: "metricType", in: "path", required: true, schema: { type: "string" } }],
     });
+  });
+
+  test("literal characters in a template match only themselves", async () => {
+    expect((await cli("endpoints", "reports/7.json")).json).toMatchObject({ path: "/api/v2/reports/{id}.json" });
+    expect((await cli("endpoints", "reports/7xjson")).exitCode).toBe(2);
   });
 });
 
