@@ -7,12 +7,15 @@ import me.aquitano.health.domain.DailyMetricRegistry
 import me.aquitano.health.domain.DailyMetricTypes
 import me.aquitano.health.domain.ScalarMetricTypes
 import me.aquitano.health.domain.roundToScalarPrecision
+import me.aquitano.health.shared.AppJson
 import me.aquitano.health.shared.doubleOrNull
 import me.aquitano.health.shared.longOrNull
 import me.aquitano.health.shared.objOrNull
 import me.aquitano.health.shared.primitiveOrNull
 import me.aquitano.health.shared.stringOrNull
+import java.security.MessageDigest
 import java.time.LocalDate
+import java.util.HexFormat
 import kotlin.math.roundToInt
 
 class GoogleHealthNormalizer {
@@ -20,8 +23,49 @@ class GoogleHealthNormalizer {
         // mainSleep is a plain proto boolean, so false and absent print the same. It only picks
         // the summary when the window has a main sleep at all; otherwise naps are excluded.
         val hasMainSleep = fetchResult.dataPoints.any { it.objOrNull("sleep")?.sleepMetadataFlag("mainSleep") == true }
-        return fetchResult.dataPoints.flatMap { normalizeDataPoint(fetchResult.dataType, it, hasMainSleep) }
+        return fetchResult.dataPoints
+            .flatMap { normalizeDataPoint(fetchResult.dataType, it, hasMainSleep) }
+            .withDistinctIds()
     }
+
+    /**
+     * Identical copies of a record collapse into one. Different records that share an id (two
+     * devices at one instant) all stay: the first in content order keeps the id, so a reading
+     * stored before the second one arrived is updated rather than duplicated, and each other one
+     * gains a hash of its content. A re-read of the same window yields the same ids.
+     */
+    private fun List<IngestionRecord>.withDistinctIds(): List<IngestionRecord> {
+        val records = distinct()
+        val shared =
+            records
+                .filter { it.providerRecordId != null }
+                .groupBy { it.providerRecordId }
+                .filterValues { it.size > 1 }
+        if (shared.isEmpty()) return records
+        val renamed =
+            shared.values
+                .flatMap { sharing ->
+                    val contentByRecord = sharing.associateWith { AppJson.encodeToString(IngestionRecord.serializer(), it) }
+                    contentByRecord.entries
+                        .sortedBy { it.value }
+                        .drop(1)
+                        .map { (record, content) -> record to record.withProviderRecordId("${record.providerRecordId}:${contentKey(content)}") }
+                }.toMap()
+        return records.map { renamed[it] ?: it }
+    }
+
+    private fun contentKey(content: String): String = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content.toByteArray(Charsets.UTF_8))).take(16)
+
+    private fun IngestionRecord.withProviderRecordId(id: String): IngestionRecord =
+        when (this) {
+            is StepInterval -> copy(providerRecordId = id)
+            is SleepSession -> copy(providerRecordId = id)
+            is SleepSummary -> copy(providerRecordId = id)
+            is ActivitySummary -> copy(providerRecordId = id)
+            is DailyMetric -> copy(providerRecordId = id)
+            is BloodPressure -> copy(providerRecordId = id)
+            is ScalarSample -> copy(providerRecordId = id)
+        }
 
     private fun normalizeDataPoint(
         dataType: GoogleHealthDataType,
@@ -274,9 +318,9 @@ class GoogleHealthNormalizer {
     }
 
     /**
-     * Reconciled points are one stream per data type, so the time key is unique within it. It
-     * leaves out the payload, so a field Google adds later cannot turn the same reading into a
-     * new record.
+     * Reconciled points are one stream per data type, so the time key is nearly always unique
+     * within it; [withDistinctIds] separates the rare readings that share one. It leaves out the
+     * payload, so a field Google adds later cannot turn the same reading into a new record.
      */
     private fun providerRecordId(
         dataType: String,

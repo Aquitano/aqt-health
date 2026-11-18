@@ -129,6 +129,27 @@ class GoogleHealthNormalizerTest {
     }
 
     @Test
+    fun differentReadingsAtOneInstantKeepSeparateIdsAndIdenticalCopiesCollapse() {
+        val points =
+            listOf("61", "62", "61").map {
+                dataPointJson("""{ "heartRate": { "sampleTime": { "physicalTime": "2026-04-01T08:30:00Z" }, "beatsPerMinute": "$it" } }""")
+            }
+
+        fun idsByValue(points: List<JsonObject>) =
+            normalizer
+                .normalize(GoogleHealthFetchResult(GoogleHealthDataType.HeartRate, emptyList(), points))
+                .map { assertIs<ScalarSample>(it) }
+                .also { assertEquals(2, it.size) }
+                .associate { it.value to it.providerRecordId }
+
+        val ids = idsByValue(points)
+
+        assertEquals(setOf(61.0, 62.0), ids.keys)
+        assertEquals("heart-rate:2026-04-01T08:30:00Z:none", ids[61.0])
+        assertEquals(ids, idsByValue(points.reversed()))
+    }
+
+    @Test
     fun zeroBodyFatIsDropped() {
         val records =
             normalize(
