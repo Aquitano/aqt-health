@@ -191,7 +191,7 @@ const Page = type({ items: "unknown[]", meta: { "nextCursor?": "string" } });
 
 async function readAllPages(config: Config, url: URL, maxItems: number): Promise<Result<unknown>> {
   const items: unknown[] = [];
-  const cursors = new Set<string>();
+  const cursors = new Set(url.searchParams.getAll("cursor"));
   for (;;) {
     const response = await requestJson(config, url);
     if (!response.ok) return response;
@@ -201,10 +201,12 @@ async function readAllPages(config: Config, url: URL, maxItems: number): Promise
     }
     items.push(...page.items);
     const next = page.meta.nextCursor;
+    if (next !== undefined && cursors.has(next)) {
+      return requestError("repeated_cursor", `${url.pathname} returned the cursor ${next} twice`);
+    }
     if (next === undefined || items.length >= maxItems) {
       return ok({ ...page, items, meta: { ...page.meta, count: items.length } });
     }
-    if (cursors.has(next)) return requestError("repeated_cursor", `${url.pathname} returned the cursor ${next} twice`);
     cursors.add(next);
     url.searchParams.set("cursor", next);
   }

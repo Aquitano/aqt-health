@@ -107,6 +107,15 @@ describe("get", () => {
     expect(error).toMatchObject({ error: { code: "repeated_cursor" } });
   });
 
+  test("--all fails when the server hands back the caller's starting cursor", async () => {
+    const requestsBefore = seen.length;
+    const { exitCode, error } = await cli("get", "metrics/heart_rate", "cursor=same", "--all", "--max-items", "2");
+
+    expect(exitCode).toBe(1);
+    expect(error).toMatchObject({ error: { code: "repeated_cursor" } });
+    expect(seen.length).toBe(requestsBefore + 1);
+  });
+
   test("a redirect is reported, not followed with the API key", async () => {
     const { exitCode, error } = await cli("get", "moved");
 
