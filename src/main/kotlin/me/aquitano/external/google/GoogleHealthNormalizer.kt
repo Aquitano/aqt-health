@@ -396,16 +396,16 @@ class GoogleHealthNormalizer {
         val minutesByLevel =
             point
                 .objOrNull("activeMinutes")
-                ?.let { activeMinutes ->
-                    val listed =
-                        activeMinutes["activeMinutesRollupByActivityLevel"]
-                            ?.jsonArray
-                            ?.filterIsInstance<JsonObject>()
-                            ?.mapNotNull { level -> level.stringOrNull("activityLevel")?.let { it to level.nonNegativeLong("activeMinutesSum")?.toInt() } }
-                            ?.toMap()
-                            .orEmpty()
-                    listOf("LIGHT", "MODERATE", "VIGOROUS").associateWith { listed[it] ?: 0 }
-                }.orEmpty()
+                ?.get("activeMinutesRollupByActivityLevel")
+                ?.jsonArray
+                ?.filterIsInstance<JsonObject>()
+                ?.mapNotNull { level ->
+                    val minutes = level.nonNegativeLong("activeMinutesSum") ?: return@mapNotNull null
+                    level.stringOrNull("activityLevel")?.let { it to minutes.toInt() }
+                }?.toMap()
+                ?.takeIf { it.isNotEmpty() }
+                ?.let { listed -> listOf("LIGHT", "MODERATE", "VIGOROUS").associateWith { listed[it] ?: 0 } }
+                .orEmpty()
         val moderate = minutesByLevel["MODERATE"]
         val vigorous = minutesByLevel["VIGOROUS"]
         val heartRate = point.objOrNull("heartRate")

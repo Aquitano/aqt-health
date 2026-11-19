@@ -107,6 +107,7 @@ class GeneratedGoogleHealthClientTest {
             fixture.service.rollUps["active-minutes"] =
                 rollUp(
                     """{"civilStartTime": {"date": {"year": 2026, "month": 4, "day": 1}}, "activeMinutes": {"activeMinutesRollupByActivityLevel": [{"activityLevel": "LIGHT", "activeMinutesSum": "171"}, {"activityLevel": "VIGOROUS", "activeMinutesSum": "37"}]}}""",
+                    """{"civilStartTime": {"date": {"year": 2026, "month": 4, "day": 2}}, "activeMinutes": {}}""",
                 )
             fixture.service.rollUps["heart-rate"] = rollUp("""{"civilStartTime": {"date": {"year": 2026, "month": 4, "day": 1}}, "heartRate": {"beatsPerMinuteAvg": 78.6}}""")
 
