@@ -825,6 +825,50 @@ class ReadApiRouteTest : PostgresIntegrationTest() {
         }
 
     @Test
+    fun dailyMetricsReturnTheBestRankedProvidersValuePerDateWithItsUnit() =
+        testApplication {
+            configureTestApplication()
+            for ((provider, value) in listOf("google_health" to 61.0, "withings" to 58.0)) {
+                val response =
+                    client.post("/api/v2/ingestion/batches") {
+                        authorized()
+                        contentType(ContentType.Application.Json)
+                        setBody("""{"provider":"$provider","providerInstanceId":"$provider","ingestedAt":"2026-04-20T10:00:00Z","sourcePayload":{},"records":[{"type":"daily_metric","providerRecordId":"rhr-2026-04-19","date":"2026-04-19","metricType":"resting_heart_rate","value":$value}]}""")
+                    }
+                assertEquals(HttpStatusCode.Created, response.status)
+            }
+
+            val restingHeartRate =
+                authorizedGet("/api/v2/daily-metrics?metricTypes=resting_heart_rate&date=2026-04-19&includeSource=true").items().single().jsonObject
+            assertEquals(61.0, restingHeartRate["value"]!!.jsonPrimitive.double)
+            assertEquals("bpm", restingHeartRate["unit"]!!.jsonPrimitive.content)
+            assertEquals("google_health", restingHeartRate["source"]!!.jsonObject["provider"]!!.jsonPrimitive.content)
+            assertEquals(HttpStatusCode.BadRequest, authorizedGet("/api/v2/daily-metrics?metricTypes=resting_heartrate").status)
+        }
+
+    @Test
+    fun aDailyMetricRecordIdReusedForAnotherMetricTypeKeepsBothValues() =
+        testApplication {
+            configureTestApplication()
+            for ((metricType, value) in listOf("resting_heart_rate" to 61.0, "nightly_respiratory_rate" to 17.0)) {
+                val response =
+                    client.post("/api/v2/ingestion/batches") {
+                        authorized()
+                        contentType(ContentType.Application.Json)
+                        setBody("""{"provider":"google_health","providerInstanceId":"google_health","ingestedAt":"2026-04-20T10:00:00Z","sourcePayload":{},"records":[{"type":"daily_metric","providerRecordId":"daily-2026-04-19","date":"2026-04-19","metricType":"$metricType","value":$value}]}""")
+                    }
+                assertEquals(HttpStatusCode.Created, response.status)
+            }
+
+            assertEquals(
+                mapOf("resting_heart_rate" to 61.0, "nightly_respiratory_rate" to 17.0),
+                authorizedGet("/api/v2/daily-metrics?date=2026-04-19").items().associate {
+                    it.jsonObject["metricType"]!!.jsonPrimitive.content to it.jsonObject["value"]!!.jsonPrimitive.double
+                },
+            )
+        }
+
+    @Test
     fun readsRejectQueryParametersTheEndpointDoesNotSupport() =
         testApplication {
             configureTestApplication()

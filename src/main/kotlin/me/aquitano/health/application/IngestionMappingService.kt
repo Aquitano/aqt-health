@@ -108,6 +108,7 @@ class IngestionMappingService {
             is SleepSummary -> mapSleepSummary(field, dto, issues)
             is BloodPressure -> mapBloodPressure(field, dto, issues)
             is ScalarSample -> mapScalarSample(field, dto, issues)
+            is DailyMetric -> mapDailyMetric(field, dto, issues)
         }
     }
 }

@@ -161,6 +161,25 @@ object CanonicalActivitySummariesTable : Table("canonical_activity_summaries") {
         integer("activity_summary_id").references(ActivitySummariesTable.id)
 }
 
+object DailyMetricValuesTable : IntIdTable("daily_metric_values") {
+    val sourceInstanceId = integer("source_instance_id").references(SourceInstancesTable.id)
+    val ingestionRecordId = integer("ingestion_record_id").references(IngestionRecordsTable.id).nullable()
+    val providerRecordId = text("provider_record_id").nullable()
+    val date = date("date")
+    val metricType = text("metric_type")
+    val value = double("value")
+    val createdAt = timestampWithTimeZone("created_at")
+}
+
+/** Read-only mapping of the canonical_daily_metric_values view (see V41). */
+object CanonicalDailyMetricValuesView : Table("canonical_daily_metric_values") {
+    val id = integer("id")
+    val date = date("date")
+    val metricType = text("metric_type")
+    val sourceInstanceId = integer("source_instance_id")
+    val value = double("value")
+}
+
 object SleepSummariesTable : IntIdTable("sleep_summaries") {
     val sourceInstanceId =
         integer("source_instance_id").references(SourceInstancesTable.id)

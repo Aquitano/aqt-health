@@ -5,6 +5,7 @@ import com.google.protobuf.util.JsonFormat
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
+import me.aquitano.health.api.dto.DailyMetric
 import me.aquitano.health.api.dto.IngestionBatchRequest
 import me.aquitano.health.api.dto.ScalarSample
 import me.aquitano.health.api.dto.SleepSession
@@ -123,6 +124,27 @@ class GoogleHealthNormalizerTest {
         assertEquals(listOf(timeKey, timeKey), listOf(ids[0].second, ids[2].second))
         assertTrue(ids[1].second!!.startsWith("$timeKey:"))
         assertEquals(ids.toSet(), idsInOrder("62", "61", "61").toSet())
+    }
+
+    @Test
+    fun dailyMetricsKeepGooglesDateAndDropImplausibleValues() {
+        val records =
+            normalize(
+                GoogleHealthDataType.DailyOxygenSaturation,
+                """
+                {
+                  "dailyOxygenSaturation": {
+                    "date": { "year": 2026, "month": 4, "day": 1 },
+                    "averagePercentage": 96.4,
+                    "lowerBoundPercentage": 12.0,
+                    "upperBoundPercentage": 98.0
+                  }
+                }
+                """,
+            )
+
+        assertEquals(listOf(DailyMetric("daily-oxygen-saturation:2026-04-01:oxygen_saturation", "2026-04-01", "oxygen_saturation", 96.4)), records)
+        assertAcceptedByIngestion(records)
     }
 
     private fun normalize(

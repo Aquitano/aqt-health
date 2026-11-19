@@ -50,6 +50,7 @@ private val replayableRecordTypes =
         RecordTypes.SLEEP_SUMMARY,
         RecordTypes.BLOOD_PRESSURE,
         RecordTypes.SCALAR,
+        RecordTypes.DAILY_METRIC,
     )
 
 /**

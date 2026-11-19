@@ -76,6 +76,16 @@ data class ActivitySummary(
 }
 
 @Serializable
+@SerialName("daily_metric")
+data class DailyMetric(
+    override val providerRecordId: String? = null,
+    @JsonSchema.Format("date")
+    val date: String,
+    val metricType: String,
+    val value: Double,
+) : IngestionRecord()
+
+@Serializable
 @SerialName("sleep_summary")
 data class SleepSummary(
     override val providerRecordId: String? = null,

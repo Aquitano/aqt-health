@@ -3,7 +3,10 @@ package me.aquitano.external.google
 import kotlinx.serialization.json.*
 import me.aquitano.health.api.dto.*
 import me.aquitano.health.domain.BodyMetricTypes
+import me.aquitano.health.domain.DailyMetricRegistry
+import me.aquitano.health.domain.DailyMetricTypes
 import me.aquitano.health.domain.ScalarMetricTypes
+import me.aquitano.health.domain.roundToScalarPrecision
 import me.aquitano.health.shared.AppJson
 import me.aquitano.health.shared.doubleOrNull
 import me.aquitano.health.shared.longOrNull
@@ -11,16 +14,22 @@ import me.aquitano.health.shared.objOrNull
 import me.aquitano.health.shared.primitiveOrNull
 import me.aquitano.health.shared.stringOrNull
 import java.security.MessageDigest
+import java.time.LocalDate
 import java.util.HexFormat
+import kotlin.math.roundToInt
 
 class GoogleHealthNormalizer {
     fun normalize(fetchResult: GoogleHealthFetchResult): List<IngestionRecord> {
         // mainSleep is a plain proto boolean, so false and absent print the same. It only picks
         // the summary when the window has a main sleep at all; otherwise naps are excluded.
         val hasMainSleep = fetchResult.dataPoints.any { it.objOrNull("sleep")?.sleepMetadataFlag("mainSleep") == true }
-        return fetchResult.dataPoints
-            .flatMap { normalizeDataPoint(fetchResult.dataType, it, hasMainSleep) }
-            .withDistinctTimeKeys("${fetchResult.dataType.code}:")
+        val records = fetchResult.dataPoints.flatMap { normalizeDataPoint(fetchResult.dataType, it, hasMainSleep) }
+        val dateKeyed =
+            when (val fetch = fetchResult.dataType.fetch) {
+                is GoogleHealthFetch.Reconcile -> fetch.byDate
+                GoogleHealthFetch.ActivityRollUp -> true
+            }
+        return if (dateKeyed) records else records.withDistinctTimeKeys("${fetchResult.dataType.code}:")
     }
 
     /**
@@ -55,6 +64,7 @@ class GoogleHealthNormalizer {
             is SleepSession -> copy(providerRecordId = id)
             is SleepSummary -> copy(providerRecordId = id)
             is ActivitySummary -> copy(providerRecordId = id)
+            is DailyMetric -> copy(providerRecordId = id)
             is BloodPressure -> copy(providerRecordId = id)
             is ScalarSample -> copy(providerRecordId = id)
         }
@@ -67,12 +77,27 @@ class GoogleHealthNormalizer {
         val code = dataType.code
         return when (dataType) {
             GoogleHealthDataType.Steps -> listOfNotNull(normalizeSteps(code, point))
+
             GoogleHealthDataType.Sleep -> normalizeSleep(code, point, hasMainSleep)
+
             GoogleHealthDataType.HeartRate -> listOfNotNull(normalizeHeartRate(code, point))
+
             GoogleHealthDataType.Weight -> listOfNotNull(normalizeWeight(code, point))
+
             GoogleHealthDataType.BodyFat -> listOfNotNull(normalizeBodyFat(code, point))
+
             GoogleHealthDataType.HeartRateVariability -> listOfNotNull(normalizeHeartRateVariability(code, point))
+
             GoogleHealthDataType.RespiratoryRateSleepSummary -> listOfNotNull(normalizeRespiratoryRate(code, point))
+
+            GoogleHealthDataType.DailyRestingHeartRate,
+            GoogleHealthDataType.DailyHeartRateVariability,
+            GoogleHealthDataType.DailyOxygenSaturation,
+            GoogleHealthDataType.DailyRespiratoryRate,
+            GoogleHealthDataType.DailySleepTemperature,
+            -> normalizeDailyMetrics(dataType, point)
+
+            GoogleHealthDataType.Activity -> listOfNotNull(normalizeActivity(code, point))
         }
     }
 
@@ -304,8 +329,119 @@ class GoogleHealthNormalizer {
         point.stringOrNull("dataPointName")?.takeIf { it.isNotBlank() }
             ?: "$dataType:$startOrMeasuredAt:${endAt ?: "none"}"
 
+    private fun normalizeDailyMetrics(
+        dataType: GoogleHealthDataType,
+        point: JsonObject,
+    ): List<DailyMetric> {
+        val (field, values) =
+            when (dataType) {
+                GoogleHealthDataType.DailyRestingHeartRate -> {
+                    "dailyRestingHeartRate" to listOf(DailyMetricTypes.RESTING_HEART_RATE to "beatsPerMinute")
+                }
+
+                GoogleHealthDataType.DailyHeartRateVariability -> {
+                    "dailyHeartRateVariability" to
+                        listOf(
+                            DailyMetricTypes.NIGHTLY_HRV_RMSSD to "averageHeartRateVariabilityMilliseconds",
+                            DailyMetricTypes.DEEP_SLEEP_HRV_RMSSD to "deepSleepRootMeanSquareOfSuccessiveDifferencesMilliseconds",
+                            DailyMetricTypes.NON_REM_HEART_RATE to "nonRemHeartRateBeatsPerMinute",
+                        )
+                }
+
+                GoogleHealthDataType.DailyOxygenSaturation -> {
+                    "dailyOxygenSaturation" to
+                        listOf(
+                            DailyMetricTypes.OXYGEN_SATURATION to "averagePercentage",
+                            DailyMetricTypes.OXYGEN_SATURATION_LOWER_BOUND to "lowerBoundPercentage",
+                        )
+                }
+
+                GoogleHealthDataType.DailyRespiratoryRate -> {
+                    "dailyRespiratoryRate" to listOf(DailyMetricTypes.NIGHTLY_RESPIRATORY_RATE to "breathsPerMinute")
+                }
+
+                GoogleHealthDataType.DailySleepTemperature -> {
+                    "dailySleepTemperatureDerivations" to
+                        listOf(
+                            DailyMetricTypes.NIGHTLY_SKIN_TEMPERATURE to "nightlyTemperatureCelsius",
+                            DailyMetricTypes.SKIN_TEMPERATURE_BASELINE to "baselineTemperatureCelsius",
+                        )
+                }
+
+                else -> {
+                    error("${dataType.code} is not a daily metric type")
+                }
+            }
+        val body = point.objOrNull(field) ?: return emptyList()
+        val date = body.objOrNull("date")?.civilDate() ?: return emptyList()
+        return values.mapNotNull { (metricType, key) ->
+            val value = body.finiteDoubleOrNull(key)?.roundToScalarPrecision() ?: return@mapNotNull null
+            if (value !in DailyMetricRegistry.find(metricType)!!.valueRange) return@mapNotNull null
+            DailyMetric(
+                providerRecordId = "${dataType.code}:$date:$metricType",
+                date = date.toString(),
+                metricType = metricType,
+                value = value,
+            )
+        }
+    }
+
+    /** Google leaves a roll-up value unset for a day nothing was worn, so absent fields stay null instead of becoming zeros. */
+    private fun normalizeActivity(
+        dataType: String,
+        point: JsonObject,
+    ): ActivitySummary? {
+        val date = point.stringOrNull("date") ?: return null
+        // A worn day lists only the activity levels that had minutes, so a missing level is zero.
+        val minutesByLevel =
+            point
+                .objOrNull("activeMinutes")
+                ?.get("activeMinutesRollupByActivityLevel")
+                ?.jsonArray
+                ?.filterIsInstance<JsonObject>()
+                ?.mapNotNull { level ->
+                    val minutes = level.nonNegativeLong("activeMinutesSum") ?: return@mapNotNull null
+                    level.stringOrNull("activityLevel")?.let { it to minutes.toInt() }
+                }?.toMap()
+                ?.takeIf { it.isNotEmpty() }
+                ?.let { listed -> listOf("LIGHT", "MODERATE", "VIGOROUS").associateWith { listed[it] ?: 0 } }
+                .orEmpty()
+        val moderate = minutesByLevel["MODERATE"]
+        val vigorous = minutesByLevel["VIGOROUS"]
+        val heartRate = point.objOrNull("heartRate")
+        val summary =
+            ActivitySummary(
+                providerRecordId = "$dataType:$date",
+                date = date,
+                distanceMeters = point.objOrNull("distance")?.nonNegativeLong("millimetersSum")?.let { (it / 1000.0).roundToScalarPrecision() },
+                totalEnergyKcal =
+                    point
+                        .objOrNull("totalCalories")
+                        ?.finiteDoubleOrNull("kcalSum")
+                        ?.takeIf { it >= 0.0 }
+                        ?.roundToScalarPrecision(),
+                softMinutes = minutesByLevel["LIGHT"],
+                moderateMinutes = moderate,
+                intenseMinutes = vigorous,
+                activeMinutes = if (moderate != null && vigorous != null) moderate + vigorous else null,
+                averageHeartRateBpm = heartRate?.heartRateBpm("beatsPerMinuteAvg"),
+                minHeartRateBpm = heartRate?.heartRateBpm("beatsPerMinuteMin"),
+                maxHeartRateBpm = heartRate?.heartRateBpm("beatsPerMinuteMax"),
+            )
+        return summary.takeIf { it.hasAnyMetric() }
+    }
+
+    private fun JsonObject.heartRateBpm(key: String): Int? = finiteDoubleOrNull(key)?.roundToInt()?.takeIf { it in 25..250 }
+
     // ProtoJSON writes non-finite doubles as "NaN" and "Infinity", which parse as numbers.
     private fun JsonObject.finiteDoubleOrNull(key: String): Double? = doubleOrNull(key)?.takeIf { it.isFinite() }
+
+    private fun JsonObject.civilDate(): LocalDate? {
+        val year = longOrNull("year")?.toInt() ?: return null
+        val month = longOrNull("month")?.toInt() ?: return null
+        val day = longOrNull("day")?.toInt() ?: return null
+        return runCatching { LocalDate.of(year, month, day) }.getOrNull()
+    }
 
     private fun mapSleepStage(value: String?): String? =
         when (value) {

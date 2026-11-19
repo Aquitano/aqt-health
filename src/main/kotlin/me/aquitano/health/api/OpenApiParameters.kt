@@ -10,6 +10,8 @@ import me.aquitano.health.application.metric.common.IntParamSpec
 import me.aquitano.health.application.metric.common.QueryParamSpecs
 import me.aquitano.health.domain.BatchStatus
 import me.aquitano.health.domain.BodyMetricTypes
+import me.aquitano.health.domain.DailyMetricRegistry
+import me.aquitano.health.domain.DailyMetricTypes
 import me.aquitano.health.domain.ScalarMetricTypes
 import me.aquitano.health.shared.SortDirection
 
@@ -122,6 +124,17 @@ internal fun Operation.Builder.scalarDailySummaryQueryParameters() {
     )
 }
 
+internal fun Operation.Builder.dailyMetricQueryParameters() {
+    parameters {
+        query("metricTypes") {
+            description =
+                "Comma-separated daily metric types. Defaults to every type: ${DailyMetricRegistry.metricTypes.joinToString(", ")}."
+            schema = stringSchema(example = "${DailyMetricTypes.RESTING_HEART_RATE},${DailyMetricTypes.NIGHTLY_HRV_RMSSD}")
+        }
+    }
+    dailyQueryParameters(localDays = false)
+}
+
 internal fun Operation.Builder.dailyQueryParameters(localDays: Boolean) {
     providerFilterParameters()
     orderParameter("Sort direction. Defaults to ${QueryParamSpecs.order.default.wireName}. Use desc for newest-first reads.")
@@ -135,7 +148,7 @@ internal fun Operation.Builder.dailyQueryParameters(localDays: Boolean) {
         dateRangeQueryParameters("local date")
         timezoneParameter("IANA timezone that defines `today` and the local-day boundaries of each total. Defaults to UTC.")
     } else {
-        dateRangeQueryParameters("UTC date")
+        dateRangeQueryParameters("provider calendar date")
     }
 }
 

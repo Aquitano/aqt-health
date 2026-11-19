@@ -4,6 +4,9 @@ import com.google.api.gax.rpc.ApiException
 import com.google.api.gax.rpc.StatusCode
 import com.google.auth.oauth2.AccessToken
 import com.google.auth.oauth2.GoogleCredentials
+import com.google.devicesandservices.health.v4.DailyRollUpDataPointsRequest
+import com.google.devicesandservices.health.v4.DailyRollUpDataPointsResponse
+import com.google.devicesandservices.health.v4.DailyRollupDataPoint
 import com.google.devicesandservices.health.v4.ReconcileDataPointsRequest
 import com.google.devicesandservices.health.v4.ReconcileDataPointsResponse
 import com.google.devicesandservices.health.v4.ReconciledDataPoint
@@ -13,6 +16,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.jsonPrimitive
+import me.aquitano.health.api.dto.ActivitySummary
 import me.aquitano.health.application.providersync.RefreshedTokenSet
 import java.net.URI
 import java.time.Instant
@@ -88,6 +92,43 @@ class GeneratedGoogleHealthClientTest {
                     dataType.code,
                 )
             }
+        }
+
+    @Test
+    fun activityRollUpsBecomeOneSummaryPerDateAndNoneForADayNothingWasWorn() =
+        runBlocking {
+            val fixture = Fixture()
+            fixture.service.rollUps["distance"] =
+                rollUp(
+                    """{"civilStartTime": {"date": {"year": 2026, "month": 4, "day": 1}}, "distance": {"millimetersSum": "4589200"}}""",
+                    """{"civilStartTime": {"date": {"year": 2026, "month": 4, "day": 2}}}""",
+                )
+            fixture.service.rollUps["total-calories"] = rollUp("""{"civilStartTime": {"date": {"year": 2026, "month": 4, "day": 1}}, "totalCalories": {"kcalSum": 2695.5}}""")
+            fixture.service.rollUps["active-minutes"] =
+                rollUp(
+                    """{"civilStartTime": {"date": {"year": 2026, "month": 4, "day": 1}}, "activeMinutes": {"activeMinutesRollupByActivityLevel": [{"activityLevel": "LIGHT", "activeMinutesSum": "171"}, {"activityLevel": "VIGOROUS", "activeMinutesSum": "37"}]}}""",
+                    """{"civilStartTime": {"date": {"year": 2026, "month": 4, "day": 2}}, "activeMinutes": {}}""",
+                )
+            fixture.service.rollUps["heart-rate"] = rollUp("""{"civilStartTime": {"date": {"year": 2026, "month": 4, "day": 1}}, "heartRate": {"beatsPerMinuteAvg": 78.6}}""")
+
+            val result = fixture.client.fetchDataPoints("access-token", GoogleHealthDataType.Activity, fixture.from, fixture.to, 1000)
+
+            assertEquals(
+                listOf(
+                    ActivitySummary(
+                        providerRecordId = "activity:2026-04-01",
+                        date = "2026-04-01",
+                        distanceMeters = 4589.2,
+                        totalEnergyKcal = 2695.5,
+                        softMinutes = 171,
+                        moderateMinutes = 0,
+                        intenseMinutes = 37,
+                        activeMinutes = 37,
+                        averageHeartRateBpm = 79,
+                    ),
+                ),
+                GoogleHealthNormalizer().normalize(result),
+            )
         }
 
     @Test
@@ -219,6 +260,8 @@ class GeneratedGoogleHealthClientTest {
                         return ReconcileDataPointsResponse.getDefaultInstance()
                     }
 
+                    override fun dailyRollUpDataPoints(request: DailyRollUpDataPointsRequest): DailyRollUpDataPointsResponse = error("not used")
+
                     override fun close() {
                         oldCloses.incrementAndGet()
                     }
@@ -291,8 +334,11 @@ class GeneratedGoogleHealthClientTest {
     private class FakeDataPointsService : GoogleHealthDataPointsService {
         val requests = mutableListOf<ReconcileDataPointsRequest>()
         val responses = ArrayDeque<ReconcileDataPointsResponse>()
+        val rollUps = mutableMapOf<String, DailyRollUpDataPointsResponse>()
         var nextFailure: ApiException? = null
         var closes = 0
+
+        override fun dailyRollUpDataPoints(request: DailyRollUpDataPointsRequest): DailyRollUpDataPointsResponse = rollUps.getValue(request.parent.substringAfterLast('/'))
 
         override fun reconcileDataPoints(request: ReconcileDataPointsRequest): ReconcileDataPointsResponse {
             requests.add(request)
@@ -457,6 +503,12 @@ class GeneratedGoogleHealthClientTest {
         }
         """,
         )
+
+    private fun rollUp(vararg json: String): DailyRollUpDataPointsResponse =
+        DailyRollUpDataPointsResponse
+            .newBuilder()
+            .addAllRollupDataPoints(json.map { DailyRollupDataPoint.newBuilder().also { builder -> JsonFormat.parser().merge(it, builder) }.build() })
+            .build()
 
     private fun dataPoint(json: String): ReconciledDataPoint {
         val builder = ReconciledDataPoint.newBuilder()

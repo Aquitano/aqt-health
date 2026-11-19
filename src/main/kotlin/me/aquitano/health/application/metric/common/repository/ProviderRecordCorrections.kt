@@ -2,7 +2,7 @@ package me.aquitano.health.application.metric.common.repository
 
 import me.aquitano.health.application.metric.common.MetricWrite
 import me.aquitano.health.domain.RecordTypes
-import me.aquitano.health.infrastructure.repositories.sameScalarIdentity
+import me.aquitano.health.infrastructure.repositories.sameRecordIdentity
 import me.aquitano.health.infrastructure.repositories.scalarContext
 import me.aquitano.health.shared.normalizeProviderCode
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
@@ -93,7 +93,7 @@ class ProviderRecordCorrections {
                       AND newer.id > incoming.id
                       AND batch.source_instance_id = $sourceInstanceId
                       AND batch.status = 'processed'
-                      AND ${sameScalarIdentity("newer", "incoming")}
+                      AND ${sameRecordIdentity("newer", "incoming")}
                   )
                 """.trimIndent(),
             ) { rows ->
@@ -121,13 +121,21 @@ class ProviderRecordCorrections {
                 records.chunked(CHUNK_SIZE).forEach { chunk ->
                     val ids = chunk.joinToString(",") { it.ingestionRecordId.toString() }
                     val deleteIds = mutableListOf<Long>()
-                    val scalarIdentity =
-                        if (recordType == RecordTypes.SCALAR) {
-                            """AND projection.metric_type = incoming.normalized_record_json->>'metricType'
+                    val metricIdentity =
+                        when (recordType) {
+                            RecordTypes.SCALAR -> {
+                                """AND projection.metric_type = incoming.normalized_record_json->>'metricType'
                            AND COALESCE(projection.context, '') = ${scalarContext("incoming")}
                            AND COALESCE(projection.segment, '') = COALESCE(incoming.normalized_record_json->>'segment', '')"""
-                        } else {
-                            ""
+                            }
+
+                            RecordTypes.DAILY_METRIC -> {
+                                "AND projection.metric_type = incoming.normalized_record_json->>'metricType'"
+                            }
+
+                            else -> {
+                                ""
+                            }
                         }
                     val unchanged =
                         if (recordType == RecordTypes.SCALAR) {
@@ -147,7 +155,7 @@ class ProviderRecordCorrections {
                         JOIN ingestion_records incoming
                           ON incoming.provider_record_id = projection.provider_record_id
                          AND incoming.id IN ($ids)
-                         $scalarIdentity
+                         $metricIdentity
                         LEFT JOIN ingestion_records previous ON previous.id = projection.ingestion_record_id
                         WHERE projection.source_instance_id = $sourceInstanceId
                         """.trimIndent(),
@@ -218,6 +226,7 @@ private fun projectionFor(recordType: String): Projection =
         RecordTypes.SLEEP_SUMMARY -> Projection("sleep_summaries", "start_at", "end_at")
         RecordTypes.ACTIVITY_SUMMARY -> Projection("activity_summaries", "date::timestamp AT TIME ZONE 'UTC'")
         RecordTypes.BLOOD_PRESSURE -> Projection("blood_pressure_measurements", "measured_at")
+        RecordTypes.DAILY_METRIC -> Projection("daily_metric_values", "date::timestamp AT TIME ZONE 'UTC'")
         RecordTypes.SCALAR -> Projection("scalar_samples", "measured_at")
         else -> error("Unsupported correction record type: $recordType")
     }

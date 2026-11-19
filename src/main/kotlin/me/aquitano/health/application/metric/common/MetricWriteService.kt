@@ -3,6 +3,7 @@ package me.aquitano.health.application.metric.common
 import me.aquitano.health.application.metric.activity.repository.ActivitySummaryWriteRepository
 import me.aquitano.health.application.metric.cardiovascular.repository.CardiovascularWriteRepository
 import me.aquitano.health.application.metric.common.repository.ProviderRecordCorrections
+import me.aquitano.health.application.metric.daily.repository.DailyMetricWriteRepository
 import me.aquitano.health.application.metric.scalar.ScalarSampleWrite
 import me.aquitano.health.application.metric.scalar.ScalarSampleWriteRepository
 import me.aquitano.health.application.metric.sleep.repository.SleepWriteRepository
@@ -10,6 +11,7 @@ import me.aquitano.health.application.metric.steps.repository.StepWriteRepositor
 import me.aquitano.health.application.stepRebuildDates
 import me.aquitano.health.domain.ActivitySummaryRecord
 import me.aquitano.health.domain.BloodPressureRecord
+import me.aquitano.health.domain.DailyMetricRecord
 import me.aquitano.health.domain.HealthRecord
 import me.aquitano.health.domain.MetricCreatedCounts
 import me.aquitano.health.domain.ScalarSampleRecord
@@ -31,6 +33,7 @@ class MetricWriteService(
     private val activitySummaryWriteRepository: ActivitySummaryWriteRepository,
     private val cardiovascularWriteRepository: CardiovascularWriteRepository,
     private val scalarSampleWriteRepository: ScalarSampleWriteRepository,
+    private val dailyMetricWriteRepository: DailyMetricWriteRepository,
 ) {
     private val corrections = ProviderRecordCorrections()
 
@@ -92,6 +95,12 @@ class MetricWriteService(
                     is SleepSummaryRecord -> {
                         MetricCreatedCounts.of(StructuralMetricKinds.SLEEP_SUMMARIES to 1).takeIf {
                             sleepWriteRepository.insertSleepSummary(sourceInstanceId, ingestionRecordId, record, now)
+                        }
+                    }
+
+                    is DailyMetricRecord -> {
+                        MetricCreatedCounts.of(StructuralMetricKinds.DAILY_METRIC_VALUES to 1).takeIf {
+                            dailyMetricWriteRepository.insertDailyMetric(sourceInstanceId, ingestionRecordId, record, now)
                         }
                     }
 

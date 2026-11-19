@@ -20,6 +20,9 @@ import me.aquitano.health.application.metric.cardiovascular.CardiovascularQueryS
 import me.aquitano.health.application.metric.cardiovascular.repository.CardiovascularRepository
 import me.aquitano.health.application.metric.cardiovascular.repository.CardiovascularWriteRepository
 import me.aquitano.health.application.metric.common.MetricWriteService
+import me.aquitano.health.application.metric.daily.DailyMetricQueryService
+import me.aquitano.health.application.metric.daily.repository.DailyMetricReadRepository
+import me.aquitano.health.application.metric.daily.repository.DailyMetricWriteRepository
 import me.aquitano.health.application.metric.dashboard.DashboardQueryService
 import me.aquitano.health.application.metric.scalar.ScalarMetricQueryService
 import me.aquitano.health.application.metric.scalar.ScalarSampleReadRepository
@@ -108,6 +111,7 @@ fun ingestionModule() =
 
         // Metric write repositories
         singleOf(::ActivitySummaryWriteRepository)
+        singleOf(::DailyMetricWriteRepository)
         singleOf(::CardiovascularWriteRepository)
         singleOf(::ScalarSampleWriteRepository)
         singleOf(::SleepWriteRepository)
@@ -137,6 +141,7 @@ fun metricsReadModule() =
     module {
         // Read repositories
         singleOf(::CanonicalActivitySummaryDerivationRepository)
+        singleOf(::DailyMetricReadRepository)
         singleOf(::CardiovascularRepository)
         singleOf(::ScalarSampleReadRepository)
         singleOf(::SleepRepository)
@@ -146,6 +151,7 @@ fun metricsReadModule() =
 
         // Query services
         singleOf(::ActivityQueryService)
+        singleOf(::DailyMetricQueryService)
         singleOf(::CardiovascularQueryService)
         singleOf(::ScalarMetricQueryService)
         singleOf(::SleepQueryService)

@@ -14,6 +14,7 @@ object MetricFamilies {
     const val RESPIRATORY_RATE = "respiratory_rate"
     const val HRV = "hrv"
     const val CARDIOVASCULAR = "cardiovascular"
+    const val DAILY_METRIC = "daily_metric"
 }
 
 object ScalarMetricTypes {
@@ -26,7 +27,12 @@ data class ScalarValueRange(
     val min: Double,
     val max: Double?,
     val minInclusive: Boolean = true,
-)
+) {
+    operator fun contains(value: Double): Boolean {
+        val aboveMin = if (minInclusive) value >= min else value > min
+        return aboveMin && (max == null || value <= max)
+    }
+}
 
 private const val SCALAR_DECIMALS = 6
 
@@ -46,12 +52,7 @@ data class ScalarMetricDescriptor(
     val allowedContexts: Set<String>? = null,
     val supportsSegment: Boolean = false,
 ) {
-    fun valueIsValid(value: Double): Boolean {
-        val aboveMin =
-            if (valueRange.minInclusive) value >= valueRange.min else value > valueRange.min
-        val belowMax = valueRange.max?.let { value <= it } ?: true
-        return aboveMin && belowMax
-    }
+    fun valueIsValid(value: Double): Boolean = value in valueRange
 }
 
 object ScalarMetricRegistry {

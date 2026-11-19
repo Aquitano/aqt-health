@@ -53,6 +53,7 @@ class MetricCatalogBootstrap(
                 MetricFamilies.RESPIRATORY_RATE to listOf("withings", "google_health", "health_connect"),
                 MetricFamilies.HRV to listOf("withings", "google_health", "health_connect"),
                 MetricFamilies.CARDIOVASCULAR to listOf("withings", "google_health", "health_connect"),
+                MetricFamilies.DAILY_METRIC to listOf("google_health", "withings", "health_connect"),
             )
     }
 }

@@ -2,15 +2,17 @@ package me.aquitano.health.infrastructure.repositories
 
 import me.aquitano.health.domain.ScalarMetricRegistry
 
-internal fun sameScalarIdentity(
+internal fun sameRecordIdentity(
     left: String,
     right: String,
 ): String =
-    """($right.record_type <> 'scalar' OR (
-        $left.normalized_record_json->>'metricType' = $right.normalized_record_json->>'metricType'
-        AND ${scalarContext(left)} = ${scalarContext(right)}
-        AND COALESCE($left.normalized_record_json->>'segment', '') = COALESCE($right.normalized_record_json->>'segment', '')
-    ))"""
+    """(CASE $right.record_type
+        WHEN 'scalar' THEN $left.normalized_record_json->>'metricType' = $right.normalized_record_json->>'metricType'
+            AND ${scalarContext(left)} = ${scalarContext(right)}
+            AND COALESCE($left.normalized_record_json->>'segment', '') = COALESCE($right.normalized_record_json->>'segment', '')
+        WHEN 'daily_metric' THEN $left.normalized_record_json->>'metricType' = $right.normalized_record_json->>'metricType'
+        ELSE TRUE
+    END)"""
 
 // Defaults mirror mapScalarSample; absent context means "unknown" for context-bearing metrics.
 private val contextualMetricTypes =

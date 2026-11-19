@@ -120,6 +120,23 @@ data class ActivitySummaryResponse(
 )
 
 @Serializable
+data class DailyMetricsResponse(
+    val items: List<DailyMetricResponse>,
+    val meta: ReadResponseMeta,
+)
+
+@Serializable
+data class DailyMetricResponse(
+    val id: Int,
+    @JsonSchema.Format("date")
+    val date: String,
+    val metricType: String,
+    val value: Double,
+    val unit: String,
+    val source: SourceMetadataResponse? = null,
+)
+
+@Serializable
 data class SleepSummariesResponse(
     val items: List<SleepSummaryResponse>,
     val meta: ReadResponseMeta,

@@ -181,6 +181,7 @@ class GoogleHealthProviderTest : PostgresIntegrationTest() {
                 ProviderSyncRequest(
                     from = Instant.parse("2026-04-01T00:00:00Z"),
                     to = Instant.parse("2026-04-02T00:00:00Z"),
+                    dataTypes = allMetricFetchResults().map { it.dataType.code },
                 )
             val first = fixture.provider.sync(request, fixture.now)
             fixture.client.fetchResults += allMetricFetchResults()

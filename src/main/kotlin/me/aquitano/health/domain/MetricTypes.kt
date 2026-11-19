@@ -6,6 +6,7 @@ object RecordTypes {
     const val ACTIVITY_SUMMARY = "activity_summary"
     const val SLEEP_SUMMARY = "sleep_summary"
     const val BLOOD_PRESSURE = "blood_pressure"
+    const val DAILY_METRIC = "daily_metric"
 
     /** Every point-in-time scalar metric; the metric type comes from the scalar registry. */
     const val SCALAR = "scalar"
