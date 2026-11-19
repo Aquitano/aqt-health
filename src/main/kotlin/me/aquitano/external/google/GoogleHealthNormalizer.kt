@@ -11,19 +11,63 @@ import me.aquitano.health.shared.objOrNull
 import me.aquitano.health.shared.primitiveOrNull
 import me.aquitano.health.shared.stringOrNull
 import java.security.MessageDigest
-import java.util.*
+import java.util.HexFormat
 
 class GoogleHealthNormalizer {
-    fun normalize(fetchResult: GoogleHealthFetchResult): List<IngestionRecord> = fetchResult.dataPoints.flatMap { normalizeDataPoint(fetchResult.dataType, it) }
+    fun normalize(fetchResult: GoogleHealthFetchResult): List<IngestionRecord> {
+        // mainSleep is a plain proto boolean, so false and absent print the same. It only picks
+        // the summary when the window has a main sleep at all; otherwise naps are excluded.
+        val hasMainSleep = fetchResult.dataPoints.any { it.objOrNull("sleep")?.sleepMetadataFlag("mainSleep") == true }
+        return fetchResult.dataPoints
+            .flatMap { normalizeDataPoint(fetchResult.dataType, it, hasMainSleep) }
+            .withDistinctTimeKeys("${fetchResult.dataType.code}:")
+    }
+
+    /**
+     * The first record in content order keeps the plain time key, so a reading stored before a
+     * second one arrived at its instant is updated rather than duplicated. Ordering by content, not
+     * by arrival, gives a re-read of the window the same ids.
+     */
+    private fun List<IngestionRecord>.withDistinctTimeKeys(timeKeyPrefix: String): List<IngestionRecord> {
+        val shared =
+            filter { it.providerRecordId?.startsWith(timeKeyPrefix) == true }
+                .groupBy { it.providerRecordId }
+                .mapValues { (_, sharing) -> sharing.distinct() }
+                .filterValues { it.size > 1 }
+        if (shared.isEmpty()) return this
+        val renamed =
+            shared.values
+                .flatMap { sharing ->
+                    val contentByRecord = sharing.associateWith { AppJson.encodeToString(IngestionRecord.serializer(), it) }
+                    contentByRecord.entries
+                        .sortedBy { it.value }
+                        .drop(1)
+                        .map { (record, content) -> record to record.withProviderRecordId("${record.providerRecordId}:${contentKey(content)}") }
+                }.toMap()
+        return map { renamed[it] ?: it }
+    }
+
+    private fun contentKey(content: String): String = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content.toByteArray(Charsets.UTF_8))).take(16)
+
+    private fun IngestionRecord.withProviderRecordId(id: String): IngestionRecord =
+        when (this) {
+            is StepInterval -> copy(providerRecordId = id)
+            is SleepSession -> copy(providerRecordId = id)
+            is SleepSummary -> copy(providerRecordId = id)
+            is ActivitySummary -> copy(providerRecordId = id)
+            is BloodPressure -> copy(providerRecordId = id)
+            is ScalarSample -> copy(providerRecordId = id)
+        }
 
     private fun normalizeDataPoint(
         dataType: GoogleHealthDataType,
         point: JsonObject,
+        hasMainSleep: Boolean,
     ): List<IngestionRecord> {
         val code = dataType.code
         return when (dataType) {
             GoogleHealthDataType.Steps -> listOfNotNull(normalizeSteps(code, point))
-            GoogleHealthDataType.Sleep -> normalizeSleep(code, point)
+            GoogleHealthDataType.Sleep -> normalizeSleep(code, point, hasMainSleep)
             GoogleHealthDataType.HeartRate -> listOfNotNull(normalizeHeartRate(code, point))
             GoogleHealthDataType.Weight -> listOfNotNull(normalizeWeight(code, point))
             GoogleHealthDataType.BodyFat -> listOfNotNull(normalizeBodyFat(code, point))
@@ -59,6 +103,7 @@ class GoogleHealthNormalizer {
     private fun normalizeSleep(
         dataType: String,
         point: JsonObject,
+        hasMainSleep: Boolean,
     ): List<IngestionRecord> {
         val sleep = point.objOrNull("sleep") ?: return emptyList()
         val interval = sleep.objOrNull("interval") ?: return emptyList()
@@ -93,22 +138,20 @@ class GoogleHealthNormalizer {
                 endAt = endAt,
                 stages = stages,
             )
-        return listOfNotNull(session, sleepSummary(session, sleep))
+        val isNightlySleep = if (hasMainSleep) sleep.sleepMetadataFlag("mainSleep") == true else sleep.sleepMetadataFlag("nap") != true
+        return listOfNotNull(session, sleepSummary(session, sleep).takeIf { isNightlySleep })
     }
+
+    private fun JsonObject.sleepMetadataFlag(key: String): Boolean? =
+        objOrNull("metadata")
+            ?.get(key)
+            ?.primitiveOrNull()
+            ?.booleanOrNull
 
     private fun sleepSummary(
         session: SleepSession,
         sleep: JsonObject,
     ): SleepSummary? {
-        // canonical_sleep_summaries keeps one summary per UTC start date, so a nap would
-        // replace the night it shares a date with.
-        val isNap =
-            sleep
-                .objOrNull("metadata")
-                ?.get("nap")
-                ?.primitiveOrNull()
-                ?.booleanOrNull
-        if (isNap == true) return null
         val summary = sleep.objOrNull("summary") ?: return null
         val stageSummaries =
             summary["stagesSummary"]
@@ -149,7 +192,7 @@ class GoogleHealthNormalizer {
     ): ScalarSample? {
         val hrv = point.objOrNull("heartRateVariability") ?: return null
         val measuredAt = hrv.objOrNull("sampleTime")?.stringOrNull("physicalTime") ?: return null
-        val rmssd = hrv.doubleOrNull("rootMeanSquareOfSuccessiveDifferencesMilliseconds") ?: return null
+        val rmssd = hrv.finiteDoubleOrNull("rootMeanSquareOfSuccessiveDifferencesMilliseconds") ?: return null
         if (rmssd <= 0.0 || rmssd > 500.0) return null
         return ScalarSample(
             providerRecordId = providerRecordId(dataType, point, measuredAt, null),
@@ -167,7 +210,7 @@ class GoogleHealthNormalizer {
         val summary = point.objOrNull("respiratoryRateSleepSummary") ?: return null
         val measuredAt = summary.objOrNull("sampleTime")?.stringOrNull("physicalTime") ?: return null
         val breathsPerMinute =
-            summary.objOrNull("fullSleepStats")?.doubleOrNull("breathsPerMinute") ?: return null
+            summary.objOrNull("fullSleepStats")?.finiteDoubleOrNull("breathsPerMinute") ?: return null
         if (breathsPerMinute !in 5.0..80.0) return null
         return ScalarSample(
             providerRecordId = providerRecordId(dataType, point, measuredAt, null),
@@ -212,7 +255,7 @@ class GoogleHealthNormalizer {
         val weight = point.objOrNull("weight") ?: return null
         val sampleTime = weight.objOrNull("sampleTime") ?: return null
         val measuredAt = sampleTime.stringOrNull("physicalTime") ?: return null
-        val grams = weight.doubleOrNull("weightGrams") ?: return null
+        val grams = weight.finiteDoubleOrNull("weightGrams") ?: return null
         if (grams <= 0.0) return null
         return ScalarSample(
             providerRecordId =
@@ -235,8 +278,8 @@ class GoogleHealthNormalizer {
         val bodyFat = point.objOrNull("bodyFat") ?: return null
         val sampleTime = bodyFat.objOrNull("sampleTime") ?: return null
         val measuredAt = sampleTime.stringOrNull("physicalTime") ?: return null
-        val percentage = bodyFat.doubleOrNull("percentage") ?: return null
-        if (percentage !in 0.0..100.0) return null
+        val percentage = bodyFat.finiteDoubleOrNull("percentage") ?: return null
+        if (percentage <= 0.0 || percentage > 100.0) return null
         return ScalarSample(
             providerRecordId =
                 providerRecordId(
@@ -251,14 +294,18 @@ class GoogleHealthNormalizer {
         )
     }
 
+    /** Leaves out the payload, so a field Google adds later cannot turn the same reading into a new record. */
     private fun providerRecordId(
         dataType: String,
         point: JsonObject,
         startOrMeasuredAt: String,
         endAt: String?,
     ): String =
-        point.stringOrNull("name")?.takeIf { it.isNotBlank() }
-            ?: "$dataType:$startOrMeasuredAt:${endAt ?: "none"}:${point.sha256()}"
+        point.stringOrNull("dataPointName")?.takeIf { it.isNotBlank() }
+            ?: "$dataType:$startOrMeasuredAt:${endAt ?: "none"}"
+
+    // ProtoJSON writes non-finite doubles as "NaN" and "Infinity", which parse as numbers.
+    private fun JsonObject.finiteDoubleOrNull(key: String): Double? = doubleOrNull(key)?.takeIf { it.isFinite() }
 
     private fun mapSleepStage(value: String?): String? =
         when (value) {
@@ -279,12 +326,4 @@ class GoogleHealthNormalizer {
         }
 
     private fun JsonObject.nonNegativeLong(key: String): Long? = longOrNull(key)?.takeIf { it >= 0 }
-
-    private fun JsonObject.sha256(): String {
-        val digest =
-            MessageDigest
-                .getInstance("SHA-256")
-                .digest(AppJson.encodeToString(this).toByteArray(Charsets.UTF_8))
-        return HexFormat.of().formatHex(digest)
-    }
 }

@@ -1,6 +1,6 @@
 package me.aquitano.external.google
 
-import com.google.devicesandservices.health.v4.DataPoint
+import com.google.devicesandservices.health.v4.ReconciledDataPoint
 import com.google.protobuf.util.JsonFormat
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -25,7 +25,7 @@ class GoogleHealthNormalizerTest {
                 GoogleHealthDataType.HeartRateVariability,
                 """
                 {
-                  "name": "users/me/dataTypes/heart-rate-variability/dataPoints/8812734",
+                  "dataPointName": "users/me/dataTypes/heart-rate-variability/dataPoints/8812734",
                   "heartRateVariability": {
                     "sampleTime": { "physicalTime": "2026-04-01T03:15:00Z" },
                     "rootMeanSquareOfSuccessiveDifferencesMilliseconds": 42.7,
@@ -49,7 +49,7 @@ class GoogleHealthNormalizerTest {
                 GoogleHealthDataType.RespiratoryRateSleepSummary,
                 """
                 {
-                  "name": "users/me/dataTypes/respiratory-rate-sleep-summary/dataPoints/5521",
+                  "dataPointName": "users/me/dataTypes/respiratory-rate-sleep-summary/dataPoints/5521",
                   "respiratoryRateSleepSummary": {
                     "sampleTime": { "physicalTime": "2026-04-01T06:00:00Z" },
                     "deepSleepStats": { "breathsPerMinute": 13.2 },
@@ -103,6 +103,27 @@ class GoogleHealthNormalizerTest {
         assertIs<SleepSession>(records.single())
     }
 
+    @Test
+    fun differentReadingsAtOneInstantKeepSeparateIdsAndIdenticalCopiesCollapse() {
+        fun idsByValue(vararg bpm: String) =
+            normalizer
+                .normalize(
+                    GoogleHealthFetchResult(
+                        GoogleHealthDataType.HeartRate,
+                        emptyList(),
+                        bpm.map { dataPointJson("""{ "heartRate": { "sampleTime": { "physicalTime": "2026-04-01T08:30:00Z" }, "beatsPerMinute": "$it" } }""") },
+                    ),
+                ).map { assertIs<ScalarSample>(it) }
+                .associate { it.value to it.providerRecordId }
+
+        val ids = idsByValue("61", "62", "61")
+
+        assertEquals(setOf(61.0, 62.0), ids.keys)
+        assertEquals(2, ids.values.toSet().size)
+        assertEquals("heart-rate:2026-04-01T08:30:00Z:none", ids[61.0])
+        assertEquals(ids, idsByValue("62", "61", "61"))
+    }
+
     private fun normalize(
         dataType: GoogleHealthDataType,
         protoJson: String,
@@ -111,7 +132,7 @@ class GoogleHealthNormalizerTest {
 
     /** Round-trips through the generated proto so a misspelled field fails the test, as the API would. */
     private fun dataPointJson(protoJson: String): JsonObject {
-        val builder = DataPoint.newBuilder()
+        val builder = ReconciledDataPoint.newBuilder()
         JsonFormat.parser().merge(protoJson.trimIndent(), builder)
         return AppJson.parseToJsonElement(JsonFormat.printer().print(builder.build())).jsonObject
     }
@@ -119,7 +140,7 @@ class GoogleHealthNormalizerTest {
     private fun sleepPoint(nap: Boolean): String =
         """
         {
-          "name": "users/me/dataTypes/sleep/dataPoints/77310",
+          "dataPointName": "users/me/dataTypes/sleep/dataPoints/77310",
           "sleep": {
             "interval": {
               "startTime": "2026-03-31T22:30:00Z",

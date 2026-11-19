@@ -150,7 +150,7 @@ Withings and Google Health connect through OAuth and sync in background jobs. `G
 
 ## Google Health provider
 
-The app reads Google Health with Google's generated Health client library and keeps each response page in the batch's `sourcePayload`.
+The app reads Google Health with Google's generated Health client library and keeps each response page in the batch's `sourcePayload`. Every data type is read with `reconcile` over all of the account's sources (`all-sources`), so Google merges overlapping devices into one stream. Narrower source families drop real data, such as weights a Withings scale writes into Google Health through Health Connect.
 
 Google Cloud setup:
 
@@ -176,13 +176,13 @@ curl -X POST http://localhost:8080/api/v2/providers/google-health/sync-jobs \
   -d '{"from": "2026-04-01T00:00:00Z", "to": "2026-04-20T00:00:00Z"}'
 ```
 
-Without `dataTypes`, the sync reads the provider's default data types, which `GET /api/v2/providers/google-health` lists. Each `sleep` point also yields a sleep summary unless Google marks it as a nap. Without `from` and `to`, the sync covers the last seven days. The job splits the range into one-day UTC windows and skips days it has already completed, so only the current day is fetched again.
+Without `dataTypes`, the sync reads the provider's default data types, which `GET /api/v2/providers/google-health` lists. A `sleep` point also yields a sleep summary when Google marks it as the main sleep, or, in a window without a main sleep, when it is not a nap. Without `from` and `to`, the sync covers the last seven days. The job splits the range into one-day UTC windows and skips days it has already completed, so only the current day is fetched again.
 
 Poll `GET /api/v2/providers/google-health/sync-jobs/{jobId}` for progress. The job keeps running if the client disconnects.
 
 After a restart, the app reruns unfinished jobs from the start, which is safe because ingestion skips records it already has. `restartCount` on the job counts these reruns. A job is rerun at most three times, and the next restart marks it failed.
 
-Ingestion skips overlapping Google Health step intervals from the same account as duplicates.
+Ingestion skips overlapping Google Health step intervals from the same account as duplicates. Steps stored by versions that read with `list` stay inflated where devices overlapped. Raw rows are never deleted, so only a backfill into a fresh database repairs them.
 
 ## Withings provider
 
