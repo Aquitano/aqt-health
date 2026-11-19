@@ -14,6 +14,7 @@ import me.aquitano.health.shared.AppJson
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 class GoogleHealthNormalizerTest {
     private val normalizer = GoogleHealthNormalizer()
@@ -104,8 +105,8 @@ class GoogleHealthNormalizerTest {
     }
 
     @Test
-    fun differentReadingsAtOneInstantKeepSeparateIdsAndIdenticalCopiesCollapse() {
-        fun idsByValue(vararg bpm: String) =
+    fun differentReadingsAtOneInstantGetSeparateIdsAndIdenticalCopiesShareOne() {
+        fun idsInOrder(vararg bpm: String) =
             normalizer
                 .normalize(
                     GoogleHealthFetchResult(
@@ -113,15 +114,15 @@ class GoogleHealthNormalizerTest {
                         emptyList(),
                         bpm.map { dataPointJson("""{ "heartRate": { "sampleTime": { "physicalTime": "2026-04-01T08:30:00Z" }, "beatsPerMinute": "$it" } }""") },
                     ),
-                ).map { assertIs<ScalarSample>(it) }
-                .associate { it.value to it.providerRecordId }
+                ).map { assertIs<ScalarSample>(it).let { sample -> sample.value to sample.providerRecordId } }
 
-        val ids = idsByValue("61", "62", "61")
+        val ids = idsInOrder("61", "62", "61")
+        val timeKey = "heart-rate:2026-04-01T08:30:00Z:none"
 
-        assertEquals(setOf(61.0, 62.0), ids.keys)
-        assertEquals(2, ids.values.toSet().size)
-        assertEquals("heart-rate:2026-04-01T08:30:00Z:none", ids[61.0])
-        assertEquals(ids, idsByValue("62", "61", "61"))
+        assertEquals(listOf(61.0, 62.0, 61.0), ids.map { it.first })
+        assertEquals(listOf(timeKey, timeKey), listOf(ids[0].second, ids[2].second))
+        assertTrue(ids[1].second!!.startsWith("$timeKey:"))
+        assertEquals(ids.toSet(), idsInOrder("62", "61", "61").toSet())
     }
 
     private fun normalize(
