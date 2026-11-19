@@ -67,4 +67,5 @@ class GoogleHealthHttpException(
     val code: String,
     message: String,
     val oauthError: String? = null,
-) : RuntimeException(message)
+    cause: Throwable? = null,
+) : RuntimeException(message, cause)

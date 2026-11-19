@@ -2,9 +2,11 @@ package me.aquitano.external.google
 
 import com.google.api.gax.rpc.ApiException
 import com.google.api.gax.rpc.StatusCode
-import com.google.devicesandservices.health.v4.DataPoint
-import com.google.devicesandservices.health.v4.ListDataPointsRequest
-import com.google.devicesandservices.health.v4.ListDataPointsResponse
+import com.google.auth.oauth2.AccessToken
+import com.google.auth.oauth2.GoogleCredentials
+import com.google.devicesandservices.health.v4.ReconcileDataPointsRequest
+import com.google.devicesandservices.health.v4.ReconcileDataPointsResponse
+import com.google.devicesandservices.health.v4.ReconciledDataPoint
 import com.google.protobuf.util.JsonFormat
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
@@ -53,7 +55,7 @@ class GeneratedGoogleHealthClientTest {
             pointsByDataType.forEach { (dataType, pointAndFilterField) ->
                 val (point, filterField) = pointAndFilterField
                 fixture.service.responses +=
-                    ListDataPointsResponse
+                    ReconcileDataPointsResponse
                         .newBuilder()
                         .addDataPoints(point)
                         .build()
@@ -69,6 +71,7 @@ class GeneratedGoogleHealthClientTest {
 
                 val request = fixture.service.requests.last()
                 assertEquals("users/me/dataTypes/${dataType.code}", request.parent, dataType.code)
+                assertEquals("users/me/dataSourceFamilies/all-sources", request.dataSourceFamily, dataType.code)
                 assertEquals(
                     """$filterField >= "${fixture.from}" AND $filterField < "${fixture.to}"""",
                     request.filter,
@@ -77,9 +80,9 @@ class GeneratedGoogleHealthClientTest {
                 val normalized = GoogleHealthNormalizer().normalize(result)
                 assertEquals(1, normalized.size, dataType.code)
                 assertEquals(
-                    point.name,
+                    point.dataPointName,
                     result.dataPoints
-                        .single()["name"]
+                        .single()["dataPointName"]
                         ?.jsonPrimitive
                         ?.content,
                     dataType.code,
@@ -92,13 +95,13 @@ class GeneratedGoogleHealthClientTest {
         runBlocking {
             val fixture = Fixture()
             fixture.service.responses +=
-                ListDataPointsResponse
+                ReconcileDataPointsResponse
                     .newBuilder()
                     .addDataPoints(stepsPoint("steps-1"))
                     .setNextPageToken("next-page")
                     .build()
             fixture.service.responses +=
-                ListDataPointsResponse
+                ReconcileDataPointsResponse
                     .newBuilder()
                     .addDataPoints(stepsPoint("steps-2"))
                     .build()
@@ -106,7 +109,7 @@ class GeneratedGoogleHealthClientTest {
             val result = fixture.client.fetchDataPoints("access-token", GoogleHealthDataType.Steps, fixture.from, fixture.to, 1000)
 
             assertEquals(listOf(0, 1), result.pages.map { it.pageIndex })
-            assertEquals(listOf("steps-1", "steps-2"), result.dataPoints.map { it["name"]?.jsonPrimitive?.content })
+            assertEquals(listOf("steps-1", "steps-2"), result.dataPoints.map { it["dataPointName"]?.jsonPrimitive?.content })
             assertEquals("next-page", fixture.service.requests[1].pageToken)
         }
 
@@ -114,8 +117,8 @@ class GeneratedGoogleHealthClientTest {
     fun fetchDataPointsRejectsRepeatedPageToken() =
         runBlocking {
             val fixture = Fixture()
-            fixture.service.responses += ListDataPointsResponse.newBuilder().setNextPageToken("same-token").build()
-            fixture.service.responses += ListDataPointsResponse.newBuilder().setNextPageToken("same-token").build()
+            fixture.service.responses += ReconcileDataPointsResponse.newBuilder().setNextPageToken("same-token").build()
+            fixture.service.responses += ReconcileDataPointsResponse.newBuilder().setNextPageToken("same-token").build()
 
             val error =
                 assertFailsWith<GoogleHealthHttpException> {
@@ -129,7 +132,7 @@ class GeneratedGoogleHealthClientTest {
     fun fetchDataPointsEnforcesPageLimit() =
         runBlocking {
             val fixture = Fixture(maxPages = 1)
-            fixture.service.responses += ListDataPointsResponse.newBuilder().setNextPageToken("next").build()
+            fixture.service.responses += ReconcileDataPointsResponse.newBuilder().setNextPageToken("next").build()
 
             val error =
                 assertFailsWith<GoogleHealthHttpException> {
@@ -147,6 +150,22 @@ class GeneratedGoogleHealthClientTest {
 
             assertFailsWith<GoogleHealthUnauthorizedException> {
                 fixture.client.fetchDataPoints("access-token", GoogleHealthDataType.Steps, fixture.from, fixture.to, 1000)
+            }
+            Unit
+        }
+
+    @Test
+    fun anExpiredTokenTheAuthLibraryCannotRefreshCountsAsUnauthorized() =
+        runBlocking {
+            val fixture = Fixture()
+            val refreshFailure =
+                assertFailsWith<IllegalStateException> {
+                    GoogleCredentials.create(AccessToken.newBuilder().setTokenValue("expired").build()).refresh()
+                }
+            fixture.service.nextFailure = apiException(StatusCode.Code.UNKNOWN, cause = refreshFailure)
+
+            assertFailsWith<GoogleHealthUnauthorizedException> {
+                fixture.client.fetchDataPoints("access-token", GoogleHealthDataType.HeartRate, fixture.from, fixture.to, 1000)
             }
             Unit
         }
@@ -170,7 +189,7 @@ class GeneratedGoogleHealthClientTest {
         runBlocking {
             val fixture = Fixture()
             repeat(3) {
-                fixture.service.responses += ListDataPointsResponse.newBuilder().build()
+                fixture.service.responses += ReconcileDataPointsResponse.newBuilder().build()
             }
 
             fixture.client.fetchDataPoints("token-1", GoogleHealthDataType.Steps, fixture.from, fixture.to, 1000)
@@ -194,10 +213,10 @@ class GeneratedGoogleHealthClientTest {
             val oldCloses = AtomicInteger()
             val oldService =
                 object : GoogleHealthDataPointsService {
-                    override fun listDataPoints(request: ListDataPointsRequest): ListDataPointsResponse {
+                    override fun reconcileDataPoints(request: ReconcileDataPointsRequest): ReconcileDataPointsResponse {
                         started.complete(Unit)
                         check(release.await(10, TimeUnit.SECONDS))
-                        return ListDataPointsResponse.getDefaultInstance()
+                        return ReconcileDataPointsResponse.getDefaultInstance()
                     }
 
                     override fun close() {
@@ -206,7 +225,7 @@ class GeneratedGoogleHealthClientTest {
                 }
             val newService =
                 FakeDataPointsService().apply {
-                    responses += ListDataPointsResponse.getDefaultInstance()
+                    responses += ReconcileDataPointsResponse.getDefaultInstance()
                 }
             val client =
                 GeneratedGoogleHealthClient(
@@ -270,12 +289,12 @@ class GeneratedGoogleHealthClientTest {
     }
 
     private class FakeDataPointsService : GoogleHealthDataPointsService {
-        val requests = mutableListOf<ListDataPointsRequest>()
-        val responses = ArrayDeque<ListDataPointsResponse>()
+        val requests = mutableListOf<ReconcileDataPointsRequest>()
+        val responses = ArrayDeque<ReconcileDataPointsResponse>()
         var nextFailure: ApiException? = null
         var closes = 0
 
-        override fun listDataPoints(request: ListDataPointsRequest): ListDataPointsResponse {
+        override fun reconcileDataPoints(request: ReconcileDataPointsRequest): ReconcileDataPointsResponse {
             requests.add(request)
             nextFailure?.let {
                 nextFailure = null
@@ -309,10 +328,13 @@ class GeneratedGoogleHealthClientTest {
         ): GoogleHealthFetchResult = error("not used")
     }
 
-    private fun apiException(code: StatusCode.Code): ApiException =
+    private fun apiException(
+        code: StatusCode.Code,
+        cause: Throwable? = null,
+    ): ApiException =
         ApiException(
             "failure",
-            null,
+            cause,
             object : StatusCode {
                 override fun getCode(): StatusCode.Code = code
 
@@ -321,11 +343,11 @@ class GeneratedGoogleHealthClientTest {
             false,
         )
 
-    private fun stepsPoint(name: String = "google-steps-1"): DataPoint =
+    private fun stepsPoint(name: String = "google-steps-1"): ReconciledDataPoint =
         dataPoint(
             """
         {
-          "name": "$name",
+          "dataPointName": "$name",
           "steps": {
             "interval": {
               "startTime": "2026-04-01T08:00:00Z",
@@ -337,11 +359,11 @@ class GeneratedGoogleHealthClientTest {
         """,
         )
 
-    private fun sleepPoint(): DataPoint =
+    private fun sleepPoint(): ReconciledDataPoint =
         dataPoint(
             """
         {
-          "name": "google-sleep-1",
+          "dataPointName": "google-sleep-1",
           "sleep": {
             "interval": {
               "startTime": "2026-03-31T22:00:00Z",
@@ -359,11 +381,11 @@ class GeneratedGoogleHealthClientTest {
         """,
         )
 
-    private fun heartRatePoint(): DataPoint =
+    private fun heartRatePoint(): ReconciledDataPoint =
         dataPoint(
             """
         {
-          "name": "google-hr-1",
+          "dataPointName": "google-hr-1",
           "heartRate": {
             "sampleTime": {
               "physicalTime": "2026-04-01T08:30:00Z"
@@ -374,11 +396,11 @@ class GeneratedGoogleHealthClientTest {
         """,
         )
 
-    private fun weightPoint(): DataPoint =
+    private fun weightPoint(): ReconciledDataPoint =
         dataPoint(
             """
         {
-          "name": "google-weight-1",
+          "dataPointName": "google-weight-1",
           "weight": {
             "sampleTime": {
               "physicalTime": "2026-04-01T07:00:00Z"
@@ -389,11 +411,11 @@ class GeneratedGoogleHealthClientTest {
         """,
         )
 
-    private fun bodyFatPoint(): DataPoint =
+    private fun bodyFatPoint(): ReconciledDataPoint =
         dataPoint(
             """
         {
-          "name": "google-body-fat-1",
+          "dataPointName": "google-body-fat-1",
           "bodyFat": {
             "sampleTime": {
               "physicalTime": "2026-04-01T07:00:00Z"
@@ -404,11 +426,11 @@ class GeneratedGoogleHealthClientTest {
         """,
         )
 
-    private fun heartRateVariabilityPoint(): DataPoint =
+    private fun heartRateVariabilityPoint(): ReconciledDataPoint =
         dataPoint(
             """
         {
-          "name": "google-hrv-1",
+          "dataPointName": "google-hrv-1",
           "heartRateVariability": {
             "sampleTime": {
               "physicalTime": "2026-04-01T03:15:00Z"
@@ -419,11 +441,11 @@ class GeneratedGoogleHealthClientTest {
         """,
         )
 
-    private fun respiratoryRatePoint(): DataPoint =
+    private fun respiratoryRatePoint(): ReconciledDataPoint =
         dataPoint(
             """
         {
-          "name": "google-respiratory-rate-1",
+          "dataPointName": "google-respiratory-rate-1",
           "respiratoryRateSleepSummary": {
             "sampleTime": {
               "physicalTime": "2026-04-01T06:00:00Z"
@@ -436,8 +458,8 @@ class GeneratedGoogleHealthClientTest {
         """,
         )
 
-    private fun dataPoint(json: String): DataPoint {
-        val builder = DataPoint.newBuilder()
+    private fun dataPoint(json: String): ReconciledDataPoint {
+        val builder = ReconciledDataPoint.newBuilder()
         JsonFormat.parser().merge(json.trimIndent(), builder)
         return builder.build()
     }

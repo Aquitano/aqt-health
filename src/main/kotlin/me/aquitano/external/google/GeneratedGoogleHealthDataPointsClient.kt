@@ -5,7 +5,9 @@ import com.google.api.gax.rpc.ApiException
 import com.google.api.gax.rpc.StatusCode
 import com.google.auth.oauth2.AccessToken
 import com.google.auth.oauth2.GoogleCredentials
+import com.google.auth.oauth2.OAuth2Credentials
 import com.google.devicesandservices.health.v4.*
+import com.google.protobuf.MessageOrBuilder
 import com.google.protobuf.util.JsonFormat
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
@@ -68,17 +70,18 @@ class GeneratedGoogleHealthClient(
             }
 
             val request =
-                ListDataPointsRequest
+                ReconcileDataPointsRequest
                     .newBuilder()
                     .setParent(DataTypeName.of("me", dataType.code).toString())
                     .setPageSize(pageSize)
                     .setFilter(dataType.filter(from, to))
+                    .setDataSourceFamily(ALL_SOURCES)
                     .also { builder ->
                         if (pageToken.isNotBlank()) builder.setPageToken(pageToken)
                     }.build()
 
-            val response = callListDataPoints(service, request, dataType)
-            val pageDataPoints = response.dataPointsList.map(::dataPointJson)
+            val response = callUpstream(dataType) { service.reconcileDataPoints(request) }
+            val pageDataPoints = response.dataPointsList.map(::toJson)
             val nextPageToken =
                 response.nextPageToken.takeIf { it.isNotBlank() }
 
@@ -116,13 +119,12 @@ class GeneratedGoogleHealthClient(
         return GoogleHealthFetchResult(dataType, pages, dataPoints)
     }
 
-    private fun callListDataPoints(
-        service: GoogleHealthDataPointsService,
-        request: ListDataPointsRequest,
+    private fun <T> callUpstream(
         dataType: GoogleHealthDataType,
-    ): ListDataPointsResponse =
+        call: () -> T,
+    ): T =
         try {
-            service.listDataPoints(request)
+            call()
         } catch (exception: ApiException) {
             throw mapApiException(exception, dataType)
         }
@@ -131,28 +133,35 @@ class GeneratedGoogleHealthClient(
         exception: ApiException,
         dataType: GoogleHealthDataType,
     ): RuntimeException =
-        when (exception.statusCode.code) {
-            StatusCode.Code.UNAUTHENTICATED -> {
-                GoogleHealthUnauthorizedException(
-                    "Google Health access token is unauthorized",
-                )
-            }
-
-            else -> {
-                GoogleHealthHttpException(
-                    "google_health_upstream_failed",
-                    "Google Health ${dataType.code} request failed with ${exception.statusCode.code}",
-                )
-            }
+        if (exception.statusCode.code == StatusCode.Code.UNAUTHENTICATED || exception.isRejectedFixedAccessToken()) {
+            GoogleHealthUnauthorizedException("Google Health access token is unauthorized")
+        } else {
+            GoogleHealthHttpException(
+                "google_health_upstream_failed",
+                "Google Health ${dataType.code} request failed with ${exception.statusCode.code}",
+                cause = exception,
+            )
         }
 
-    private fun dataPointJson(dataPoint: DataPoint): JsonObject = AppJson.parseToJsonElement(PROTO_JSON_PRINTER.print(dataPoint)).jsonObject
+    /**
+     * On a 401 the auth library tries to refresh the fixed access token it was given, cannot, and
+     * gax reports that as UNKNOWN. It means the token expired, so the pipeline must refresh it.
+     */
+    private fun ApiException.isRejectedFixedAccessToken(): Boolean =
+        generateSequence<Throwable>(this) { it.cause }.any { cause ->
+            cause is IllegalStateException && cause.stackTrace.firstOrNull()?.className == OAuth2Credentials::class.java.name
+        }
+
+    private fun toJson(message: MessageOrBuilder): JsonObject = AppJson.parseToJsonElement(PROTO_JSON_PRINTER.print(message)).jsonObject
 
     companion object {
         private val PROTO_JSON_PRINTER: JsonFormat.Printer =
             JsonFormat
                 .printer()
                 .omittingInsignificantWhitespace()
+
+        /** Narrower source families drop real data, such as scale weights written through Health Connect. */
+        private const val ALL_SOURCES = "users/me/dataSourceFamilies/all-sources"
     }
 }
 
@@ -244,7 +253,7 @@ open class GoogleHealthDataPointsServiceFactory(
 }
 
 interface GoogleHealthDataPointsService : AutoCloseable {
-    fun listDataPoints(request: ListDataPointsRequest): ListDataPointsResponse
+    fun reconcileDataPoints(request: ReconcileDataPointsRequest): ReconcileDataPointsResponse
 }
 
 private class GeneratedGoogleHealthDataPointsService(
@@ -259,7 +268,7 @@ private class GeneratedGoogleHealthDataPointsService(
             ),
         )
 
-    override fun listDataPoints(request: ListDataPointsRequest): ListDataPointsResponse = client.listDataPointsCallable().call(request)
+    override fun reconcileDataPoints(request: ReconcileDataPointsRequest): ReconcileDataPointsResponse = client.reconcileDataPointsCallable().call(request)
 
     override fun close() {
         client.close()
