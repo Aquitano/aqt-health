@@ -28,6 +28,8 @@ out/
 
 ### aqt-health ###
 data/
+cli/node_modules/
+cli/dist/
 *.db
 *.db-shm
 *.db-wal

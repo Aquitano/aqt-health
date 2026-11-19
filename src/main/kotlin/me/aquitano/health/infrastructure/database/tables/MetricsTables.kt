@@ -171,7 +171,7 @@ object DailyMetricValuesTable : IntIdTable("daily_metric_values") {
     val createdAt = timestampWithTimeZone("created_at")
 }
 
-/** Read-only mapping of the canonical_daily_metric_values view (see V40). */
+/** Read-only mapping of the canonical_daily_metric_values view (see V41). */
 object CanonicalDailyMetricValuesView : Table("canonical_daily_metric_values") {
     val id = integer("id")
     val date = date("date")

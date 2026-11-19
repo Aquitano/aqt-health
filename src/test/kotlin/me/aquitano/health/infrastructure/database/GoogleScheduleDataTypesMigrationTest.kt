@@ -48,7 +48,7 @@ class GoogleScheduleDataTypesMigrationTest : PostgresIntegrationTest() {
                 repository.upsertConfig("google-health", instance, true, dataTypes, 1_440, 7, now, now)
             }
             val migration =
-                checkNotNull(javaClass.getResource("/db/migration/V41__schedule_google_daily_metrics_and_activity.sql")).readText()
+                checkNotNull(javaClass.getResource("/db/migration/V42__schedule_google_daily_metrics_and_activity.sql")).readText()
 
             repeat(2) { transaction(database) { exec(migration) } }
 

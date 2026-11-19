@@ -39,7 +39,7 @@ class GoogleScalarIdMigrationTest : PostgresIntegrationTest() {
             """.trimIndent(),
         )
         val migration =
-            checkNotNull(javaClass.getResource("/db/migration/V42__google_scalar_ids_without_content_hash.sql")).readText()
+            checkNotNull(javaClass.getResource("/db/migration/V40__google_scalar_ids_without_content_hash.sql")).readText()
 
         repeat(2) { config.execute(migration) }
 
