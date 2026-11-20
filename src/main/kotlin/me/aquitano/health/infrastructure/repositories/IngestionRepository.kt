@@ -57,7 +57,7 @@ data class AdminBatchDetailRow(
     val receivedAt: String,
     val processedAt: String?,
     val errorMessage: String?,
-    val sourcePayloadJson: String,
+    val sourcePayloadJson: String?,
 )
 
 data class AdminIngestionRecordRow(
@@ -81,12 +81,25 @@ data class ReplayRecordRow(
 )
 
 class IngestionRepository {
+    private val batchMetadataColumns =
+        listOf(
+            IngestionBatchesTable.id,
+            SourcesTable.code,
+            SourceInstancesTable.providerInstanceId,
+            IngestionBatchesTable.batchExternalId,
+            IngestionBatchesTable.status,
+            IngestionBatchesTable.ingestedAt,
+            IngestionBatchesTable.receivedAt,
+            IngestionBatchesTable.processedAt,
+            IngestionBatchesTable.errorMessage,
+        )
+
     fun findBatchByExternalId(
         sourceInstanceId: Int,
         batchExternalId: String,
     ): ExistingBatch? =
         IngestionBatchesTable
-            .selectAll()
+            .select(IngestionBatchesTable.id, IngestionBatchesTable.status, IngestionBatchesTable.batchExternalId)
             .where {
                 (IngestionBatchesTable.sourceInstanceId eq sourceInstanceId) and
                     (IngestionBatchesTable.batchExternalId eq batchExternalId)
@@ -162,7 +175,7 @@ class IngestionRepository {
         snapshot: IngestionSnapshot? = null,
     ): Int =
         IngestionBatchesTable
-            .insertAndGetId {
+            .insertReturning(returning = listOf(IngestionBatchesTable.id)) {
                 it[this.sourceInstanceId] = sourceInstanceId
                 it[this.batchExternalId] = batchExternalId
                 it[syncWindowKey] = snapshot?.windowKey
@@ -175,7 +188,8 @@ class IngestionRepository {
                 it[errorMessage] = null
                 it[createdAt] = receivedAt.toDbTimestamp()
                 it[updatedAt] = receivedAt.toDbTimestamp()
-            }.value
+            }.single()[IngestionBatchesTable.id]
+            .value
 
     fun releaseFailedBatchExternalId(
         batchId: Int,
@@ -267,7 +281,7 @@ class IngestionRepository {
             IngestionBatchesTable
                 .innerJoin(SourceInstancesTable)
                 .innerJoin(SourcesTable)
-                .selectAll()
+                .select(batchMetadataColumns)
                 .where(combineConditions(conditions))
                 .orderBy(
                     IngestionBatchesTable.receivedAt to SortOrder.DESC,
@@ -308,11 +322,15 @@ class IngestionRepository {
             (EqOp(IngestionBatchesTable.receivedAt, sortValue) and LessOp(IngestionBatchesTable.id, idValue))
     }
 
-    fun findBatchDetail(batchId: Int): AdminBatchDetailRow? =
-        IngestionBatchesTable
+    fun findBatchDetail(
+        batchId: Int,
+        includeSourcePayload: Boolean,
+    ): AdminBatchDetailRow? {
+        val columns = if (includeSourcePayload) batchMetadataColumns + IngestionBatchesTable.sourcePayloadJson else batchMetadataColumns
+        return IngestionBatchesTable
             .innerJoin(SourceInstancesTable)
             .innerJoin(SourcesTable)
-            .selectAll()
+            .select(columns)
             .where { IngestionBatchesTable.id eq batchId }
             .limit(1)
             .map {
@@ -326,9 +344,10 @@ class IngestionRepository {
                     receivedAt = it[IngestionBatchesTable.receivedAt].toApiString(),
                     processedAt = it[IngestionBatchesTable.processedAt]?.toApiString(),
                     errorMessage = it[IngestionBatchesTable.errorMessage],
-                    sourcePayloadJson = it[IngestionBatchesTable.sourcePayloadJson],
+                    sourcePayloadJson = if (includeSourcePayload) it[IngestionBatchesTable.sourcePayloadJson] else null,
                 )
             }.singleOrNull()
+    }
 
     fun listRecordsForBatch(batchId: Int): List<AdminIngestionRecordRow> =
         IngestionRecordsTable

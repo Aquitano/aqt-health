@@ -103,7 +103,7 @@ class AdminService(
         val (batch, records) =
             suspendDbTransaction(db = database) {
                 val batch =
-                    ingestionRepository.findBatchDetail(batchId)
+                    ingestionRepository.findBatchDetail(batchId, includeSourcePayload)
                         ?: throw NotFoundException("Ingestion batch not found")
                 val records = ingestionRepository.listRecordsForBatch(batchId)
                 batch to records
@@ -142,12 +142,7 @@ class AdminService(
                             },
                     )
                 },
-            sourcePayload =
-                if (includeSourcePayload) {
-                    AppJson.parseToJsonElement(batch.sourcePayloadJson)
-                } else {
-                    null
-                },
+            sourcePayload = batch.sourcePayloadJson?.let(AppJson::parseToJsonElement),
             // Rebuilt from the records rather than stored: the batch-level copy was a
             // duplicate of the per-record normalized JSON.
             normalizedPayload =
