@@ -381,8 +381,15 @@ class IngestionRepository {
             .innerJoin(IngestionBatchesTable)
             .innerJoin(SourceInstancesTable)
             .innerJoin(SourcesTable)
-            .selectAll()
-            .where(replayConditions(dayStart, dayEnd, recordTypes))
+            .select(
+                IngestionRecordsTable.id,
+                IngestionRecordsTable.recordType,
+                SourcesTable.code,
+                IngestionBatchesTable.sourceInstanceId,
+                IngestionRecordsTable.normalizedRecordJson,
+                IngestionRecordsTable.recordStartAt,
+                IngestionRecordsTable.recordEndAt,
+            ).where(replayConditions(dayStart, dayEnd, recordTypes))
             .orderBy(IngestionRecordsTable.id to SortOrder.ASC)
             .mapNotNull { row ->
                 row[IngestionRecordsTable.recordStartAt]?.let { recordStartAt ->
